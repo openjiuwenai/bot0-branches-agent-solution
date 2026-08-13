@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>罐表分析 · 化工炼化物料平衡数据</title>
+<link rel="stylesheet" href="/static/style.css?v=25">
+<style>
+  .tank-controls { display:flex; flex-wrap:wrap; gap:16px; align-items:flex-start; margin-bottom:16px; }
+  .tank-field { display:flex; flex-direction:column; gap:4px; }
+  .tank-field label { font-size:12px; color:var(--muted); }
+  .tank-field select, .tank-field input { padding:5px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; min-width:140px; }
+  .tp-radio-group { display:flex; gap:0; border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+  .tp-radio { padding:6px 16px; border:none; background:#fff; font-size:13px; cursor:pointer; border-right:1px solid var(--border); }
+  .tp-radio:last-child { border-right:none; }
+  .tp-radio.active { background:var(--primary); color:#fff; font-weight:600; }
+  .mat-dropdown-wrap { position:relative; }
+  .mat-dropdown-btn { padding:6px 14px; border:1px solid var(--border); border-radius:6px; background:#fff; font-size:13px; cursor:pointer; min-width:200px; text-align:left; }
+  .mat-dropdown-btn:hover { border-color:var(--primary); }
+  .mat-dropdown-panel { position:absolute; top:100%; left:0; margin-top:4px; background:#fff; border:1px solid var(--border); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.12); max-height:300px; width:300px; overflow-y:auto; z-index:100; }
+  .mat-dropdown-panel.hidden { display:none; }
+  .mat-dropdown-list { padding:6px; }
+  .mat-check-item { display:flex; align-items:center; gap:6px; padding:4px 8px; border-radius:4px; font-size:13px; cursor:pointer; }
+  .mat-check-item:hover { background:#f0f7ff; }
+  .mat-check-item input { margin:0; }
+  .mat-search { width:100%; padding:5px 8px; border:1px solid var(--border); border-radius:4px; font-size:13px; margin-bottom:6px; box-sizing:border-box; }
+  .tank-stats-table { width:100%; border-collapse:collapse; font-size:12.5px; margin-bottom:16px; }
+  .tank-stats-table th, .tank-stats-table td { border:1px solid var(--border); padding:5px 8px; text-align:right; }
+  .tank-stats-table th { background:#f1f5f9; font-weight:600; text-align:center; }
+  .tank-stats-table td:first-child, .tank-stats-table th:first-child { text-align:left; position:sticky; left:0; background:#fff; z-index:1; }
+  .tank-stats-table tbody tr:hover { background:#f8fafc; }
+  .stats-wrap { max-height:300px; overflow:auto; border:1px solid var(--border); border-radius:8px; margin-bottom:16px; }
+  .chart-section { margin-bottom:24px; }
+  .chart-section .card-title { margin-bottom:8px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="nav-bar">
+      <a href="/" class="nav-back">← 返回导入预览</a>
+      <a href="/analysis" class="nav-back" style="margin-left:12px">→ 总收率趋势分析</a>
+    </div>
+    <h1>罐表分析</h1>
+    <p class="subtitle">统计分析各罐装载物料数据、各种原料的库存变化趋势</p>
+  </header>
+
+  <section class="analysis-import-card">
+    <div class="analysis-import-left">
+      <h2 class="card-title">选择数据源</h2>
+      <div class="analysis-field">
+        <label for="tankSource">罐表数据源</label>
+        <select id="tankSource"></select>
+      </div>
+      <button id="loadOverviewBtn" type="button" class="btn-primary">加载数据</button>
+    </div>
+  </section>
+
+  <div id="tankErrors" class="errors-box hidden">
+    <h3>错误</h3>
+    <ul id="tankErrorList"></ul>
+  </div>
+
+  <div id="tankMain" class="hidden">
+    <div class="tank-controls">
+      <div class="tank-field">
+        <label>选择罐号</label>
+        <div class="mat-dropdown-wrap">
+          <button type="button" id="tankDropdownBtn" class="mat-dropdown-btn">请选择罐号 ▾</button>
+          <div id="tankDropdownPanel" class="mat-dropdown-panel hidden">
+            <div style="padding:6px">
+              <input type="text" id="tankSearch" class="mat-search" placeholder="搜索罐号...">
+              <div id="tankDropdownList" class="mat-dropdown-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="tank-field">
+        <label>选择物料</label>
+        <div class="mat-dropdown-wrap">
+          <button type="button" id="matDropdownBtn" class="mat-dropdown-btn">请选择物料 ▾</button>
+          <div id="matDropdownPanel" class="mat-dropdown-panel hidden">
+            <div style="padding:6px">
+              <input type="text" id="matSearch" class="mat-search" placeholder="搜索物料...">
+              <div id="matDropdownList" class="mat-dropdown-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="tank-field">
+        <label>时间点（三选一）</label>
+        <div class="tp-radio-group" id="tpGroup">
+          <button class="tp-radio active" data-tp="前尺">前尺</button>
+          <button class="tp-radio" data-tp="12点">12点</button>
+          <button class="tp-radio" data-tp="0点">0点</button>
+        </div>
+      </div>
+      <div class="tank-field">
+        <label>开始日期</label>
+        <input type="date" id="tankRangeStart">
+      </div>
+      <div class="tank-field">
+        <label>结束日期</label>
+        <input type="date" id="tankRangeEnd">
+      </div>
+      <div class="tank-field" style="justify-content:flex-end">
+        <button type="button" id="tankApplyBtn" class="btn-primary">查询</button>
+      </div>
+      <div class="tank-field" style="justify-content:flex-end">
+        <button type="button" id="tankResetBtn" class="btn-secondary">重置</button>
+      </div>
+    </div>
+    <span id="tankStatus" class="range-status" style="display:block;margin-bottom:12px"></span>
+
+    <div class="stats-wrap">
+      <table class="tank-stats-table" id="statsTable">
+        <thead><tr><th>名称</th><th>类型</th><th>液位-最大</th><th>液位-最小</th><th>液位-均值</th><th>液位-总计</th><th>罐量-最大</th><th>罐量-最小</th><th>罐量-均值</th><th>罐量-总计</th><th>数据点</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <section class="chart-section">
+      <h2 class="card-title">液位变化趋势</h2>
+      <div id="levelChartWrap" class="chart-wrap">
+        <svg id="levelChart" class="yield-chart"></svg>
+        <div id="levelTooltip" class="chart-tooltip hidden"></div>
+      </div>
+    </section>
+
+    <section class="chart-section">
+      <h2 class="card-title">罐量变化趋势</h2>
+      <div id="volumeChartWrap" class="chart-wrap">
+        <svg id="volumeChart" class="yield-chart"></svg>
+        <div id="volumeTooltip" class="chart-tooltip hidden"></div>
+      </div>
+    </section>
+
+    <section class="chart-section" id="matTotalSection" style="display:none">
+      <h2 class="card-title">物料日总量与累计均值</h2>
+      <div id="matTotalChartWrap" class="chart-wrap">
+        <svg id="matTotalChart" class="yield-chart"></svg>
+        <div id="matTotalTooltip" class="chart-tooltip hidden"></div>
+      </div>
+    </section>
+  </div>
+</div>
+<script src="/static/tank_analysis.js?v=14"></script>
+</body>
+</html>

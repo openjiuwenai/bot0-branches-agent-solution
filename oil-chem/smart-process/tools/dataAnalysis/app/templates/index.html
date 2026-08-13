@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>化工炼化物料平衡数据 · 导入预览</title>
+<link rel="stylesheet" href="/static/style.css?v=26">
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>化工炼化物料平衡数据 · 导入与预览</h1>
+    <p class="subtitle">选择装置模块和数据粒度导入 Excel，自动检测粒度并路由存储；支持按时间段清除和导出。</p>
+    <div class="home-analysis-link"><a href="/analysis">→ 总收率趋势分析</a> &nbsp; <a href="/tank-analysis">→ 罐表分析</a></div>
+  </header>
+
+  <div class="top-row" id="importRow">
+    <!-- 两个装置模块导入卡片由 JS 渲染 -->
+  </div>
+
+  <section class="export-card">
+    <h2 class="card-title">导出数据</h2>
+    <div class="export-bar">
+      <div class="export-field">
+        <label for="exportSource">数据源</label>
+        <select id="exportSource"></select>
+      </div>
+      <div class="export-field">
+        <label for="exportStart">开始日期</label>
+        <input type="date" id="exportStart">
+      </div>
+      <div class="export-field">
+        <label for="exportEnd">结束日期</label>
+        <input type="date" id="exportEnd">
+      </div>
+      <div class="export-field export-fname">
+        <label for="exportFilename">导出文件名</label>
+        <input type="text" id="exportFilename" placeholder="留空则用数据源名">
+      </div>
+      <button id="exportBtn" type="button">导出 Excel</button>
+      <span id="exportHint" class="export-hint"></span>
+    </div>
+  </section>
+
+  <section id="resultSection" class="result-section hidden">
+    <div id="statusBanner" class="status-banner"></div>
+    <div id="errorsBox" class="errors-box hidden">
+      <h3>错误</h3>
+      <ul id="errorList"></ul>
+    </div>
+    <div id="wideWrap" class="table-wrap wide-table-wrap">
+      <table id="wideTable" class="data-table wide-table">
+        <thead><tr></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+<script src="/static/app.js?v=33"></script>
+</body>
+</html>

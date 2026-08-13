@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>总收率趋势分析 · 化工炼化物料平衡</title>
+<link rel="stylesheet" href="/static/style.css?v=36">
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="nav-bar">
+      <a href="/" class="nav-back">← 返回导入预览</a>
+      <a href="/tank-analysis" class="nav-back" style="margin-left:12px">→ 罐表分析</a>
+    </div>
+    <h1>总收率趋势分析</h1>
+    <p class="subtitle">基于导入页面的物料平衡数据，自动计算每个时间点的总收率（出总/进总×100%），合理范围 98%-102%</p>
+  </header>
+
+  <section class="analysis-import-card">
+    <div class="analysis-import-left">
+      <h2 class="card-title">分析数据源</h2>
+      <div class="filter-bar">
+        <div class="analysis-field">
+          <label for="analysisSource">数据源</label>
+          <select id="analysisSource"></select>
+        </div>
+        <div class="analysis-field">
+          <label for="negFilterMode">数据模式</label>
+          <select id="negFilterMode">
+            <option value="raw">原始数据</option>
+            <option value="filter" selected>剔除负值非正常数据</option>
+          </select>
+        </div>
+        <div class="analysis-field">
+          <label for="ioFlowSelect">装置选择</label>
+          <select id="ioFlowSelect" class="range-input" style="width:180px">
+            <option value="total">总进出物料</option>
+          </select>
+        </div>
+        <div class="analysis-field">
+          <label for="ioFlowStart">开始日期</label>
+          <input type="date" id="ioFlowStart" class="range-input">
+        </div>
+        <div class="analysis-field">
+          <label for="ioFlowEnd">结束日期</label>
+          <input type="date" id="ioFlowEnd" class="range-input">
+        </div>
+      </div>
+      <div class="filter-bar">
+        <div class="analysis-field mat-exclude-field">
+          <label>剔除日期（可多选）</label>
+          <div class="mat-exclude-dropdown">
+            <button type="button" id="ioExcludeBtn" class="mat-exclude-btn">点击选择剔除日期 ▾</button>
+            <div id="ioExcludePanel" class="mat-exclude-panel hidden">
+              <div class="mat-exclude-panel-head">
+                <input type="text" id="ioExcludeSearch" class="mat-exclude-search" placeholder="搜索日期…">
+                <button type="button" id="ioExcludeClear" class="btn-secondary btn-sm">清空</button>
+              </div>
+              <div id="ioExcludeList" class="mat-exclude-list"></div>
+            </div>
+            <div id="ioExcludeTags" class="mat-exclude-tags"></div>
+          </div>
+        </div>
+        <div class="analysis-field">
+          <label for="rangeMin">显示最小值 (%)</label>
+          <input type="number" id="rangeMin" class="range-input" step="0.1" placeholder="不限" min="0" max="500">
+        </div>
+        <div class="analysis-field">
+          <label for="rangeMax">显示最大值 (%)</label>
+          <input type="number" id="rangeMax" class="range-input" step="0.1" placeholder="不限" min="0" max="500">
+        </div>
+        <div class="filter-actions">
+          <button id="genAnalysisBtn" type="button" class="btn-primary">生成分析</button>
+          <button id="resetFiltersBtn" type="button" class="btn-secondary">重置</button>
+        </div>
+      </div>
+      <div class="filter-status-row">
+        <span id="rangeStatus" class="range-status"></span>
+        <span id="ioFlowStatus" class="range-status"></span>
+      </div>
+      <p class="analysis-tip">分析直接基于<strong>导入页面</strong>的数据计算总收率（出总/进总×100%），无需单独上传文件。选择数据源后点击「生成分析」，调整筛选条件后点击「应用」</p>
+    </div>
+  </section>
+
+  <div id="analysisStatus" class="analysis-meta empty hidden"></div>
+
+<div id="analysisErrors" class="errors-box hidden">
+    <h3>错误</h3>
+    <ul id="analysisErrorList"></ul>
+  </div>
+
+  <div id="analysisAdjust" class="adjust-box hidden">
+    <h3>识别说明</h3>
+    <ul id="analysisAdjustList"></ul>
+  </div>
+
+  <section id="statsSection" class="stats-section hidden">
+    <div class="stat-card"><div class="stat-label">数据点数</div><div class="stat-value" id="statCount">-</div></div>
+    <div class="stat-card"><div class="stat-label">时间范围</div><div class="stat-value small" id="statRange">-</div></div>
+    <div class="stat-card"><div class="stat-label">平均收率</div><div class="stat-value" id="statMean">-</div></div>
+    <div class="stat-card"><div class="stat-label">最低收率</div><div class="stat-value warn" id="statMin">-</div></div>
+    <div class="stat-card"><div class="stat-label">最高收率</div><div class="stat-value warn" id="statMax">-</div></div>
+    <div class="stat-card"><div class="stat-label">合格率(98-102%)</div><div class="stat-value" id="statRate">-</div></div>
+  </section>
+
+  <section id="chartSection" class="chart-section hidden">
+    <h2 class="card-title">总收率变化趋势</h2>
+    <div class="chart-legend">
+      <span class="lg-item"><i class="lg-swatch range"></i>合格区间 98%-102%</span>
+      <span class="lg-item"><i class="lg-swatch ok"></i>合格点</span>
+      <span class="lg-item"><i class="lg-swatch bad"></i>超出范围</span>
+      <span class="lg-item"><i class="lg-swatch line"></i>总收率</span>
+    </div>
+    <div id="chartWrap" class="chart-wrap">
+      <svg id="yieldChart" class="yield-chart"></svg>
+      <div id="chartTooltip" class="chart-tooltip hidden"></div>
+    </div>
+  </section>
+
+  <section id="ioFlowSection" class="chart-section hidden">
+    <h2 class="card-title">进出物料变化趋势</h2>
+    <div class="chart-legend">
+      <span class="lg-item"><i class="lg-swatch" style="background:#2b6cb0"></i>进料</span>
+      <span class="lg-item"><i class="lg-swatch" style="background:#e0322d"></i>出料</span>
+    </div>
+    <div id="ioFlowChartWrap" class="chart-wrap">
+      <svg id="ioFlowChart" class="yield-chart"></svg>
+      <div id="ioFlowTooltip" class="chart-tooltip hidden"></div>
+    </div>
+  </section>
+
+
+  <section id="distSection" class="chart-section hidden">
+    <h2 class="card-title">总进出物料占比 / 收率</h2>
+    <div class="dist-row dist-row-3">
+      <div class="dist-col">
+        <h3 class="sub-title">进方向物料占比</h3>
+        <div class="dist-chart-wrap"><svg id="distInChart" class="dist-chart"></svg></div>
+        <div id="distInLegend" class="dist-legend"></div>
+      </div>
+      <div class="dist-col">
+        <h3 class="sub-title">出方向物料占比</h3>
+        <div class="dist-chart-wrap"><svg id="distOutChart" class="dist-chart"></svg></div>
+        <div id="distOutLegend" class="dist-legend"></div>
+      </div>
+      <div class="dist-col">
+        <h3 class="sub-title">出方向物料收率</h3>
+        <div class="dist-chart-wrap"><svg id="distYieldChart" class="dist-chart"></svg></div>
+        <div id="distYieldLegend" class="dist-legend"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="materialSection" class="chart-section hidden">
+    <h2 class="card-title">物料变化趋势</h2>
+    <div class="material-controls">
+      <div class="material-dropdown-wrap">
+        <button type="button" id="materialDropdownBtn" class="material-dropdown-btn">请选择物料 ▾</button>
+        <div id="materialDropdownPanel" class="material-dropdown-panel hidden">
+          <div id="materialDropdownList" class="material-dropdown-list"></div>
+        </div>
+      </div>
+      <div class="material-actions">
+        <button type="button" id="matSelectAll" class="btn-secondary">全部</button>
+        <button type="button" id="matSelectNo" class="btn-secondary">清空</button>
+      </div>
+    </div>
+    <div class="material-range">
+      <div class="range-field">
+        <label for="matRangeStart">开始日期</label>
+        <input type="date" id="matRangeStart" class="range-input">
+      </div>
+      <div class="range-field">
+        <label for="matRangeEnd">结束日期</label>
+        <input type="date" id="matRangeEnd" class="range-input">
+      </div>
+      <div class="range-field mat-exclude-field">
+        <label>剔除日期（可多选）</label>
+        <div class="mat-exclude-dropdown">
+          <button type="button" id="matExcludeBtn" class="mat-exclude-btn">点击选择剔除日期 ▾</button>
+          <div id="matExcludePanel" class="mat-exclude-panel hidden">
+            <div class="mat-exclude-panel-head">
+              <input type="text" id="matExcludeSearch" class="mat-exclude-search" placeholder="搜索日期…">
+              <button type="button" id="matExcludeClear" class="btn-secondary btn-sm">清空</button>
+            </div>
+            <div id="matExcludeList" class="mat-exclude-list"></div>
+          </div>
+          <div id="matExcludeTags" class="mat-exclude-tags"></div>
+        </div>
+      </div>
+      <button type="button" id="matRangeApply" class="btn-primary">应用</button>
+      <button type="button" id="matRangeReset" class="btn-secondary">重置</button>
+      <span id="matRangeStatus" class="range-status"></span>
+    </div>
+    <div id="materialStats" class="material-stats hidden"></div>
+    <div id="materialChartWrap" class="chart-wrap">
+      <svg id="materialChart" class="yield-chart"></svg>
+      <div id="materialTooltip" class="chart-tooltip hidden"></div>
+    </div>
+    <div class="stability-trend-wrap">
+      <div class="stability-trend-head">
+        <h3 class="sub-title">稳定性趋势（滚动7日 CV）</h3>
+        <label class="detrend-toggle"><input type="checkbox" id="detrendToggle"> 剔除趋势</label>
+      </div>
+      <div id="stabilityChartWrap" class="chart-wrap">
+        <svg id="stabilityChart" class="yield-chart"></svg>
+      </div>
+    </div>
+  </section>
+  <section id="diagSection" class="chart-section hidden">
+    <h2 class="card-title">物料平衡诊断</h2>
+    <div class="diag-controls">
+      <div class="range-field">
+        <label for="diagPersist">持续性阈值</label>
+        <div class="diag-inline"><input type="number" id="diagPersist" class="range-input" value="4" min="1" style="width:72px"><span id="diagPersistUnit" class="diag-unit">小时</span></div>
+      </div>
+      <div class="range-field">
+        <label for="diagRatio">运行阈值比例</label>
+        <div class="diag-inline"><input type="number" id="diagRatio" class="range-input" value="5" min="1" max="100" style="width:72px"><span class="diag-unit">%</span></div>
+      </div>
+      <button type="button" id="diagApply" class="btn-primary">应用诊断</button>
+      <span id="diagStatus" class="range-status"></span>
+    </div>
+    <h3 class="sub-title">累积平衡诊断</h3>
+    <p class="diag-hint" id="diagCumHint"></p>
+    <div id="diagCumWrap" class="chart-wrap"><svg id="diagCumChart" class="yield-chart"></svg></div>
+    <h3 class="sub-title" style="margin-top:16px">物料切换时序</h3>
+    <div id="diagGanttWrap" class="chart-wrap"><svg id="diagGanttChart" class="yield-chart"></svg></div>
+    <h4 class="diag-sub">切换事件</h4>
+    <div id="diagEvents" class="diag-events"></div>
+    <h3 class="sub-title" style="margin-top:16px">收率异常归因</h3>
+    <p class="diag-hint">贡献度排名：各物料偏离整段均值对平衡偏差的累计贡献（吨，精确可加；橙=推高收率，蓝=压低收率）</p>
+    <div id="diagAttrWrap" class="chart-wrap"><svg id="diagAttrChart" class="yield-chart"></svg></div>
+    <h4 class="diag-sub">合规/非合规段 CV 对比</h4>
+    <div id="diagCVTable" class="material-stats"></div>
+  </section>
+</div>
+<script src="/static/analysis.js?v=53"></script>
+</body>
+</html>
