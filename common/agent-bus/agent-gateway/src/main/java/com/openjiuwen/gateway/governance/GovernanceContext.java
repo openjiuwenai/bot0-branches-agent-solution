@@ -26,6 +26,7 @@ public class GovernanceContext {
     private String messageId;
     private String contextId;
     private String rawBody;
+    private String idempotencyFingerprint;
 
     /**
      * Get trace correlation id.
@@ -187,5 +188,24 @@ public class GovernanceContext {
      */
     public void setRawBody(String rawBody) {
         this.rawBody = rawBody;
+    }
+
+    /**
+     * Get the idempotency fingerprint (normalized {@code params} body, excluding
+     * the JSON-RPC envelope {@code id}; populated by G3 ParamValidator).
+     *
+     * @return idempotency fingerprint, or {@code null} if G3 did not run
+     */
+    public String idempotencyFingerprint() {
+        return idempotencyFingerprint;
+    }
+
+    /**
+     * Set the idempotency fingerprint.
+     *
+     * @param idempotencyFingerprint normalized params body fingerprint
+     */
+    public void setIdempotencyFingerprint(String idempotencyFingerprint) {
+        this.idempotencyFingerprint = idempotencyFingerprint;
     }
 }
