@@ -6,7 +6,6 @@ package com.openjiuwen.service.bus.consumer.caller;
 
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCallOutcome;
-import com.openjiuwen.service.app.controller.a2a.client.RemoteCallOutcomeMapper;
 
 import org.a2aproject.sdk.client.ClientEvent;
 import org.a2aproject.sdk.client.MessageEvent;

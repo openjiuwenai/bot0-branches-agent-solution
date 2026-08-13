@@ -4,7 +4,6 @@
 
 package com.openjiuwen.service.bus.consumer.a2a;
 
-import com.openjiuwen.service.app.controller.a2a.A2aJsonRpcResponseSerializer;
 import com.openjiuwen.service.bus.consumer.BusTaskProjectionCoordinator;
 import com.openjiuwen.service.bus.consumer.model.Admission;
 import com.openjiuwen.service.bus.consumer.model.BusResponseProjection;

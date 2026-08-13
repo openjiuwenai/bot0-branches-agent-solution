@@ -8,7 +8,6 @@ import com.openjiuwen.bus.forwarding.common.AgentBusBrokerProperties;
 import com.openjiuwen.bus.forwarding.spi.AgentBusRequestSubmitter;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
-import com.openjiuwen.service.app.controller.a2a.client.A2ATaskSubscriptionClient;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 import com.openjiuwen.service.bus.consumer.BusTaskProjectionCoordinator;
 import com.openjiuwen.service.bus.consumer.RuntimeBusEventConsumer;
@@ -16,6 +15,7 @@ import com.openjiuwen.service.bus.consumer.a2a.RequestHandlerBusA2aBridge;
 import com.openjiuwen.service.bus.consumer.a2a.TaskStoreProjectionPostProcessor;
 import com.openjiuwen.service.bus.consumer.caller.AgentBusCallerResponseLifecycle;
 import com.openjiuwen.service.bus.consumer.caller.AgentBusRemoteAgentCaller;
+import com.openjiuwen.service.bus.consumer.caller.A2ATaskSubscriptionClient;
 import com.openjiuwen.service.bus.consumer.caller.RuntimeRdcClient;
 import com.openjiuwen.service.bus.consumer.relay.BusProjectionRepairScheduler;
 import com.openjiuwen.service.bus.consumer.relay.BusProjectionRepairer;
@@ -122,6 +122,11 @@ public class BusConsumerAutoConfiguration {
     @Bean
     CallerSettings agentBusCallerSettings(AgentBusBrokerProperties bus, Environment environment) {
         return new CallerSettings(tenantId(bus), serviceId(environment), bus.responseTimeoutMs());
+    }
+
+    @Bean
+    A2ATaskSubscriptionClient a2aTaskSubscriptionClient() {
+        return new A2ATaskSubscriptionClient();
     }
 
     @Bean

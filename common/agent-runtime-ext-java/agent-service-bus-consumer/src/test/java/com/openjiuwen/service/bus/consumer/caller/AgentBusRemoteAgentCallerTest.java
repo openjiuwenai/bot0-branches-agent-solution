@@ -12,7 +12,7 @@ import com.openjiuwen.bus.forwarding.spi.AgentBusRequestSubmitter;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.ForwardingReceipt;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
-import com.openjiuwen.service.app.controller.a2a.A2aJsonRpcResponseSerializer;
+import com.openjiuwen.service.bus.consumer.a2a.A2aJsonRpcResponseSerializer;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCall;
 

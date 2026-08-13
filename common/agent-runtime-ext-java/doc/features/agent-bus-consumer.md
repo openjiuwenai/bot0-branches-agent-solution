@@ -163,4 +163,4 @@ Runtime 无需部署或配置数据库。
 
 - [Agent Bus Consumer 接入指南](../guides/agent-bus-consumer-integration.md)
 - [扩展模块 README](../../README.md)
-- [agent-bus-consumer-demo](../../../example/agent-bus-consumer-demo)
+- [Agent Bus caller/callee 独立 Demo](../../../example/agent-bus-consumer-demo)

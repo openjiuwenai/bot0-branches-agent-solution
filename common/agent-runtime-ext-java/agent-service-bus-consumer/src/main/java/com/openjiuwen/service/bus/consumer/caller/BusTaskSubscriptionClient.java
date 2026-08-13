@@ -4,8 +4,6 @@
 
 package com.openjiuwen.service.bus.consumer.caller;
 
-import com.openjiuwen.service.app.controller.a2a.client.A2ATaskSubscriptionClient;
-
 import org.a2aproject.sdk.client.ClientEvent;
 
 import java.util.Map;

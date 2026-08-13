@@ -7,7 +7,6 @@ package com.openjiuwen.service.bus.consumer.a2a;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.openjiuwen.service.app.controller.a2a.A2aJsonRpcResponseSerializer;
 import com.openjiuwen.service.bus.consumer.model.AgentBusEventEnvelope;
 import com.openjiuwen.service.bus.consumer.model.BusDispatchResult;
 

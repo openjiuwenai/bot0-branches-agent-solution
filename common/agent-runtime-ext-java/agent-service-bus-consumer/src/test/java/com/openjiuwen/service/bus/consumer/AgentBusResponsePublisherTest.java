@@ -12,7 +12,7 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
-import com.openjiuwen.service.app.controller.a2a.A2aJsonRpcResponseSerializer;
+import com.openjiuwen.service.bus.consumer.a2a.A2aJsonRpcResponseSerializer;
 import com.openjiuwen.service.bus.consumer.model.BusResponseProjection;
 import com.openjiuwen.service.bus.consumer.runtime.AgentBusResponsePublisher;
 

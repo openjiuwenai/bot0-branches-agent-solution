@@ -159,6 +159,6 @@ Agent Bus 只传输流式控制面事件，不传输 token chunk 或 SSE frame�
 
 ## 8. 示例与相关文档
 
-- [agent-bus-consumer-demo](../../../example/agent-bus-consumer-demo)
+- [Agent Bus caller/callee 独立 Demo](../../../example/agent-bus-consumer-demo)
 - [Agent Bus Consumer 特性](../features/agent-bus-consumer.md)
 - [扩展模块 README](../../README.md)
