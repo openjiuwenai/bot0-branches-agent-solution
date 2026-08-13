@@ -71,21 +71,8 @@ public class ParamValidator {
      */
     public void validate(String rawBody, GovernanceContext ctx) {
         checkInlinePayloadSize(rawBody);
-        JsonNode root;
-        try {
-            root = mapper.readTree(rawBody);
-        } catch (JsonProcessingException ex) {
-            throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_JSONRPC",
-                    "Malformed JSON-RPC body");
-        }
-        if (root == null || !root.isObject()) {
-            throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_JSONRPC",
-                    "JSON-RPC body must be an object");
-        }
-        if (!"2.0".equals(text(root, "jsonrpc").orElse(null))) {
-            throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_JSONRPC",
-                    "jsonrpc must be \"2.0\"");
-        }
+        JsonNode root = parseRoot(rawBody);
+        validateEnvelope(root);
         String method = text(root, "method").orElse(null);
         if (method == null || method.isBlank()) {
             throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_JSONRPC",
@@ -97,40 +84,71 @@ public class ParamValidator {
         }
         ctx.setMethod(method);
 
+        JsonNode message = validateMessage(root);
+        classifyCreateOrResume(root, message, ctx);
+        populateMessageFields(message, ctx);
+        ctx.setIdempotencyFingerprint(fingerprintOf(root));
+    }
+
+    private JsonNode parseRoot(String rawBody) {
+        try {
+            return mapper.readTree(rawBody);
+        } catch (JsonProcessingException ex) {
+            throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_JSONRPC",
+                    "Malformed JSON-RPC body");
+        }
+    }
+
+    private void validateEnvelope(JsonNode root) {
+        if (root == null || !root.isObject()) {
+            throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_JSONRPC",
+                    "JSON-RPC body must be an object");
+        }
+        if (!"2.0".equals(text(root, "jsonrpc").orElse(null))) {
+            throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_JSONRPC",
+                    "jsonrpc must be \"2.0\"");
+        }
+    }
+
+    private static JsonNode validateMessage(JsonNode root) {
         JsonNode message = root.path("params").path("message");
         if (message.isMissingNode() || !message.isObject()) {
             throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_MESSAGE",
                     "params.message is required and must be an object");
         }
-        JsonNode parts = message.path("parts");
-        if (!parts.isArray()) {
+        if (!message.path("parts").isArray()) {
             throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_MESSAGE",
                     "params.message.parts must be an array");
         }
+        return message;
+    }
+
+    private static void classifyCreateOrResume(JsonNode root, JsonNode message, GovernanceContext ctx) {
         String taskId = text(message, "taskId").orElse(null);
         if (taskId != null && !taskId.isBlank()) {
-            // resume
             ctx.setTaskId(taskId);
-        } else {
-            // create — parts must not be empty; agentId optional but empty-string is illegal
-            if (parts.isEmpty()) {
-                throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_MESSAGE",
-                        "params.message.parts must not be empty for create");
-            }
-            // check both params.metadata.agentId (spec) and params.agentId (misplaced, ISSUE-99)
-            String agentId = text(root.path("params").path("metadata"), "agentId").orElse(null);
-            if (agentId == null) {
-                agentId = text(root.path("params"), "agentId").orElse(null);
-            }
-            if (agentId != null && agentId.isBlank()) {
-                throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_AGENT_ID",
-                        "agentId must not be empty");
-            }
-            if (agentId != null) {
-                ctx.setAgentId(agentId);
-            }
+            return;
         }
+        // create — parts must not be empty; agentId optional but empty-string is illegal
+        if (message.path("parts").isEmpty()) {
+            throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_MESSAGE",
+                    "params.message.parts must not be empty for create");
+        }
+        // check both params.metadata.agentId (spec) and params.agentId (misplaced, ISSUE-99)
+        String agentId = text(root.path("params").path("metadata"), "agentId").orElse(null);
+        if (agentId == null) {
+            agentId = text(root.path("params"), "agentId").orElse(null);
+        }
+        if (agentId != null && agentId.isBlank()) {
+            throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_AGENT_ID",
+                    "agentId must not be empty");
+        }
+        if (agentId != null) {
+            ctx.setAgentId(agentId);
+        }
+    }
 
+    private static void populateMessageFields(JsonNode message, GovernanceContext ctx) {
         String messageId = text(message, "messageId").orElse(null);
         if (messageId != null && !messageId.isBlank()) {
             ctx.setMessageId(messageId);
@@ -139,7 +157,6 @@ public class ParamValidator {
         if (contextId != null && !contextId.isBlank()) {
             ctx.setContextId(contextId);
         }
-        ctx.setIdempotencyFingerprint(fingerprintOf(root));
     }
 
     /**
