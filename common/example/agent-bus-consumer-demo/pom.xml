@@ -5,65 +5,71 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.openjiuwen.example</groupId>
-    <artifactId>agent-bus-consumer-demo</artifactId>
+    <artifactId>agent-bus-consumer-demos</artifactId>
     <version>0.1.0</version>
-    <packaging>jar</packaging>
+    <packaging>pom</packaging>
 
-    <name>agent-bus-consumer-demo</name>
-    <description>Standalone FEAT-017 runtime demo for consuming agent-bus events</description>
+    <name>agent-bus-consumer-demos</name>
+    <description>Independent caller and callee Runtime demos for Agent Bus</description>
 
-    <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.0.6</version>
-        <relativePath/>
-    </parent>
+    <modules>
+        <module>agent-bus-consumer-caller-demo</module>
+        <module>agent-bus-consumer-callee-demo</module>
+    </modules>
 
     <properties>
         <java.version>17</java.version>
         <maven.compiler.release>17</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <spring-boot.version>4.0.6</spring-boot.version>
         <agent-runtime-java.version>0.1.1.post1</agent-runtime-java.version>
         <agent-runtime-ext-java.version>0.1.0</agent-runtime-ext-java.version>
     </properties>
 
-    <dependencies>
-        <dependency>
-            <groupId>com.openjiuwen</groupId>
-            <artifactId>agent-service-app</artifactId>
-            <version>${agent-runtime-java.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.openjiuwen</groupId>
-            <artifactId>agent-service-bus-consumer</artifactId>
-            <version>${agent-runtime-ext-java.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-webmvc</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.openjiuwen</groupId>
+                <artifactId>agent-service-app</artifactId>
+                <version>${agent-runtime-java.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.openjiuwen</groupId>
+                <artifactId>agent-service-bus-consumer</artifactId>
+                <version>${agent-runtime-ext-java.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <release>17</release>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <mainClass>com.openjiuwen.example.busconsumer.AgentBusConsumerDemoApplication</mainClass>
-                </configuration>
-            </plugin>
-        </plugins>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.14.1</version>
+                    <configuration>
+                        <release>17</release>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <version>${spring-boot.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.5.4</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
     </build>
 </project>

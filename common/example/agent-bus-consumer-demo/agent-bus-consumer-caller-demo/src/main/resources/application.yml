@@ -1,15 +1,19 @@
 server:
-  port: ${SERVER_PORT:18081}
+  port: ${SERVER_PORT:18080}
 
 spring:
-  profiles:
-    default: memory
   application:
-    name: agent-bus-consumer-demo
+    name: agent-bus-consumer-caller-demo
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration
+  flyway:
+    enabled: false
 
 openjiuwen:
   service:
-    service-id: ${RUNTIME_SERVICE_ID:agent-bus-consumer-demo}
+    service-id: ${RUNTIME_SERVICE_ID:agent-bus-consumer-caller-demo}
     query:
       legacy-path-enabled: true
       webflux:
@@ -17,6 +21,7 @@ openjiuwen:
     bus:
       consumer:
         enabled: ${AGENT_BUS_ENABLED:true}
+        registry-base-url: ${RDC_BASE_URL:http://127.0.0.1:8092}
 
 agent-bus:
   role:
@@ -28,12 +33,12 @@ agent-bus:
     enabled: false
   nameserver: ${AGENT_BUS_NAMESERVER:127.0.0.1:9876}
   namespace: ${AGENT_BUS_NAMESPACE:ascend-prod}
-  producer-group: ${AGENT_BUS_RUNTIME_PRODUCER_GROUP:feat017-runtime-producer}
+  producer-group: ${AGENT_BUS_CALLER_PRODUCER_GROUP:runtime-source-caller}
   tenant: ${AGENT_BUS_TENANT:tenant-a}
   event-bus-service-id: ${AGENT_BUS_EVENT_BUS_SERVICE_ID:eventbus-01}
   poll-wait-millis: 3000
 
 logging:
   level:
-    com.openjiuwen.example.busconsumer: INFO
+    com.openjiuwen.example.buscaller: INFO
     com.openjiuwen.service.bus.consumer: DEBUG
