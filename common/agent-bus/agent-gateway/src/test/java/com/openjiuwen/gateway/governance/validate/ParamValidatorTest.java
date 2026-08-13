@@ -109,4 +109,62 @@ class ParamValidatorTest {
         GovernanceContext ctx = validate(validator, STREAMING);
         assertThat(ctx.method()).isEqualTo("SendStreamingMessage");
     }
+
+    @Test
+    void fingerprintExcludesJsonRpcRequestId() {
+        // ISSUE-84/85: 同一业务正文,仅顶层 id 不同(JSON-RPC 客户端重试惯例) → 同指纹 → 幂等复用而非 409
+        String idA = "{\"jsonrpc\":\"2.0\",\"id\":\"A\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]}}}";
+        String idB = "{\"jsonrpc\":\"2.0\",\"id\":\"B\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]}}}";
+        assertThat(validate(validator, idA).idempotencyFingerprint())
+                .isEqualTo(validate(validator, idB).idempotencyFingerprint());
+    }
+
+    @Test
+    void fingerprintIsStableAcrossFieldOrder() {
+        // ISSUE-84: 同一业务正文,JSON 字段顺序不同 → 同指纹(规范化键序排序)
+        String orderA = "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]},"
+                + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
+        String orderB = "{\"jsonrpc\":\"2.0\",\"id\":\"2\",\"method\":\"SendMessage\","
+                + "\"params\":{\"metadata\":{\"agentId\":\"agent-9\"},"
+                + "\"message\":{\"parts\":[{\"text\":\"hi\"}],\"messageId\":\"m1\"}}}";
+        assertThat(validate(validator, orderA).idempotencyFingerprint())
+                .isEqualTo(validate(validator, orderB).idempotencyFingerprint());
+    }
+
+    @Test
+    void fingerprintReflectsBusinessBody() {
+        // 不同业务正文 → 不同指纹 → 幂等冲突 409(保留冲突检测)
+        String body1 = "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]}}}";
+        String body2 = "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"bye\"}]}}}";
+        assertThat(validate(validator, body1).idempotencyFingerprint())
+                .isNotEqualTo(validate(validator, body2).idempotencyFingerprint());
+    }
+
+    @Test
+    void inlineAtExactLimitIsAccepted() {
+        // ISSUE-86 缺陷①: rawBody 正好 65536 字节(规格上限,对齐 ForwardingEnvelope) → G3 通过,不抛 413
+        String prefix = "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"";
+        String suffix = "\"}]}}}";
+        int textLen = 65536 - prefix.length() - suffix.length();
+        String body = prefix + "a".repeat(textLen) + suffix;
+        GovernanceContext ctx = validate(validator, body);
+        assertThat(ctx.messageId()).isEqualTo("m1");
+    }
+
+    @Test
+    void inlineOverLimitReturns413PayloadTooLarge() {
+        // ISSUE-86 缺陷①: text 70000B → rawBody > 65536(超规格上限) → G3 拒绝 413 PAYLOAD_TOO_LARGE
+        String body = "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\""
+                + "a".repeat(70000) + "\"}]}}}";
+        GovernanceException ge = govern(() -> validate(validator, body));
+        assertThat(ge.code()).isEqualTo("PAYLOAD_TOO_LARGE");
+        assertThat(ge.httpStatus().value()).isEqualTo(413);
+    }
 }
