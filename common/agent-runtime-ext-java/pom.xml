@@ -181,6 +181,11 @@
                 <version>${a2a-sdk.version}</version>
             </dependency>
             <dependency>
+                <groupId>org.a2aproject.sdk</groupId>
+                <artifactId>a2a-java-sdk-client</artifactId>
+                <version>${a2a-sdk.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>com.openjiuwen</groupId>
                 <artifactId>agent-core-java</artifactId>
                 <version>0.1.14.post1</version>

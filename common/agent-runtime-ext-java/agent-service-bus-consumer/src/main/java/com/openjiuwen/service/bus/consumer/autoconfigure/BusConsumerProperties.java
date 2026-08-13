@@ -6,6 +6,7 @@ package com.openjiuwen.service.bus.consumer.autoconfigure;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.net.URI;
 import java.time.Duration;
 
 /**
@@ -15,7 +16,10 @@ import java.time.Duration;
  */
 @ConfigurationProperties("openjiuwen.service.bus.consumer")
 public class BusConsumerProperties {
+    private static final URI DEFAULT_REGISTRY_BASE_URL = URI.create("http://localhost:8092");
+
     private boolean enabled;
+    private URI registryBaseUrl = DEFAULT_REGISTRY_BASE_URL;
     private Tuning tuning = new Tuning();
 
     public boolean isEnabled() {
@@ -24,6 +28,14 @@ public class BusConsumerProperties {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public URI getRegistryBaseUrl() {
+        return registryBaseUrl;
+    }
+
+    public void setRegistryBaseUrl(URI value) {
+        this.registryBaseUrl = value;
     }
 
     public Tuning getTuning() {

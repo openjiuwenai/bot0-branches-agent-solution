@@ -18,6 +18,7 @@ import java.util.concurrent.ConcurrentMap;
  */
 public final class InMemoryBusTaskAdmissionStore {
     private final ConcurrentMap<String, Admission> tasks = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Admission> taskAdmissions = new ConcurrentHashMap<>();
 
     /**
      * Finds an admission by its idempotency scope.
@@ -45,7 +46,10 @@ public final class InMemoryBusTaskAdmissionStore {
         if (reservation.state() != Admission.State.RESERVED) {
             throw new IllegalArgumentException("reservation must be in RESERVED state");
         }
-        return tasks.computeIfAbsent(key(reservation.tenantId(), reservation.idempotencyKey()), ignored -> reservation);
+        Admission admission = tasks.computeIfAbsent(key(reservation.tenantId(), reservation.idempotencyKey()),
+                ignored -> reservation);
+        taskAdmissions.putIfAbsent(key(admission.tenantId(), admission.taskId()), admission);
+        return admission;
     }
 
     /**
@@ -59,11 +63,14 @@ public final class InMemoryBusTaskAdmissionStore {
      *            admitted Task identity
      */
     public void markAdmitted(String tenantId, String key, String taskId) {
-        tasks.computeIfPresent(key(tenantId, key),
-                (ignored, admission) -> new Admission(admission.tenantId(), admission.idempotencyKey(),
-                        admission.requestDigest(), taskId, admission.sourceFamily(), admission.correlationId(),
-                        admission.traceId(), admission.sourceServiceId(), admission.targetServiceId(),
-                        admission.routeHandle(), Admission.State.ADMITTED));
+        tasks.computeIfPresent(key(tenantId, key), (ignored, admission) -> {
+            Admission admitted = new Admission(admission.tenantId(), admission.idempotencyKey(),
+                    admission.requestDigest(), taskId, admission.sourceFamily(), admission.correlationId(),
+                    admission.traceId(), admission.sourceServiceId(), admission.targetServiceId(),
+                    admission.routeHandle(), admission.requestId(), Admission.State.ADMITTED);
+            taskAdmissions.put(key(tenantId, taskId), admitted);
+            return admitted;
+        });
     }
 
     /**
@@ -77,8 +84,7 @@ public final class InMemoryBusTaskAdmissionStore {
      * @return the admission associated with the Task, if present
      */
     public Optional<Admission> findByTaskId(String tenantId, String taskId) {
-        return tasks.values().stream().filter(a -> a.tenantId().equals(tenantId) && a.taskId().equals(taskId))
-                .findFirst();
+        return Optional.ofNullable(taskAdmissions.get(key(tenantId, taskId)));
     }
 
     /**

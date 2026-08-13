@@ -12,10 +12,10 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
+import com.openjiuwen.service.bus.consumer.a2a.A2aJsonRpcResponseSerializer;
 import com.openjiuwen.service.bus.consumer.model.BusResponseProjection;
 import com.openjiuwen.service.bus.consumer.runtime.AgentBusResponsePublisher;
 
-import org.a2aproject.sdk.jsonrpc.common.json.JsonUtil;
 import org.a2aproject.sdk.spec.Task;
 import org.a2aproject.sdk.spec.TaskState;
 import org.a2aproject.sdk.spec.TaskStatus;
@@ -66,18 +66,16 @@ class AgentBusResponsePublisherTest {
         var publisher = new AgentBusResponsePublisher(recordingProducer(captured), "runtime-a");
         Task task = Task.builder().id("task").contextId("ctx")
                 .status(new TaskStatus(TaskState.TASK_STATE_COMPLETED)).metadata(Map.of("result", "done")).build();
+        String response = A2aJsonRpcResponseSerializer.streamingEvent("request-1", task);
         publisher.publish(new BusResponseProjection("response-event", "INVOCATION_RESPONSE", "tenant-a", "corr",
-                "task", Instant.now(), Map.of("task", task), "trace", "runtime-a", "gateway-a", "route", "idem",
-                "request-message", "RESPONSE", 1));
+                "task", Instant.now(), Map.of("a2aResponse", response), "trace", "runtime-a", "gateway-a", "route",
+                "idem", "request-message", "RESPONSE", 1));
 
         String inlinePayload = captured.get().headers().inlinePayload();
-        assertThat(inlinePayload).contains("taskId=task", "a2aResponseType=Task");
+        assertThat(inlinePayload).contains("taskId=task", "a2aResponseType=JsonRpcResponse");
         String encoded = token(inlinePayload, "a2aResponse");
         String json = new String(Base64.getUrlDecoder().decode(encoded), StandardCharsets.UTF_8);
-        Task restored = JsonUtil.fromJson(json, Task.class);
-        assertThat(restored.id()).isEqualTo("task");
-        assertThat(restored.status().state()).isEqualTo(TaskState.TASK_STATE_COMPLETED);
-        assertThat(restored.metadata()).containsEntry("result", "done");
+        assertThat(json).isEqualTo(response);
     }
 
     @Test
