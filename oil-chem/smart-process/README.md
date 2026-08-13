@@ -27,14 +27,15 @@
 
 ## 目录约定
 
-本目录初期以 `README.md` 作为占位。后续可按需补充以下子目录：
+本目录以 `README.md` 说明场景定位，并按需组织以下子目录：
 
 ```
 smart-process/
 ├── README.md
+├── mcp/                                  # 流程工业专属 MCP 服务
+│   └── refinery-route-optimizer/         # 炼厂加工路线优化器（收率预测 + 三路线效益对比）
 ├── methodology/      # 可选：流程工业专属方法论
 ├── skills/           # 可选：流程工业专属 Skill
-├── mcp/              # 可选：流程工业专属 MCP
 └── tools/            # 可选：流程工业专属 Agent 工具
 ```
 

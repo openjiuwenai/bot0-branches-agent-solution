@@ -27,14 +27,14 @@
 
 ## 目录约定
 
-本目录初期以 `README.md` 作为占位。后续可按需补充以下子目录：
+本目录以 `README.md` 说明场景定位，并按需组织以下子目录：
 
 ```
 asset-ops/
 ├── README.md
+├── mcp/              # 设备运维专属 MCP 服务（按需补充）
 ├── methodology/      # 可选：设备运维专属方法论
 ├── skills/           # 可选：设备运维专属 Skill
-├── mcp/              # 可选：设备运维专属 MCP
 └── tools/            # 可选：设备运维专属 Agent 工具
 ```
 
