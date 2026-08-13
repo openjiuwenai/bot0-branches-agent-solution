@@ -1,0 +1,4 @@
+interface:
+  display_name: "原油评价报告导入"
+  short_description: "解析炼厂原油评价报告Excel，提取蒸馏/性质/侧线数据导入PostgreSQL与ChromaDB"
+  default_prompt: "Use $crude-assay-import to import this crude assay Excel report."
