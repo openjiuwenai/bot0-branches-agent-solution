@@ -338,7 +338,6 @@ evaluator:
 
 def test_build_evaluator_type_custom_receives_runtime(tmp_path: Path) -> None:
     """type: custom 接收 eval_runtime 中的 model_config 等运行时参数。"""
-    from unittest.mock import MagicMock
 
     from openjiuwen.core.foundation.llm.schema.config import ModelClientConfig, ModelRequestConfig
 

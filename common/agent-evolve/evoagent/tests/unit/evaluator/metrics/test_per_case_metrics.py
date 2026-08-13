@@ -27,19 +27,19 @@ class TestContainsMetric:
         assert ContainsMetric().name == "contains"
 
     def test_hit(self) -> None:
-        assert ContainsMetric().compute({"answer": "the result is PASS"}, "PASS") == 1.0
+        assert ContainsMetric().compute({"answer": "the result is PASS"}, "PASS") == pytest.approx(1.0)
 
     def test_miss(self) -> None:
-        assert ContainsMetric().compute({"answer": "no signal"}, "PASS") == 0.0
+        assert ContainsMetric().compute({"answer": "no signal"}, "PASS") == pytest.approx(0.0)
 
     def test_case_insensitive(self) -> None:
         m = ContainsMetric(case_insensitive=True)
-        assert m.compute({"answer": "Hello World"}, "hello world") == 1.0
-        assert m.compute({"answer": "Hello World"}, "GOODBYE") == 0.0
+        assert m.compute({"answer": "Hello World"}, "hello world") == pytest.approx(1.0)
+        assert m.compute({"answer": "Hello World"}, "GOODBYE") == pytest.approx(0.0)
 
     def test_empty_label_is_miss(self) -> None:
         # Empty expected substring would trivially "match" everywhere; treat as 0.0.
-        assert ContainsMetric().compute({"answer": "anything"}, "") == 0.0
+        assert ContainsMetric().compute({"answer": "anything"}, "") == pytest.approx(0.0)
 
 
 class TestKeywordRecallMetric:
@@ -53,22 +53,22 @@ class TestKeywordRecallMetric:
 
     def test_full_recall(self) -> None:
         m = KeywordRecallMetric()
-        assert m.compute({"answer": "北京 上海"}, ["北京", "上海"]) == 1.0
+        assert m.compute({"answer": "北京 上海"}, ["北京", "上海"]) == pytest.approx(1.0)
 
     def test_no_hits(self) -> None:
         m = KeywordRecallMetric()
-        assert m.compute({"answer": "成都"}, ["北京", "上海"]) == 0.0
+        assert m.compute({"answer": "成都"}, ["北京", "上海"]) == pytest.approx(0.0)
 
     def test_empty_keywords_is_zero(self) -> None:
-        assert KeywordRecallMetric().compute({"answer": "anything"}, []) == 0.0
+        assert KeywordRecallMetric().compute({"answer": "anything"}, []) == pytest.approx(0.0)
 
     def test_case_insensitive(self) -> None:
         m = KeywordRecallMetric(case_insensitive=True)
-        assert m.compute({"answer": "Hello World"}, ["hello", "world"]) == 1.0
+        assert m.compute({"answer": "Hello World"}, ["hello", "world"]) == pytest.approx(1.0)
 
     def test_scalar_label(self) -> None:
         # A scalar label is treated as a single-keyword list.
-        assert KeywordRecallMetric().compute({"answer": "PASS here"}, "PASS") == 1.0
+        assert KeywordRecallMetric().compute({"answer": "PASS here"}, "PASS") == pytest.approx(1.0)
 
 
 class TestKeywordHitMetric:

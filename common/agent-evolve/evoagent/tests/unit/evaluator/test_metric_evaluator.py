@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -170,7 +171,7 @@ class TestEvaluatedCaseOutput:
         case = _make_case(expected_result={"answer": "hello"})
 
         result = evaluator.evaluate(case, {"answer": "hello"})
-        reason = __import__("json").loads(result.reason)
+        reason = json.loads(result.reason)
 
         assert reason["reason"] == "轨迹存在冗余调用"
         assert reason["attributed_skill"] == "product_recommend_skill"

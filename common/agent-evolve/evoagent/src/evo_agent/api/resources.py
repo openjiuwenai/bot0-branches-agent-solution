@@ -40,7 +40,8 @@ class LocalResolver:
             stacklevel=2,
         )
 
-    def resolve_dataset(self, ref: str) -> DatasetSpec:
+    @staticmethod
+    def resolve_dataset(ref: str) -> DatasetSpec:
         """从本地 manifest 文件加载数据集。"""
         path = Path(ref)
         if not path.exists():
@@ -48,7 +49,8 @@ class LocalResolver:
             raise FileNotFoundError(msg)
         return load_dataset_manifest(path)
 
-    def resolve_evaluator(self, ref: str) -> Any:
+    @staticmethod
+    def resolve_evaluator(ref: str) -> Any:
         """通过 dotted path 加载评估器类并实例化。"""
         module_path, _, class_name = ref.rpartition(".")
         if not module_path:

@@ -42,40 +42,40 @@ class TestSetOverlapBatchMetric:
         assert agg["recall"] == pytest.approx(1 / 3)
         assert agg["f1"] == pytest.approx(1 / 3)
         assert agg["accuracy"] == pytest.approx(1 / 5)
-        assert agg["score"] == agg["f1"]
+        assert agg["score"] == pytest.approx(agg["f1"])
 
     def test_all_correct_is_one(self) -> None:
         m = SetOverlapBatchMetric()
         m.reset()
         m.accumulate({"answer": ["北京", "上海"]}, ["北京", "上海"])
         agg = m.aggregate()
-        assert agg["precision"] == 1.0
-        assert agg["recall"] == 1.0
-        assert agg["f1"] == 1.0
-        assert agg["accuracy"] == 1.0
+        assert agg["precision"] == pytest.approx(1.0)
+        assert agg["recall"] == pytest.approx(1.0)
+        assert agg["f1"] == pytest.approx(1.0)
+        assert agg["accuracy"] == pytest.approx(1.0)
 
     def test_all_wrong_is_zero(self) -> None:
         m = SetOverlapBatchMetric()
         m.reset()
         m.accumulate({"answer": ["上海"]}, ["北京"])  # TP=0 FP=1 FN=1
         agg = m.aggregate()
-        assert agg["precision"] == 0.0
-        assert agg["recall"] == 0.0
-        assert agg["f1"] == 0.0
-        assert agg["accuracy"] == 0.0
+        assert agg["precision"] == pytest.approx(0.0)
+        assert agg["recall"] == pytest.approx(0.0)
+        assert agg["f1"] == pytest.approx(0.0)
+        assert agg["accuracy"] == pytest.approx(0.0)
 
     def test_empty_batch_is_zero_no_div(self) -> None:
         m = SetOverlapBatchMetric()
         m.reset()
         agg = m.aggregate()
-        assert agg["f1"] == 0.0
-        assert agg["accuracy"] == 0.0
+        assert agg["f1"] == pytest.approx(0.0)
+        assert agg["accuracy"] == pytest.approx(0.0)
 
     def test_reset_clears_state(self) -> None:
         m = SetOverlapBatchMetric()
         m.accumulate({"answer": ["x"]}, ["x"])  # TP=1
         m.reset()
-        assert m.aggregate()["f1"] == 0.0
+        assert m.aggregate()["f1"] == pytest.approx(0.0)
 
     def test_label_key_extraction(self) -> None:
         # Both predict and label wrapped under "answer"; extract both sides.

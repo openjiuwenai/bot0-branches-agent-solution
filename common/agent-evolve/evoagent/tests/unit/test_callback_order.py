@@ -175,7 +175,6 @@ def test_ordinary_exception_swallowed_and_subsequent_callback_runs() -> None:
 def test_composed_callbacks_does_not_import_adapter_client() -> None:
     """ComposedCallbacks 只认 FatalOptimizationError marker，不反向依赖 adapter_client。"""
     import ast
-    import inspect
 
     from evo_agent.callbacks import composed_callbacks as mod
 

@@ -535,7 +535,7 @@ public class BusForwarder {
         }
         // 超时兜底:body 为 null,合成最小终态(A2A v1.0 {"task":{...}} 格式)
         String state = FiveStateFolder.fold(terminalEvent.eventType()) == InvocationResponseStatus.FAILED
-                ? "failed" : "completed";
+                ? "TASK_STATE_FAILED" : "TASK_STATE_COMPLETED";
         return "{\"jsonrpc\":\"2.0\",\"result\":{\"task\":{\"id\":\""
                 + (terminalEvent.taskId() != null ? terminalEvent.taskId() : "")
                 + "\",\"status\":{\"state\":\"" + state + "\"}}}}";
@@ -555,7 +555,7 @@ public class BusForwarder {
                 + (taskId != null ? taskId : "")
                 + "\",\"contextId\":\""
                 + (contextId != null ? contextId : "")
-                + "\",\"status\":{\"state\":\"working\"}}}}";
+                + "\",\"status\":{\"state\":\"TASK_STATE_WORKING\"}}}}";
     }
 
     /**

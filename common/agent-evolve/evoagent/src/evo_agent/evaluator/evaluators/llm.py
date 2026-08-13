@@ -495,11 +495,13 @@ class LLMEvaluator(EvaluateInputMixin, BaseEvaluator):  # type: ignore[misc]
 
         # --- Essential field validation (critical path) ---
         raw_score = data["score"]
-        assert isinstance(raw_score, (int, float)) and not isinstance(raw_score, bool)
+        if not isinstance(raw_score, (int, float)) or isinstance(raw_score, bool):
+            raise TypeError("evaluator response 'score' must be a number")
         score = max(0.0, min(1.0, float(raw_score)))
 
         raw_is_pass = data["is_pass"]
-        assert isinstance(raw_is_pass, bool)
+        if not isinstance(raw_is_pass, bool):
+            raise TypeError("evaluator response 'is_pass' must be a bool")
         is_pass = raw_is_pass
 
         attributed_skill = data.get("attributed_skill", "")

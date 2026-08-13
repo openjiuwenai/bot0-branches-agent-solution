@@ -95,11 +95,7 @@ class AdapterClient:
         except RuntimeError:
             current_loop = None
 
-        if (
-            self._async_http is None
-            or self._async_http.is_closed
-            or (self._async_http_loop is not None and self._async_http_loop is not current_loop)
-        ):
+        if self._async_http_needs_rebuild(current_loop):
             self._async_http = httpx.AsyncClient(
                 base_url=self._base_url,
                 timeout=httpx.Timeout(self._timeout),
@@ -107,6 +103,14 @@ class AdapterClient:
             )
             self._async_http_loop = current_loop
         return self._async_http
+
+    def _async_http_needs_rebuild(self, current_loop: object | None) -> bool:
+        """是否需要（重新）创建 async HTTP client（G.CTL.03：拆分多条件守卫）。"""
+        return (
+            self._async_http is None
+            or self._async_http.is_closed
+            or (self._async_http_loop is not None and self._async_http_loop is not current_loop)
+        )
 
     # ── 对话 ──
 
@@ -491,7 +495,8 @@ class AdapterClient:
 
     # ── 内部方法 ──
 
-    def _handle_response(self, response: httpx.Response) -> dict[str, Any]:
+    @staticmethod
+    def _handle_response(response: httpx.Response) -> dict[str, Any]:
         """统一响应处理：成功返回 JSON body，失败抛出 AdapterError。
 
         错误格式优先读契约 ``{"error":{"code","message"}}``，
@@ -560,6 +565,22 @@ class AdapterClient:
             except RuntimeError:
                 pass  # event loop closed — connections will be GC'd
         self._sync_http.close()
+
+    async def reset_async_http(self) -> None:
+        """关闭并丢弃缓存的 async httpx client（绑定的事件循环仍存活时使用）。
+
+        跨线程切换前清掉绑定到旧 event loop 的 client，让后续访问在当前 loop
+        中重建。旧 loop 已关闭（aclose 会抛 RuntimeError）时改用 clear_async_http。
+        """
+        if self._async_http is not None and not self._async_http.is_closed:
+            await self._async_http.aclose()
+        self._async_http = None
+        self._async_http_loop = None
+
+    def clear_async_http(self) -> None:
+        """仅清空缓存的 async httpx client（不 aclose，用于旧 loop 已关闭场景）。"""
+        self._async_http = None
+        self._async_http_loop = None
 
     async def __aenter__(self) -> AdapterClient:
         return self

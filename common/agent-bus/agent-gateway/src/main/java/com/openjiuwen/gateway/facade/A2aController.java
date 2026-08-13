@@ -111,7 +111,8 @@ public class A2aController {
             context.setPrincipalId(principal.principalId());
             context.setTenantId(tenantId);
             if (context.taskId() == null) {
-                IdempotencyRule.Decision idem = idempotencyRule.check(tenantId, context.messageId(), jsonRpcBody);
+                IdempotencyRule.Decision idem = idempotencyRule.check(tenantId, context.messageId(),
+                        context.idempotencyFingerprint());
                 IdempotencyRule.Outcome outcome = idem.outcome();
                 if (outcome == IdempotencyRule.Outcome.REPLAY) {
                     return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(idem.result());

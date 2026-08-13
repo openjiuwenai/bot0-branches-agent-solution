@@ -383,7 +383,7 @@ def main() -> int:
     print(f"USER_QUERY={meta.get('user_query')}")
 
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     out = REPORT_DIR / f"e2e_dialogue_{stamp}.json"
     payload = {
         "meta": {

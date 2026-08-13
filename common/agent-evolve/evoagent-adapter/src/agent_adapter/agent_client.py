@@ -253,7 +253,7 @@ def _parse_sse_frame(line: str) -> dict | None:
     try:
         parsed = json.loads(data_str)
         return parsed if isinstance(parsed, dict) else None
-    except (json.JSONDecodeError, ValueError):
+    except ValueError:
         return None
 
 

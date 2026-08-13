@@ -316,14 +316,20 @@ class ManagedDocE2EHarness:
     def _spawn(self, name: str, command: list[str], *, cwd: Path, env: dict[str, str]) -> None:
         log_path = self._root / f"{name.lower().replace(' ', '-')}.log"
         stream = log_path.open("w", encoding="utf-8")
-        process = subprocess.Popen(  # noqa: S603
-            command,
-            cwd=cwd,
-            env=env,
-            stdout=stream,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
+        try:
+            process = subprocess.Popen(  # noqa: S603
+                command,
+                cwd=cwd,
+                env=env,
+                stdout=stream,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+        except BaseException:
+            # Popen failed before taking the stream — close it so the log
+            # file handle does not leak. On success _stop_processes owns it.
+            stream.close()
+            raise
         self._processes.append((name, process, stream))
 
     def _wait_http(self, url: str, *, process_name: str, timeout: float = 15.0) -> None:

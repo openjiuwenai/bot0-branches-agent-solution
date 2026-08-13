@@ -294,8 +294,6 @@ class LLMInvocation:
                     result.transport_complete,
                 )
                 return result
-            except asyncio.CancelledError:
-                raise
             except Exception as exc:
                 last_error = exc
                 retryable = _is_retryable(exc) or (
@@ -329,7 +327,7 @@ class LLMInvocation:
                 )
                 if attempt >= attempts or not retryable:
                     if isinstance(exc, LLMInvocationError):
-                        raise
+                        raise exc
                     category = _declared_category(exc)
                     if category is not None:
                         raise LLMInvocationError(category, str(exc)) from exc

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import pytest
 from agent_adapter.config import AdapterConfig
 
 
@@ -19,7 +20,7 @@ def test_trace_config_defaults():
     assert c.kafka_brokers == "kafka:9092"
     assert c.kafka_topic == "otlp_traces"
     assert c.kafka_group == "agent-adapter"
-    assert c.trace_wait_timeout == 10.0
+    assert c.trace_wait_timeout == pytest.approx(10.0)
 
 
 def test_trace_config_env_override(monkeypatch):
@@ -33,4 +34,4 @@ def test_trace_config_env_override(monkeypatch):
     assert c.pg_host == "pg.example"
     assert c.pg_port == 6543
     assert c.kafka_brokers == "b1:9092,b2:9092"
-    assert c.trace_wait_timeout == 7.5
+    assert c.trace_wait_timeout == pytest.approx(7.5)

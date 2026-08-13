@@ -315,7 +315,7 @@ def main() -> int:
     print(f"合计: {passed}/{len(results)} 通过")
 
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     out = REPORT_DIR / f"api_suite_{stamp}.json"
     payload = {
         "meta": {

@@ -70,7 +70,7 @@ def _parse_llm_value(content: str) -> Any:
         return ""
     try:
         return json.loads(text)
-    except (json.JSONDecodeError, ValueError):
+    except ValueError:
         pass
     # 兜底：取首个 {...} 或 [...] 片段再试一次。
     for pattern in (r"\{.*\}", r"\[.*\]"):
@@ -78,7 +78,7 @@ def _parse_llm_value(content: str) -> Any:
         if match:
             try:
                 return json.loads(match.group(0))
-            except (json.JSONDecodeError, ValueError):
+            except ValueError:
                 continue
     return text
 
@@ -137,7 +137,7 @@ class AnswerExtractor:
         if self._config.json_path:
             try:
                 parsed = json.loads(raw_text)
-            except (json.JSONDecodeError, ValueError):
+            except ValueError:
                 parsed = None
             if parsed is not None:
                 found, value = _walk_json_path(parsed, self._config.json_path)

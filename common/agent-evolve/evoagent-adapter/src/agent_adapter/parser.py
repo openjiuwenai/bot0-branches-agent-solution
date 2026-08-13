@@ -175,7 +175,7 @@ def _extract_keywords(payload: str, keywords: list[str]) -> dict | None:
             # Try to parse the extracted value as JSON
             try:
                 result[keyword] = json.loads(value)
-            except (json.JSONDecodeError, ValueError):
+            except ValueError:
                 result[keyword] = value
 
     return result if result else None

@@ -1897,7 +1897,6 @@ async def test_attribute_single_skill_goodcase_all_kept(edp_cls: type) -> None:
 
 def test_build_analyst_prompt_error(edp_cls: type) -> None:
     """analyst_error 模板：包含 Failed Trajectories 段。"""
-    from unittest.mock import MagicMock, patch
 
     optimizer = edp_cls.__new__(edp_cls)
     optimizer._scheduler = MagicMock()
@@ -1924,7 +1923,6 @@ def test_build_analyst_prompt_error(edp_cls: type) -> None:
 
 def test_build_analyst_prompt_success(edp_cls: type) -> None:
     """analyst_success 模板：包含 Successful Trajectories 段。"""
-    from unittest.mock import MagicMock, patch
 
     optimizer = edp_cls.__new__(edp_cls)
     optimizer._scheduler = MagicMock()
@@ -1949,7 +1947,6 @@ def test_build_analyst_prompt_success(edp_cls: type) -> None:
 
 def test_build_analyst_prompt_with_context(edp_cls: type) -> None:
     """step_buffer_context 和 meta_skill_context 非空时包含对应段。"""
-    from unittest.mock import MagicMock, patch
 
     optimizer = edp_cls.__new__(edp_cls)
     optimizer._scheduler = MagicMock()

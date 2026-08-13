@@ -7,6 +7,7 @@ import pytest
 from agent_adapter.pairing import PairedRecord, PairingEngine
 from agent_adapter.parser import ParsedTagRecord
 
+
 # ── Helpers ──
 
 def make_start_record(

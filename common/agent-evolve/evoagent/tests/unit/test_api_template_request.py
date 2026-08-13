@@ -50,8 +50,8 @@ def _make_valid_request(
 def test_optimizer_template_request_defaults() -> None:
     """默认 train_split=0.8, val_split=0.2, hyperparams={}。"""
     tpl = OptimizerTemplateRequest(name="test", scenario="场景")
-    assert tpl.train_split == 0.8
-    assert tpl.val_split == 0.2
+    assert tpl.train_split == pytest.approx(0.8)
+    assert tpl.val_split == pytest.approx(0.2)
     assert tpl.hyperparams == {}
 
 
