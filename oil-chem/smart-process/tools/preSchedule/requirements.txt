@@ -1,0 +1,17 @@
+# 原油加工月计划排产系统 — Python 后端依赖
+# 安装：pip install -r requirements.txt
+# Python >= 3.10
+
+# CP-SAT 求解器（排产核心）
+ortools==9.15.6755
+
+# FastAPI 后端服务
+fastapi==0.139.0
+uvicorn==0.51.0            # [standard] 含 uvloop/httptools 加速
+
+# Excel 读写（模板读取 + 结果回填）
+openpyxl==3.1.5
+
+
+# 数据校验（FastAPI 请求/响应模型）
+pydantic==2.13.4

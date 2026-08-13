@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>物料流向分析 · 实验</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f5f7fa; color: #1a202c; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+  header { margin-bottom: 20px; }
+  header h1 { font-size: 22px; margin-bottom: 6px; }
+  header .subtitle { font-size: 13px; color: #718096; }
+  .nav-bar { margin-bottom: 12px; }
+  .nav-bar a { color: #2563eb; text-decoration: none; font-size: 13px; }
+  .summary-row { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+  .summary-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; min-width: 140px; }
+  .summary-card .label { font-size: 12px; color: #718096; margin-bottom: 4px; }
+  .summary-card .value { font-size: 20px; font-weight: 700; }
+  .panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+  .panel h2 { font-size: 15px; margin-bottom: 12px; }
+  #flowGraph { width: 100%; height: 600px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fafbfc; }
+  .match-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .match-table th { background: #f7fafc; padding: 8px; text-align: left; border-bottom: 2px solid #e2e8f0; font-weight: 600; }
+  .match-table td { padding: 6px 8px; border-bottom: 1px solid #edf2f7; }
+  .match-table .yes { color: #16a34a; }
+  .match-table .no { color: #dc2626; }
+  .loading { text-align: center; padding: 40px; color: #718096; font-size: 14px; }
+  .legend { display: flex; gap: 16px; margin-bottom: 10px; font-size: 12px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-dot { width: 14px; height: 14px; border-radius: 3px; }
+  .tooltip { position: absolute; background: #1a202c; color: #fff; padding: 6px 10px; border-radius: 4px; font-size: 12px; pointer-events: none; z-index: 100; display: none; max-width: 240px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="nav-bar"><a href="http://127.0.0.1:8765/">← 返回主服务</a></div>
+    <h1>罐 → 装置 → 罐 物料流向分析</h1>
+    <p class="subtitle">基于已导入的物料平衡数据和罐表数据，自动匹配物料名称，构建流向关系图</p>
+  </header>
+  <div class="summary-row" id="summaryRow">
+    <div class="loading">正在加载分析数据…</div>
+  </div>
+  <div class="panel">
+    <h2>流向关系图（拖拽节点可调整位置，悬停查看物料和流量）</h2>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#2563eb"></div>装置</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#16a34a"></div>储罐</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#d97706"></div>外部进料</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#dc2626"></div>外部出料</div>
+    </div>
+    <svg id="flowGraph"></svg>
+  </div>
+  <div class="panel">
+    <h2>物料名称匹配明细</h2>
+    <table class="match-table" id="matchTable">
+      <thead><tr><th>罐表物料名</th><th>匹配物料平衡物料</th><th>匹配度</th><th>状态</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+<div class="tooltip" id="tooltip"></div>
+<script src="/static/flow.js"></script>
+</body>
+</html>

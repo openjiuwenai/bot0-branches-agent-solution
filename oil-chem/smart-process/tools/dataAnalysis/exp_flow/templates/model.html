@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>收率预测模型（实验）</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f0f2f5; color: #333; padding: 20px; }
+  h1 { font-size: 20px; margin-bottom: 16px; }
+  .card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  select, button { padding: 6px 12px; border: 1px solid #d0d5dd; border-radius: 6px; font-size: 14px; }
+  button { cursor: pointer; background: #2563eb; color: #fff; border: none; }
+  button:hover { background: #1d4ed8; }
+  button.secondary { background: #6b7280; }
+  .info-row { display: flex; gap: 24px; font-size: 13px; color: #666; margin-bottom: 8px; }
+  .info-row b { color: #333; }
+  table { border-collapse: collapse; font-size: 12px; width: 100%; }
+  th, td { border: 1px solid #e0e0e0; padding: 4px 8px; text-align: center; }
+  th { background: #f5f7fa; font-weight: 600; position: sticky; top: 0; z-index: 1; }
+  td.label { text-align: left; font-weight: 500; white-space: nowrap; }
+  th.label { text-align: left; white-space: nowrap; }
+  .heatmap td { font-family: monospace; }
+  .pos { background: #dcfce7; }
+  .neg { background: #fee2e2; }
+  .strong-pos { background: #16a34a; color: #fff; }
+  .strong-neg { background: #dc2626; color: #fff; }
+  .metric-good { color: #16a34a; font-weight: 600; }
+  .metric-bad { color: #dc2626; font-weight: 600; }
+  .metric-neutral { color: #f59e0b; }
+  .section-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #e0e0e0; }
+  .warning { background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 12px; font-size: 13px; color: #92400e; margin-bottom: 12px; line-height: 1.6; }
+  .tooltip { position: absolute; background: #1e293b; color: #fff; padding: 6px 10px; border-radius: 4px; font-size: 12px; pointer-events: none; z-index: 100; display: none; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .scroll-x { overflow-x: auto; }
+  .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; margin-left: 4px; }
+  .badge-in { background: #dbeafe; color: #1e40af; }
+  .badge-out { background: #fef3c7; color: #92400e; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: #666; margin-top: 8px; }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+  .legend-swatch { width: 14px; height: 14px; border-radius: 2px; }
+</style>
+</head>
+<body>
+<h1>收率预测模型 — 基于进料占比预测出料收率</h1>
+
+<div class="card">
+  <div class="controls">
+    <label>数据源：</label>
+    <select id="sourceSel"></select>
+    <label><input type="checkbox" id="lagChk" checked> 滞后特征（仅天级）</label>
+    <label><input type="checkbox" id="rollChk" checked> 滚动均值（仅天级）</label>
+    <button id="fitBtn">训练岭回归</button>
+    <button id="gbBtn">训练梯度提升+SHAP</button>
+    <button id="cmpBtn" class="secondary">模型对比</button>
+    <button id="statsBtn" class="secondary">特征统计</button>
+  </div>
+  <div class="info-row" id="infoRow"></div>
+  <div id="warningBox"></div>
+</div>
+
+<div id="results" style="display:none">
+
+  <div class="card">
+    <div class="section-title">模型评估指标</div>
+    <div class="scroll-x">
+      <table id="metricsTable">
+        <thead>
+          <tr>
+            <th class="label">出料物料</th>
+            <th>样本数</th>
+            <th>CV R²</th>
+            <th>训练 R²</th>
+            <th>CV MAE</th>
+            <th>均值</th>
+            <th>标准差</th>
+            <th>Lasso选中进料数</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="legend-swatch" style="background:#16a34a"></span> R² &gt; 0.3 (较好)</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#f59e0b"></span> 0 &lt; R² &lt; 0.3 (一般)</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#dc2626"></span> R² &lt; 0 (预测能力不足)</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">进料→出料 影响系数矩阵（岭回归）</div>
+    <p style="font-size:12px;color:#888;margin-bottom:8px">
+      数值含义：进料占比每增加1个百分点，出料收率变化多少个百分点。绿色=正向影响，红色=负向影响。
+    </p>
+    <div class="scroll-x">
+      <table id="coefTable">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="section-title">Lasso 特征筛选结果</div>
+      <div class="scroll-x">
+        <table id="lassoTable">
+          <thead>
+            <tr>
+              <th class="label">出料物料</th>
+              <th>选中进料</th>
+              <th>剔除进料</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">特征工程信息</div>
+      <div id="featureInfo" style="font-size:13px;line-height:1.8;color:#555"></div>
+    </div>
+  </div>
+
+</div>
+
+
+<div id="gbPanel" style="display:none">
+  <div class="card">
+    <div class="section-title">梯度提升树评估指标</div>
+    <div class="scroll-x">
+      <table id="gbMetricsTable">
+        <thead>
+          <tr>
+            <th class="label">出料物料</th>
+            <th>样本数</th>
+            <th>CV R²</th>
+            <th>训练 R²</th>
+            <th>CV MAE</th>
+            <th>均值</th>
+            <th>标准差</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">SHAP 重要性矩阵（进料→出料）</div>
+    <p style="font-size:12px;color:#888;margin-bottom:8px">
+      数值含义：|SHAP值|均值，表示该进料对该出料收率的平均影响幅度（越大越重要）。
+    </p>
+    <div class="scroll-x">
+      <table id="shapTable">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">SHAP 详细分析</div>
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px">
+      <label>选择出料物料：</label>
+      <select id="shapTargetSel"></select>
+    </div>
+    <div id="shapDetail"></div>
+  </div>
+</div>
+
+<div id="cmpPanel" style="display:none">
+  <div class="card">
+    <div class="section-title">岭回归 vs 梯度提升 对比</div>
+    <div class="scroll-x">
+      <table id="cmpTable">
+        <thead>
+          <tr>
+            <th class="label" rowspan="2">出料物料</th>
+            <th colspan="3">岭回归</th>
+            <th colspan="3">梯度提升</th>
+            <th rowspan="2">最优模型</th>
+          </tr>
+          <tr>
+            <th>CV R²</th><th>训练 R²</th><th>CV MAE</th>
+            <th>CV R²</th><th>训练 R²</th><th>CV MAE</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<div id="statsPanel" style="display:none">
+  <div class="card">
+    <div class="section-title">进料占比统计（诊断模型效果）</div>
+    <div class="scroll-x">
+      <table id="inStatsTable">
+        <thead>
+          <tr><th class="label">进料物料</th><th>均值</th><th>标准差</th><th>最小值</th><th>最大值</th><th>变异系数(%)</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="section-title">出料收率统计</div>
+    <div class="scroll-x">
+      <table id="outStatsTable">
+        <thead>
+          <tr><th class="label">出料物料</th><th>均值(%)</th><th>标准差</th><th>最小值</th><th>最大值</th><th>变异系数(%)</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+function $(id){ return document.getElementById(id); }
+var modelData = null;
+
+function init(){
+  fetch("/api/sources").then(function(r){return r.json();}).then(function(data){
+    var sel = $("sourceSel");
+    data.forEach(function(s){
+      var opt = document.createElement("option");
+      opt.value = s.source_id;
+      opt.textContent = s.name + "（" + s.granularity + "，" + s.row_count + "行）";
+      sel.appendChild(opt);
+    });
+  });
+  $("fitBtn").addEventListener("click", fitModel);
+  $("gbBtn").addEventListener("click", fitGB);
+  $("cmpBtn").addEventListener("click", compareModels);
+  $("statsBtn").addEventListener("click", loadStats);
+}
+
+function fitModel(){
+  var sid = $("sourceSel").value;
+  var useLag = $("lagChk").checked;
+  if(!sid){ alert("请先选择数据源"); return; }
+  $("fitBtn").textContent = "训练中...";
+  $("fitBtn").disabled = true;
+  var useRoll = $("rollChk").checked;
+  fetch("/api/fit?source_id=" + encodeURIComponent(sid) + "&use_lag=" + useLag + "&use_rolling=" + useRoll)
+    .then(function(r){return r.json();})
+    .then(function(data){
+      $("fitBtn").textContent = "训练模型";
+      $("fitBtn").disabled = false;
+      if(data.error){ alert(data.error); return; }
+      modelData = data;
+      renderResults(data);
+    })
+    .catch(function(e){
+      $("fitBtn").textContent = "训练模型";
+      $("fitBtn").disabled = false;
+      alert("请求失败: " + e);
+    });
+}
+
+function renderResults(data){
+  $("results").style.display = "";
+  var info = data.granularity === "hourly" ? "小时级" : "天级";
+  $("infoRow").innerHTML =
+    "<span>粒度：<b>" + info + "</b></span>" +
+    "<span>样本数：<b>" + data.n_samples + "</b></span>" +
+    "<span>时间范围：<b>" + data.date_range[0] + " ~ " + data.date_range[1] + "</b></span>" +
+    "<span>进料物料：<b>" + data.in_materials.length + "</b> 种</span>" +
+    "<span>出料物料：<b>" + data.out_materials.length + "</b> 种</span>";
+
+  // Warning for low sample / negative R2
+  var negCount = 0;
+  for(var om in data.ridge_results){
+    if(data.ridge_results[om].cv_r2_mean < 0) negCount++;
+  }
+  var warn = "";
+  if(data.n_samples < 200){
+    warn += "<b>样本量偏少（" + data.n_samples + "条）</b>，模型可能过拟合，交叉验证R²仅供参考。建议使用小时级数据获得更多样本。<br>";
+  }
+  if(negCount > data.out_materials.length / 2){
+    warn += "<b>" + negCount + "/" + data.out_materials.length + " 个出料的交叉验证R²为负</b>，说明模型预测能力不足。";
+    warn += "可能原因：进料占比变化模式单一（如双模态切换）、缺少操作条件数据（温度/压力/催化剂活性）、数据噪声大。";
+    warn += "系数矩阵仍可参考方向性影响，但不宜作为定量预测依据。";
+  }
+  $("warningBox").innerHTML = warn ? '<div class="warning">' + warn + '</div>' : "";
+
+  renderMetrics(data);
+  renderCoefMatrix(data);
+  renderLasso(data);
+  renderFeatureInfo(data);
+}
+
+function r2Class(r2){
+  if(r2 > 0.3) return "metric-good";
+  if(r2 > 0) return "metric-neutral";
+  return "metric-bad";
+}
+
+function renderMetrics(data){
+  var tb = $("metricsTable").querySelector("tbody");
+  tb.innerHTML = "";
+  data.out_materials.forEach(function(om){
+    var rr = data.ridge_results[om];
+    var lr = data.lasso_results[om];
+    var tr = document.createElement("tr");
+    tr.innerHTML =
+      '<td class="label">' + esc(om) + '</td>' +
+      '<td>' + rr.n_samples + '</td>' +
+      '<td class="' + r2Class(rr.cv_r2_mean) + '">' + rr.cv_r2_mean + '</td>' +
+      '<td>' + rr.train_r2 + '</td>' +
+      '<td>' + rr.cv_mae_mean + '</td>' +
+      '<td>' + rr.y_mean + '</td>' +
+      '<td>' + rr.y_std + '</td>' +
+      '<td>' + lr.n_selected + ' / ' + data.in_materials.length + '</td>';
+    tb.appendChild(tr);
+  });
+}
+
+function renderCoefMatrix(data){
+  var thead = $("coefTable").querySelector("thead");
+  var tbody = $("coefTable").querySelector("tbody");
+  var inMats = data.in_materials;
+  var outMats = data.out_materials;
+  var cm = data.coef_matrix;
+
+  // Find max abs value for color scaling
+  var maxAbs = 0;
+  inMats.forEach(function(im){
+    outMats.forEach(function(om){
+      var v = cm[im][om];
+      if(v != null && Math.abs(v) > maxAbs) maxAbs = Math.abs(v);
+    });
+  });
+
+  var htr = document.createElement("tr");
+  htr.innerHTML = '<th class="label">进料 \\ 出料</th>';
+  outMats.forEach(function(om){
+    htr.innerHTML += '<th>' + esc(om) + '</th>';
+  });
+  thead.innerHTML = "";
+  thead.appendChild(htr);
+
+  tbody.innerHTML = "";
+  inMats.forEach(function(im){
+    var tr = document.createElement("tr");
+    tr.innerHTML = '<td class="label">' + esc(im) + '</td>';
+    outMats.forEach(function(om){
+      var v = cm[im][om];
+      if(v == null){
+        tr.innerHTML += '<td>-</td>';
+      } else {
+        var ratio = maxAbs > 0 ? Math.abs(v) / maxAbs : 0;
+        var cls = "";
+        var bg = "";
+        if(ratio > 0.5){
+          cls = v > 0 ? "strong-pos" : "strong-neg";
+        } else if(ratio > 0.15){
+          cls = v > 0 ? "pos" : "neg";
+        }
+        var cell = '<td class="' + cls + '">' + v.toFixed(4) + '</td>';
+        tr.innerHTML += cell;
+      }
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+function renderLasso(data){
+  var tb = $("lassoTable").querySelector("tbody");
+  tb.innerHTML = "";
+  data.out_materials.forEach(function(om){
+    var lr = data.lasso_results[om];
+    var sel = Object.keys(lr.selected_features || {}).map(function(k){
+      return esc(k) + "(" + lr.selected_features[k] + ")";
+    }).join(", ") || "<span style='color:#999'>无</span>";
+    var zero = (lr.zeroed_features || []).length;
+    var tr = document.createElement("tr");
+    tr.innerHTML =
+      '<td class="label">' + esc(om) + '</td>' +
+      '<td style="font-size:11px;text-align:left">' + sel + '</td>' +
+      '<td>' + zero + ' 个</td>';
+    tb.appendChild(tr);
+  });
+}
+
+function renderFeatureInfo(data){
+  var fi = data.feature_info;
+  $("featureInfo").innerHTML =
+    "时间列：" + esc(fi.time_col) + "<br>" +
+    "进出类型列：" + esc(fi.io_col) + "<br>" +
+    "数值列：" + esc(fi.value_col) + "<br>" +
+    "物料名称列：" + esc(fi.name_col) + "<br>" +
+    "密度列：" + (fi.density_col ? esc(fi.density_col) : "无") + "<br>" +
+    "滞后特征：" + (fi.use_lag ? "启用（" + fi.lag_days + "天滞后）" : "未启用") + "<br>" +
+    "特征定义：x<sub>i</sub> = 进料<sub>i</sub>流量 / 总进料流量<br>" +
+    "目标定义：y<sub>j</sub> = 出料<sub>j</sub>流量 / 总进料流量 × 100%";
+}
+
+function loadStats(){
+  var sid = $("sourceSel").value;
+  if(!sid){ alert("请先选择数据源"); return; }
+  $("statsBtn").textContent = "加载中...";
+  fetch("/api/feature-stats?source_id=" + encodeURIComponent(sid))
+    .then(function(r){return r.json();})
+    .then(function(data){
+      $("statsBtn").textContent = "查看特征统计";
+      if(data.error){ alert(data.error); return; }
+      $("statsPanel").style.display = "";
+      var itb = $("inStatsTable").querySelector("tbody");
+      itb.innerHTML = "";
+      data.in_stats.forEach(function(s){
+        var cvCls = s.cv > 100 ? "metric-bad" : (s.cv < 20 ? "metric-good" : "metric-neutral");
+        itb.innerHTML += '<tr><td class="label">' + esc(s.name) + '</td><td>' + s.mean + '</td><td>' + s.std + '</td><td>' + s.min + '</td><td>' + s.max + '</td><td class="' + cvCls + '">' + s.cv + '</td></tr>';
+      });
+      var otb = $("outStatsTable").querySelector("tbody");
+      otb.innerHTML = "";
+      data.out_stats.forEach(function(s){
+        var cvCls = s.cv > 100 ? "metric-bad" : (s.cv < 20 ? "metric-good" : "metric-neutral");
+        otb.innerHTML += '<tr><td class="label">' + esc(s.name) + '</td><td>' + s.mean + '</td><td>' + s.std + '</td><td>' + s.min + '</td><td>' + s.max + '</td><td class="' + cvCls + '">' + s.cv + '</td></tr>';
+      });
+    });
+}
+
+function esc(s){
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+
+var gbData = null;
+
+function fitGB(){
+  var sid = $("sourceSel").value;
+  var useLag = $("lagChk").checked;
+  var useRoll = $("rollChk").checked;
+  if(!sid){ alert("请先选择数据源"); return; }
+  $("gbBtn").textContent = "训练中...";
+  $("gbBtn").disabled = true;
+  fetch("/api/fit-gb?source_id=" + encodeURIComponent(sid) + "&use_lag=" + useLag + "&use_rolling=" + useRoll)
+    .then(function(r){return r.json();})
+    .then(function(data){
+      $("gbBtn").textContent = "训练梯度提升+SHAP";
+      $("gbBtn").disabled = false;
+      if(data.error){ alert(data.error); return; }
+      gbData = data;
+      renderGB(data);
+    })
+    .catch(function(e){
+      $("gbBtn").textContent = "训练梯度提升+SHAP";
+      $("gbBtn").disabled = false;
+      alert("请求失败: " + e);
+    });
+}
+
+function renderGB(data){
+  $("gbPanel").style.display = "";
+  var tb = $("gbMetricsTable").querySelector("tbody");
+  tb.innerHTML = "";
+  data.out_materials.forEach(function(om){
+    var gr = data.gb_results[om];
+    if(gr.error){ tb.innerHTML += '<tr><td class="label">' + esc(om) + '</td><td colspan="6" style="color:#dc2626">' + gr.error + '</td></tr>'; return; }
+    tb.innerHTML += '<tr><td class="label">' + esc(om) + '</td><td>' + gr.n_samples + '</td>' +
+      '<td class="' + r2Class(gr.cv_r2_mean) + '">' + gr.cv_r2_mean + '</td>' +
+      '<td>' + gr.train_r2 + '</td><td>' + gr.cv_mae_mean + '</td>' +
+      '<td>' + gr.y_mean + '</td><td>' + gr.y_std + '</td></tr>';
+  });
+
+  renderShapMatrix(data);
+
+  // Populate target selector
+  var sel = $("shapTargetSel");
+  sel.innerHTML = "";
+  data.out_materials.forEach(function(om){
+    var opt = document.createElement("option");
+    opt.value = om; opt.textContent = om;
+    sel.appendChild(opt);
+  });
+  sel.onchange = function(){ renderShapDetail(data, sel.value); };
+  if(data.out_materials.length) renderShapDetail(data, data.out_materials[0]);
+}
+
+function renderShapMatrix(data){
+  var thead = $("shapTable").querySelector("thead");
+  var tbody = $("shapTable").querySelector("tbody");
+  var inMats = data.in_materials;
+  var outMats = data.out_materials;
+  var sm = data.shap_matrix;
+  var maxAbs = 0;
+  inMats.forEach(function(im){ outMats.forEach(function(om){ var v = sm[im][om]; if(v != null && v > maxAbs) maxAbs = v; }); });
+
+  var htr = document.createElement("tr");
+  htr.innerHTML = '<th class="label">进料 \\ 出料</th>';
+  outMats.forEach(function(om){ htr.innerHTML += '<th>' + esc(om) + '</th>'; });
+  thead.innerHTML = ""; thead.appendChild(htr);
+  tbody.innerHTML = "";
+  inMats.forEach(function(im){
+    var tr = document.createElement("tr");
+    tr.innerHTML = '<td class="label">' + esc(im) + '</td>';
+    outMats.forEach(function(om){
+      var v = sm[im][om];
+      if(v == null || v === 0){ tr.innerHTML += '<td>-</td>'; return; }
+      var ratio = maxAbs > 0 ? v / maxAbs : 0;
+      var cls = "";
+      if(ratio > 0.6) cls = "strong-pos";
+      else if(ratio > 0.3) cls = "pos";
+      tr.innerHTML += '<td class="' + cls + '">' + v.toFixed(4) + '</td>';
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+function renderShapDetail(data, target){
+  var gr = data.gb_results[target];
+  var el = $("shapDetail");
+  if(!gr || gr.error){ el.innerHTML = '<p style="color:#999">无数据</p>'; return; }
+
+  var html = '<div style="margin-bottom:16px">';
+  html += '<table style="font-size:12px"><thead><tr><th class="label" style="text-align:left">特征</th><th>|SHAP|均值</th><th>方向(均值)</th><th>类型</th></tr></thead><tbody>';
+  gr.shap_importance.forEach(function(si){
+    var dir = gr.shap_direction[si.feature] || 0;
+    var dirCls = dir > 0 ? "metric-good" : (dir < 0 ? "metric-bad" : "");
+    html += '<tr><td class="label" style="text-align:left">' + esc(si.feature) + '</td>' +
+      '<td>' + si.mean_abs_shap.toFixed(6) + '</td>' +
+      '<td class="' + dirCls + '">' + (dir >= 0 ? '+' : '') + dir.toFixed(6) + '</td>' +
+      '<td>' + (si.is_base ? '<span class="badge badge-in">基础</span>' : '<span class="badge badge-out">衍生</span>') + '</td></tr>';
+  });
+  html += '</tbody></table></div>';
+
+  // SHAP dependency plot for top base feature
+  var topBase = gr.shap_importance.find(function(si){ return si.is_base; });
+  if(topBase && gr.base_shap_data && gr.base_shap_data[topBase.feature]){
+    var bd = gr.base_shap_data[topBase.feature];
+    html += '<div class="section-title" style="margin-top:16px">SHAP 依赖图：' + esc(topBase.feature) + '</div>';
+    html += '<p style="font-size:12px;color:#888;margin-bottom:8px">横轴=进料占比，纵轴=SHAP值（对该收率的贡献）。展示非线性关系和拐点。</p>';
+    html += drawShapScatter(bd.values, bd.shap, topBase.feature);
+  }
+  el.innerHTML = html;
+}
+
+function drawShapScatter(xs, ys, label){
+  var W = 600, H = 300, M = {l:60, r:20, t:20, b:50};
+  var iw = W - M.l - M.r, ih = H - M.t - M.b;
+  var xMin = Math.min.apply(null, xs), xMax = Math.max.apply(null, xs);
+  var yMin = Math.min.apply(null, ys), yMax = Math.max.apply(null, ys);
+  if(xMin === xMax) xMax = xMin + 1;
+  if(yMin === yMax) yMax = yMin + 1;
+  yMin = Math.min(yMin, 0); yMax = Math.max(yMax, 0);
+  var xPad = (xMax - xMin) * 0.05, yPad = (yMax - yMin) * 0.1;
+  xMin -= xPad; xMax += xPad; yMin -= yPad; yMax += yPad;
+  function xv(v){ return M.l + (v - xMin) / (xMax - xMin) * iw; }
+  function yv(v){ return M.t + (1 - (v - yMin) / (yMax - yMin)) * ih; }
+  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="max-width:600px">';
+  // zero line
+  var yz = yv(0);
+  svg += '<line x1="' + M.l + '" y1="' + yz + '" x2="' + (W-M.r) + '" y2="' + yz + '" stroke="#ccc" stroke-dasharray="4,2"/>';
+  // grid
+  for(var i = 0; i <= 4; i++){
+    var gy = M.t + ih * i / 4;
+    svg += '<line x1="' + M.l + '" y1="' + gy + '" x2="' + (W-M.r) + '" y2="' + gy + '" stroke="#f0f0f0"/>';
+    var gv = yMax - (yMax - yMin) * i / 4;
+    svg += '<text x="' + (M.l-6) + '" y="' + (gy+3) + '" text-anchor="end" font-size="10" fill="#999">' + gv.toFixed(3) + '</text>';
+  }
+  // points
+  for(var i = 0; i < xs.length; i++){
+    var color = ys[i] > 0 ? '#16a34a' : '#dc2626';
+    svg += '<circle cx="' + xv(xs[i]).toFixed(1) + '" cy="' + yv(ys[i]).toFixed(1) + '" r="2.5" fill="' + color + '" opacity="0.6"/>';
+  }
+  // axes
+  svg += '<line x1="' + M.l + '" y1="' + M.t + '" x2="' + M.l + '" y2="' + (H-M.b) + '" stroke="#999"/>';
+  svg += '<line x1="' + M.l + '" y1="' + (H-M.b) + '" x2="' + (W-M.r) + '" y2="' + (H-M.b) + '" stroke="#999"/>';
+  svg += '<text x="' + (M.l+iw/2) + '" y="' + (H-8) + '" text-anchor="middle" font-size="11" fill="#666">' + esc(label) + ' 占比</text>';
+  svg += '<text x="16" y="' + (M.t+ih/2) + '" text-anchor="middle" font-size="11" fill="#666" transform="rotate(-90 16 ' + (M.t+ih/2) + ')">SHAP值</text>';
+  svg += '</svg>';
+  return svg;
+}
+
+function compareModels(){
+  var sid = $("sourceSel").value;
+  var useLag = $("lagChk").checked;
+  var useRoll = $("rollChk").checked;
+  if(!sid){ alert("请先选择数据源"); return; }
+  $("cmpBtn").textContent = "对比中...";
+  fetch("/api/compare?source_id=" + encodeURIComponent(sid) + "&use_lag=" + useLag + "&use_rolling=" + useRoll)
+    .then(function(r){return r.json();})
+    .then(function(data){
+      $("cmpBtn").textContent = "模型对比";
+      if(data.error){ alert(data.error); return; }
+      renderCompare(data);
+    });
+}
+
+function renderCompare(data){
+  $("cmpPanel").style.display = "";
+  var tb = $("cmpTable").querySelector("tbody");
+  tb.innerHTML = "";
+  data.comparison.forEach(function(c){
+    var ridgeBetter = c.ridge_cv_r2 > c.gb_cv_r2;
+    var best = ridgeBetter ? "岭回归" : "梯度提升";
+    tb.innerHTML += '<tr><td class="label">' + esc(c.target) + '</td>' +
+      '<td class="' + r2Class(c.ridge_cv_r2) + '">' + c.ridge_cv_r2 + '</td><td>' + c.ridge_train_r2 + '</td><td>' + c.ridge_cv_mae + '</td>' +
+      '<td class="' + r2Class(c.gb_cv_r2) + '">' + c.gb_cv_r2 + '</td><td>' + c.gb_train_r2 + '</td><td>' + c.gb_cv_mae + '</td>' +
+      '<td><b>' + best + '</b></td></tr>';
+  });
+}
+
+init();
+</script>
+</body>
+</html>
