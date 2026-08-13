@@ -34,6 +34,47 @@ Gateway **本身不打桩**——始终打真实（或你刚起的）Gateway 进
 | S5-01 未知 agent | ✅ | `ROUTE_NO_CANDIDATES` + 无拓扑泄漏 |
 | 拓扑清洗 | ✅ | 错误体 grep |
 
+## 前置条件
+
+### 环境要求
+
+- **Java 21**（OpenJDK 21+）
+- **Maven 3.9+**
+- （可选）Python 3.8+（跑 stub，见下方"无真 RDC/Runtime"路径）
+
+### 构建依赖（从零开始）
+
+`agent-gateway-demo` 依赖 `agent-gateway`（lib jar）和 `event-bus-sdk`，必须**先按依赖顺序**构建并 `install` 到本地仓库：
+
+```bash
+# 1. RDC（无依赖，必须先构建）
+cd common/agent-bus/registry-discovery-center && mvn install -DskipTests
+
+# 2. event-bus reactor（event-bus-relay 依赖 RDC lib jar）
+cd ../event-bus && mvn install -DskipTests
+
+# 3. agent-gateway（依赖 event-bus-spi，产出 lib jar + fat-jar）
+mvn -f ../agent-gateway/pom.xml install -Dmaven.test.skip=true
+
+# 4. agent-gateway-demo 胖 jar（依赖 agent-gateway:lib + event-bus-sdk）
+cd ../../example/agent-gateway-demo && mvn clean package -DskipTests
+```
+
+构建产物：`common/example/agent-gateway-demo/target/agent-gateway-demo-0.1.0.jar`（Spring Boot fat-jar）。
+
+### 启动 Gateway
+
+```bash
+# DIRECT 模式（默认）
+java -jar common/example/agent-gateway-demo/target/agent-gateway-demo-0.1.0.jar
+
+# 或用 DIRECT profile + 自定义配置
+java -jar target/agent-gateway-demo-0.1.0.jar \
+  --spring.config.additional-location=application-example.yml
+```
+
+Gateway 默认监听 `:8080`。配置参考 [`../application-example.yml`](../application-example.yml)（`gateway.path-mode=direct`、`gateway.rdc.base-url`、`gateway.default-agent-id` 等）。
+
 ## 跑法
 
 ```bash
