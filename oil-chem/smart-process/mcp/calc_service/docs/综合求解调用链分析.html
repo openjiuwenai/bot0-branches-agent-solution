@@ -1,0 +1,1058 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>综合求解调用链分析</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --card-border: #334155;
+            --text: #e2e8f0;
+            --text-dim: #94a3b8;
+            --accent: #3b82f6;
+            --accent2: #8b5cf6;
+            --green: #10b981;
+            --orange: #f59e0b;
+            --red: #ef4444;
+            --cyan: #06b6d4;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            padding: 0;
+        }
+        .header {
+            background: linear-gradient(135deg, var(--card-bg), var(--bg));
+            border-bottom: 2px solid var(--accent);
+            padding: 30px 40px;
+        }
+        .header h1 {
+            font-size: 28px;
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+        .header .subtitle {
+            font-size: 14px;
+            color: var(--text-dim);
+            line-height: 1.6;
+        }
+        .header .badge {
+            display: inline-block;
+            background: var(--accent);
+            color: #fff;
+            padding: 2px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px 40px;
+        }
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 20px 24px;
+            margin-bottom: 16px;
+        }
+        .card h2 {
+            font-size: 20px;
+            color: var(--accent);
+            margin-bottom: 12px;
+            border-bottom: 1px solid var(--card-border);
+            padding-bottom: 8px;
+        }
+        .card h3 {
+            font-size: 16px;
+            color: var(--accent2);
+            margin: 16px 0 8px 0;
+        }
+        .card p {
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+        .card ul, .card ol {
+            margin-left: 20px;
+            margin-bottom: 12px;
+        }
+        .card li {
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+        .card code {
+            background: var(--bg);
+            color: var(--cyan);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 13px;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+        .card pre {
+            background: var(--bg);
+            border: 1px solid var(--card-border);
+            border-radius: 6px;
+            padding: 12px 16px;
+            overflow-x: auto;
+            margin: 12px 0;
+        }
+        .card pre code {
+            background: none;
+            color: var(--text);
+            padding: 0;
+        }
+        .card .file-path {
+            color: var(--green);
+            font-size: 13px;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+        .card .deleted {
+            color: var(--red);
+            text-decoration: line-through;
+        }
+        .card .new-file {
+            color: var(--green);
+            font-weight: 600;
+        }
+        .card .moved {
+            color: var(--orange);
+        }
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-right: 6px;
+        }
+        .tag-new { background: var(--green); color: #fff; }
+        .tag-moved { background: var(--orange); color: #fff; }
+        .tag-deleted { background: var(--red); color: #fff; }
+        .tag-phase { background: var(--accent2); color: #fff; }
+        .tag-p0 { background: var(--cyan); color: #fff; }
+        .tag-p1 { background: var(--accent); color: #fff; }
+        .tag-p2 { background: var(--accent2); color: #fff; }
+        .tag-p4 { background: var(--orange); color: #fff; }
+        .tag-p5 { background: var(--green); color: #fff; }
+        .mermaid {
+            background: var(--bg);
+            border: 1px solid var(--card-border);
+            border-radius: 6px;
+            padding: 16px;
+            margin: 12px 0;
+            text-align: center;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+        }
+        th, td {
+            border: 1px solid var(--card-border);
+            padding: 8px 12px;
+            text-align: left;
+            font-size: 13px;
+        }
+        th {
+            background: var(--bg);
+            color: var(--accent);
+            font-weight: 600;
+        }
+        td { color: var(--text); }
+        tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+        .formula {
+            background: var(--bg);
+            border-left: 3px solid var(--accent);
+            padding: 8px 16px;
+            margin: 8px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            color: var(--text);
+        }
+        .note {
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 3px solid var(--accent);
+            padding: 8px 16px;
+            margin: 8px 0;
+            font-size: 13px;
+            color: var(--text-dim);
+        }
+        .warning {
+            background: rgba(245, 158, 11, 0.1);
+            border-left: 3px solid var(--orange);
+            padding: 8px 16px;
+            margin: 8px 0;
+            font-size: 13px;
+            color: var(--text);
+        }
+        .func-sig {
+            color: var(--cyan);
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            display: block;
+            margin: 4px 0;
+        }
+        .layer-label {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .layer-api { background: var(--red); color: #fff; }
+        .layer-service { background: var(--accent); color: #fff; }
+        .layer-calc { background: var(--green); color: #fff; }
+        .layer-data { background: var(--orange); color: #fff; }
+        .layer-models { background: var(--accent2); color: #fff; }
+        .layer-sched { background: var(--cyan); color: #fff; }
+        .toc {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 16px 24px;
+            margin-bottom: 16px;
+        }
+        .toc h2 {
+            font-size: 16px;
+            color: var(--accent);
+            margin-bottom: 8px;
+        }
+        .toc ul { list-style: none; margin-left: 0; }
+        .toc li { margin-bottom: 2px; }
+        .toc a {
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 13px;
+        }
+        .toc a:hover { color: var(--accent); }
+        .toc .toc-sub { margin-left: 16px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>综合求解调用链分析<span class="badge">2026-08</span></h1>
+        <div class="subtitle">第二轮重构：calc_ctx完全消除·纯函数计算层·batch_optimizer拆分3文件·calculate_physical拆分7子函数·service层计算逻辑下移·死代码清理</div>
+    </div>
+    <div class="container">
+        <div class="toc">
+            <h2>目录</h2>
+            <ul>
+                <li><a href="#request-params">1. 请求参数</a></li>
+                <li><a href="#call-chain">2. 调用链全景图（Mermaid Flowchart）</a></li>
+                <li><a href="#sequence">3. 时序图（Mermaid Sequence）</a></li>
+                <li><a href="#func-hierarchy">4. 函数层级图（Mermaid Graph）<span class="tag tag-new">NEW</span></a></li>
+                <li><a href="#call-count">5. 调用次数公式</a></li>
+                <li><a href="#api-layer">6. API 路由层</a></li>
+                <li><a href="#service-layer">7. Service 编排层</a></li>
+                <li><a href="#calc-layer">8. Calculation 计算层</a></li>
+                <li><a href="#models-layer">9. Models 数据结构层</a></li>
+                <li><a href="#scheduling-layer">10. Scheduling 排产层</a></li>
+                <li><a href="#summary-table">11. 文件—函数—职责总览表</a></li>
+                <li><a href="#bottleneck">12. 性能瓶颈分析</a></li>
+                <li><a href="#constraint-mapping">13. 约束实现映射</a></li>
+                <li><a href="#file-tree">14. 文件函数树</a></li>
+                <li><a href="#unused-funcs">15. 已删除/废弃函数</a></li>
+            </ul>
+        </div>
+        <div class="card" id="request-params">
+            <h2>1. 请求参数</h2>
+            <p><code>POST /api/scheduling/comprehensive_solve</code> 请求体核心字段：</p>
+            <table>
+                <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+                <tr><td><code>plan_month</code></td><td>string</td><td>计划月份，如 <code>"2026-07"</code>。双价格月口径：选优用上月价，核算用本月价</td></tr>
+                <tr><td><code>production_plans_input</code></td><td>list</td><td>原油加工计划输入（含 crude_type_id / cost / monthly_qty）。为空时懒加载 DB 已落盘计划</td></tr>
+                <tr><td><code>monthly_crude_input</code></td><td>dict</td><td>月度原油输入量映射</td></tr>
+                <tr><td><code>blend_mode</code></td><td>bool</td><td>是否混炼模式</td></tr>
+                <tr><td><code>save_data</code></td><td>bool</td><td>是否落盘（含 device_load_rate 回写）。<code>False</code> = 只读求解，无写副作用</td></tr>
+                <tr><td><code>hangmei_target</code></td><td>float|None</td><td>航煤目标产出吨数。<code>None</code> 或 ≤0 表示不启用航煤工况</td></tr>
+                <tr><td><code>shutdown_config</code></td><td>list|None</td><td>装置停工声明 <code>[{unit, start_time, end_time}, ...]</code>，按停工边界拆分批次</td></tr>
+                <tr><td><code>plan_source</code></td><td>string</td><td><code>"lp"</code>(默认) 读 production_plan_details；<code>"cp_sat"</code> 读 cp_sat_plan_details</td></tr>
+                <tr><td><code>simplified</code></td><td>bool</td><td>精简模式：裁剪组合列表的 batch_details 大嵌套对象，默认 <code>True</code></td></tr>
+            </table>
+            <div class="note">第二轮重构变更：<code>plan_source="lp"</code> 实际统一走 CP-SAT 排产（旧 LP 排产已删除）。未传 <code>production_plans_input</code> 时优先复用 DB 已落盘计划。</div>
+        </div>
+        <div class="card" id="call-chain">
+            <h2>2. 调用链全景图 <span class="tag tag-phase">Phase 2</span></h2>
+            <p>以下 Mermaid 流程图展示 <code>comprehensive_solve</code> 从 API 到计算层的完整调用链。<b>第二轮重构核心变化</b>：calc_ctx 已完全消除，Service 层通过 <code>_preload_reference_data()</code> 预加载 prices/device_costs/feed_ratios 三个 flat dict 后显式传参给计算层纯函数。</p>
+            <div class="mermaid">
+flowchart TD
+    A["POST /api/scheduling/comprehensive_solve"] --> B["plan_routes.py<br/>comprehensive_solve()"]
+    B --> C["solve_service.py<br/>SolveService.comprehensive_solve()"]
+
+    subgraph S1["流程① 排产"]
+        C --> S1a["_produce_plan()"]
+        S1a --> S1b["_load_existing_plan()"]
+        S1b --> S1c["scheduling_repo.py<br/>load_production_plan_details()"]
+        S1a --> S1d["_extract_crude_costs()"]
+    end
+
+    subgraph S2["流程② 批次+组合"]
+        C --> S2a["_enumerate_switches()"]
+        S2a --> S2b["switch_planner.py<br/>ValveSwitchPlanner.enumerate_valve_switching()"]
+        S2a --> S2c["switch_planner.py<br/>build_device_split_roles()"]
+    end
+
+    subgraph PRE["预加载引用数据"]
+        C --> P0["_preload_reference_data()<br/>cache-aside: prices + device_costs + feed_ratios"]
+        P0 --> P1["refinery_repo.py<br/>preload_prices()"]
+        P0 --> P2["price_repo<br/>load_device_costs()"]
+        P0 --> P3["refinery_repo.py<br/>get_feed_ratio()"]
+    end
+
+    subgraph S3["流程③ 效益选优"]
+        C --> S3a["_evaluate_and_pick()"]
+        S3a --> S3b["combination_optimizer.py<br/>optimize_combinations()"]
+        S3b --> S3c["combination_evaluator.py<br/>evaluate_combination() x N组合"]
+        S3c --> S3d["hangmei_optimizer.py<br/>_compute_combo_hangmei()"]
+        S3c --> S3e["direct_calculator.py<br/>calculate_physical()"]
+        S3e --> S3f["7子函数<br/>_build_topology / _init_special_vars<br/>_resolve_eff_input / _forward_traverse<br/>_fix_cross_edges / _apply_shutdown_scaling<br/>_build_device_utilization"]
+        S3c --> S3g["economics.py<br/>generate_explanation()"]
+        S3c --> S3h["tank_capacity_checker.py<br/>TankCapacityChecker.check()"]
+        S3c --> S3i["combination_evaluator.py<br/>_apply_monthly_capacity_reduction()<br/>_apply_hangmei_output_correction()"]
+    end
+
+    C --> S4["_finalize_combination_outputs()"]
+    C --> S5["_reassess_feasibility()"]
+    C --> S6["_select_optimal()"]
+
+    subgraph FINAL["最终核算"]
+        C --> F1["_preload_reference_data()<br/>本月价"]
+        C --> F2["evaluate_combination()<br/>summary_only=False 全量重算"]
+        C --> F3["economic_reporter.py<br/>aggregate_economics()<br/>build_economic_explanation()<br/>build_economic_breakdown()"]
+        C --> F4["switch_analysis.py<br/>build_jian1_switch_analysis()"]
+        C --> F5["flow_diagram_builder.py<br/>build_flow_diagram()<br/>build_device_input_sources()"]
+        C --> F6["_eval_all_combos_final()<br/>本月价全组合批量评估"]
+        F6 --> F7["combination_evaluator.py<br/>recompute_combination_economics()"]
+    end
+
+    C --> R["组装 result dict 返回"]
+
+    style P0 fill:#3b82f6,color:#fff
+    style S3b fill:#10b981,color:#fff
+    style S3c fill:#10b981,color:#fff
+    style S3d fill:#8b5cf6,color:#fff
+    style S3f fill:#06b6d4,color:#fff
+    style F3 fill:#f59e0b,color:#fff
+    style F4 fill:#f59e0b,color:#fff
+    style F5 fill:#f59e0b,color:#fff
+            </div>
+            <div class="note"><b>图例</b>：蓝色 = Service 层预加载（Phase 2 新增）；绿色 = calculation 层核心计算；紫色 = 航煤工况；青色 = calculate_physical 拆分（Phase 4）；橙色 = 从 Service 层下移到 calculation 层的函数（Phase 5）。</div>
+        </div>
+        <div class="card" id="sequence">
+            <h2>3. 时序图 <span class="tag tag-phase">Phase 2+3</span></h2>
+            <p>展示单次 <code>comprehensive_solve</code> 的完整时序。<b>第二轮重构变化</b>：新增 <code>_preload_reference_data</code> 参与者；<code>batch_optimizer</code> 替换为 <code>ComboOpt</code> / <code>ComboEval</code> / <code>HangmeiOpt</code> 三个参与者；calc_ctx 参与者已移除。</p>
+            <div class="mermaid">
+sequenceDiagram
+    participant API as plan_routes
+    participant SS as SolveService
+    participant PRD as _preload_reference_data
+    participant CO as ComboOpt combination_optimizer
+    participant CE as ComboEval combination_evaluator
+    participant HO as HangmeiOpt hangmei_optimizer
+    participant DC as direct_calculator
+    participant ECON as economics
+
+    API->>SS: comprehensive_solve plan_month
+    SS->>SS: 1 _produce_plan PlanStage
+    SS->>SS: 2 _enumerate_switches SwitchStage
+    SS->>PRD: _preload_reference_data prev_month
+    PRD-->>SS: prices device_costs feed_ratios
+    SS->>HO: build_hangmei_context prices
+    HO-->>SS: HangmeiContext
+
+    SS->>CO: optimize_combinations prices device_costs feed_ratios
+    loop PASS 1 N组合 summary_only=True
+        CO->>CE: evaluate_combination prices
+        CE->>HO: _precompute_hangmei_batch_data
+        CE->>HO: _compute_combo_hangmei
+        HO-->>CE: mode M best_start summary
+        loop 每批次
+            CE->>DC: calculate_physical feed_ratios
+            DC->>DC: 7子函数
+            DC-->>CE: feasible result_dict
+            CE->>ECON: generate_explanation prices
+            ECON-->>CE: explanation
+        end
+        CE->>CE: _apply_monthly_capacity_reduction
+        CE->>CE: _apply_hangmei_output_correction
+        CE-->>CO: CombinationResult
+    end
+    CO-->>SS: combination_results pass1_results
+
+    SS->>SS: _finalize_combination_outputs
+    SS->>SS: _reassess_feasibility
+    SS->>SS: _select_optimal
+
+    SS->>PRD: _preload_reference_data plan_month
+    PRD-->>SS: prices_final
+    SS->>CE: evaluate_combination summary_only=False
+    CE-->>SS: full_result
+
+    SS->>SS: _eval_all_combos_final
+    loop PASS 4 本月价 R2复用物理
+        SS->>CE: recompute_combination_economics prices_final
+        CE->>ECON: generate_explanation prices_final
+        CE-->>SS: CombinationResult
+    end
+
+    SS-->>API: result dict
+            </div>
+        </div>
+        <div class="card" id="func-hierarchy">
+            <h2>4. 函数层级图 <span class="tag tag-new">NEW</span> <span class="tag tag-phase">Phase 3+4</span></h2>
+            <p>展示第二轮重构后的函数归属与层级关系。<b>batch_optimizer.py 拆分</b>为 3 个子模块；<b>calculate_physical 拆分</b>为 7 个子函数；<b>4 个共享函数</b>提取到 combination_evaluator.py。</p>
+            <div class="mermaid">
+graph TD
+    ROOT["SolveService.comprehensive_solve()"]
+
+    subgraph svc["service/solve_service.py"]
+        ROOT --> PP["_produce_plan()"]
+        ROOT --> ES["_enumerate_switches()"]
+        ROOT --> PRD["_preload_reference_data() ★Phase2"]
+        ROOT --> EAP["_evaluate_and_pick()"]
+        ROOT --> FIN["_finalize_combination_outputs()"]
+        ROOT --> RFS["_reassess_feasibility()"]
+        ROOT --> SEL["_select_optimal()"]
+        ROOT --> EAF["_eval_all_combos_final()"]
+        ROOT --> BBD["_build_batch_details()"]
+    end
+
+    subgraph co["calculation/combination_optimizer.py ★Phase3"]
+        EAP --> OC["optimize_combinations()"]
+    end
+
+    subgraph ce["calculation/combination_evaluator.py ★Phase3"]
+        OC --> EC["evaluate_combination()"]
+        OC --> RCE["recompute_combination_economics()"]
+        EC --> PHD["_precompute_hangmei_batch_data() ★Phase1"]
+        EC --> MCR["_apply_monthly_capacity_reduction() ★Phase1"]
+        EC --> HOC["_apply_hangmei_output_correction() ★Phase1"]
+        EC --> BDO["_build_batch_details_with_overload() ★Phase1"]
+        RCE --> MCR
+        RCE --> HOC
+        RCE --> BDO
+    end
+
+    subgraph ho["calculation/hangmei_optimizer.py ★Phase3"]
+        EC --> BCH["_compute_combo_hangmei()"]
+        EC --> BHM["build_hangmei_context()"]
+        BCH --> FOH["_find_optimal_hangmei_start()"]
+        BHM --> CEI["_compute_device_effective_input()"]
+        BHM --> RHY["_resolve_hangmei_yield()"]
+    end
+
+    subgraph dc["calculation/direct_calculator.py ★Phase4"]
+        EC --> CP["calculate_physical()"]
+        EC --> CD["calculate_direct() 包装函数"]
+        CD --> CP
+        CP --> BT["_build_topology()"]
+        CP --> ISV["_init_special_vars()"]
+        CP --> REI["_resolve_eff_input()"]
+        CP --> FT["_forward_traverse()"]
+        CP --> FCE["_fix_cross_edges()"]
+        CP --> ASS["_apply_shutdown_scaling()"]
+        CP --> BDU["_build_device_utilization()"]
+        FT --> REI
+        FCE --> REI
+    end
+
+    subgraph econ["calculation/economics.py"]
+        EC --> GE["generate_explanation()"]
+        RCE --> GE
+    end
+
+    subgraph moved["★Phase5 从Service下移到Calculation"]
+        FIN --> ER["economic_reporter.py<br/>aggregate_economics()<br/>build_economic_explanation()<br/>build_economic_breakdown()"]
+        ROOT --> SA["switch_analysis.py<br/>build_jian1_switch_analysis()"]
+        BBD --> FDB["flow_diagram_builder.py<br/>build_flow_diagram()<br/>build_device_input_sources()"]
+    end
+
+    style PRD fill:#3b82f6,color:#fff
+    style OC fill:#10b981,color:#fff
+    style EC fill:#10b981,color:#fff
+    style CP fill:#06b6d4,color:#fff
+    style BT fill:#06b6d4,color:#fff
+    style ISV fill:#06b6d4,color:#fff
+    style REI fill:#06b6d4,color:#fff
+    style FT fill:#06b6d4,color:#fff
+    style FCE fill:#06b6d4,color:#fff
+    style ASS fill:#06b6d4,color:#fff
+    style BDU fill:#06b6d4,color:#fff
+    style PHD fill:#8b5cf6,color:#fff
+    style MCR fill:#8b5cf6,color:#fff
+    style HOC fill:#8b5cf6,color:#fff
+    style BDO fill:#8b5cf6,color:#fff
+    style ER fill:#f59e0b,color:#fff
+    style SA fill:#f59e0b,color:#fff
+    style FDB fill:#f59e0b,color:#fff
+            </div>
+        </div>
+        <div class="card" id="call-count">
+            <h2>5. 调用次数公式</h2>
+            <p>设 <code>B</code> = 批次数，<code>C</code> = 组合数（通常 <code>C = 2^(B-1)</code>），<code>D</code> = 装置数。</p>
+            <table>
+                <tr><th>阶段</th><th>函数</th><th>调用次数</th><th>说明</th></tr>
+                <tr><td>PASS 1 选优</td><td><code>evaluate_combination</code></td><td><code>C</code></td><td>每个组合评估一次（summary_only=True，上月价）</td></tr>
+                <tr><td>PASS 1 内部</td><td><code>calculate_physical</code></td><td><code>C × B</code> → <code>≤ 2B</code></td><td><span class="tag tag-p0">P0</span> 物理缓存：同 (batch_id, mode, in_hangmei_window) 只算一次</td></tr>
+                <tr><td>PASS 1 内部</td><td><code>generate_explanation</code></td><td><code>C × B</code> → <code>≤ 2B</code></td><td><span class="tag tag-p0">P0</span> 经济参数匹配时复用缓存 explanation</td></tr>
+                <tr><td>PASS 1 内部</td><td><code>_compute_combo_hangmei</code></td><td><code>C</code> → <code>1</code></td><td><span class="tag tag-p1">P1</span> 航煤预计算缓存：同 (batch_id, mode) 只算一次</td></tr>
+                <tr><td>PASS 3 核算</td><td><code>evaluate_combination</code></td><td><code>1</code></td><td>最优组合全量重算（summary_only=False，本月价）</td></tr>
+                <tr><td>PASS 4 对比</td><td><code>recompute_combination_economics</code></td><td><code>C - 1</code></td><td><span class="tag tag-p2">P2</span> 复用 PASS 1 物理计算。最优组合复用 PASS 3 (<span class="tag tag-p5">P5</span>)</td></tr>
+                <tr><td>PASS 4 内部</td><td><code>generate_explanation</code></td><td><code>(C-1) × B</code> → <code>≤ 2B</code></td><td><span class="tag tag-p0">P0</span> 跨组合经济缓存复用</td></tr>
+                <tr><td>PASS 4 航煤</td><td><code>_compute_combo_hangmei</code></td><td><code>C - 1</code></td><td><span class="tag tag-p4">P4</span> 航煤搜索依赖价格，用本月价重跑</td></tr>
+            </table>
+            <div class="formula">总 calculate_physical 调用 ≈ 3B | 总 generate_explanation 调用 ≈ 5B | 无优化时 4CB（C=8,B=4时 128次→优化后≈20次）</div>
+        </div>
+        <div class="card" id="api-layer">
+            <h2>6. API 路由层 <span class="layer-label layer-api">API</span></h2>
+            <p><span class="file-path">file:///d:/coding/huilian_tag_meixiao/solve_v1/backend/api/plan_routes.py</span></p>
+            <p>薄封装层：参数解析 + 调用 <code>SolveService</code> + 响应封装。业务编排已下沉到 Service 层。</p>
+            <table>
+                <tr><th>路由函数</th><th>HTTP</th><th>调用</th><th>说明</th></tr>
+                <tr><td><code>comprehensive_solve</code></td><td>POST</td><td><code>SolveService.comprehensive_solve()</code></td><td>综合求解主入口</td></tr>
+                <tr><td><code>optimize_valve_switching</code></td><td>POST</td><td><code>SolveService.optimize_valve()</code></td><td>仅优化阀门切换位置</td></tr>
+                <tr><td><code>enumerate_switches</code></td><td>POST</td><td><code>SolveService.enumerate_switches()</code></td><td>批次划分与组合识别（不评估）</td></tr>
+                <tr><td><code>generate_plan</code></td><td>POST</td><td><code>SolveService.generate_plan()</code></td><td>生成排产计划（异步 CP-SAT）</td></tr>
+                <tr><td><code>generate_plan_status</code></td><td>GET</td><td>内存 <code>_tasks</code> dict</td><td>轮询排产任务状态</td></tr>
+            </table>
+            <div class="note">CP-SAT 排产通过 <code>_run_cp_sat_async</code> 后台线程执行，POST 立即返回 <code>task_id</code>，前端轮询 GET 取结果。</div>
+        </div>
+        <div class="card" id="service-layer">
+            <h2>7. Service 编排层 <span class="layer-label layer-service">Service</span></h2>
+            <p><span class="file-path">file:///d:/coding/huilian_tag_meixiao/solve_v1/backend/service/solve_service.py</span></p>
+            <p>承接原 <code>api/plan_routes.py</code> 中的业务编排与 helper。依赖方向：<code>service → {calculation, scheduling, data} → models</code>。</p>
+            <h3>comprehensive_solve() <span class="tag tag-phase">编排入口</span></h3>
+            <p>综合求解主入口，编排三个业务流程：① _produce_plan 排产 → ② _enumerate_switches 批次+组合 → ③ _evaluate_and_pick 效益选优。双价格月口径：选方案用上月价，核算效益用本月价。</p>
+            <h3>_preload_reference_data() <span class="tag tag-new">Phase 2 新增</span></h3>
+            <p>Cache-aside 模式：Service 层在调用计算层前一次性预加载引用数据，产出三个 flat dict：<code>prices</code> / <code>device_costs</code> / <code>feed_ratios</code>。替代原 CalcContext 封装并在计算层内部查 DB 的模式。</p>
+            <h3>其他关键方法</h3>
+            <table>
+                <tr><th>方法</th><th>说明</th></tr>
+                <tr><td><code>_produce_plan</code></td><td>流程①：复用 DB 已落盘计划或报错</td></tr>
+                <tr><td><code>_enumerate_switches</code></td><td>流程②：调用 ValveSwitchPlanner</td></tr>
+                <tr><td><code>_evaluate_and_pick</code></td><td>流程③：调用 optimize_combinations，传入预加载引用数据</td></tr>
+                <tr><td><code>_finalize_combination_outputs</code></td><td>从 pass1_results 填充 CombinationOutput</td></tr>
+                <tr><td><code>_reassess_feasibility</code></td><td>月度口径重定可行性</td></tr>
+                <tr><td><code>_select_optimal</code></td><td>月度可行组合中重选最优</td></tr>
+                <tr><td><code>_eval_all_combos_final</code></td><td>PASS 4：本月价全组合批量评估</td></tr>
+                <tr><td><code>optimize_valve</code></td><td>仅优化阀门切换位置</td></tr>
+                <tr><td><code>enumerate_switches</code></td><td>仅流程② + 轻量容量校验</td></tr>
+            </table>
+            <h3>编排阶段对象</h3>
+            <p><code>PlanStage</code>(details, custom_crude_costs) → <code>SwitchStage</code>(batches, combinations) → <code>SolutionStage</code>(combination_results, optimal, pass1_results)</p>
+        </div>
+        <div class="card" id="calc-layer">
+            <h2>8. Calculation 计算层 <span class="layer-label layer-calc">Calc</span></h2>
+            <p>纯函数层：无 DB 直连，所有价格/成本/配比通过参数传入。第二轮重构后 <code>batch_optimizer.py</code> 拆分为 3 个子模块。</p>
+
+            <h3>combination_optimizer.py <span class="tag tag-new">★ Phase 3 新文件</span></h3>
+            <p><span class="file-path">file:///d:/coding/huilian_tag_meixiao/solve_v1/backend/calculation/combination_optimizer.py</span></p>
+            <p>组合遍历与最优挑选。从原 <code>batch_optimizer.py</code> 拆出。</p>
+            <pre><code>def optimize_combinations(batches, combinations, custom_crude_costs,
+        load_scenario_fn, hangmei_ctx=None, select_month=None,
+        final_month=None, logger=None,
+        prices: Dict = None, device_costs: Dict = None,
+        feed_ratios: Dict = None) -> dict</code></pre>
+            <ul>
+                <li>遍历所有组合，调用 <code>evaluate_combination(summary_only=True)</code> 评估</li>
+                <li><span class="tag tag-p0">P0</span> 物理缓存 <code>physical_cache</code>：跨组合共享，同 (batch_id, mode, in_hangmei_window) 只算一次物理计算</li>
+                <li><span class="tag tag-p1">P1</span> 航煤预计算缓存 <code>hangmei_precompute_cache</code>：同 (batch_id, mode) 只算一次</li>
+                <li>R2 优化：保留 <code>pass1_results: Dict[int, CombinationResult]</code> 供 PASS 4 复用物理计算</li>
+                <li>返回 <code>{combination_results, optimal_details, optimal_revenue, scenario_cache, pass1_results}</code></li>
+            </ul>
+            <div class="note">Stage 2 已删除：最优组合的全量重算(summary_only=False)统一延迟到 <code>comprehensive_solve</code> 月度重选后执行，避免与 PASS 3 重复计算。</div>
+
+            <h3>combination_evaluator.py <span class="tag tag-new">★ Phase 3 新文件</span></h3>
+            <p><span class="file-path">file:///d:/coding/huilian_tag_meixiao/solve_v1/backend/calculation/combination_evaluator.py</span></p>
+            <p>组合评估：CombinationResult 数据类、单组合评估、经济重算与 4 个共享辅助函数。</p>
+
+            <p><b>CombinationResult</b>（PASS 间中间结果，含完整中间数据）：</p>
+            <pre><code>@dataclass
+class CombinationResult:
+    combination_id: str
+    description: str
+    switch_position: int
+    initial_mode: str
+    switches: Dict
+    total_revenue: float
+    total_cost: float = 0.0
+    batch_results: List[dict]
+    explanations: List[dict]      # 各批次 explanation
+    calc_results: List[dict]      # 各批次完整 calc_result
+    hangmei_summary: dict         # 航煤工况摘要
+    feasible: bool = True
+    bottleneck_devices: List[dict]
+    infeasible_summary: str
+    tank_check_result: dict
+    batch_details: List[dict]     # 含 processing_days（提前构建）
+    monthly_load: dict            # 月度负荷（提前构建）</code></pre>
+
+            <p><b>evaluate_combination()</b> — 评估单个阀门切换组合：</p>
+            <pre><code>def evaluate_combination(combo, batches, scenario_cache, custom_crude_costs,
+        load_scenario_fn, hangmei_ctx=None, plan_month=None, logger=None,
+        capacity_only=False, summary_only=False,
+        physical_cache=None, hangmei_precompute_cache=None,
+        prices: Dict = None, device_costs: Dict = None,
+        feed_ratios: Dict = None) -> Optional[CombinationResult]</code></pre>
+            <ul>
+                <li>航煤工况：调用 <code>_precompute_hangmei_batch_data</code> + <code>_compute_combo_hangmei</code></li>
+                <li>逐批次：P0 缓存命中时复用物理结果，经济参数不匹配时仅重跑 <code>generate_explanation</code></li>
+                <li>罐容段级检测：<code>TankCapacityChecker.check()</code>，违规即否定可行性</li>
+                <li>月度能力折减：<code>_apply_monthly_capacity_reduction</code></li>
+                <li>航煤产出修正：<code>_apply_hangmei_output_correction</code></li>
+            </ul>
+
+            <p><b>recompute_combination_economics()</b> — 复用物理计算，仅用新价格月重算经济 <span class="tag tag-p2">P2</span></p>
+            <pre><code>def recompute_combination_economics(prev_result, batches, scenario_cache,
+        plan_month, hangmei_ctx=None, logger=None, load_scenario_fn=None,
+        custom_crude_costs=None, econ_cache=None,
+        prices: Dict = None, device_costs: Dict = None,
+        feed_ratios: Dict = None) -> CombinationResult</code></pre>
+            <ul>
+                <li><span class="tag tag-p4">P4</span> 航煤搜索依赖价格：用本月价重跑 <code>_compute_combo_hangmei</code>，而非直接复用 PASS 1</li>
+                <li><span class="tag tag-p0">P0</span> 跨组合经济缓存 <code>econ_cache</code>：同 (batch, mode, 航煤参数) 的 explanation 跨组合复用</li>
+                <li>航煤参数变化时（<code>hangmei_changed=True</code>），受影响批次需重算物理计算</li>
+            </ul>
+
+            <h3>4 个共享辅助函数 <span class="tag tag-phase">★ Phase 1 消除重复</span></h3>
+            <p>从 <code>evaluate_combination</code> 和 <code>recompute_combination_economics</code> 中提取的公共逻辑：</p>
+            <table>
+                <tr><th>函数</th><th>说明</th></tr>
+                <tr>
+                    <td><code>_precompute_hangmei_batch_data()</code></td>
+                    <td>预计算每批次航煤主动/被动装置的有效输入量和收率。支持 <code>hangmei_precompute_cache</code></td>
+                </tr>
+                <tr>
+                    <td><code>_apply_monthly_capacity_reduction()</code></td>
+                    <td>月度加工能力折减：按装置顺序累计原料量，超容部分按比例折减收益。返回 (deduction, batch_ratios)</td>
+                </tr>
+                <tr>
+                    <td><code>_apply_hangmei_output_correction()</code></td>
+                    <td>航煤产出修正：用 calc_results 真实航煤产量替代估算值，并按 batch_ratios 加权折减</td>
+                </tr>
+                <tr>
+                    <td><code>_build_batch_details_with_overload()</code></td>
+                    <td>构建 batch_details + monthly_load，并重算超容装置的 processing_days/daily_consumption</td>
+                </tr>
+            </table>
+
+            <h3>hangmei_optimizer.py <span class="tag tag-new">★ Phase 3 新文件</span></h3>
+            <p><span class="file-path">file:///d:/coding/huilian_tag_meixiao/solve_v1/backend/calculation/hangmei_optimizer.py</span></p>
+            <p>航煤工况相关：有效进料计算、上下文构建、组合级 M/N 计算与时段搜索。</p>
+            <table>
+                <tr><th>函数</th><th>说明</th></tr>
+                <tr><td><code>HangmeiContext</code></td><td>航煤工况全局上下文 dataclass（跨组合共享）。多装置支持：active/passive_products 列表</td></tr>
+                <tr><td><code>build_hangmei_context()</code></td><td>构建航煤上下文。接收 <code>prices</code> 参数取航煤价格</td></tr>
+                <tr><td><code>_compute_combo_hangmei()</code></td><td>根据组合各批次减一线方向计算 M/N，搜索最优航煤起始时段</td></tr>
+                <tr><td><code>_find_optimal_hangmei_start()</code></td><td>对每个候选起始位置逐天累加航煤增量直到满足缺口</td></tr>
+                <tr><td><code>_compute_device_effective_input()</code></td><td>通过 connections 拓扑动态查找装置上游储罐，计算有效进料量</td></tr>
+                <tr><td><code>_resolve_hangmei_yield()</code></td><td>解析航煤产品在某 mode 下的（非航煤收率, 航煤收率）</td></tr>
+            </table>
+            <h3>direct_calculator.py <span class="tag tag-phase">★ Phase 2 + Phase 4</span></h3>
+            <p><span class="file-path">file:///d:/coding/huilian_tag_meixiao/solve_v1/backend/calculation/direct_calculator.py</span></p>
+            <p>v2 纯函数版：无 calc_ctx、无 DB 直连。<code>feed_ratios</code> 由 Service 层预加载后显式传入；<code>prices</code>/<code>device_costs</code> 透传给 <code>generate_explanation</code>。</p>
+
+            <p><b>calculate_physical()</b> — 纯物理计算（不含经济计算/价格参数），<span class="tag tag-phase">Phase 4 拆分为 7 子函数</span>：</p>
+            <pre><code>def calculate_physical(scenario, input_amount, yield_mode, logger=None,
+        total_input_amount=None, days=1, hangmei_mode=False,
+        hangmei_m_days=0, day_index=0, shutdown_intervals=None,
+        feed_ratios: Dict = None) -> Tuple[bool, dict]</code></pre>
+            <p>执行 BFS 拓扑遍历、流量计算、停工缩减、装置利用率构建，返回物理字段 result_dict（不含 explanation）。</p>
+
+            <table>
+                <tr><th>子函数</th><th>说明</th></tr>
+                <tr>
+                    <td><code>_build_topology(scenario)</code></td>
+                    <td>BFS 拓扑排序（每次重算，&lt;0.5ms，无需缓存）。返回 device_order 列表</td>
+                </tr>
+                <tr>
+                    <td><code>_init_special_vars(yield_mode, input_amount, scenario)</code></td>
+                    <td>计算 jian1 理论总量并设置特殊变量 X/Y。X_ZERO: X=0, Y=jian1_total；Y_ZERO: X=jian1_total, Y=0</td>
+                </tr>
+                <tr>
+                    <td><code>_resolve_eff_input(scenario, dev_id, dev_input, ...)</code></td>
+                    <td>按 max_yr main_feed + target_product_id 计算总进料量。连接主料量 / max_yr main_feed.yield_rate</td>
+                </tr>
+                <tr>
+                    <td><code>_forward_traverse(scenario, device_order, ...)</code></td>
+                    <td>正向遍历：拓扑序计算 device_inputs, connection_flows, total_feeds。返回 6 元组</td>
+                </tr>
+                <tr>
+                    <td><code>_fix_cross_edges(scenario, device_order, ...)</code></td>
+                    <td>修正 BFS 拓扑序交叉边：从完整 connection_flows 重算 device_inputs 和 total_feeds</td>
+                </tr>
+                <tr>
+                    <td><code>_apply_shutdown_scaling(...)</code></td>
+                    <td>停工按小时比例缩减：装置产出/连接 flow 按非停工时长比例缩减。进料罐照常接收 CDU 来料</td>
+                </tr>
+                <tr>
+                    <td><code>_build_device_utilization(scenario, ...)</code></td>
+                    <td>构建装置利用率数据（仅进料+基础信息，不含单批次超容判定）。跳过停用装置</td>
+                </tr>
+            </table>
+
+            <p><b>calculate_direct()</b> — 兼容包装函数：</p>
+            <pre><code>def calculate_direct(scenario, input_amount, yield_mode, logger=None,
+        crude_oil_price=0.0, total_input_amount=None, days=1,
+        hangmei_mode=False, hangmei_m_days=0, day_index=0,
+        plan_month=None, shutdown_intervals=None,
+        capacity_only=False, summary_only=False,
+        prices: Dict = None, device_costs: Dict = None,
+        feed_ratios: Dict = None) -> Tuple[bool, dict]</code></pre>
+            <p>调用 <code>calculate_physical</code> 得到物理结果，再根据 <code>summary_only</code>/<code>capacity_only</code> 调用 <code>generate_explanation</code>（统一入口），将 explanation 写入 result_dict 并返回。</p>
+
+            <h3>economic_reporter.py <span class="tag tag-moved">★ Phase 5 从 Service 下移</span></h3>
+            <p><span class="file-path">file:///d:/coding/huilian_tag_meixiao/solve_v1/backend/calculation/economic_reporter.py</span></p>
+            <table>
+                <tr><th>函数</th><th>说明</th></tr>
+                <tr><td><code>aggregate_economics(optimal_explanations, monthly_load, cdu_device_id)</code></td><td>统一聚合最优组合各批次 explanation（SSOT，供文本/结构化两个渲染方法共用）</td></tr>
+                <tr><td><code>build_economic_explanation(agg, actual_profit, near_feasible)</code></td><td>从聚合数据生成经济效益说明文字（纯渲染层，不做任何聚合计算）</td></tr>
+                <tr><td><code>build_economic_breakdown(agg, processing_device_ids, actual_profit)</code></td><td>从聚合数据生成结构化效益拆解（纯渲染层，与 explanation 同源同值）</td></tr>
+            </table>
+
+            <h3>switch_analysis.py <span class="tag tag-moved">★ Phase 5 从 Service 下移</span></h3>
+            <p><span class="file-path">file:///d:/coding/huilian_tag_meixiao/solve_v1/backend/calculation/switch_analysis.py</span></p>
+            <table>
+                <tr><th>函数</th><th>说明</th></tr>
+                <tr><td><code>build_jian1_switch_analysis(optimal_combo, batches, scenario_cache, repo, calc_results)</code></td><td>减一线切换点供需分析（切换前 CDU 产出 vs 设备月平均负荷消耗）</td></tr>
+            </table>
+
+            <h3>flow_diagram_builder.py <span class="tag tag-moved">★ Phase 5 从 Service 下移</span></h3>
+            <p><span class="file-path">file:///d:/coding/huilian_tag_meixiao/solve_v1/backend/calculation/flow_diagram_builder.py</span></p>
+            <table>
+                <tr><th>函数</th><th>说明</th></tr>
+                <tr><td><code>build_flow_diagram(scenario, device_util, device_inputs, connection_flows, monthly_load)</code></td><td>构建全装置流程图数据（数字孪生视图）。返回 {nodes, edges}</td></tr>
+                <tr><td><code>build_device_input_sources(scenario, device_id, ...)</code></td><td>构建指定装置的进料来源拆解</td></tr>
+            </table>
+
+            <h3>batch_optimizer.py <span class="tag tag-moved">★ Phase 3 重导出层</span></h3>
+            <p><span class="file-path">file:///d:/coding/huilian_tag_meixiao/solve_v1/backend/calculation/batch_optimizer.py</span></p>
+            <p>20 行兼容入口，仅为不破坏现有 import 路径。新代码应直接从子模块导入。</p>
+            <pre><code>from .hangmei_optimizer import (
+    HangmeiContext, build_hangmei_context,
+    _compute_effective_input, _compute_device_effective_input,
+    _resolve_hangmei_yield, _compute_combo_hangmei, _find_optimal_hangmei_start,
+)
+from .combination_evaluator import (
+    CombinationResult, evaluate_combination, recompute_combination_economics,
+    _precompute_hangmei_batch_data, _apply_monthly_capacity_reduction,
+    _apply_hangmei_output_correction, _build_batch_details_with_overload,
+)
+from .combination_optimizer import optimize_combinations</code></pre>
+
+            <h3>economics.py <span class="tag tag-phase">★ Phase 2 纯函数化</span></h3>
+            <p><span class="file-path">file:///d:/coding/huilian_tag_meixiao/solve_v1/backend/calculation/economics.py</span></p>
+            <p>v2 纯函数版：无 calc_ctx、无 DB 直连。<code>prices</code>/<code>device_costs</code> 由 Service 层预加载后显式传入。</p>
+            <ul>
+                <li><code>generate_explanation()</code> — 统一入口（原 generate_summary 已合并，逻辑完全相同）</li>
+                <li><code>classify_cdu_products()</code> — 从 material_flows 拓扑推导 CDU 侧线产品的分流分组（替代硬编码）</li>
+                <li>Stage 1 已删除：<code>_build_decision_reasons</code> / <code>_build_key_decisions</code> / <code>_build_diversion_scenarios</code> / <code>_build_algorithm_details</code> 等死代码</li>
+                <li>Stage 4：消除日值→批次值的 ×days 循环（compute_revenue/compute_costs 直接输出批次值）</li>
+            </ul>
+
+            <h3>batch_builder.py</h3>
+            <p><span class="file-path">file:///d:/coding/huilian_tag_meixiao/solve_v1/backend/calculation/batch_builder.py</span></p>
+            <table>
+                <tr><th>函数</th><th>说明</th></tr>
+                <tr><td><code>build_batch_details_list(batch_results, calc_results, explanations, tank_initials)</code></td><td>构建各批次装置级计算过程明细</td></tr>
+                <tr><td><code>build_monthly_load(batch_details)</code></td><td>月度装置负荷聚合（含超容判定、停工折算）</td></tr>
+                <tr><td><code>merge_intervals(intervals)</code></td><td>合并重叠时间区间</td></tr>
+            </table>
+
+            <h3>其他 calculation 层文件</h3>
+            <table>
+                <tr><th>文件</th><th>关键函数</th><th>说明</th></tr>
+                <tr><td><code>revenue_calculator.py</code></td><td><code>compute_revenue()</code>, <code>get_product_price()</code></td><td>收入计算。<code>get_product_price</code> 优先从 <code>prices</code> dict 取值</td></tr>
+                <tr><td><code>cost_calculator.py</code></td><td><code>compute_costs()</code>, <code>CostBreakdown</code></td><td>成本计算</td></tr>
+                <tr><td><code>yield_resolver.py</code></td><td><code>resolve_yield_rate()</code></td><td>收率解析（含航煤工况收率切换）</td></tr>
+                <tr><td><code>tank_capacity_checker.py</code></td><td><code>TankCapacityChecker.check()</code></td><td>罐容段级检测（检测优先，不做可行性判定）</td></tr>
+            </table>
+        </div>
+        <div class="card" id="models-layer">
+            <h2>9. Models 数据结构层 <span class="layer-label layer-models">Models</span></h2>
+            <p><span class="file-path">file:///d:/coding/huilian_tag_meixiao/solve_v1/backend/models/</span></p>
+            <h3>results.py — CombinationOutput</h3>
+            <p>对外输出最终结果（无中间数据，可直接序列化）。重构后无下划线临时键，由 <code>_finalize_combination_outputs</code> 从 CombinationResult 填充。含 <code>to_dict()</code> 方法供 API JSON 序列化。</p>
+            <h3>calc_context.py <span class="tag tag-deleted">已删除</span></h3>
+            <p><span class="deleted">CalcContext</span> 已在 Phase 2 完全消除。改为 Service 层 <code>_preload_reference_data()</code> 预加载 + 显式传参。</p>
+            <h3>refinery.py — RefineryScenario</h3>
+            <p>炼化场景数据类，含 devices/connections/products/material_flows 拓扑数据。</p>
+            <h3>scheduling.py</h3>
+            <p>排产计划数据结构（ProductionPlanDetail 等）。</p>
+        </div>
+        <div class="card" id="scheduling-layer">
+            <h2>10. Scheduling 排产层 <span class="layer-label layer-sched">Sched</span></h2>
+            <h3>switch_planner.py</h3>
+            <p><span class="file-path">file:///d:/coding/huilian_tag_meixiao/solve_v1/backend/scheduling/switch_planner.py</span></p>
+            <p><code>ValveSwitchPlanner.enumerate_valve_switching()</code> — 识别批次 + 枚举组合。<code>build_device_split_roles()</code> — 数据驱动获取装置分流角色。</p>
+            <h3>device_input_calc.py</h3>
+            <p><span class="file-path">file:///d:/coding/huilian_tag_meixiao/solve_v1/backend/scheduling/device_input_calc.py</span></p>
+            <p><code>build_flow_topology()</code> / <code>load_yield_tables()</code> / <code>compute_device_inputs_by_mode()</code> — 计算 X_ZERO/Y_ZERO 两种工况下各装置进料量。</p>
+        </div>
+        <div class="card" id="summary-table">
+            <h2>11. 文件—函数—职责总览表</h2>
+            <table>
+                <tr><th>层</th><th>文件</th><th>关键函数/类</th><th>职责</th><th>重构状态</th></tr>
+                <tr><td>API</td><td><code>api/plan_routes.py</code></td><td><code>comprehensive_solve</code> / <code>optimize_valve_switching</code> / <code>enumerate_switches</code></td><td>参数解析 + 响应封装</td><td>薄封装</td></tr>
+                <tr><td>Service</td><td><code>service/solve_service.py</code></td><td><code>SolveService</code> / <code>_preload_reference_data</code> / <code>_evaluate_and_pick</code></td><td>业务编排 + 引用数据预加载</td><td><span class="tag tag-new">Phase 2</span></td></tr>
+                <tr><td>Calc</td><td><code>calculation/combination_optimizer.py</code></td><td><code>optimize_combinations</code></td><td>组合遍历与最优挑选</td><td><span class="tag tag-new">Phase 3 新文件</span></td></tr>
+                <tr><td>Calc</td><td><code>calculation/combination_evaluator.py</code></td><td><code>evaluate_combination</code> / <code>recompute_combination_economics</code> / 4 shared funcs</td><td>单组合评估 + 经济重算 + 共享逻辑</td><td><span class="tag tag-new">Phase 3 + Phase 1</span></td></tr>
+                <tr><td>Calc</td><td><code>calculation/hangmei_optimizer.py</code></td><td><code>build_hangmei_context</code> / <code>_compute_combo_hangmei</code></td><td>航煤工况计算</td><td><span class="tag tag-new">Phase 3 新文件</span></td></tr>
+                <tr><td>Calc</td><td><code>calculation/batch_optimizer.py</code></td><td>(re-export)</td><td>20 行兼容入口</td><td><span class="tag tag-moved">Phase 3 重导出</span></td></tr>
+                <tr><td>Calc</td><td><code>calculation/direct_calculator.py</code></td><td><code>calculate_physical</code> + 7 子函数 / <code>calculate_direct</code></td><td>物理计算（纯函数）</td><td><span class="tag tag-phase">Phase 2 + Phase 4</span></td></tr>
+                <tr><td>Calc</td><td><code>calculation/economics.py</code></td><td><code>generate_explanation</code> / <code>classify_cdu_products</code></td><td>可解释性分析（纯函数）</td><td><span class="tag tag-phase">Phase 2 纯函数化</span></td></tr>
+                <tr><td>Calc</td><td><code>calculation/economic_reporter.py</code></td><td><code>aggregate_economics</code> / <code>build_economic_explanation</code> / <code>build_economic_breakdown</code></td><td>经济效益报告生成</td><td><span class="tag tag-moved">Phase 5 下移</span></td></tr>
+                <tr><td>Calc</td><td><code>calculation/switch_analysis.py</code></td><td><code>build_jian1_switch_analysis</code></td><td>减一线切换点供需分析</td><td><span class="tag tag-moved">Phase 5 下移</span></td></tr>
+                <tr><td>Calc</td><td><code>calculation/flow_diagram_builder.py</code></td><td><code>build_flow_diagram</code> / <code>build_device_input_sources</code></td><td>流程图数据构建</td><td><span class="tag tag-moved">Phase 5 下移</span></td></tr>
+                <tr><td>Calc</td><td><code>calculation/batch_builder.py</code></td><td><code>build_batch_details_list</code> / <code>build_monthly_load</code></td><td>批次明细构建 + 月度负荷聚合</td><td>-</td></tr>
+                <tr><td>Calc</td><td><code>calculation/revenue_calculator.py</code></td><td><code>compute_revenue</code> / <code>get_product_price</code></td><td>收入计算</td><td>-</td></tr>
+                <tr><td>Calc</td><td><code>calculation/cost_calculator.py</code></td><td><code>compute_costs</code></td><td>成本计算</td><td>-</td></tr>
+                <tr><td>Calc</td><td><code>calculation/yield_resolver.py</code></td><td><code>resolve_yield_rate</code></td><td>收率解析</td><td>-</td></tr>
+                <tr><td>Calc</td><td><code>calculation/tank_capacity_checker.py</code></td><td><code>TankCapacityChecker.check</code></td><td>罐容段级检测</td><td>-</td></tr>
+                <tr><td>Models</td><td><code>models/results.py</code></td><td><code>CombinationOutput</code></td><td>对外输出最终结果</td><td>保留</td></tr>
+                <tr><td>Models</td><td><code>models/refinery.py</code></td><td><code>RefineryScenario</code></td><td>炼化场景数据结构</td><td>-</td></tr>
+                <tr><td>Models</td><td><code>models/scheduling.py</code></td><td><code>ProductionPlanDetail</code></td><td>排产计划数据结构</td><td>-</td></tr>
+                <tr><td>Models</td><td><span class="deleted">models/calc_context.py</span></td><td><span class="deleted">CalcContext</span></td><td><span class="deleted">引用数据容器</span></td><td><span class="tag tag-deleted">已删除</span></td></tr>
+                <tr><td>Sched</td><td><code>scheduling/switch_planner.py</code></td><td><code>ValveSwitchPlanner</code></td><td>阀门切换规划</td><td>-</td></tr>
+                <tr><td>Sched</td><td><code>scheduling/device_input_calc.py</code></td><td><code>compute_device_inputs_by_mode</code></td><td>装置进料量计算</td><td>-</td></tr>
+                <tr><td>Data</td><td><code>data/refinery_repo.py</code></td><td><code>RefineryRepository</code> / <code>get_feed_ratio</code></td><td>炼化数据仓库</td><td>-</td></tr>
+                <tr><td>Data</td><td><code>data/scheduling_repo.py</code></td><td><code>SchedulingRepository</code></td><td>排产数据仓库</td><td>-</td></tr>
+                <tr><td>-</td><td><span class="deleted">calculation/hangmei.py</span></td><td><span class="deleted">航煤旧模块</span></td><td><span class="deleted">已被 hangmei_optimizer.py 替代</span></td><td><span class="tag tag-deleted">已删除</span></td></tr>
+            </table>
+        </div>
+        <div class="card" id="bottleneck">
+            <h2>12. 性能瓶颈分析</h2>
+            <table>
+                <tr><th>瓶颈点</th><th>优化前</th><th>优化后</th><th>优化手段</th></tr>
+                <tr><td>calculate_physical 调用</td><td>C × B</td><td>≤ 3B</td><td><span class="tag tag-p0">P0</span> 物理缓存</td></tr>
+                <tr><td>generate_explanation 调用</td><td>C × B</td><td>≤ 5B</td><td><span class="tag tag-p0">P0</span> 经济缓存 + <span class="tag tag-p5">P5</span> 复用</td></tr>
+                <tr><td>航煤预计算</td><td>C × B</td><td>1</td><td><span class="tag tag-p1">P1</span> 航煤预计算缓存</td></tr>
+                <tr><td>PASS 4 经济重算</td><td>C × B 次 calculate_physical</td><td>(C-1) × B 次 generate_explanation</td><td><span class="tag tag-p2">P2</span> 复用物理 + <span class="tag tag-p5">P5</span> 复用 PASS 3</td></tr>
+                <tr><td>PASS 4 航煤搜索</td><td>直接复用（结果错误）</td><td>用本月价重跑</td><td><span class="tag tag-p4">P4</span> 航煤依赖价格</td></tr>
+                <tr><td>calc_ctx DB 查询</td><td>每次查 DB</td><td>0</td><td><span class="tag tag-phase">Phase 2</span> 预加载 + 显式传参</td></tr>
+                <tr><td>generate_explanation 入口</td><td>2 个（重复）</td><td>1 个</td><td><span class="tag tag-phase">Phase 2</span> 合并</td></tr>
+            </table>
+            <div class="formula">典型 B=4, C=8：calculate_physical 68次→12次(减82%) | generate_explanation 68次→20次(减71%)</div>
+        </div>
+        <div class="card" id="constraint-mapping">
+            <h2>13. 约束实现映射</h2>
+            <p>展示从业务约束到代码实现的关系链路：</p>
+            <div class="mermaid">
+flowchart LR
+    subgraph BIZ["业务约束"]
+        B1["装置加工能力上限"]
+        B2["罐容库存上下限"]
+        B3["减一线分流方向"]
+        B4["航煤目标产出"]
+        B5["装置停工"]
+        B6["月度负荷可行性"]
+    end
+
+    subgraph IMPL["代码实现"]
+        I1["_build_device_utilization<br/>CDU 批次级负荷判定<br/>→ monthly_load 超容判定"]
+        I2["TankCapacityChecker.check<br/>罐容段级检测"]
+        I3["_init_special_vars<br/>X_ZERO / Y_ZERO<br/>→ _forward_traverse 分流"]
+        I4["hangmei_optimizer<br/>_compute_combo_hangmei<br/>_find_optimal_hangmei_start"]
+        I5["_apply_shutdown_scaling<br/>按小时比例缩减产能"]
+        I6["_reassess_feasibility<br/>月度口径重定可行性<br/>罐容无违规 AND 负荷不超容"]
+    end
+
+    B1 --> I1
+    B2 --> I2
+    B3 --> I3
+    B4 --> I4
+    B5 --> I5
+    B6 --> I6
+
+    I1 --> I6
+    I2 --> I6
+    I5 --> I1
+
+    style B1 fill:#ef4444,color:#fff
+    style B2 fill:#ef4444,color:#fff
+    style B4 fill:#8b5cf6,color:#fff
+    style I2 fill:#10b981,color:#fff
+    style I4 fill:#8b5cf6,color:#fff
+    style I6 fill:#3b82f6,color:#fff
+            </div>
+            <div class="note"><b>可行性判定层次</b>：① 单批次日均超容 → 不否定组合（仅收集瓶颈信息）；② 罐容段级检测违规 → 否定可行性；③ 月度平均负荷超容 → 接近可行（折减后参与选优）。三级判定由 <code>_reassess_feasibility</code> 统一仲裁。</div>
+        </div>
+        <div class="card" id="file-tree">
+            <h2>14. 文件函数树</h2>
+            <p>完整展示 backend 目录下所有文件的函数/类结构。</p>
+            <pre><code>solve_v1/backend/
+├── api/
+│   └── plan_routes.py
+│       ├── comprehensive_solve() → SolveService
+│       ├── optimize_valve_switching() → SolveService
+│       ├── enumerate_switches() → SolveService
+│       └── generate_plan() → SolveService
+├── service/
+│   └── solve_service.py
+│       ├── SolveService
+│       │   ├── comprehensive_solve() [编排入口]
+│       │   ├── _produce_plan() [流程①]
+│       │   ├── _enumerate_switches() [流程②]
+│       │   ├── _evaluate_and_pick() [流程③]
+│       │   ├── _preload_reference_data() ★Phase 2
+│       │   ├── _finalize_combination_outputs()
+│       │   ├── _reassess_feasibility()
+│       │   ├── _select_optimal()
+│       │   ├── _eval_all_combos_final() [PASS 4]
+│       │   └── optimize_valve() / enumerate_switches()
+│       └── PlanStage / SwitchStage / SolutionStage
+├── calculation/
+│   ├── combination_optimizer.py ★Phase 3 新文件
+│   │   └── optimize_combinations()
+│   ├── combination_evaluator.py ★Phase 3 新文件
+│   │   ├── CombinationResult [中间结果]
+│   │   ├── evaluate_combination()
+│   │   ├── recompute_combination_economics()
+│   │   ├── _precompute_hangmei_batch_data() ★Phase 1
+│   │   ├── _apply_monthly_capacity_reduction() ★Phase 1
+│   │   ├── _apply_hangmei_output_correction() ★Phase 1
+│   │   └── _build_batch_details_with_overload() ★Phase 1
+│   ├── hangmei_optimizer.py ★Phase 3 新文件
+│   │   ├── HangmeiContext
+│   │   ├── build_hangmei_context()
+│   │   ├── _compute_combo_hangmei()
+│   │   └── _find_optimal_hangmei_start()
+│   ├── batch_optimizer.py ★Phase 3 重导出层(20行)
+│   ├── direct_calculator.py ★Phase 2 + Phase 4
+│   │   ├── calculate_physical() [纯物理计算]
+│   │   │   ├── _build_topology() ★Phase 4
+│   │   │   ├── _init_special_vars() ★Phase 4
+│   │   │   ├── _resolve_eff_input() ★Phase 4
+│   │   │   ├── _forward_traverse() ★Phase 4
+│   │   │   ├── _fix_cross_edges() ★Phase 4
+│   │   │   ├── _apply_shutdown_scaling() ★Phase 4
+│   │   │   └── _build_device_utilization() ★Phase 4
+│   │   └── calculate_direct() [兼容包装]
+│   ├── economics.py ★Phase 2 纯函数化
+│   │   ├── generate_explanation()
+│   │   └── classify_cdu_products()
+│   ├── economic_reporter.py ★Phase 5 从Service下移
+│   ├── switch_analysis.py ★Phase 5 从Service下移
+│   ├── flow_diagram_builder.py ★Phase 5 从Service下移
+│   ├── batch_builder.py
+│   ├── revenue_calculator.py
+│   ├── cost_calculator.py
+│   ├── yield_resolver.py
+│   ├── tank_capacity_checker.py
+│   └── [已删除] hangmei.py
+├── models/
+│   ├── results.py → CombinationOutput
+│   ├── refinery.py → RefineryScenario
+│   ├── scheduling.py → ProductionPlanDetail
+│   └── [已删除] calc_context.py → CalcContext
+├── scheduling/
+│   ├── switch_planner.py → ValveSwitchPlanner
+│   └── device_input_calc.py → compute_device_inputs_by_mode()
+├── data/
+│   ├── refinery_repo.py → RefineryRepository
+│   └── scheduling_repo.py → SchedulingRepository
+├── app.py / config.py / logger.py</code></pre>
+        </div>
+        <div class="card" id="unused-funcs">
+            <h2>15. 已删除/废弃函数</h2>
+            <p>第二轮重构清理的死代码和被替代的函数/文件：</p>
+            <table>
+                <tr><th>文件</th><th>函数/类</th><th>删除原因</th><th>替代方案</th></tr>
+                <tr>
+                    <td><span class="deleted">models/calc_context.py</span></td>
+                    <td><span class="deleted">CalcContext</span></td>
+                    <td>Phase 2：calc_ctx 完全消除</td>
+                    <td>Service 层 <code>_preload_reference_data()</code> + 显式传参 prices/device_costs/feed_ratios</td>
+                </tr>
+                <tr>
+                    <td><span class="deleted">calculation/hangmei.py</span></td>
+                    <td><span class="deleted">航煤旧模块全部函数</span></td>
+                    <td>Phase 3：batch_optimizer 拆分</td>
+                    <td><code>hangmei_optimizer.py</code>（新文件）</td>
+                </tr>
+                <tr>
+                    <td><span class="deleted">calculation/economics.py</span></td>
+                    <td><span class="deleted">_build_decision_reasons()</span></td>
+                    <td>Stage 1：死代码清理</td>
+                    <td>无（未被任何调用方使用）</td>
+                </tr>
+                <tr>
+                    <td><span class="deleted">calculation/economics.py</span></td>
+                    <td><span class="deleted">_build_key_decisions()</span></td>
+                    <td>Stage 1：死代码清理</td>
+                    <td>无（未被任何调用方使用）</td>
+                </tr>
+                <tr>
+                    <td><span class="deleted">calculation/economics.py</span></td>
+                    <td><span class="deleted">_build_diversion_scenarios()</span></td>
+                    <td>Stage 1：死代码清理</td>
+                    <td>无（未被任何调用方使用）</td>
+                </tr>
+                <tr>
+                    <td><span class="deleted">calculation/economics.py</span></td>
+                    <td><span class="deleted">_build_algorithm_details()</span></td>
+                    <td>Stage 1：死代码清理</td>
+                    <td>无（未被任何调用方使用）</td>
+                </tr>
+                <tr>
+                    <td><span class="deleted">calculation/economics.py</span></td>
+                    <td><span class="deleted">generate_summary()</span></td>
+                    <td>Stage 2：合并消除重复</td>
+                    <td><code>generate_explanation()</code>（逻辑完全相同，统一入口）</td>
+                </tr>
+                <tr>
+                    <td><span class="deleted">calculation/revenue_calculator.py</span></td>
+                    <td><span class="deleted">未使用的 helper 函数</span></td>
+                    <td>死代码清理</td>
+                    <td>无</td>
+                </tr>
+                <tr>
+                    <td><span class="deleted">models/refinery.py</span></td>
+                    <td><span class="deleted">未使用的属性/方法</span></td>
+                    <td>死代码清理</td>
+                    <td>无</td>
+                </tr>
+                <tr>
+                    <td><span class="deleted">logger.py</span></td>
+                    <td><span class="deleted">未使用的日志 helper</span></td>
+                    <td>死代码清理</td>
+                    <td>无</td>
+                </tr>
+                <tr>
+                    <td><span class="deleted">combination_optimizer.py</span></td>
+                    <td><span class="deleted">Stage 2 全量重算逻辑</span></td>
+                    <td>PASS 3 延迟到 comprehensive_solve 月度重选后</td>
+                    <td>由 <code>comprehensive_solve</code> 中的 <code>evaluate_combination(summary_only=False)</code> 替代</td>
+                </tr>
+            </table>
+            <div class="note"><b>注意</b>：calc_ctx/CalcContext/calc_context.py 的引用仅出现在本文档的解释性文本中（描述"已被消除"），实际代码中已完全移除。所有计算函数通过 <code>prices: Dict</code>、<code>device_costs: Dict</code>、<code>feed_ratios: Dict</code> 参数接收引用数据。</div>
+        </div>
+    </div>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            themeVariables: {
+                primaryColor: '#1e293b',
+                primaryTextColor: '#e2e8f0',
+                primaryBorderColor: '#3b82f6',
+                lineColor: '#94a3b8',
+                secondaryColor: '#334155',
+                tertiaryColor: '#0f172a'
+            },
+            flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+            sequence: { useMaxWidth: true, mirrorActors: false }
+        });
+    </script>
+</body>
+</html>

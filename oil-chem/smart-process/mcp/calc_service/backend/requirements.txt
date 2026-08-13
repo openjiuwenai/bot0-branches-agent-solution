@@ -1,0 +1,14 @@
+# calc_service backend 直接依赖。
+# 运行环境通常与主项目 backend/ 共用同一 Python env（主项目 requirements.txt
+# 已含 sqlalchemy>=2.0 / psycopg2-binary>=2.9），此处仅声明 calc_service 自身用到的包，
+# 便于独立部署时按需安装。
+flask>=3.0
+flask-cors>=4.0
+ortools>=9.11
+pandas>=2.0
+sqlalchemy>=2.0
+psycopg2-binary>=2.9
+# get_price_from_api() 经 HTTP 调主后端 price API 取价（替代旧 price_cost 表直查）
+requests>=2.31
+# 迁移脚本读历史 Excel 用（运行时不需要）
+openpyxl>=3.1

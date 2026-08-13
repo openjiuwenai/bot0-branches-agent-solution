@@ -1,0 +1,2153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>原油炼化优化系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #fff;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 28px;
+            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .tab-btn {
+            padding: 12px 24px;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        .tab-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+        .tab-btn.active {
+            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+            box-shadow: 0 4px 15px rgba(0, 210, 255, 0.4);
+        }
+
+        .card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .card h2 {
+            color: #00d2ff;
+            margin-bottom: 15px;
+            font-size: 18px;
+            border-bottom: 2px solid rgba(0, 210, 255, 0.3);
+            padding-bottom: 10px;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #ccc;
+        }
+        .input-group input {
+            width: 200px;
+            padding: 10px 15px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+        }
+        .input-group input:focus {
+            outline: none;
+            border-color: #00d2ff;
+            box-shadow: 0 0 10px rgba(0, 210, 255, 0.3);
+        }
+
+        .btn {
+            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 210, 255, 0.4);
+        }
+        .btn-secondary {
+            background: rgba(255,255,255,0.2);
+        }
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .edit-cell {
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 4px;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+            min-width: 80px;
+        }
+        .edit-cell:hover {
+            background: rgba(0, 210, 255, 0.15);
+            border-color: rgba(0, 210, 255, 0.3);
+        }
+        .edit-cell:focus {
+            outline: none;
+            background: rgba(0, 210, 255, 0.25);
+            border-color: #00d2ff;
+            border-radius: 4px;
+            box-shadow: 0 0 10px rgba(0, 210, 255, 0.3);
+        }
+
+        .edit-select {
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 4px;
+            color: #fff;
+            padding: 6px 10px;
+            font-size: 13px;
+        }
+        .edit-select:hover {
+            border-color: rgba(0, 210, 255, 0.5);
+        }
+        .edit-select:focus {
+            outline: none;
+            border-color: #00d2ff;
+            box-shadow: 0 0 10px rgba(0, 210, 255, 0.3);
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 13px;
+        }
+        .data-table th, .data-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .data-table th {
+            background: rgba(0, 210, 255, 0.1);
+            color: #00d2ff;
+            font-weight: bold;
+        }
+        .data-table tr:hover {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .metric {
+            display: inline-block;
+            background: rgba(255,255,255,0.05);
+            padding: 15px 25px;
+            border-radius: 10px;
+            margin: 10px;
+            text-align: center;
+        }
+        .metric-label {
+            display: block;
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 5px;
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00d2ff;
+        }
+        .metric-profit {
+            color: #4caf50;
+            font-size: 32px;
+        }
+
+        .special-vars {
+            background: rgba(255,235,59,0.1);
+            border: 2px solid rgba(255,235,59,0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .special-vars h3 {
+            color: #ffeb3b;
+            margin-bottom: 10px;
+        }
+        .special-var-item {
+            display: inline-block;
+            margin: 10px 20px;
+            font-size: 18px;
+        }
+        .special-var-item span {
+            color: #ff9800;
+            font-weight: bold;
+        }
+
+        .topology-container {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(0, 210, 255, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            overflow-x: auto;
+        }
+        .topology-title {
+            color: #00d2ff;
+            font-size: 18px;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        .topology-graph {
+            display: flex;
+            flex-direction: row;
+            gap: 80px;
+            min-width: 2000px;
+            min-height: 600px;
+            position: relative;
+            padding: 80px 60px;
+            align-items: flex-start;
+        }
+        .topology-layer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px;
+            position: relative;
+        }
+        .topology-layer-label {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-size: 14px;
+            background: rgba(78, 205, 196, 0.3);
+            padding: 5px 15px;
+            border-radius: 6px;
+            z-index: 10;
+            white-space: nowrap;
+        }
+        .topology-device-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 5;
+        }
+        .topology-device {
+            background: linear-gradient(135deg, rgba(0, 210, 255, 0.2), rgba(0, 210, 255, 0.08));
+            border: 2px solid rgba(0, 210, 255, 0.5);
+            border-radius: 12px;
+            padding: 12px 16px;
+            min-width: 130px;
+            text-align: center;
+            position: relative;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+        .topology-svg-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            overflow: visible;
+        }
+        .topology-connection-path {
+            stroke: #4ecdc4;
+            stroke-width: 2;
+            fill: none;
+            marker-end: url(#arrowhead);
+        }
+        .topology-connection-text {
+            font-size: 11px;
+            fill: #4ecdc4;
+            text-anchor: middle;
+            font-weight: bold;
+        }
+        .topology-connection-amount {
+            font-size: 10px;
+            fill: #888;
+            text-anchor: middle;
+        }
+        .topology-device.start {
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.2), rgba(76, 175, 80, 0.05));
+            border-color: rgba(76, 175, 80, 0.5);
+        }
+        .topology-device.end {
+            background: linear-gradient(135deg, rgba(255, 152, 0, 0.2), rgba(255, 152, 0, 0.05));
+            border-color: rgba(255, 152, 0, 0.5);
+        }
+        .topology-device.tank {
+            background: linear-gradient(135deg, rgba(156, 39, 176, 0.2), rgba(156, 39, 176, 0.05));
+            border-color: rgba(156, 39, 176, 0.5);
+            border-radius: 20px;
+        }
+        .topology-device.tank .topology-device-name::before {
+            content: "🏺 ";
+        }
+        .topology-device-name {
+            font-weight: bold;
+            font-size: 14px;
+            color: #fff;
+            margin-bottom: 5px;
+        }
+        .topology-device-id {
+            font-size: 10px;
+            color: #888;
+        }
+        .topology-device-capacity {
+            font-size: 11px;
+            color: #00d2ff;
+            margin-top: 5px;
+        }
+        .topology-device-util {
+            font-size: 10px;
+            margin-top: 3px;
+        }
+        .topology-device-util.low { color: #4caf50; }
+        .topology-device-util.medium { color: #ff9800; }
+        .topology-device-util.high { color: #f44336; }
+        .topology-product {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            color: #ccc;
+        }
+        .topology-product-name {
+            color: #aaa;
+            font-size: 11px;
+        }
+        .topology-product-flow {
+            color: #4ecdc4;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        .topology-connection {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 80px;
+        }
+        .topology-arrow {
+            color: #00d2ff;
+            font-size: 20px;
+        }
+        .topology-flow {
+            background: rgba(78, 205, 196, 0.2);
+            border: 1px solid rgba(78, 205, 196, 0.4);
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 11px;
+            color: #4ecdc4;
+            margin-top: 3px;
+        }
+        .topology-legend {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        .topology-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #888;
+        }
+        .topology-legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+        .topology-legend-color.start { background: rgba(76, 175, 80, 0.5); border: 1px solid #4caf50; }
+        .topology-legend-color.process { background: rgba(0, 210, 255, 0.3); border: 1px solid #00d2ff; }
+        .topology-legend-color.end { background: rgba(255, 152, 0, 0.5); border: 1px solid #ff9800; }
+        .topology-legend-color.tank { background: rgba(156, 39, 176, 0.5); border: 1px solid #9c27b0; border-radius: 10px; }
+        .topology-svg-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .topology-svg-arrow {
+            stroke: #4ecdc4;
+            stroke-width: 2;
+            fill: none;
+            marker-end: url(#arrowhead);
+        }
+        .topology-device-wrapper {
+            position: relative;
+            display: inline-block;
+            z-index: 1;
+        }
+
+        .progress-container {
+            margin: 10px 0;
+        }
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 12px;
+            color: #ccc;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 15px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+            border-radius: 10px;
+            transition: width 0.5s;
+        }
+
+        .flow-group {
+            margin: 20px 0;
+            border: 1px solid rgba(0, 210, 255, 0.2);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .flow-group-header {
+            background: rgba(0, 210, 255, 0.1);
+            padding: 12px 15px;
+            font-weight: bold;
+            color: #00d2ff;
+            font-size: 15px;
+        }
+        .flow-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .flow-item:last-child {
+            border-bottom: none;
+        }
+        .flow-item .device {
+            color: #00d2ff;
+            font-weight: bold;
+        }
+        .flow-item .arrow {
+            color: #4caf50;
+        }
+        .flow-item .product {
+            color: #ff9800;
+        }
+        .flow-item .flow-value {
+            margin-left: auto;
+            color: #4caf50;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .flow-item .special-tag {
+            background: rgba(255,235,59,0.2);
+            color: #ffeb3b;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .flow-item .unique-tag {
+            background: rgba(76,175,80,0.2);
+            color: #4caf50;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+        }
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(0, 210, 255, 0.3);
+            border-top-color: #00d2ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+
+        .config-section {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .config-label {
+            color: #ccc;
+            font-size: 14px;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+        }
+        .switch input { display: none; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255,255,255,0.2);
+            transition: .4s;
+            border-radius: 26px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px; width: 20px;
+            left: 3px; bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+        }
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+
+        @media (max-width: 768px) {
+            .tabs { flex-direction: column; }
+            .tab-btn { width: 100%; }
+            .metric { width: 100%; margin: 5px 0; }
+            .input-group input { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>原油炼化优化系统</h1>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="openTab('solve')">优化求解</button>
+            <button class="tab-btn" onclick="openTab('devices')">装置管理</button>
+            <button class="tab-btn" onclick="openTab('products')">产品管理</button>
+            <button class="tab-btn" onclick="openTab('connections')">连接关系</button>
+            <button class="tab-btn" onclick="openTab('energy')">能耗管理</button>
+            <button class="tab-btn" onclick="window.location.href='/scheduling'" style="background: linear-gradient(90deg, #52c41a, #73d13d);">排厂管理</button>
+        </div>
+
+        <div id="solve" class="tab-content active">
+            <div class="card">
+                <h2>求解参数设置</h2>
+                <div class="input-group">
+                    <label>原油进料量（吨）</label>
+                    <input type="number" id="inputAmount" value="100000" min="1000" max="1000000">
+                </div>
+                <div class="input-group">
+                    <label>原油进料量加工天数</label>
+                    <input type="number" id="days" value="30" min="0.1" max="365" step="0.5">
+                </div>
+                <div class="input-group">
+                    <label>单吨原油价格（元/吨）</label>
+                    <input type="number" id="crudeOilPrice" value="1000" min="0" step="100">
+                </div>
+                <div class="input-group">
+                    <label>原油品种</label>
+                    <select id="crudeType">
+                        <option value="BZ">BZ (默认)</option>
+                    </select>
+                </div>
+                <button class="btn" onclick="runSolve()" id="solveBtn">开始优化求解</button>
+                <button class="btn btn-secondary" onclick="reloadData()" style="margin-left: 10px;">重新加载数据</button>
+                <div class="config-section">
+                    <span class="config-label">详细日志:</span>
+                    <label class="switch">
+                        <input type="checkbox" id="verboseLog" checked onchange="setLogConfig()">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="config-label" id="logStatus">开启</span>
+                </div>
+            </div>
+
+            <div class="card" id="resultCard" style="display: none;">
+                <h2>优化求解结果</h2>
+
+                <div id="errorDisplay" style="display: none;"></div>
+                
+                <div id="summaryMetrics"></div>
+
+                <div style="margin-top: 25px;" id="economicSection">
+                    <h3 style="color: #00d2ff; margin-bottom: 15px; font-size: 16px;">💰 经济效益与分流分析</h3>
+                    <div id="economicAnalysis" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;"></div>
+                    <div id="diversionScenarios" style="margin-top: 15px;"></div>
+                </div>
+
+                <div class="topology-container" id="topologyContainer" style="display: none; margin-top: 25px;">
+                    <div class="topology-title">🔗 原料到产品加工流程拓扑图</div>
+                    <div class="topology-graph" id="topologyGraph"></div>
+                    <div class="topology-legend">
+                        <div class="topology-legend-item">
+                            <div class="topology-legend-color start"></div>
+                            <span>起点装置（原料输入）</span>
+                        </div>
+                        <div class="topology-legend-item">
+                            <div class="topology-legend-color process"></div>
+                            <span>加工装置</span>
+                        </div>
+                        <div class="topology-legend-item">
+                            <div class="topology-legend-color tank"></div>
+                            <span>储罐</span>
+                        </div>
+                        <div class="topology-legend-item">
+                            <div class="topology-legend-color end"></div>
+                            <span>终点装置（产品输出）</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 25px;" id="explanationSection">
+                    <h3 style="color: #00d2ff; margin-bottom: 15px; font-size: 16px;">📊 求解结果分析</h3>
+                    <div style="background: rgba(0, 210, 255, 0.05); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <p id="explanationSummary" style="color: #ccc; line-height: 1.6;"></p>
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <h3 style="color: #00d2ff; margin-bottom: 15px;">装置利用率</h3>
+                    <div id="utilizationList"></div>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <h3 style="color: #00d2ff; margin-bottom: 15px;">连接流量详情 (按装置分组)</h3>
+                    <div id="flowDetails"></div>
+                </div>
+            </div>
+
+            <div class="card" id="loadingCard" style="display: none;">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    <span style="margin-left: 20px;">正在计算最优方案...</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="devices" class="tab-content">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>装置列表</h2>
+                    <div>
+                        <button class="btn" onclick="showAddDeviceForm()">+ 添加装置</button>
+                        <button class="btn btn-secondary" onclick="loadDevices()">刷新</button>
+                    </div>
+                </div>
+                <div id="addDeviceForm" style="display: none; background: rgba(255,255,255,0.05); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3 style="color: #00d2ff; margin-bottom: 15px;">添加新装置</h3>
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: end;">
+                        <div class="input-group">
+                            <label>装置ID</label>
+                            <input type="text" id="newDeviceId" placeholder="如: E">
+                        </div>
+                        <div class="input-group">
+                            <label>名称</label>
+                            <input type="text" id="newDeviceName" placeholder="如: 催化裂化">
+                        </div>
+                        <div class="input-group">
+                            <label>类型</label>
+                            <select id="newDeviceType" style="width: 120px; padding: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #fff;">
+                                <option value="normal">普通装置</option>
+                                <option value="tank">储罐</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>最大容量（吨）</label>
+                            <input type="number" id="newDeviceCapacity" placeholder="如: 50000">
+                        </div>
+                        <button class="btn" onclick="addDevice()">保存</button>
+                        <button class="btn btn-secondary" onclick="hideAddDeviceForm()">取消</button>
+                    </div>
+                </div>
+                <table class="data-table" id="devicesTable">
+                    <thead>
+                        <tr>
+                            <th>装置ID</th>
+                            <th>名称</th>
+                            <th>类型</th>
+                            <th>容量（吨）</th>
+                            <th>最低安全阈值（吨）</th>
+                            <th>当前容量（吨）</th>
+                            <th>装置负荷率（%）</th>
+                            <th>有效容量（吨）</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="products" class="tab-content">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>产品列表</h2>
+                    <div>
+                        <button class="btn" onclick="showAddProductForm()">+ 添加产品</button>
+                        <button class="btn btn-secondary" onclick="loadProducts()">刷新</button>
+                    </div>
+                </div>
+                <div id="addProductForm" style="display: none; background: rgba(255,255,255,0.05); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3 style="color: #00d2ff; margin-bottom: 15px;">添加新产品</h3>
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: end;">
+                        <div class="input-group">
+                            <label>产品ID</label>
+                            <input type="text" id="newProductId" placeholder="如: B_chaiyou">
+                        </div>
+                        <div class="input-group">
+                            <label>名称</label>
+                            <input type="text" id="newProductName" placeholder="如: chaiyou">
+                        </div>
+                        <div class="input-group">
+                            <label>来源装置</label>
+                            <input type="text" id="newProductSource" placeholder="如: B">
+                        </div>
+                        <div class="input-group">
+                            <label>收率(%)</label>
+                            <input type="number" id="newProductYield" placeholder="如: 100">
+                        </div>
+                        <div class="input-group">
+                            <label>收率2(%)</label>
+                            <input type="number" id="newProductYield2" placeholder="如: 0">
+                        </div>
+                        <div class="input-group">
+                            <label>价格(元/吨)</label>
+                            <input type="number" id="newProductPrice" placeholder="如: 5000">
+                        </div>
+                        <div class="input-group">
+                            <label>最终产品</label>
+                            <select id="newProductFinal" style="width: 100px; padding: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #fff;">
+                                <option value="false">否</option>
+                                <option value="true">是</option>
+                            </select>
+                        </div>
+                        <button class="btn" onclick="addProduct()">保存</button>
+                        <button class="btn btn-secondary" onclick="hideAddProductForm()">取消</button>
+                    </div>
+                </div>
+                <table class="data-table" id="productsTable">
+                    <thead>
+                        <tr>
+                            <th>产品ID</th>
+                            <th>名称</th>
+                            <th>来源装置</th>
+                            <th>收率(%)</th>
+                            <th>收率2(%)</th>
+                            <th>价格(元/吨)</th>
+                            <th>最终产品</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="connections" class="tab-content">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>连接关系</h2>
+                    <div>
+                        <button class="btn" onclick="showAddConnectionForm()">+ 添加连接</button>
+                        <button class="btn btn-secondary" onclick="loadConnections()">刷新</button>
+                    </div>
+                </div>
+                <div id="addConnectionForm" style="display: none; background: rgba(255,255,255,0.05); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3 style="color: #00d2ff; margin-bottom: 15px;">添加新连接</h3>
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: end;">
+                        <div class="input-group">
+                            <label>连接ID</label>
+                            <input type="text" id="newConnId" placeholder="如: conn_18">
+                        </div>
+                        <div class="input-group">
+                            <label>来源装置</label>
+                            <input type="text" id="newConnFromDev" placeholder="如: A">
+                        </div>
+                        <div class="input-group">
+                            <label>来源产品</label>
+                            <input type="text" id="newConnFromProd" placeholder="如: A_jian1">
+                        </div>
+                        <div class="input-group">
+                            <label>目标装置</label>
+                            <input type="text" id="newConnToDev" placeholder="如: B">
+                        </div>
+                        <div class="input-group">
+                            <label>优先级</label>
+                            <input type="number" id="newConnPriority" value="1">
+                        </div>
+                        <div class="input-group">
+                            <label>唯一目标</label>
+                            <select id="newConnUnique" style="width: 100px; padding: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #fff;">
+                                <option value="false">否</option>
+                                <option value="true">是</option>
+                            </select>
+                        </div>
+                        <button class="btn" onclick="addConnection()">保存</button>
+                        <button class="btn btn-secondary" onclick="hideAddConnectionForm()">取消</button>
+                    </div>
+                </div>
+                <table class="data-table" id="connectionsTable">
+                    <thead>
+                        <tr>
+                            <th>连接ID</th>
+                            <th>来源装置</th>
+                            <th>来源产品</th>
+                            <th>目标装置</th>
+                            <th>优先级</th>
+                            <th>唯一目标</th>
+                            <th>特殊变量</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="energy" class="tab-content">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>能耗记录</h2>
+                    <div>
+                        <button class="btn" onclick="showAddEnergyForm()">+ 添加能耗记录</button>
+                        <button class="btn btn-secondary" onclick="loadEnergyConsumptions()">刷新</button>
+                    </div>
+                </div>
+                <div id="addEnergyForm" style="display: none; background: rgba(255,255,255,0.05); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3 style="color: #00d2ff; margin-bottom: 15px;">添加能耗记录</h3>
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: end;">
+                        <div class="input-group">
+                            <label>装置ID</label>
+                            <input type="text" id="newEnergyDeviceId" placeholder="如: cjy_01">
+                        </div>
+                        <div class="input-group">
+                            <label>能耗种类</label>
+                            <select id="newEnergyType" style="width: 140px; padding: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #fff;">
+                                <option value="electricity">电</option>
+                                <option value="natural_gas">天然气</option>
+                                <option value="steam">蒸汽</option>
+                                <option value="water">水</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>单位消耗</label>
+                            <input type="number" id="newEnergyConsumption" placeholder="如: 15.0">
+                        </div>
+                        <div class="input-group">
+                            <label>单价（元/单位）</label>
+                            <input type="number" id="newEnergyPrice" placeholder="如: 0.65">
+                        </div>
+                        <button class="btn" onclick="addEnergyConsumption()">保存</button>
+                        <button class="btn btn-secondary" onclick="hideAddEnergyForm()">取消</button>
+                    </div>
+                </div>
+                <table class="data-table" id="energyTable">
+                    <thead>
+                        <tr>
+                            <th>能耗ID</th>
+                            <th>装置ID</th>
+                            <th>能耗种类</th>
+                            <th>单位消耗</th>
+                            <th>单价（元/单位）</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openTab(tabName) {
+            const tabContents = document.getElementsByClassName('tab-content');
+            for (let i = 0; i < tabContents.length; i++) {
+                tabContents[i].classList.remove('active');
+            }
+            const tabButtons = document.getElementsByClassName('tab-btn');
+            for (let i = 0; i < tabButtons.length; i++) {
+                tabButtons[i].classList.remove('active');
+            }
+            document.getElementById(tabName).classList.add('active');
+            event.currentTarget.classList.add('active');
+            if (tabName === 'devices') loadDevices();
+            if (tabName === 'products') loadProducts();
+            if (tabName === 'connections') loadConnections();
+            if (tabName === 'energy') loadEnergyConsumptions();
+        }
+
+        function loadDevices() {
+            console.log('loadDevices: 开始加载装置数据...');
+            const tbody = document.querySelector('#devicesTable tbody');
+            
+            fetch('/api/devices')
+                .then(res => {
+                    console.log('loadDevices: 响应状态:', res.status);
+                    if (!res.ok) {
+                        throw new Error(`HTTP错误: ${res.status}`);
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    console.log('loadDevices: 返回数据:', data);
+                    tbody.innerHTML = '';
+                    
+                    if (!data || !data.devices || !Array.isArray(data.devices)) {
+                        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: #ff9800;">数据格式错误</td></tr>';
+                        return;
+                    }
+                    
+                    if (data.devices.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: #ff9800;">暂无数据</td></tr>';
+                        return;
+                    }
+                    
+                    data.devices.forEach(device => {
+                        tbody.innerHTML += `
+                            <tr data-id="${device.id}">
+                                <td style="color: #00d2ff; font-weight: bold;">${device.id}</td>
+                                <td contenteditable="true" class="edit-cell" data-field="name" title="点击编辑名称">${device.name}</td>
+                                <td>
+                                    <select class="edit-select" data-field="type" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #fff; padding: 5px;">
+                                        <option value="normal" ${device.type === 'normal' ? 'selected' : ''}>普通装置</option>
+                                        <option value="tank" ${device.type === 'tank' ? 'selected' : ''}>储罐</option>
+                                    </select>
+                                </td>
+                                <td contenteditable="true" class="edit-cell" data-field="safety_stock_thrd" title="点击编辑安全库存阈值">${device.safety_stock_thrd.toLocaleString()}</td>
+                                <td contenteditable="true" class="edit-cell" data-field="low_safety_thrd" title="点击编辑最低安全阈值">${device.low_safety_thrd.toLocaleString()}</td>
+                                <td contenteditable="true" class="edit-cell" data-field="current_capacity" title="点击编辑当前容量">${device.current_capacity.toLocaleString()}</td>
+                                <td contenteditable="true" class="edit-cell" data-field="refinery_unit_load_percent" title="点击编辑装置负荷率">${device.refinery_unit_load_percent.toLocaleString()}</td>
+                                <td>${device.effective_capacity.toLocaleString()}</td>
+                                <td>
+                                    <button class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px; margin-right: 5px;" onclick="saveDevice('${device.id}')">保存</button>
+                                    <button class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;" onclick="deleteDevice('${device.id}')">删除</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                })
+                .catch(error => {
+                    console.error('loadDevices: 加载失败:', error);
+                    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #ff5722;">加载失败: ${error.message}</td></tr>`;
+                });
+        }
+
+        function saveDevice(deviceId) {
+            const row = document.querySelector(`tr[data-id="${deviceId}"]`);
+            const cells = row.querySelectorAll('.edit-cell');
+            const select = row.querySelector('.edit-select');
+            
+            const data = {
+                id: deviceId,
+                name: cells[0].textContent.trim().replace(/^📝 /, ''),
+                type: select.value,
+                safety_stock_thrd: parseFloat(cells[1].textContent.replace(/,/g, '').replace(/^📝 /, '')),
+                low_safety_thrd: parseFloat(cells[2].textContent.replace(/,/g, '').replace(/^📝 /, '')),
+                current_capacity: parseFloat(cells[3].textContent.replace(/,/g, '').replace(/^📝 /, '')),
+                refinery_unit_load_percent: parseFloat(cells[4].textContent.replace(/,/g, '').replace(/^📝 /, ''))
+            };
+            
+            fetch('/api/devices/' + deviceId, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    alert('装置更新成功！');
+                    loadDevices();
+                } else {
+                    alert('更新失败: ' + result.message);
+                }
+            });
+        }
+
+        function showAddDeviceForm() {
+            document.getElementById('addDeviceForm').style.display = 'block';
+        }
+
+        function hideAddDeviceForm() {
+            document.getElementById('addDeviceForm').style.display = 'none';
+            document.getElementById('newDeviceId').value = '';
+            document.getElementById('newDeviceName').value = '';
+            document.getElementById('newDeviceCapacity').value = '';
+        }
+
+        function addDevice() {
+            const data = {
+                id: document.getElementById('newDeviceId').value,
+                name: document.getElementById('newDeviceName').value,
+                type: document.getElementById('newDeviceType').value,
+                max_capacity: parseFloat(document.getElementById('newDeviceCapacity').value)
+            };
+            
+            fetch('/api/devices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    alert('装置添加成功！');
+                    hideAddDeviceForm();
+                    loadDevices();
+                } else {
+                    alert('添加失败: ' + result.message);
+                }
+            });
+        }
+
+        function deleteDevice(deviceId) {
+            if (!confirm('确定要删除装置 ' + deviceId + ' 吗？')) return;
+            
+            fetch('/api/devices/' + deviceId, {
+                method: 'DELETE'
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    alert('装置删除成功！');
+                    loadDevices();
+                } else {
+                    alert('删除失败: ' + result.message);
+                }
+            });
+        }
+
+        function loadProducts() {
+            fetch('/api/products')
+                .then(res => res.json())
+                .then(data => {
+                    const tbody = document.querySelector('#productsTable tbody');
+                    tbody.innerHTML = '';
+                    data.products.forEach(product => {
+                        tbody.innerHTML += `
+                            <tr data-id="${product.id}">
+                                <td style="color: #00d2ff; font-weight: bold;">${product.id}</td>
+                                <td contenteditable="true" class="edit-cell" data-field="name" title="点击编辑产品名称">${product.name}</td>
+                                <td>${product.source_device_id} (${product.source_device_name})</td>
+                                <td contenteditable="true" class="edit-cell" data-field="yield_rate" title="点击编辑收率">${product.yield_rate}</td>
+                                <td contenteditable="true" class="edit-cell" data-field="yield_rate_2" title="点击编辑收率2">${product.yield_rate_2 || 0}</td>
+                                <td contenteditable="true" class="edit-cell" data-field="price" title="点击编辑价格">${product.price.toLocaleString()}</td>
+                                <td>
+                                    <select class="edit-select" data-field="is_final" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #fff; padding: 5px;">
+                                        <option value="true" ${product.is_final ? 'selected' : ''}>是</option>
+                                        <option value="false" ${!product.is_final ? 'selected' : ''}>否</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <button class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px; margin-right: 5px;" onclick="saveProduct('${product.id}')">保存</button>
+                                    <button class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;" onclick="deleteProduct('${product.id}')">删除</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                });
+        }
+
+        function saveProduct(productId) {
+            const row = document.querySelector(`tr[data-id="${productId}"]`);
+            const cells = row.querySelectorAll('.edit-cell');
+            const select = row.querySelector('.edit-select');
+            
+            const allCells = row.querySelectorAll('td');
+            const sourceDeviceText = allCells[2].textContent;
+            
+            const data = {
+                id: productId,
+                name: cells[0].textContent.trim().replace(/^📝 /, ''),
+                source_device_id: sourceDeviceText.split('(')[0].trim(),
+                yield_rate: parseFloat(cells[1].textContent.replace(/^📝 /, '')),
+                yield_rate_2: parseFloat(cells[2].textContent.replace(/^📝 /, '')),
+                price: parseFloat(cells[3].textContent.replace(/,/g, '').replace(/^📝 /, '')),
+                is_final: select.value === 'true'
+            };
+            
+            fetch('/api/products/' + productId, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    alert('产品更新成功！');
+                    loadProducts();
+                } else {
+                    alert('更新失败: ' + result.message);
+                }
+            });
+        }
+
+        function showAddProductForm() {
+            document.getElementById('addProductForm').style.display = 'block';
+        }
+
+        function hideAddProductForm() {
+            document.getElementById('addProductForm').style.display = 'none';
+            document.getElementById('newProductId').value = '';
+            document.getElementById('newProductName').value = '';
+            document.getElementById('newProductSource').value = '';
+            document.getElementById('newProductYield').value = '';
+            document.getElementById('newProductYield2').value = '';
+            document.getElementById('newProductPrice').value = '';
+        }
+
+        function addProduct() {
+            const data = {
+                id: document.getElementById('newProductId').value,
+                name: document.getElementById('newProductName').value,
+                source_device_id: document.getElementById('newProductSource').value,
+                yield_rate: parseFloat(document.getElementById('newProductYield').value),
+                yield_rate_2: parseFloat(document.getElementById('newProductYield2').value || 0),
+                price: parseFloat(document.getElementById('newProductPrice').value),
+                is_final: document.getElementById('newProductFinal').value === 'true'
+            };
+            
+            fetch('/api/products', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    alert('产品添加成功！');
+                    hideAddProductForm();
+                    loadProducts();
+                } else {
+                    alert('添加失败: ' + result.message);
+                }
+            });
+        }
+
+        function deleteProduct(productId) {
+            if (!confirm('确定要删除产品 ' + productId + ' 吗？')) return;
+            
+            fetch('/api/products/' + productId, {
+                method: 'DELETE'
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    alert('产品删除成功！');
+                    loadProducts();
+                } else {
+                    alert('删除失败: ' + result.message);
+                }
+            });
+        }
+
+        function loadConnections() {
+            fetch('/api/connections')
+                .then(res => res.json())
+                .then(data => {
+                    const tbody = document.querySelector('#connectionsTable tbody');
+                    tbody.innerHTML = '';
+                    data.connections.forEach(conn => {
+                        const uniqueColor = conn.is_unique_target ? '#4caf50' : '#ff9800';
+                        tbody.innerHTML += `
+                            <tr data-id="${conn.id}">
+                                <td style="color: #00d2ff; font-weight: bold;">${conn.id}</td>
+                                <td>${conn.from_device_id} (${conn.from_device_name})</td>
+                                <td>${conn.from_product_id}</td>
+                                <td>${conn.to_device_id} (${conn.to_device_name})</td>
+                                <td contenteditable="true" class="edit-cell" data-field="priority" title="点击编辑优先级">${conn.priority}</td>
+                                <td>
+                                    <select class="edit-select" data-field="is_unique_target" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #fff; padding: 5px;">
+                                        <option value="true" ${conn.is_unique_target ? 'selected' : ''}>是</option>
+                                        <option value="false" ${!conn.is_unique_target ? 'selected' : ''}>否</option>
+                                    </select>
+                                </td>
+                                <td contenteditable="true" class="edit-cell" data-field="special_var" title="点击编辑特殊变量 (X/Y)">${conn.special_var || ''}</td>
+                                <td>
+                                    <button class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px; margin-right: 5px;" onclick="saveConnection('${conn.id}')">保存</button>
+                                    <button class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;" onclick="deleteConnection('${conn.id}')">删除</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                });
+        }
+
+        function saveConnection(connId) {
+            const row = document.querySelector(`tr[data-id="${connId}"]`);
+            const cells = row.querySelectorAll('.edit-cell');
+            const select = row.querySelector('.edit-select');
+            const allCells = row.querySelectorAll('td');
+            
+            const data = {
+                id: connId,
+                from_device_id: allCells[1].textContent.split('(')[0].trim(),
+                from_product_id: allCells[2].textContent.trim(),
+                to_device_id: allCells[3].textContent.split('(')[0].trim(),
+                priority: parseInt(cells[0].textContent.trim()),
+                is_unique_target: select.value === 'true',
+                special_var: cells[1].textContent.trim() || null
+            };
+            
+            fetch('/api/connections/' + connId, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    alert('连接更新成功！');
+                    loadConnections();
+                } else {
+                    alert('更新失败: ' + result.message);
+                }
+            });
+        }
+
+        function showAddConnectionForm() {
+            document.getElementById('addConnectionForm').style.display = 'block';
+        }
+
+        function hideAddConnectionForm() {
+            document.getElementById('addConnectionForm').style.display = 'none';
+            document.getElementById('newConnId').value = '';
+            document.getElementById('newConnFromDev').value = '';
+            document.getElementById('newConnFromProd').value = '';
+            document.getElementById('newConnToDev').value = '';
+            document.getElementById('newConnPriority').value = '1';
+        }
+
+        function addConnection() {
+            const data = {
+                id: document.getElementById('newConnId').value,
+                from_device_id: document.getElementById('newConnFromDev').value,
+                from_product_id: document.getElementById('newConnFromProd').value,
+                to_device_id: document.getElementById('newConnToDev').value,
+                priority: parseInt(document.getElementById('newConnPriority').value),
+                is_unique_target: document.getElementById('newConnUnique').value === 'true',
+                special_var: null
+            };
+            
+            fetch('/api/connections', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    alert('连接添加成功！');
+                    hideAddConnectionForm();
+                    loadConnections();
+                } else {
+                    alert('添加失败: ' + result.message);
+                }
+            });
+        }
+
+        function deleteConnection(connId) {
+            if (!confirm('确定要删除连接 ' + connId + ' 吗？')) return;
+            
+            fetch('/api/connections/' + connId, {
+                method: 'DELETE'
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    alert('连接删除成功！');
+                    loadConnections();
+                } else {
+                    alert('删除失败: ' + result.message);
+                }
+            });
+        }
+
+        function runSolve() {
+            const inputAmount = document.getElementById('inputAmount').value;
+            const days = document.getElementById('days').value;
+            const crudeOilPrice = document.getElementById('crudeOilPrice').value;
+            const crudeType = document.getElementById('crudeType').value;
+            const solveBtn = document.getElementById('solveBtn');
+            const resultCard = document.getElementById('resultCard');
+            const loadingCard = document.getElementById('loadingCard');
+
+            solveBtn.disabled = true;
+            resultCard.style.display = 'none';
+            loadingCard.style.display = 'block';
+
+            fetch('/api/solve', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-cache'
+                },
+                body: JSON.stringify({
+                    input_amount: parseFloat(inputAmount),
+                    days: parseFloat(days),  // 改为parseFloat支持小数
+                    crude_oil_price: parseFloat(crudeOilPrice),
+                    crude_type: crudeType
+                })
+            })
+            .then(res => {
+                console.log('响应状态:', res.status);
+                return res.json();
+            })
+            .then(data => {
+                console.log('收到的数据:', data);
+                loadingCard.style.display = 'none';
+                if (data.success) {
+                    try {
+                        displayResult(data.result, data);
+                        resultCard.style.display = 'block';
+                    } catch (e) {
+                        console.error('displayResult 执行失败:', e);
+                        displaySolveError('显示结果失败: ' + e.message);
+                    }
+                } else {
+                    displaySolveError(data.message, data.details);
+                }
+                solveBtn.disabled = false;
+            })
+            .catch(error => {
+                loadingCard.style.display = 'none';
+                displaySolveError('请求失败: ' + error.message);
+                solveBtn.disabled = false;
+            });
+        }
+
+        function renderTopology(result) {
+            const topologyContainer = document.getElementById('topologyContainer');
+            const topologyGraph = document.getElementById('topologyGraph');
+            
+            if (!result.connection_flows || !result.device_inputs || Object.keys(result.connection_flows).length === 0) {
+                topologyContainer.style.display = 'none';
+                return;
+            }
+
+            const connectionFlows = result.connection_flows;
+            const deviceInputs = result.device_inputs;
+            const deviceUtilization = result.device_utilization || {};
+
+            // 获取后端计算好的所有产品产量数据（包含有效收率计算）
+            const deviceProductOutputs = {};
+            if (result.explanation && result.explanation.all_product_outputs) {
+                const allProductOutputs = result.explanation.all_product_outputs;
+                Object.keys(allProductOutputs).forEach(deviceId => {
+                    if (allProductOutputs[deviceId]) {
+                        deviceProductOutputs[deviceId] = {};
+                        Object.keys(allProductOutputs[deviceId]).forEach(productName => {
+                            if (allProductOutputs[deviceId][productName]) {
+                                deviceProductOutputs[deviceId][productName] = allProductOutputs[deviceId][productName].output;
+                            }
+                        });
+                    }
+                });
+            }
+
+            fetch('/api/devices')
+                .then(res => res.json())
+                .then(data => {
+                    const devices = {};
+                    data.devices.forEach(d => devices[d.id] = d);
+
+                    fetch('/api/connections')
+                        .then(res => res.json())
+                        .then(connData => {
+                            const connections = {};
+                            connData.connections.forEach(c => connections[c.id] = c);
+
+                            fetch('/api/products')
+                                .then(res => res.json())
+                                .then(prodData => {
+                                    const products = {};
+                                    prodData.products.forEach(p => products[p.id] = p);
+
+                                    const startDeviceId = connData.connections.length > 0 ? 
+                                        (connData.connections.find(c => devices[c.from_device_id]?.type === 'start')?.from_device_id || 'cjy_01') : 'cjy_01';
+
+                                    let html = '';
+
+                                    const processedDevices = new Set();
+                                    const layers = [];
+
+                                    function getDeviceLayer(deviceId, visited = new Set()) {
+                                        if (visited.has(deviceId)) return 0;
+                                        visited.add(deviceId);
+                                        
+                                        const upstream = connData.connections.filter(c => c.to_device_id === deviceId);
+                                        if (upstream.length === 0) return 0;
+                                        
+                                        let maxLayer = 0;
+                                        upstream.forEach(conn => {
+                                            const layer = getDeviceLayer(conn.from_device_id, visited) + 1;
+                                            maxLayer = Math.max(maxLayer, layer);
+                                        });
+                                        return maxLayer;
+                                    }
+
+                                    connData.connections.forEach(conn => {
+                                        const fromDevice = conn.from_device_id;
+                                        const toDevice = conn.to_device_id;
+                                        
+                                        if (!processedDevices.has(fromDevice)) {
+                                            processedDevices.add(fromDevice);
+                                        }
+                                        if (!processedDevices.has(toDevice)) {
+                                            processedDevices.add(toDevice);
+                                        }
+                                    });
+
+                                    const deviceLayers = {};
+                                    processedDevices.forEach(deviceId => {
+                                        deviceLayers[deviceId] = getDeviceLayer(deviceId);
+                                    });
+
+                                    const maxLayer = Math.max(...Object.values(deviceLayers), 0);
+
+                                    for (let layer = 0; layer <= maxLayer; layer++) {
+                                        const layerDevices = Object.keys(deviceLayers).filter(d => deviceLayers[d] === layer);
+                                        if (layerDevices.length > 0) {
+                                            layers.push({ layer, devices: layerDevices });
+                                        }
+                                    }
+
+                                    layers.forEach((layerInfo, layerIndex) => {
+                                        const layerLabel = layerIndex === 0 ? '原料输入' : (layerIndex === maxLayer ? '产品输出' : `加工层 ${layerIndex}`);
+                                        html += `<div class="topology-layer" data-layer="${layerIndex}">`;
+                                        html += `<div class="topology-layer-label">${layerLabel}</div>`;
+
+                                        layerInfo.devices.forEach((deviceId, deviceIndex) => {
+                                            const device = devices[deviceId];
+                                            if (!device) return;
+
+                                            const isStart = device.type === 'start';
+                                            const isEnd = connData.connections.filter(c => c.from_device_id === deviceId).length === 0;
+                                            const isTank = device.type === 'tank';
+
+                                            const util = deviceUtilization[deviceId] || {};
+                                            const utilPercent = util.utilization || 0;
+                                            let utilClass = 'low';
+                                            if (utilPercent > 80) utilClass = 'high';
+                                            else if (utilPercent > 50) utilClass = 'medium';
+
+                                            html += `<div class="topology-device-wrapper" id="device-${deviceId}" data-device="${deviceId}">`;
+                                            html += `<div class="topology-device ${isStart ? 'start' : ''} ${isEnd ? 'end' : ''} ${isTank ? 'tank' : ''}">`;
+                                            html += `<div class="topology-device-name">${device.name}</div>`;
+                                            html += `<div class="topology-device-id">${device.id}</div>`;
+                                            const capacity = device.safety_stock_thrd || 0;
+                                            html += `<div class="topology-device-capacity">容量: ${(capacity / 1000).toFixed(3)}k 吨</div>`;
+                                            html += `<div class="topology-device-util ${utilClass}">利用率: ${utilPercent.toFixed(3)}%</div>`;
+
+                                            const inputFlow = deviceInputs[deviceId] || 0;
+                                            if (inputFlow > 0) {
+                                                html += `<div class="topology-product-flow" style="margin-top: 8px;">输入: ${inputFlow.toFixed(3)}吨</div>`;
+                                            }
+
+                                            const deviceProducts = prodData.products.filter(p => p.source_device_id === deviceId);
+                                            if (deviceProducts.length > 0) {
+                                                html += `<div class="topology-device-products" style="margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px;">`;
+                                                html += `<div style="font-size: 11px; color: #4ecdc4; margin-bottom: 4px;">产品输出:</div>`;
+                                                deviceProducts.forEach(product => {
+                                                    // 使用后端计算好的有效收率产量
+                                                    const productOutput = deviceProductOutputs[deviceId]?.[product.name] || 0;
+                                                    html += `<div style="font-size: 10px; color: #fff; margin: 2px 0;">${product.name}: ${productOutput.toFixed(3)}吨</div>`;
+                                                });
+                                                html += `</div>`;
+                                            }
+
+                                            html += `</div>`;
+                                            html += `</div>`;
+                                        });
+
+                                        html += `</div>`;
+                                    });
+
+                                    topologyGraph.innerHTML = html;
+
+                                    setTimeout(() => {
+                                        const graphRect = topologyGraph.getBoundingClientRect();
+                                        const svgWidth = Math.max(graphRect.width, 1500);
+                                        const svgHeight = Math.max(graphRect.height, 600);
+
+                                        let svgHtml = `<svg class="topology-svg-container" width="${svgWidth}" height="${svgHeight}" style="position:absolute;top:0;left:0;overflow:visible;">`;
+                                        svgHtml += `<defs>`;
+                                        svgHtml += `<marker id="arrowhead" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto">`;
+                                        svgHtml += `<polygon points="0 0, 12 5, 0 10" fill="#4ecdc4"/>`;
+                                        svgHtml += `</marker>`;
+                                        svgHtml += `</defs>`;
+
+                                        const connectionOffsets = {};
+                                        const groupedConnections = {};
+
+                                        connData.connections.forEach((conn, idx) => {
+                                            const flow = connectionFlows[conn.id] || 0;
+                                            if (flow <= 0.001) return;
+
+                                            const key = `${conn.from_device_id}-${conn.to_device_id}`;
+                                            if (!groupedConnections[key]) {
+                                                groupedConnections[key] = {
+                                                    from_device_id: conn.from_device_id,
+                                                    to_device_id: conn.to_device_id,
+                                                    products: []
+                                                };
+                                            }
+                                            const product = products[conn.from_product_id];
+                                            groupedConnections[key].products.push({
+                                                name: product ? product.name : conn.from_product_id,
+                                                flow: flow
+                                            });
+                                        });
+
+                                        Object.values(groupedConnections).forEach(group => {
+                                            const fromDeviceEl = document.getElementById(`device-${group.from_device_id}`);
+                                            const toDeviceEl = document.getElementById(`device-${group.to_device_id}`);
+                                            if (!fromDeviceEl || !toDeviceEl) return;
+
+                                            const fromRect = fromDeviceEl.getBoundingClientRect();
+                                            const toRect = toDeviceEl.getBoundingClientRect();
+
+                                            const startX = fromRect.right - graphRect.left;
+                                            const startY = fromRect.top + fromRect.height / 2 - graphRect.top;
+                                            const endX = toRect.left - graphRect.left;
+                                            const endY = toRect.top + toRect.height / 2 - graphRect.top;
+
+                                            if (endX > startX) {
+                                                const totalFlow = group.products.reduce((sum, p) => sum + p.flow, 0);
+                                                const midX = (startX + endX) / 2;
+                                                const midY = (startY + endY) / 2;
+                                                
+                                                // 计算标签宽度，根据产品数量调整
+                                                const labelWidth = Math.max(100, group.products.length * 60);
+                                                const labelHeight = 20 + group.products.length * 16;
+                                                
+                                                svgHtml += `<line x1="${startX}" y1="${startY}" x2="${endX}" y2="${endY}" class="topology-connection-path" marker-end="url(#arrowhead)"/>`;
+                                                
+                                                // 添加总流量标签
+                                                svgHtml += `<g transform="translate(${midX}, ${midY})">`;
+                                                svgHtml += `<rect x="${-labelWidth/2}" y="${-labelHeight/2}" width="${labelWidth}" height="${labelHeight}" rx="6" fill="rgba(0,0,0,0.85)" stroke="#4ecdc4" stroke-width="1"/>`;
+                                                svgHtml += `<text x="0" y="${-labelHeight/2 + 14}" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">${totalFlow.toFixed(3)} 吨</text>`;
+                                                
+                                                // 添加各产品信息
+                                                group.products.forEach((product, idx) => {
+                                                    const textY = -labelHeight/2 + 30 + idx * 14;
+                                                    svgHtml += `<text x="0" y="${textY}" text-anchor="middle" fill="#4ecdc4" font-size="10">${product.name}: ${product.flow.toFixed(3)}</text>`;
+                                                });
+                                                svgHtml += `</g>`;
+                                            } else if (Math.abs(endX - startX) < 5) {
+                                                const totalFlow = group.products.reduce((sum, p) => sum + p.flow, 0);
+                                                const midY = (startY + endY) / 2;
+                                                
+                                                const labelWidth = 90;
+                                                const labelHeight = 20 + group.products.length * 14;
+                                                
+                                                svgHtml += `<line x1="${startX}" y1="${startY}" x2="${startX}" y2="${endY}" class="topology-connection-path"/>`;
+                                                
+                                                svgHtml += `<g transform="translate(${startX + 15}, ${midY})">`;
+                                                svgHtml += `<rect x="0" y="${-labelHeight/2}" width="${labelWidth}" height="${labelHeight}" rx="6" fill="rgba(0,0,0,0.85)" stroke="#4ecdc4" stroke-width="1"/>`;
+                                                svgHtml += `<text x="${labelWidth/2}" y="${-labelHeight/2 + 14}" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">${totalFlow.toFixed(3)} 吨</text>`;
+                                                
+                                                group.products.forEach((product, idx) => {
+                                                    const textY = -labelHeight/2 + 30 + idx * 14;
+                                                    svgHtml += `<text x="${labelWidth/2}" y="${textY}" text-anchor="middle" fill="#4ecdc4" font-size="10">${product.name}</text>`;
+                                                });
+                                                svgHtml += `</g>`;
+                                            }
+                                        });
+
+                                        svgHtml += `</svg>`;
+                                        topologyGraph.insertAdjacentHTML('afterbegin', svgHtml);
+                                    }, 150);
+
+                                    topologyContainer.style.display = 'block';
+
+                                });
+                        });
+                });
+        }
+
+        function displayResult(result, data) {
+            const errorDisplay = document.getElementById('errorDisplay');
+            const summaryMetricsEl = document.getElementById('summaryMetrics');
+            
+            if (!summaryMetricsEl) {
+                console.error('summaryMetrics 元素不存在');
+                return;
+            }
+            
+            // 隐藏错误信息，显示结果内容
+            if (errorDisplay) errorDisplay.style.display = 'none';
+            summaryMetricsEl.style.display = 'block';
+            
+            const dailyInput = data?.daily_input || result.daily_input || 0;
+            const inputAmount = data?.input_amount || result.input_amount || 0;
+            const days = data?.days || result.days || 1;
+            const crudeOilPrice = data?.crude_oil_price || result.crude_oil_price || 0;
+
+            let startDeviceInput = 0;
+            if (result.device_inputs_named) {
+                for (const [key, value] of Object.entries(result.device_inputs_named)) {
+                    if (key.startsWith('cjy_01_')) {
+                        startDeviceInput = value;
+                        break;
+                    }
+                }
+            }
+
+            let economicFormula = '';
+            if (result.explanation && result.explanation.economic_analysis) {
+                    const totalRevenue = result.explanation.economic_analysis.reduce((sum, item) => sum + item.revenue, 0);
+                    const formulas = result.explanation.economic_analysis.map(item => {
+                        const productFormulas = item.products.map(p => {
+                            let yieldNote = '';
+                            if (p.yield_type) {
+                                yieldNote = ` [${p.yield_type},${p.yield_reason}]`;
+                            }
+                            return `${p.product_name}: ${p.output.toFixed(3)}吨 × ${p.price.toLocaleString()}元${yieldNote} = ${(p.revenue / 10000).toFixed(3)}万`;
+                        }).join(' + ');
+                        return `${item.device_name}: ${productFormulas}`;
+                    }).join(' | ');
+                    economicFormula = `<div style="font-size: 10px; color: #888; margin-top: 5px;">${formulas}</div>`;
+                }
+            
+            // 添加 XY 分流说明到总经济效益说明中
+            let xy分流说明 = '';
+            if (result.special_vars && Object.keys(result.special_vars).length > 0) {
+                const xyVars = {};
+                const jkVars = {};
+                for (const [varName, value] of Object.entries(result.special_vars)) {
+                    if (varName === 'jian1_to_diesel' || varName === 'jian1_to_wax') {
+                        xyVars[varName] = value;
+                    } else if (varName.toLowerCase().includes('j') || varName.toLowerCase().includes('k')) {
+                        jkVars[varName] = value;
+                    }
+                }
+                
+                if (Object.keys(xyVars).length > 0 || Object.keys(jkVars).length > 0) {
+                    let xyDetails = '';
+                    if (Object.keys(xyVars).length > 0) {
+                        const totalXY = Object.values(xyVars).reduce((a, b) => a + b, 0);
+                        const xyItems = Object.entries(xyVars).map(([name, val]) => {
+                            const label = name === 'jian1_to_diesel' ? '减一线→柴加' : name === 'jian1_to_wax' ? '减一线→蜡加' : name;
+                            return `${label}=${val.toFixed(3)}吨`;
+                        }).join('，');
+                        xyDetails = `<div><span style="color: #ff9800;">减一线分流</span>：减一线产品在 gyrly_tank_01 和 hc_tank_01 之间的分配比例<br/>&nbsp;&nbsp;&nbsp;&nbsp;${xyItems}<br/>&nbsp;&nbsp;&nbsp;&nbsp;合计：${totalXY.toFixed(3)}吨</div>`;
+                    }
+                    
+                    let jkDetails = '';
+                    if (Object.keys(jkVars).length > 0) {
+                        const totalJK = Object.values(jkVars).reduce((a, b) => a + b, 0);
+                        const jkItems = Object.entries(jkVars).map(([name, val]) => `${name}=${val.toFixed(3)}吨`).join('，');
+                        jkDetails = `<div><span style="color: #ff9800;">J/K（HC原料分流）</span>：HC原料在 lyjq_01（蜡油加氢）和 dcc_01（DCC装置）之间的分配比例<br/>&nbsp;&nbsp;&nbsp;&nbsp;${jkItems}<br/>&nbsp;&nbsp;&nbsp;&nbsp;合计：J+K=${totalJK.toFixed(3)}吨</div>`;
+                    }
+                    
+                    xy分流说明 = `
+                        <div style="background: rgba(78,205,196,0.1); border: 1px solid rgba(78,205,196,0.3); border-radius: 8px; padding: 12px; margin-top: 10px;">
+                            <div style="font-size: 12px; color: #4ecdc4; margin-bottom: 8px; font-weight: bold;">分流变量说明：</div>
+                            <div style="font-size: 11px; color: #ccc; line-height: 1.8;">
+                                ${xyDetails}
+                                ${jkDetails}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            const metrics = `
+                <div class="metric">
+                    <div class="metric-label">原油总进料量</div>
+                    <div class="metric-value">${inputAmount.toLocaleString()} 吨</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">加工天数</div>
+                    <div class="metric-value">${days} 天</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">日均进料量</div>
+                    <div class="metric-value">${dailyInput.toLocaleString()} 吨/天</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">单吨原油价格</div>
+                    <div class="metric-value">${crudeOilPrice.toLocaleString()} 元/吨</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">日均经济效益</div>
+                    <div class="metric-value metric-profit">${(((result.explanation?.total_economic_benefit || result.objective_value) / Math.max(days, 1)) / 10000).toFixed(2)} 万元/天</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">总经济效益</div>
+                    <div class="metric-value metric-profit">${((result.explanation?.total_economic_benefit || result.objective_value) / 10000).toFixed(2)} 万元</div>
+                    ${economicFormula}
+                    ${xy分流说明}
+                </div>
+            `;
+            
+            // 添加三种方案对比表格
+            let comparisonTable = '';
+            if (data.comparison_summary && data.comparison_summary.length > 0) {
+                comparisonTable = `
+                    <div style="margin-top: 15px; padding: 15px; background: rgba(78,205,196,0.1); border: 1px solid rgba(78,205,196,0.3); border-radius: 8px;">
+                        <div style="font-size: 14px; font-weight: bold; color: #4ecdc4; margin-bottom: 10px;">三种方案利润对比（周期${data.days}天）：</div>
+                        <table style="width: 100%; font-size: 11px; color: #ccc; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background: rgba(0,0,0,0.2);">
+                                    <th style="padding: 6px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1);">模式</th>
+                                    <th style="padding: 6px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1);">收率规则</th>
+                                    <th style="padding: 6px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.1);">每日收入(万元)</th>
+                                    <th style="padding: 6px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.1);">每日原油成本(万元)</th>
+                                    <th style="padding: 6px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.1);">每日加工成本(万元)</th>
+                                    <th style="padding: 6px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.1);">每日利润(万元)</th>
+                                    <th style="padding: 6px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.1);">总利润(万元)</th>
+                                    <th style="padding: 6px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1);">推荐</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.comparison_summary.map(mode => {
+                                    const dailyRevenue = mode.total_revenue / 10000;
+                                    const dailyCrudeCost = ((mode.crude_cost || 0) / data.days) / 10000;
+                                    const dailyEnergyCost = ((mode.energy_cost || 0) / data.days) / 10000;
+                                    const dailyProfit = dailyRevenue - dailyCrudeCost - dailyEnergyCost;
+                                    const totalProfit = mode.total_profit / 10000;
+                                    return `
+                                        <tr style="${mode.is_best ? 'background: rgba(78,205,196,0.15); font-weight: bold;' : ''}">
+                                            <td style="padding: 6px; border-bottom: 1px solid rgba(255,255,255,0.05);">${mode.mode_name}</td>
+                                            <td style="padding: 6px; border-bottom: 1px solid rgba(255,255,255,0.05);">${mode.mode_desc}</td>
+                                            <td style="padding: 6px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.05);">${dailyRevenue.toFixed(2)}</td>
+                                            <td style="padding: 6px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.05);">${dailyCrudeCost.toFixed(2)}</td>
+                                            <td style="padding: 6px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.05);">${dailyEnergyCost.toFixed(2)}</td>
+                                            <td style="padding: 6px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.05);">${dailyProfit.toFixed(2)}</td>
+                                            <td style="padding: 6px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.05); color: ${mode.is_best ? '#4ecdc4' : '#ff9800'};">${totalProfit.toFixed(2)}</td>
+                                            <td style="padding: 6px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05);">${mode.is_best ? '✓ 最优' : ''}</td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                        <div style="margin-top: 10px; font-size: 11px; color: #888;">
+                            * 最优方案已自动选中并用于详细计算（每日利润最大化）
+                        </div>
+                    </div>
+                `;
+            }
+            
+            document.getElementById('summaryMetrics').innerHTML = metrics + comparisonTable;
+
+            let messagesHtml = '';
+            if (result.messages && result.messages.length > 0) {
+                messagesHtml = '<div style="margin: 15px 0;"><h3 style="color: #ff9800; margin-bottom: 10px;">警告信息</h3>';
+                result.messages.forEach(msg => {
+                    messagesHtml += `<div style="background: rgba(255,152,0,0.1); border: 1px solid rgba(255,152,0,0.3); border-radius: 8px; padding: 10px; margin-bottom: 10px; color: #ff9800;">[${msg.type.toUpperCase()}] ${msg.text}</div>`;
+                });
+                messagesHtml += '</div>';
+            }
+            document.getElementById('summaryMetrics').innerHTML = metrics + messagesHtml;
+
+            renderTopology(result);
+
+            if (result.explanation) {
+                document.getElementById('explanationSummary').textContent = result.explanation.summary || '';
+
+                let economicHtml = '';
+                if (result.explanation.economic_analysis && result.explanation.economic_analysis.length > 0) {
+                    result.explanation.economic_analysis.forEach(item => {
+                    economicHtml += `
+                        <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px;">
+                            <div style="font-weight: bold; color: #00d2ff; margin-bottom: 10px;">${item.device_id} - ${item.device_name}</div>
+                            <div style="color: #ccc; font-size: 14px; margin-bottom: 10px;">
+                                输入量: ${item.input_amount.toLocaleString()} 吨 | 收益: ${(item.revenue / 10000).toFixed(3)} 万元
+                            </div>
+                            <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;">
+                                <div style="font-size: 12px; color: #999; margin-bottom: 5px;">产品贡献:</div>
+                                ${item.products.map(p => `
+                                    <div style="font-size: 12px; color: #ddd;">
+                                        ${p.product_name}: ${(p.revenue / 10000).toFixed(3)} 万元 (收率: ${p.yield_rate.toFixed(3)}%, 价格: ${p.price.toLocaleString()}元/吨)
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                });
+                }
+                document.getElementById('economicAnalysis').innerHTML = economicHtml;
+            }
+
+            let utilizationHtml = '';
+            if (result.device_utilization) {
+                Object.entries(result.device_utilization).forEach(([deviceId, util]) => {
+                const isFull = result.device_full_flags && result.device_full_flags[deviceId] > 0.5;
+                const fullMarker = isFull ? ' <span style="color: #ff5722; font-weight: bold;">[满]</span>' : '';
+                utilizationHtml += `
+                    <div class="progress-container">
+                        <div class="progress-label">
+                            <span>${deviceId} - ${util.name}${fullMarker}</span>
+                            <span>${util.input.toFixed(3)} / ${util.max_capacity.toFixed(3)} (${util.utilization.toFixed(3)}%)</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${Math.min(util.utilization, 100)}%"></div>
+                        </div>
+                    </div>
+                `;
+            });
+            }
+            document.getElementById('utilizationList').innerHTML = utilizationHtml;
+
+            let flowHtml = '';
+            if (result.connection_details && result.connection_details.length > 0) {
+                const grouped = {};
+                result.connection_details.forEach(detail => {
+                    if (!grouped[detail.from_device_id]) {
+                        grouped[detail.from_device_id] = [];
+                    }
+                    grouped[detail.from_device_id].push(detail);
+                });
+
+                Object.entries(grouped).forEach(([fromDevice, details]) => {
+                    flowHtml += `
+                        <div class="flow-group">
+                            <div class="flow-group-header">
+                                从装置 ${fromDevice} (${details[0].from_device_name}) 输出
+                            </div>
+                            ${details.map(detail => `
+                                <div class="flow-item">
+                                    <span class="product">${detail.product_id} (${detail.product_name})</span>
+                                    <span class="arrow">→</span>
+                                    <span class="device">${detail.to_device_id} (${detail.to_device_name})</span>
+                                    ${detail.special_var ? `<span class="special-tag">[${detail.special_var}]</span>` : ''}
+                                    ${detail.is_unique_target ? `<span class="unique-tag">[唯一目标]</span>` : ''}
+                                    <span class="flow-value">${detail.flow.toFixed(3)} 吨</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                });
+            } else {
+                flowHtml = '<p style="color: #999; padding: 20px;">无流量数据</p>';
+            }
+            document.getElementById('flowDetails').innerHTML = flowHtml;
+        }
+
+        function reloadData() {
+            fetch('/api/reload', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    alert(data.message);
+                    loadDevices();
+                    loadProducts();
+                    loadConnections();
+                    loadEnergyConsumptions();
+                    loadCrudeTypes();
+                });
+        }
+
+        function loadCrudeTypes() {
+            fetch('/api/crude_types')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        const select = document.getElementById('crudeType');
+                        if (select) {
+                            // 清空现有选项
+                            select.innerHTML = '';
+                            // 添加新选项
+                            data.data.forEach(crude => {
+                                const option = document.createElement('option');
+                                option.value = crude;
+                                option.textContent = crude;
+                                select.appendChild(option);
+                            });
+                        }
+                    }
+                })
+                .catch(err => {
+                    console.error('加载原油品种失败:', err);
+                });
+        }
+
+        // 页面加载时初始化原油品种列表
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCrudeTypes();
+        });
+
+        function displaySolveError(message, details) {
+            const resultCard = document.getElementById('resultCard');
+            const errorDisplay = document.getElementById('errorDisplay');
+            const summaryMetrics = document.getElementById('summaryMetrics');
+            const topologyContainer = document.getElementById('topologyContainer');
+            const economicSection = document.getElementById('economicSection');
+            const explanationSection = document.getElementById('explanationSection');
+            const specialVars = document.getElementById('specialVars');
+            const utilizationList = document.getElementById('utilizationList');
+            const flowDetails = document.getElementById('flowDetails');
+            
+            if (!resultCard) {
+                alert('求解失败：' + message);
+                return;
+            }
+            
+            const errorHtml = `
+                <div style="background: rgba(244, 67, 54, 0.1); border: 1px solid rgba(244, 67, 54, 0.3); border-radius: 10px; padding: 20px; margin-bottom: 20px;">
+                    <h3 style="color: #f44336; margin-bottom: 15px; font-size: 18px;">❌ 求解失败</h3>
+                    <p style="color: #ff9800; font-size: 16px; margin-bottom: 15px;">${message}</p>
+                    ${details ? `
+                    <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px;">
+                        <h4 style="color: #fff; margin-bottom: 10px;">详细原因:</h4>
+                        <pre style="color: #ccc; font-family: monospace; font-size: 13px; white-space: pre-wrap;">${details}</pre>
+                    </div>
+                    ` : ''}
+                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <h4 style="color: #fff; margin-bottom: 10px;">建议操作:</h4>
+                        <ul style="color: #ccc; margin-left: 20px; line-height: 1.8;">
+                            <li>根据上述原因分析调整相关参数</li>
+                            <li>适当减少原料输入量</li>
+                            <li>检查装置容量和储罐约束设置</li>
+                            <li>刷新页面后重新尝试求解</li>
+                        </ul>
+                    </div>
+                </div>
+            `;
+            
+            // 显示错误信息，隐藏所有成功详情页面
+            errorDisplay.innerHTML = errorHtml;
+            errorDisplay.style.display = 'block';
+            summaryMetrics.style.display = 'none';
+            if (topologyContainer) topologyContainer.style.display = 'none';
+            if (economicSection) economicSection.style.display = 'none';
+            if (explanationSection) explanationSection.style.display = 'none';
+            if (specialVars) specialVars.style.display = 'none';
+            if (utilizationList) utilizationList.innerHTML = '';
+            if (flowDetails) flowDetails.innerHTML = '';
+            resultCard.style.display = 'block';
+        }
+
+        function loadEnergyConsumptions() {
+            const tbody = document.querySelector('#energyTable tbody');
+            
+            fetch('/api/energy_consumptions')
+                .then(res => res.json())
+                .then(data => {
+                    tbody.innerHTML = '';
+                    
+                    if (!data || !data.energy_consumptions || !Array.isArray(data.energy_consumptions)) {
+                        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #ff9800;">数据格式错误</td></tr>';
+                        return;
+                    }
+                    
+                    if (data.energy_consumptions.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #ff9800;">暂无数据</td></tr>';
+                        return;
+                    }
+                    
+                    const energyTypeMap = {
+                        'electricity': '电',
+                        'natural_gas': '天然气',
+                        'steam': '蒸汽',
+                        'water': '水'
+                    };
+                    
+                    data.energy_consumptions.forEach(ec => {
+                        const energyTypeMap = {
+                            'electricity': '电',
+                            'natural_gas': '天然气',
+                            'steam': '蒸汽',
+                            'water': '水'
+                        };
+                        const energyTypeName = energyTypeMap[ec.energy_type] || ec.energy_type;
+                        tbody.innerHTML += `
+                            <tr data-id="${ec.id}" data-energy-type="${ec.energy_type}">
+                                <td style="color: #00d2ff; font-weight: bold;">${ec.id}</td>
+                                <td contenteditable="true" class="edit-cell" data-field="device_id" title="点击编辑装置ID">${ec.device_id}</td>
+                                <td style="color: #4ecdc4;">${energyTypeName}</td>
+                                <td contenteditable="true" class="edit-cell" data-field="consumption_per_ton" title="点击编辑单位消耗">${ec.consumption_per_ton.toLocaleString()}</td>
+                                <td contenteditable="true" class="edit-cell" data-field="price_per_unit" title="点击编辑单价">${ec.price_per_unit.toLocaleString()}</td>
+                                <td>
+                                    <button class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px; margin-right: 5px;" onclick="saveEnergyConsumption('${ec.id}')">保存</button>
+                                    <button class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;" onclick="deleteEnergyConsumption('${ec.id}')">删除</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                })
+                .catch(error => {
+                    console.error('loadEnergyConsumptions: 加载失败:', error);
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #ff5722;">加载失败: ${error.message}</td></tr>`;
+                });
+        }
+
+        function saveEnergyConsumption(ecId) {
+            const row = document.querySelector(`tr[data-id="${ecId}"]`);
+            if (!row) {
+                alert('错误：找不到对应的行');
+                return;
+            }
+            
+            const cells = row.querySelectorAll('.edit-cell');
+            if (cells.length < 3) {
+                alert('错误：单元格数据不完整');
+                return;
+            }
+            
+            const energyType = row.getAttribute('data-energy-type') || 'electricity';
+            
+            const data = {
+                id: ecId,
+                device_id: cells[0].textContent.trim(),
+                energy_type: energyType,
+                consumption_per_ton: parseFloat(cells[1].textContent.replace(/,/g, '').trim()),
+                price_per_unit: parseFloat(cells[2].textContent.replace(/,/g, '').trim())
+            };
+            
+            fetch('/api/energy_consumptions/' + ecId, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    alert('能耗记录更新成功！');
+                    loadEnergyConsumptions();
+                } else {
+                    alert('更新失败: ' + result.message);
+                }
+            })
+            .catch(err => {
+                alert('请求失败: ' + err.message);
+            });
+        }
+
+        function showAddEnergyForm() {
+            document.getElementById('addEnergyForm').style.display = 'block';
+        }
+
+        function hideAddEnergyForm() {
+            document.getElementById('addEnergyForm').style.display = 'none';
+            document.getElementById('newEnergyDeviceId').value = '';
+            document.getElementById('newEnergyType').value = 'electricity';
+            document.getElementById('newEnergyConsumption').value = '';
+            document.getElementById('newEnergyPrice').value = '';
+        }
+
+        function addEnergyConsumption() {
+            const data = {
+                device_id: document.getElementById('newEnergyDeviceId').value,
+                energy_type: document.getElementById('newEnergyType').value,
+                consumption_per_ton: parseFloat(document.getElementById('newEnergyConsumption').value),
+                price_per_unit: parseFloat(document.getElementById('newEnergyPrice').value)
+            };
+            
+            fetch('/api/energy_consumptions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    alert('能耗记录添加成功！');
+                    hideAddEnergyForm();
+                    loadEnergyConsumptions();
+                } else {
+                    alert('添加失败: ' + result.message);
+                }
+            });
+        }
+
+        function deleteEnergyConsumption(ecId) {
+            if (!confirm('确定要删除能耗记录 ' + ecId + ' 吗？')) return;
+            
+            fetch('/api/energy_consumptions/' + ecId, {
+                method: 'DELETE'
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    alert('能耗记录删除成功！');
+                    loadEnergyConsumptions();
+                } else {
+                    alert('删除失败: ' + result.message);
+                }
+            });
+        }
+
+        function setLogConfig() {
+            const checked = document.getElementById('verboseLog').checked;
+            fetch('/api/log-config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ verbose: checked })
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('logStatus').textContent = checked ? '开启' : '关闭';
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDevices();
+            loadProducts();
+            loadConnections();
+            loadEnergyConsumptions();
+        });
+    </script>
+</body>
+</html>

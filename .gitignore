@@ -37,3 +37,6 @@ logs/
 # Cache
 .cache/
 *.cache
+
+# Python package build
+*.egg-info/
