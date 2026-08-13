@@ -78,6 +78,34 @@ class ParamValidatorTest {
     }
 
     @Test
+    void missingMessageReturns400ValidationMessage() {
+        // ISSUE-98: 无 params.message → G3 拒绝 400 VALIDATION_MESSAGE(修复前放行→200 COMPLETED)
+        String body = "{\"jsonrpc\":\"2.0\",\"id\":\"msg-020\",\"method\":\"SendMessage\"}";
+        GovernanceException ge = govern(() -> validate(validator, body));
+        assertThat(ge.code()).isEqualTo("VALIDATION_MESSAGE");
+        assertThat(ge.httpStatus().value()).isEqualTo(400);
+    }
+
+    @Test
+    void missingPartsReturns400ValidationMessage() {
+        // ISSUE-98: params.message 存在但无 parts → 400
+        String body = "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\"}}}";
+        GovernanceException ge = govern(() -> validate(validator, body));
+        assertThat(ge.code()).isEqualTo("VALIDATION_MESSAGE");
+    }
+
+    @Test
+    void emptyAgentIdAtParamsTopLevelReturns400ValidationAgentId() {
+        // ISSUE-99: agentId="" 放 params 顶层(非 metadata) → 400 VALIDATION_AGENT_ID(修复前放行→200)
+        String body = "{\"jsonrpc\":\"2.0\",\"id\":\"msg-021\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m21\",\"parts\":[{\"text\":\"hello\"}]},\"agentId\":\"\"}}";
+        GovernanceException ge = govern(() -> validate(validator, body));
+        assertThat(ge.code()).isEqualTo("VALIDATION_AGENT_ID");
+        assertThat(ge.httpStatus().value()).isEqualTo(400);
+    }
+
+    @Test
     void resumeWithTaskIdPopulatesTaskId() {
         GovernanceContext ctx = validate(validator, RESUME);
         assertThat(ctx.taskId()).isEqualTo("task-7");
