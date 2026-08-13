@@ -155,7 +155,8 @@ def test_parse_evo_cases_string_inputs_empty_skipped() -> None:
 
 def test_evo_case_to_case_mapping() -> None:
     """case_id, query(→inputs["query"]), queries(→inputs["queries"]),
-    expected_behavior(→label["expected_result"]) 正确映射。"""
+    expected_behavior(→label["expected_result"]) 正确映射。
+    """
     from evo_agent.dataset.case import EvoCase, evo_case_to_case
 
     evo = EvoCase(

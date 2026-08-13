@@ -21,7 +21,8 @@ class TestFatalOptimizationError:
 class TestManagedDocApplyError:
     def test_inherits_fatal_marker(self) -> None:
         """ManagedDocApplyError 继承 FatalOptimizationError——
-        ComposedCallbacks 对该 marker 重新抛出。"""
+        ComposedCallbacks 对该 marker 重新抛出。
+        """
         assert issubclass(ManagedDocApplyError, FatalOptimizationError)
         assert issubclass(ManagedDocApplyError, Exception)
 
