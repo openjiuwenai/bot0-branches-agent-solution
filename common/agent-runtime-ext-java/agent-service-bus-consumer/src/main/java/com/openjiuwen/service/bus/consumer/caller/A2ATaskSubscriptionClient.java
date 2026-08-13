@@ -21,9 +21,23 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-/** Opens the HTTP/SSE {@code SubscribeToTask} data channel used by the Agent Bus caller. */
+/**
+ * Opens the HTTP/SSE {@code SubscribeToTask} data channel used by the Agent Bus caller.
+ *
+ * @since 2026-08-13
+ */
 public final class A2ATaskSubscriptionClient {
-    /** Opens a Task subscription and returns its local lifecycle handle. */
+    /**
+     * Opens a Task subscription and returns its local lifecycle handle.
+     *
+     * @param request subscription endpoint, Task identifier, and request headers
+     * @param eventConsumer consumer for each event received from the remote Task stream
+     * @param completionHandler callback invoked when the remote stream completes
+     * @param errorHandler callback invoked when the remote stream fails
+     * @return local handle used to close the subscription and suppress subsequent callbacks
+     * @throws NullPointerException if any callback or the request is {@code null}
+     * @throws IllegalArgumentException if the endpoint is not an absolute HTTP(S) URI
+     */
     public TaskSubscription subscribe(TaskSubscriptionRequest request, Consumer<ClientEvent> eventConsumer,
             Runnable completionHandler, Consumer<Throwable> errorHandler) {
         Objects.requireNonNull(request, "request is required");
@@ -99,7 +113,13 @@ public final class A2ATaskSubscriptionClient {
             requestHeaders = requestHeaders == null || requestHeaders.isEmpty() ? Map.of() : Map.copyOf(requestHeaders);
         }
 
-        /** Creates a subscription without transport-specific request headers. */
+        /**
+         * Creates a subscription without transport-specific request headers.
+         *
+         * @param endpointUrl remote Runtime endpoint URL
+         * @param taskId identifier of the Task to subscribe to
+         * @throws IllegalArgumentException if either argument is blank
+         */
         public TaskSubscriptionRequest(String endpointUrl, String taskId) {
             this(endpointUrl, taskId, Map.of());
         }

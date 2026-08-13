@@ -10,7 +10,6 @@ import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.spi.AgentHandler;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
