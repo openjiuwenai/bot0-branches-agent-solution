@@ -98,13 +98,30 @@ public class ParamValidator {
         ctx.setMethod(method);
 
         JsonNode message = root.path("params").path("message");
+        if (message.isMissingNode() || !message.isObject()) {
+            throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_MESSAGE",
+                    "params.message is required and must be an object");
+        }
+        JsonNode parts = message.path("parts");
+        if (!parts.isArray()) {
+            throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_MESSAGE",
+                    "params.message.parts must be an array");
+        }
         String taskId = text(message, "taskId").orElse(null);
         if (taskId != null && !taskId.isBlank()) {
             // resume
             ctx.setTaskId(taskId);
         } else {
-            // create — agentId optional but empty-string is illegal
+            // create — parts must not be empty; agentId optional but empty-string is illegal
+            if (parts.isEmpty()) {
+                throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_MESSAGE",
+                        "params.message.parts must not be empty for create");
+            }
+            // check both params.metadata.agentId (spec) and params.agentId (misplaced, ISSUE-99)
             String agentId = text(root.path("params").path("metadata"), "agentId").orElse(null);
+            if (agentId == null) {
+                agentId = text(root.path("params"), "agentId").orElse(null);
+            }
             if (agentId != null && agentId.isBlank()) {
                 throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_AGENT_ID",
                         "agentId must not be empty");
