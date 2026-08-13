@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>效益计算优化方案 — 吨收量纲统一 + profit.py 复用 + 分场景缓存</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif; background: #f0f2f5; color: #1a1a2e; line-height: 1.8; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); color: #fff; padding: 40px 32px; border-radius: 16px; margin-bottom: 24px; }
+  .header h1 { font-size: 24px; margin-bottom: 6px; }
+  .header .subtitle { font-size: 13px; opacity: 0.7; }
+  .section { background: #fff; border-radius: 12px; padding: 28px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+  .section-title { font-size: 18px; font-weight: 700; margin-bottom: 14px; border-left: 4px solid #4facfe; padding-left: 12px; }
+  .section-title.green { border-color: #43e97b; }
+  .section-title.orange { border-color: #fa709a; }
+  .section-title.purple { border-color: #a18cd1; }
+  .section-title.cyan { border-color: #08979c; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+  th { background: #f0f5ff; font-weight: 600; padding: 8px 12px; text-align: left; border-bottom: 2px solid #d6e4ff; }
+  td { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+  .mono { font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 12px; color: #722ed1; }
+  .formula { background: linear-gradient(135deg, #f0f5ff, #e6f7ff); border-left: 4px solid #4facfe; border-radius: 8px; padding: 14px 18px; margin: 10px 0; font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 13px; }
+  .formula .label { color: #08979c; font-weight: 600; }
+  .formula .result { color: #f5576c; font-weight: 700; }
+  .highlight { background: #fffbe6; border: 1px solid #ffe58f; border-radius: 6px; padding: 12px 16px; margin: 10px 0; font-size: 13px; }
+  .highlight strong { color: #d48806; }
+  .warn { background: #fff1f0; border: 1px solid #ffa39e; border-radius: 6px; padding: 12px 16px; margin: 10px 0; font-size: 13px; }
+  .warn strong { color: #cf1322; }
+  .code-block { background: #1e1e2e; color: #d4d4d4; border-radius: 8px; padding: 16px; font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 12px; line-height: 1.8; overflow-x: auto; margin: 10px 0; }
+  .code-block .kw { color: #c586c0; }
+  .code-block .fn { color: #dcdcaa; }
+  .code-block .str { color: #ce9178; }
+  .code-block .cmt { color: #6a9955; }
+  .code-block .var { color: #9cdcfe; }
+  .code-block .num { color: #b5cea8; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .badge-now { background: #e6f7ff; color: #08979c; }
+  .badge-new { background: #f6ffed; color: #389e0d; }
+  .badge-warn { background: #fff7e6; color: #d46b08; }
+  .badge-changed { background: #fff1f0; color: #cf1322; }
+  .diff-table td.removed { background: #fff1f0; text-decoration: line-through; color: #999; }
+  .diff-table td.added { background: #f6ffed; }
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 12px 0; }
+  .card { border: 1px solid #e8e8e8; border-radius: 10px; padding: 16px; }
+  .card h4 { font-size: 14px; margin-bottom: 8px; }
+  .card.current { border-color: #91d5ff; background: #e6f7ff; }
+  .card.proposed { border-color: #b7eb8f; background: #f6ffed; }
+  .cache-key { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+  .cache-key-item { background: #f9f0ff; border: 1px solid #d3adf7; border-radius: 8px; padding: 10px; text-align: center; font-size: 12px; }
+  .cache-key-item .key-name { font-weight: 700; color: #722ed1; margin-bottom: 4px; }
+  .cache-key-item .key-val { color: #666; font-size: 11px; }
+  .footer { text-align: center; padding: 20px; color: #999; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="header">
+  <h1>效益计算优化方案</h1>
+  <div class="subtitle">吨收量纲统一 · profit.py 复用 · 分场景缓存</div>
+</div>
+
+<!-- ==================== 1. 现状分析 ==================== -->
+<div class="section">
+  <div class="section-title">1. 现状分析与问题诊断</div>
+
+  <div class="card-grid">
+    <div class="card current">
+      <h4>🔍 当前 solve_v1 计算</h4>
+      <table>
+        <tr><td width="100"><strong>量纲</strong></td><td>绝对值（元/天 → × days → 元/批次）</td></tr>
+        <tr><td><strong>价格获取</strong></td><td>2级：缓存 → API (<code>/price/material</code>)</td></tr>
+        <tr><td><strong>价格规则</strong></td><td>仅取 <code>material_price</code> 表直查，无税规则</td></tr>
+        <tr><td><strong>装置成本</strong></td><td>API → 硬编码回退(cjy:50/cyjq:100/lyjq:100)</td></tr>
+        <tr><td><strong>复用性</strong></td><td>每次请求重算，无缓存</td></tr>
+        <tr><td><strong>可比性</strong></td><td>不同批次规模无法直接横向对比</td></tr>
+      </table>
+    </div>
+    <div class="card proposed">
+      <h4>✅ 慧炼 profit.py 计算</h4>
+      <table>
+        <tr><td width="100"><strong>量纲</strong></td><td>绝对值（元），输入量由调用方决定</td></tr>
+        <tr><td><strong>价格获取</strong></td><td>3级：直查 → <code>price_calc_rule</code> → <code>ref_price_benchmark</code></td></tr>
+        <tr><td><strong>价格规则</strong></td><td>含税计算：<code>(基准价×系数+偏差)/(1+税率) - 消费税×1.1356</code></td></tr>
+        <tr><td><strong>装置成本</strong></td><td>月度配置 → <code>md_device.default_cost</code>（无硬编码）</td></tr>
+        <tr><td><strong>接口形式</strong></td><td>FastAPI 直接查 DB，无需 HTTP 转发</td></tr>
+        <tr><td><strong>局限</strong></td><td>不含收率/拓扑计算，需调用方提供 inputs/outputs</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="warn">
+    <strong>核心问题：</strong>
+    <ul style="margin:6px 0 0 18px;">
+      <li><strong>价格精度不足</strong>：solve_v1 仅查 <code>material_price</code> 直表，缺失 <code>price_calc_rule</code>（含税计算规则），部分物料价格可能为 0</li>
+      <li><strong>量纲不可比</strong>：日输入 17160 吨 vs 8100 吨的批次利润无法直接对比，需归一化为"每吨主进料的收益"</li>
+      <li><strong>重复计算</strong>：同油种+同月份+同策略的组合，收率/价格不变但每次都重算</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ==================== 2. 优化目标 ==================== -->
+<div class="section">
+  <div class="section-title green">2. 优化目标</div>
+  <table>
+    <thead><tr><th width="40">#</th><th>目标</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><strong>吨收量纲统一</strong></td><td>所有效益指标归一化为"元/吨主进料"，1吨直馏柴油（柴加）或1吨直馏蜡油（蜡加）产生的收益</td></tr>
+      <tr><td>2</td><td><strong>复用 profit.py</strong></td><td>提取 profit.py 的 <code>_resolve_price_or_raise</code> + <code>_get_device_cost</code> 为公共函数，solve_v1 直接调用，统一价格精度</td></tr>
+      <tr><td>3</td><td><strong>分场景缓存</strong></td><td>按 (减一去向, 航煤, 油种, 月份) 缓存吨收结果，避免重复计算</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ==================== 3. 方案一：吨收量纲统一 ==================== -->
+<div class="section">
+  <div class="section-title orange">3. 方案一：吨收量纲统一</div>
+
+  <h4 style="margin:10px 0 6px;">3.1 基本量纲定义</h4>
+  <div class="formula">
+    <span class="label">吨收（柴加）=</span> <span class="result">柴加利润 / 直馏柴油量(吨)</span><br>
+    <span class="label">吨收（蜡加）=</span> <span class="result">蜡加利润 / 直馏蜡油量(吨)</span><br>
+    <span class="label">吨收入（柴加）=</span> <span class="result">柴加收入 / 直馏柴油量(吨)</span><br>
+    <span class="label">吨成本（柴加）=</span> <span class="result">柴加成本 / 直馏柴油量(吨)</span>
+  </div>
+
+  <h4 style="margin:14px 0 6px;">3.2 计算流程改造</h4>
+  <table>
+    <thead><tr><th width="60">阶段</th><th width="120">当前实现</th><th width="120">优化后</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>计算层</strong></td>
+        <td><span class="badge badge-now">日值</span> absolute</td>
+        <td><span class="badge badge-new">吨值</span> per_ton</td>
+        <td>compute_revenue/compute_costs 增加返回 <code>main_feed_qty</code>（主料量），调用方除以得吨收</td>
+      </tr>
+      <tr>
+        <td><strong>编排层</strong></td>
+        <td>利润 = 收入 − 成本<br>× days</td>
+        <td>利润 = 收入 − 成本<br>吨收 = 利润 / 主料量</td>
+        <td>generate_explanation 新增 <code>per_ton_metrics</code> 字段，保留绝对值兼容前端</td>
+      </tr>
+      <tr>
+        <td><strong>前端</strong></td>
+        <td>显示元/天、元/批次</td>
+        <td>新增"吨收"面板<br>元/吨主进料</td>
+        <td>前端 BatchCalcCard 新增吨收列：吨收入/吨成本/吨利润</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4 style="margin:14px 0 6px;">3.3 输出结构扩展</h4>
+  <div class="code-block">
+<span class="cmt"># generate_explanation 返回的 explanation dict 新增字段：</span>
+<span class="var">per_ton_metrics</span>: {
+    <span class="str">"cyjq_01"</span>: {
+        <span class="str">"main_feed_name"</span>: <span class="str">"直馏柴油"</span>,
+        <span class="str">"main_feed_qty"</span>: <span class="num">4465.36</span>,        <span class="cmt"># 主料量(吨/天)</span>
+        <span class="str">"revenue_per_ton"</span>: <span class="num">4268.52</span>,       <span class="cmt"># 吨收入(元/吨)</span>
+        <span class="str">"feed_cost_per_ton"</span>: <span class="num">3859.97</span>,      <span class="cmt"># 吨进料成本(元/吨)</span>
+        <span class="str">"process_cost_per_ton"</span>: <span class="num">100.00</span>,    <span class="cmt"># 吨加工成本(元/吨)</span>
+        <span class="str">"profit_per_ton"</span>: <span class="num">308.55</span>,         <span class="cmt"># 吨收(元/吨) ← 核心指标</span>
+    },
+    <span class="str">"lyjq_01"</span>: {
+        <span class="str">"main_feed_name"</span>: <span class="str">"直馏蜡油"</span>,
+        <span class="str">"main_feed_qty"</span>: <span class="num">4899.26</span>,
+        <span class="str">"revenue_per_ton"</span>: <span class="num">3950.12</span>,
+        <span class="str">"feed_cost_per_ton"</span>: <span class="num">3647.81</span>,
+        <span class="str">"process_cost_per_ton"</span>: <span class="num">100.00</span>,
+        <span class="str">"profit_per_ton"</span>: <span class="num">202.31</span>,
+    }
+}</div>
+
+  <div class="highlight">
+    <strong>兼容性：</strong>原有的 economic_analysis / costs / feed_details 等绝对值字段保持不变，新增 per_ton_metrics 为可选字段，前端渐进式适配。
+  </div>
+</div>
+
+<!-- ==================== 4. 方案二：复用 profit.py ==================== -->
+<div class="section">
+  <div class="section-title purple">4. 方案二：复用 profit.py 价格计算</div>
+
+  <h4 style="margin:10px 0 6px;">4.1 改造路径</h4>
+  <table>
+    <thead><tr><th width="120">层级</th><th>当前</th><th>优化后</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>价格解析</strong></td>
+        <td class="mono">revenue_calculator.get_product_price()<br>→ HTTP /api/v1/price/material</td>
+        <td class="mono">price_resolver.resolve_price()<br>→ 直查 DB（3级：直查→规则→基准价含税）</td>
+      </tr>
+      <tr>
+        <td><strong>装置成本</strong></td>
+        <td class="mono">cost_calculator._get_device_costs_from_api()<br>→ HTTP /api/v1/device/cost/list</td>
+        <td class="mono">price_resolver.resolve_device_cost()<br>→ 直查 DB（月度→default_cost）</td>
+      </tr>
+      <tr>
+        <td><strong>调用方式</strong></td>
+        <td>solve_v1 独立进程，HTTP 调用慧炼</td>
+        <td>solve_v1 复用慧炼 DB Session，直接查表</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4 style="margin:14px 0 6px;">4.2 新增公共模块：price_resolver.py</h4>
+  <p style="font-size:13px;color:#666;margin-bottom:8px;">从 profit.py 提取 <code>_resolve_price_or_raise</code> 和 <code>_get_device_cost</code>，去掉 HTTPException 改为返回 None + 日志告警（solve_v1 容错降级为 0）。</p>
+  <div class="code-block">
+<span class="cmt"># 新文件：solve_v1/backend/calculation/price_resolver.py</span>
+<span class="cmt"># 从 backend/app/api/price/profit.py 提取核心逻辑，适配 solve_v1 容错需求</span>
+
+<span class="kw">from</span> sqlalchemy.orm <span class="kw">import</span> Session
+<span class="kw">from</span> sqlalchemy <span class="kw">import</span> text
+
+<span class="kw">def</span> <span class="fn">resolve_price</span>(month: <span class="kw">str</span>, material_id: <span class="kw">int</span>, db: Session) -> <span class="kw">float</span> | <span class="kw">None</span>:
+    <span class="str">"""3级价格解析：直查 → 计算规则(含税) → 返回None"""</span>
+    <span class="cmt"># 1) material_price 直查</span>
+    row = db.execute(text(<span class="str">"SELECT price FROM material_price WHERE month=:m AND material_id=:mid"</span>),
+                     {<span class="str">"m"</span>: month, <span class="str">"mid"</span>: material_id}).first()
+    <span class="kw">if</span> row <span class="kw">and</span> row[<span class="num">0</span>] <span class="kw">is not None</span>:
+        <span class="kw">return</span> <span class="kw">float</span>(row[<span class="num">0</span>])
+
+    <span class="cmt"># 2) price_calc_rule → ref_price_benchmark（含税计算）</span>
+    rule = db.execute(text(<span class="str">"""SELECT ref_product_id, price_coefficient, price_offset,
+                        tax_rate, excise_deduction
+                        FROM price_calc_rule WHERE material_id=:mid"""</span>),
+                      {<span class="str">"mid"</span>: material_id}).first()
+    <span class="kw">if not</span> rule:
+        <span class="kw">return None</span>  <span class="cmt"># 无规则，降级</span>
+
+    bench = db.execute(text(<span class="str">"""SELECT price FROM ref_price_benchmark
+                         WHERE month=:m AND ref_product_id=:rpid"""</span>),
+                       {<span class="str">"m"</span>: month, <span class="str">"rpid"</span>: rule.ref_product_id}).first()
+    <span class="kw">if not</span> bench <span class="kw">or</span> bench[<span class="num">0</span>] <span class="kw">is None</span>:
+        <span class="kw">return None</span>
+
+    <span class="cmt"># 含税公式：(基准价×系数+偏差)/(1+税率) - 消费税×1.1356</span>
+    coeff = rule.price_coefficient <span class="kw">or</span> <span class="num">1.0</span>
+    offset = rule.price_offset <span class="kw">or</span> <span class="num">0.0</span>
+    tax = rule.tax_rate <span class="kw">or</span> <span class="num">0.0</span>
+    excise = rule.excise_deduction <span class="kw">or</span> <span class="num">0.0</span>
+    <span class="kw">return</span> (bench[<span class="num">0</span>] * coeff + offset) / (<span class="num">1</span> + tax) - excise * <span class="num">1.1356</span>
+
+
+<span class="kw">def</span> <span class="fn">resolve_device_cost</span>(month: <span class="kw">str</span>, device_id: <span class="kw">int</span>, db: Session) -> <span class="kw">float</span>:
+    <span class="str">"""装置加工成本：月度配置 → default_cost → 0"""</span>
+    row = db.execute(text(<span class="str">"""SELECT dc.unit_cost, md.default_cost
+                        FROM md_device md LEFT JOIN device_cost dc
+                        ON dc.device_id = md.id AND dc.month = :m
+                        WHERE md.id = :did"""</span>),
+                     {<span class="str">"m"</span>: month, <span class="str">"did"</span>: device_id}).first()
+    <span class="kw">if not</span> row:
+        <span class="kw">return</span> <span class="num">0.0</span>
+    <span class="kw">if</span> row[<span class="num">0</span>] <span class="kw">is not None</span>:  <span class="cmt"># 月度配置</span>
+        <span class="kw">return</span> <span class="kw">float</span>(row[<span class="num">0</span>])
+    <span class="kw">if</span> row[<span class="num">1</span>] <span class="kw">is not None</span>:  <span class="cmt"># 默认值</span>
+        <span class="kw">return</span> <span class="kw">float</span>(row[<span class="num">1</span>])
+    <span class="kw">return</span> <span class="num">0.0</span></div>
+
+  <h4 style="margin:14px 0 6px;">4.3 改造 get_product_price</h4>
+  <table class="diff-table">
+    <thead><tr><th width="80">对比</th><th>实现</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge badge-changed">当前</span></td><td class="removed">HTTP GET /api/v1/price/material → 只查 material_price 表 → 返回 0</td></tr>
+      <tr><td><span class="badge badge-new">优化后</span></td><td class="added">直查 DB：material_price → price_calc_rule(含税) → ref_price_benchmark → 返回 None→0</td></tr>
+    </tbody>
+  </table>
+
+  <div class="highlight">
+    <strong>关键收益：</strong>部分物料（如减五线、含硫干气等）在 material_price 表中可能无直接价格，但有 price_calc_rule 关联到 ref_price_benchmark 参考产品价格（含税计算），能大幅减少价格为 0 的情况。
+  </div>
+
+  <div class="warn">
+    <strong>注意：</strong>solve_v1 当前通过 HTTP API 获取价格（独立进程），改为直查 DB 需要 solve_v1 共享慧炼的 DB Session。两种方案：
+    <ul style="margin:6px 0 0 18px;">
+      <li><strong>方案A（推荐）</strong>：solve_v1 复用 <code>postgresql://huilian:huilian2026@localhost:5432/huilian</code>，直查 public schema（当前 config.py 已配置此连接串）</li>
+      <li><strong>方案B</strong>：在慧炼后端新增 <code>/api/v1/price/resolve</code> 接口，封装 3 级价格解析，solve_v1 仍走 HTTP</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ==================== 5. 方案三：分场景缓存 ==================== -->
+<div class="section">
+  <div class="section-title cyan">5. 方案三：分场景吨收缓存</div>
+
+  <h4 style="margin:10px 0 6px;">5.1 缓存键设计</h4>
+  <div class="cache-key">
+    <div class="cache-key-item">
+      <div class="key-name">减一去向</div>
+      <div class="key-val">X_ZERO / Y_ZERO</div>
+    </div>
+    <div class="cache-key-item">
+      <div class="key-name">柴加航煤</div>
+      <div class="key-val">True / False</div>
+    </div>
+    <div class="cache-key-item">
+      <div class="key-name">油种</div>
+      <div class="key-val">bozhong_25_1 / caofeidian</div>
+    </div>
+    <div class="cache-key-item">
+      <div class="key-name">月份</div>
+      <div class="key-val">2026-03 (价格期数)</div>
+    </div>
+  </div>
+
+  <h4 style="margin:14px 0 6px;">5.2 缓存结构</h4>
+  <div class="code-block">
+<span class="cmt"># 进程内缓存（lru_cache + 手动失效）</span>
+<span class="cmt"># key = (yield_mode, hangmei, crude_type, plan_month)</span>
+
+<span class="var">_per_ton_cache</span>: Dict[<span class="kw">tuple</span>, dict] = {
+    (<span class="str">"X_ZERO"</span>, <span class="kw">False</span>, <span class="str">"bozhong_25_1"</span>, <span class="str">"2026-03"</span>): {
+        <span class="str">"cyjq_01"</span>: {
+            <span class="str">"revenue_per_ton"</span>: <span class="num">4268.52</span>,
+            <span class="str">"feed_cost_per_ton"</span>: <span class="num">3859.97</span>,
+            <span class="str">"process_cost_per_ton"</span>: <span class="num">100.00</span>,
+            <span class="str">"profit_per_ton"</span>: <span class="num">308.55</span>,
+            <span class="str">"product_details"</span>: [  <span class="cmt"># 产品级吨收明细</span>
+                {<span class="str">"name"</span>: <span class="str">"航煤"</span>, <span class="str">"yield_rate"</span>: <span class="num">0.62</span>, <span class="str">"price"</span>: <span class="num">6637.16</span>,
+                 <span class="str">"revenue_per_ton"</span>: <span class="num">4115.04</span>},
+                {<span class="str">"name"</span>: <span class="str">"柴油"</span>, <span class="str">"yield_rate"</span>: <span class="num">0.022</span>, <span class="str">"price"</span>: <span class="num">4567.94</span>,
+                 <span class="str">"revenue_per_ton"</span>: <span class="num">100.49</span>},
+            ],
+            <span class="str">"feed_details"</span>: [
+                {<span class="str">"name"</span>: <span class="str">"直馏柴油"</span>, <span class="str">"ratio"</span>: <span class="num">0.978</span>, <span class="str">"price"</span>: <span class="num">3859.97</span>,
+                 <span class="str">"cost_per_ton"</span>: <span class="num">3774.85</span>},
+                {<span class="str">"name"</span>: <span class="str">"氢气"</span>, <span class="str">"ratio"</span>: <span class="num">0.022</span>, <span class="str">"price"</span>: <span class="num">7476.38</span>,
+                 <span class="str">"cost_per_ton"</span>: <span class="num">164.48</span>},
+            ],
+        },
+        <span class="str">"lyjq_01"</span>: { ... },
+    },
+    (<span class="str">"Y_ZERO"</span>, <span class="kw">False</span>, <span class="str">"caofeidian"</span>, <span class="str">"2026-03"</span>): { ... },
+    <span class="cmt"># 最多 2×2×N_油种×12月 组合</span>
+}</div>
+
+  <h4 style="margin:14px 0 6px;">5.3 缓存读写流程</h4>
+  <table>
+    <thead><tr><th width="80">阶段</th><th>操作</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td><strong>读取</strong></td><td>查缓存 key=(yield_mode, hangmei, crude_type, plan_month)</td><td>命中 → 直接返回吨收结果，跳过全部计算</td></tr>
+      <tr><td><strong>计算</strong></td><td>未命中 → 以 1吨主进料为基准计算</td><td>input_amount=1.0，走 calculate_direct → generate_explanation</td></tr>
+      <tr><td><strong>写入</strong></td><td>计算结果归一化后写入缓存</td><td>仅缓存 per_ton_metrics + product_details + feed_details</td></tr>
+      <tr><td><strong>失效</strong></td><td>价格/收率/映射变更时手动清缓存</td><td>提供 <code>clear_per_ton_cache()</code> 接口</td></tr>
+    </tbody>
+  </table>
+
+  <h4 style="margin:14px 0 6px;">5.4 吨收计算的核心简化</h4>
+  <div class="formula">
+    <span class="label">输入基准：</span> input_amount = <span class="result">1.0</span>（1吨主进料）<br>
+    <span class="label">装置输入：</span> cyjq_01 = 1.0 / feed_ratio ≈ <span class="result">1.022</span>（总进料，含辅料）<br>
+    <span class="label">产品产量：</span> 1.022 × yield_rate（如航煤0.62 = 0.634吨）<br>
+    <span class="label">收入：</span> Σ(产量 × 价格) = 0.634 × 6637 + ... <br>
+    <span class="label">吨收：</span> 收入 / 1.0（主料量）= <span class="result">收入本身即为吨收</span>
+  </div>
+  <div class="highlight">
+    <strong>关键洞察：</strong>当 input_amount=1吨主料时，计算出的收入/成本/利润天然就是"每吨主进料的收益"，无需额外除法。
+    只需在 calculate_direct 中增加 <code>per_ton_mode=True</code> 参数，跳过容量约束检查（1吨不会超容），直接走收率+价格计算。
+  </div>
+</div>
+
+<!-- ==================== 6. 实施计划 ==================== -->
+<div class="section">
+  <div class="section-title">6. 实施计划</div>
+  <table>
+    <thead><tr><th width="50">#</th><th width="120">任务</th><th width="150">涉及文件</th><th>改动说明</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td><strong>新增 price_resolver.py</strong></td>
+        <td class="mono">calculation/price_resolver.py (新)</td>
+        <td>从 profit.py 提取价格解析+装置成本查询，适配 solve_v1 容错（返回 None→0）</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td><strong>改造 get_product_price</strong></td>
+        <td class="mono">revenue_calculator.py</td>
+        <td>优先调 price_resolver.resolve_price（直查DB），失败再走 HTTP API 兜底</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td><strong>改造 compute_costs</strong></td>
+        <td class="mono">cost_calculator.py</td>
+        <td>装置成本改调 price_resolver.resolve_device_cost（直查DB），删除硬编码回退</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td><strong>新增 per_ton_cache.py</strong></td>
+        <td class="mono">calculation/per_ton_cache.py (新)</td>
+        <td>缓存管理：get_or_compute / clear / key 生成</td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td><strong>generate_explanation 扩展</strong></td>
+        <td class="mono">economics.py</td>
+        <td>新增 per_ton_metrics 字段（吨收入/吨成本/吨利润/主料量）</td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td><strong>calculate_direct 扩展</strong></td>
+        <td class="mono">direct_calculator.py</td>
+        <td>新增 per_ton_mode 参数，input=1吨时跳过容量检查</td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td><strong>batch_optimizer 集成</strong></td>
+        <td class="mono">batch_optimizer.py</td>
+        <td>组合评估前先查缓存，命中则跳过 calculate_direct</td>
+      </tr>
+      <tr>
+        <td>8</td>
+        <td><strong>前端吨收面板</strong></td>
+        <td class="mono">SolveResult.tsx</td>
+        <td>BatchCalcCard 新增吨收列（吨收入/吨成本/吨利润）</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ==================== 7. 风险与兼容 ==================== -->
+<div class="section">
+  <div class="section-title">7. 风险与兼容性</div>
+  <table>
+    <thead><tr><th width="120">风险项</th><th>影响</th><th>缓解措施</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>DB Session 共享</strong></td>
+        <td>solve_v1 直查慧炼 DB 需共享连接</td>
+        <td>config.py 已配置同一 DATABASE_URL，无需额外连接池；Session 生命周期控制在单次计算内</td>
+      </tr>
+      <tr>
+        <td><strong>价格一致性</strong></td>
+        <td>直查 DB vs HTTP API 可能有缓存延迟</td>
+        <td>直查 DB 读到的就是最新值，反而比 HTTP（可能有 FastAPI 层缓存）更实时</td>
+      </tr>
+      <tr>
+        <td><strong>缓存失效</strong></td>
+        <td>价格/收率/映射变更后缓存过期</td>
+        <td>提供手动清缓存接口 + 价格成本页面保存时自动触发清除</td>
+      </tr>
+      <tr>
+        <td><strong>前端兼容</strong></td>
+        <td>新增 per_ton_metrics 字段</td>
+        <td>渐进式：字段可选，前端先展示再深入集成</td>
+      </tr>
+      <tr>
+        <td><strong>profit.py 改造</strong></td>
+        <td>提取公共函数可能影响现有 API</td>
+        <td>profit.py 保持不变，price_resolver.py 是独立提取，不修改原文件</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ==================== 8. 预期收益 ==================== -->
+<div class="section">
+  <div class="section-title green">8. 预期收益</div>
+  <table>
+    <thead><tr><th width="120">指标</th><th>当前</th><th>优化后</th><th>提升</th></tr></thead>
+    <tbody>
+      <tr><td><strong>价格覆盖率</strong></td><td>material_price 直查（约60%）</td><td>3级解析（预计95%+）</td><td><span class="badge badge-new">+35%</span></td></tr>
+      <tr><td><strong>计算速度</strong></td><td>每次全量计算（~5秒/18组合）</td><td>缓存命中 ~0ms</td><td><span class="badge badge-new">~100x</span></td></tr>
+      <tr><td><strong>可比性</strong></td><td>绝对值，不可横向对比</td><td>吨收量纲，可跨批次对比</td><td><span class="badge badge-new">质的提升</span></td></tr>
+      <tr><td><strong>价格精度</strong></td><td>不含税规则</td><td>含税计算(基准价×系数+偏差)/(1+税率)</td><td><span class="badge badge-new">精度提升</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="footer">
+  solve_v1 效益计算优化方案 · 供评审参考 · 2026-07-03
+</div>
+
+</div>
+</body>
+</html>

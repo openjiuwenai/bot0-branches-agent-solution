@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>排厂管理系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            min-height: 100vh;
+            color: #e2e8f0;
+        }
+        
+        /* 顶部导航 */
+        .header {
+            background: rgba(30, 41, 59, 0.9);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            background: linear-gradient(90deg, #38bdf8, #06b6d4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .nav-links a {
+            color: #94a3b8;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        
+        .nav-links a:hover, .nav-links a.active {
+            background: linear-gradient(90deg, #38bdf8, #06b6d4);
+            color: #fff;
+        }
+        
+        /* 主容器 */
+        .main-container {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            min-height: calc(100vh - 70px);
+        }
+        
+        /* 侧边栏 */
+        .sidebar {
+            background: rgba(30, 41, 59, 0.8);
+            padding: 20px;
+            border-right: 1px solid rgba(148, 163, 184, 0.2);
+        }
+        
+        .sidebar-section {
+            margin-bottom: 30px;
+        }
+        
+        .sidebar-section h3 {
+            color: #38bdf8;
+            margin-bottom: 15px;
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(90deg, #38bdf8, #06b6d4);
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            width: 100%;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(56, 189, 248, 0.4);
+        }
+        
+        .btn-secondary {
+            background: rgba(148, 163, 184, 0.2);
+            color: #e2e8f0;
+            padding: 10px 15px;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(148, 163, 184, 0.3);
+        }
+        
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            padding: 10px 15px;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+        
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+        
+        .btn-success {
+            background: linear-gradient(90deg, #22c55e, #16a34a);
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+        
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
+        }
+        
+        /* 任务列表 */
+        .task-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .task-item {
+            background: rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .task-item:hover {
+            background: rgba(56, 189, 248, 0.15);
+        }
+        
+        .task-item.active {
+            border-color: #38bdf8;
+            background: rgba(56, 189, 248, 0.2);
+        }
+        
+        .task-month {
+            font-size: 18px;
+            font-weight: bold;
+            color: #38bdf8;
+        }
+        
+        .task-status {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        
+        .status-draft {
+            background: rgba(251, 191, 36, 0.2);
+            color: #fbbf24;
+        }
+        
+        .status-generated {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+        
+        .status-locked {
+            background: rgba(148, 163, 184, 0.2);
+            color: #94a3b8;
+        }
+        
+        .task-locked {
+            color: #64748b;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        
+        /* 主内容区 */
+        .content-area {
+            padding: 30px;
+        }
+        
+        .content-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        
+        .content-title {
+            font-size: 24px;
+            color: #f1f5f9;
+        }
+        
+        .content-subtitle {
+            color: #94a3b8;
+            margin-top: 5px;
+        }
+        
+        /* 卡片样式 */
+        .card {
+            background: rgba(30, 41, 59, 0.8);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .card-title {
+            font-size: 16px;
+            color: #f1f5f9;
+            font-weight: 600;
+        }
+        
+        /* 表单样式 */
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #94a3b8;
+            font-size: 14px;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            background: rgba(148, 163, 184, 0.1);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #38bdf8;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+        }
+        
+        /* 表格样式 */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .data-table th,
+        .data-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+        }
+        
+        .data-table th {
+            background: rgba(56, 189, 248, 0.1);
+            color: #38bdf8;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        
+        .data-table tr:hover {
+            background: rgba(148, 163, 184, 0.1);
+        }
+        
+        .data-table input {
+            width: 100%;
+            padding: 8px;
+            background: rgba(148, 163, 184, 0.1);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 4px;
+            color: #e2e8f0;
+            font-size: 13px;
+        }
+        
+        /* 统计卡片 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .stat-card {
+            background: rgba(30, 41, 59, 0.8);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #38bdf8;
+        }
+        
+        .stat-label {
+            color: #94a3b8;
+            margin-top: 8px;
+            font-size: 14px;
+        }
+        
+        /* 消息提示 */
+        .message {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        
+        .message-success {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: #22c55e;
+        }
+        
+        .message-error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+        }
+        
+        .message-info {
+            background: rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            color: #38bdf8;
+        }
+        
+        /* 模态框 */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+        }
+        
+        .modal {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 30px;
+            min-width: 500px;
+            max-width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .modal-title {
+            font-size: 20px;
+            color: #f1f5f9;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 24px;
+            cursor: pointer;
+        }
+        
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 25px;
+        }
+        
+        /* 编辑到货计划模态框 */
+        .arrival-editor {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .arrival-item {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        
+        .arrival-item input {
+            flex: 1;
+            padding: 8px;
+        }
+        
+        .btn-add-arrival {
+            background: rgba(56, 189, 248, 0.2);
+            color: #38bdf8;
+            border: 1px dashed #38bdf8;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
+        .btn-remove-arrival {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        /* 计划详情编辑器 */
+        .detail-editor {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        /* 求解结果卡片 */
+        .solve-result {
+            margin-top: 20px;
+        }
+        
+        .solve-result h4 {
+            color: #38bdf8;
+            margin-bottom: 15px;
+        }
+        
+        .solve-result .profit {
+            font-size: 24px;
+            color: #22c55e;
+            font-weight: bold;
+        }
+        
+        /* 加载状态 */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #94a3b8;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(56, 189, 248, 0.2);
+            border-top-color: #38bdf8;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部导航 -->
+    <div class="header">
+        <h1>排厂管理系统</h1>
+        <div class="nav-links">
+            <a href="/">首页</a>
+            <a href="/scheduling_new" class="active">排厂管理</a>
+        </div>
+    </div>
+    
+    <!-- 主容器 -->
+    <div class="main-container">
+        <!-- 侧边栏 -->
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <h3>新建任务</h3>
+                <button class="btn-primary" onclick="showCreateTaskModal()">创建排厂任务</button>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3>任务列表</h3>
+                <ul id="task-list" class="task-list">
+                    <li class="loading">加载中...</li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- 主内容区 -->
+        <div class="content-area">
+            <div id="content-wrapper">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>请选择或创建一个排厂任务</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 新建任务模态框 -->
+    <div id="create-task-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title">创建排厂任务</span>
+                <button class="modal-close" onclick="closeCreateTaskModal()">&times;</button>
+            </div>
+            <div>
+                <div class="form-group">
+                    <label>计划月份</label>
+                    <input type="month" id="task-month" value="2026-06">
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="closeCreateTaskModal()">取消</button>
+                    <button class="btn-primary" onclick="createTask()">创建</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 编辑到货计划模态框 -->
+    <div id="edit-arrival-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title">编辑到货计划 - <span id="edit-arrival-crude-name"></span></span>
+                <button class="modal-close" onclick="closeEditArrivalModal()">&times;</button>
+            </div>
+            <div class="arrival-editor" id="arrival-editor-content">
+                <!-- 动态生成到货计划编辑表单 -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeEditArrivalModal()">取消</button>
+                <button class="btn-primary" onclick="saveArrivalPlan()">保存</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 编辑排产计划明细模态框 -->
+    <div id="edit-detail-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title">编辑排产计划明细 - <span id="edit-detail-date"></span></span>
+                <button class="modal-close" onclick="closeEditDetailModal()">&times;</button>
+            </div>
+            <div class="detail-editor" id="detail-editor-content">
+                <!-- 动态生成计划明细编辑表单 -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeEditDetailModal()">取消</button>
+                <button class="btn-primary" onclick="saveDetail()">保存</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 求解结果模态框 -->
+    <div id="solve-result-modal" class="modal-overlay">
+        <div class="modal" style="min-width: 600px;">
+            <div class="modal-header">
+                <span class="modal-title">求解结果分析</span>
+                <button class="modal-close" onclick="closeSolveResultModal()">&times;</button>
+            </div>
+            <div id="solve-result-content">
+                <!-- 动态生成求解结果 -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeSolveResultModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 全局数据
+        let currentTask = null;
+        let schedulingData = {};
+        let editingCrudeIndex = -1;
+        let editingDetailIndex = -1;
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTasks();
+        });
+        
+        // 加载任务列表
+        async function loadTasks() {
+            try {
+                const response = await fetch('/api/scheduling/tasks');
+                const result = await response.json();
+                
+                if (result.success) {
+                    renderTaskList(result.tasks);
+                    // 如果有任务，默认选中第一个
+                    if (result.tasks.length > 0) {
+                        selectTask(result.tasks[0]);
+                    }
+                } else {
+                    document.getElementById('task-list').innerHTML = '<li style="color: #ef4444;">加载失败</li>';
+                }
+            } catch (error) {
+                document.getElementById('task-list').innerHTML = `<li style="color: #ef4444;">${error}</li>`;
+            }
+        }
+        
+        // 渲染任务列表
+        function renderTaskList(tasks) {
+            if (tasks.length === 0) {
+                document.getElementById('task-list').innerHTML = '<li style="color: #64748b;">暂无任务</li>';
+                return;
+            }
+            
+            const html = tasks.map((task, index) => `
+                <li class="task-item" data-plan-id="${task.plan_id}" data-planned-month="${task.planned_month}" data-status="${task.status}" data-locked="${task.locked}">
+                    <div class="task-month">${task.planned_month}</div>
+                    <span class="task-status status-${task.status}">${getStatusText(task.status)}</span>
+                    ${task.locked ? '<div class="task-locked">已锁定</div>' : ''}
+                </li>
+            `).join('');
+            
+            document.getElementById('task-list').innerHTML = html;
+            
+            // 添加点击事件监听
+            document.querySelectorAll('.task-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const task = {
+                        plan_id: this.dataset.planId,
+                        planned_month: this.dataset.plannedMonth,
+                        status: this.dataset.status,
+                        locked: this.dataset.locked === 'true'
+                    };
+                    selectTask(task);
+                });
+            });
+        }
+        
+        // 获取状态文本
+        function getStatusText(status) {
+            const map = {
+                'draft': '草稿',
+                'generated': '已生成',
+                'locked': '已锁定'
+            };
+            return map[status] || status;
+        }
+        
+        // 选中任务
+        function selectTask(task) {
+            currentTask = task;
+            
+            // 更新选中状态
+            document.querySelectorAll('.task-item').forEach(item => {
+                item.classList.remove('active');
+                // 找到对应的任务项并高亮
+                if (item.dataset.planId === task.plan_id) {
+                    item.classList.add('active');
+                }
+            });
+            
+            // 加载任务详情
+            loadTaskDetail(task.plan_id);
+        }
+        
+        // 加载任务详情
+        async function loadTaskDetail(planId) {
+            try {
+                document.getElementById('content-wrapper').innerHTML = `
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>加载中...</p>
+                    </div>
+                `;
+                
+                const [taskResult, dataResult] = await Promise.all([
+                    fetch(`/api/scheduling/tasks/${planId}`),
+                    fetch('/api/scheduling/data')
+                ]);
+                
+                const taskData = await taskResult.json();
+                const schedulingDataResult = await dataResult.json();
+                
+                if (taskData.success && schedulingDataResult.success) {
+                    schedulingData = schedulingDataResult.data;
+                    renderTaskDetail(taskData);
+                }
+            } catch (error) {
+                document.getElementById('content-wrapper').innerHTML = `
+                    <div class="message message-error">加载失败: ${error}</div>
+                `;
+            }
+        }
+        
+        // 渲染任务详情
+        function renderTaskDetail(data) {
+            const task = data.task;
+            const inputData = data.input_data;
+            const details = data.details;
+            
+            const html = `
+                <!-- 任务信息 -->
+                <div class="content-header">
+                    <div>
+                        <h2 class="content-title">${task.planned_month} 排厂任务</h2>
+                        <p class="content-subtitle">计划ID: ${task.plan_id} | 状态: ${getStatusText(task.status)} ${task.locked ? '| 已锁定' : ''}</p>
+                    </div>
+                    <div class="btn-group">
+                        ${!task.locked ? `
+                            <button class="btn-secondary" onclick="showGeneratePlanModal()">生成计划</button>
+                            <button class="btn-success" onclick="executeSolve()">执行求解</button>
+                            <button class="btn-secondary" onclick="updateTaskLock(true)">锁定任务</button>
+                        ` : `
+                            <button class="btn-secondary" onclick="updateTaskLock(false)">解锁任务</button>
+                        `}
+                        ${!task.locked ? `<button class="btn-danger" onclick="deleteTask()">删除任务</button>` : ''}
+                    </div>
+                    <div class="input-group" style="margin-left: 20px;">
+                        <label>航煤固定产出(吨)</label>
+                        <input type="number" id="hangmei-target" placeholder="不传则为非航煤工况" min="0" step="1">
+                    </div>
+                </div>
+                
+                <!-- 统计信息 -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value">${inputData.length}</div>
+                        <div class="stat-label">原油品种</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${details.length}</div>
+                        <div class="stat-label">计划天数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${getTotalStock(inputData).toLocaleString()}</div>
+                        <div class="stat-label">期初库存(吨)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${getTotalCapacity(inputData).toLocaleString()}</div>
+                        <div class="stat-label">月加工量(吨)</div>
+                    </div>
+                </div>
+                
+                <!-- 排厂参数 -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">排厂参数</span>
+                        ${!task.locked ? `<button class="btn-secondary" onclick="showEditParamsModal()">编辑参数</button>` : ''}
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>原油ID</th>
+                                <th>原油名称</th>
+                                <th>期初库存</th>
+                                <th>库存上限</th>
+                                <th>库存下限</th>
+                                <th>月加工量</th>
+                                <th>到货计划</th>
+                                <th>原油成本</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${inputData.map((item, index) => `
+                                <tr>
+                                    <td>${item.crude_type_id}</td>
+                                    <td>${item.crude_type_name}</td>
+                                    <td>${item.current_stock.toLocaleString()}</td>
+                                    <td>${item.max_level_stock.toLocaleString()}</td>
+                                    <td>${item.min_level_stock.toLocaleString()}</td>
+                                    <td>${item.monthly_processing_capacity.toLocaleString()}</td>
+                                    <td>${formatArrivalPlan(item.arrival_plan)}</td>
+                                    <td>${item.cost}</td>
+                                    <td>${!task.locked ? `<button class="btn-secondary" onclick="showEditArrivalModal(${index})">编辑到货</button>` : ''}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- 生成的计划 -->
+                ${details.length > 0 ? `
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title">排产计划明细</span>
+                        </div>
+                        <table class="data-table plan-detail-table">
+                            <thead>
+                                <tr>
+                                    <th>日期</th>
+                                    <th>日加工量(吨)</th>
+                                    <th>加工明细</th>
+                                    <th>原油库存状态</th>
+                                    <th>设备负荷</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${details.map((detail, index) => `
+                                    <tr>
+                                        <td>${detail.plan_date}</td>
+                                        <td>${detail.daily_input.toLocaleString()}</td>
+                                        <td>${formatBlendDetail(detail.blend_detail)}</td>
+                                        <td>${formatStockStatus(detail.crude_stock_status)}</td>
+                                        <td>${detail.device_load_rate.toFixed(1)}%</td>
+                                        <td>${!task.locked ? `<button class="btn-secondary" onclick="showEditDetailModal(${index})">编辑</button>` : ''}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                ` : `
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title">排产计划明细</span>
+                        </div>
+                        <div style="text-align: center; padding: 40px; color: #64748b;">
+                            暂无排产计划，请点击"生成计划"按钮生成
+                        </div>
+                    </div>
+                `}
+            `;
+            
+            document.getElementById('content-wrapper').innerHTML = html;
+        }
+        
+        // 格式化到货计划
+        function formatArrivalPlan(plan) {
+            if (typeof plan === 'string') {
+                try {
+                    plan = JSON.parse(plan);
+                } catch {
+                    return plan;
+                }
+            }
+            return Object.entries(plan).map(([date, qty]) => `${date}: ${qty}`).join('<br>');
+        }
+        
+        // 格式化加工明细
+        function formatBlendDetail(detail) {
+            if (typeof detail === 'string') {
+                try {
+                    detail = JSON.parse(detail);
+                } catch {
+                    return detail;
+                }
+            }
+            return Object.entries(detail)
+                .filter(([, qty]) => qty > 0)
+                .map(([id, qty]) => `${id}: ${qty}`)
+                .join('<br>');
+        }
+        
+        // 格式化库存状态
+        function formatStockStatus(status) {
+            if (typeof status === 'string') {
+                try {
+                    status = JSON.parse(status);
+                } catch {
+                    return status;
+                }
+            }
+            return Object.entries(status)
+                .map(([id, qty]) => `${id}: ${qty.toLocaleString()}`)
+                .join('<br>');
+        }
+        
+        // 计算总库存
+        function getTotalStock(data) {
+            return data.reduce((sum, item) => sum + (item.current_stock || 0), 0);
+        }
+        
+        // 计算总加工量
+        function getTotalCapacity(data) {
+            return data.reduce((sum, item) => sum + (item.monthly_processing_capacity || 0), 0);
+        }
+        
+        // 显示新建任务模态框
+        function showCreateTaskModal() {
+            document.getElementById('create-task-modal').classList.add('active');
+        }
+        
+        // 关闭新建任务模态框
+        function closeCreateTaskModal() {
+            document.getElementById('create-task-modal').classList.remove('active');
+        }
+        
+        // 创建任务
+        async function createTask() {
+            const month = document.getElementById('task-month').value;
+            
+            if (!month) {
+                alert('请选择计划月份');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/scheduling/tasks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ planned_month: month })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('任务创建成功');
+                    closeCreateTaskModal();
+                    loadTasks();
+                } else {
+                    alert(result.message);
+                }
+            } catch (error) {
+                alert('创建失败: ' + error);
+            }
+        }
+        
+        // 显示生成计划模态框
+        function showGeneratePlanModal() {
+            generatePlan();
+        }
+        
+        // 生成计划
+        async function generatePlan() {
+            if (!currentTask) return;
+            
+            try {
+                const response = await fetch('/api/scheduling/generate_plan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ plan_month: currentTask.planned_month })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('计划生成成功');
+                    loadTaskDetail(currentTask.plan_id);
+                } else {
+                    alert('生成失败: ' + result.message);
+                }
+            } catch (error) {
+                alert('生成失败: ' + error);
+            }
+        }
+        
+        // 执行求解
+        async function executeSolve() {
+            if (!currentTask) return;
+            
+            try {
+                // 获取当前任务详情，获取 production_plans_input 数据
+                const taskResponse = await fetch(`/api/scheduling/tasks/${currentTask.plan_id}`);
+                const taskData = await taskResponse.json();
+                
+                if (!taskData.success) {
+                    alert('获取任务失败');
+                    return;
+                }
+                
+                // 获取排厂基础数据（包含 production_plans_input 和 device_capacity）
+                const dataResponse = await fetch('/api/scheduling/data');
+                const dataResult = await dataResponse.json();
+                
+                if (!dataResult.success) {
+                    alert('获取排厂数据失败');
+                    return;
+                }
+                
+                // 获取航煤目标值
+                const hangmeiTargetInput = document.getElementById('hangmei-target');
+                const hangmeiTarget = hangmeiTargetInput ? parseFloat(hangmeiTargetInput.value) || null : null;
+                
+                // 构建综合求解请求参数
+                const requestBody = {
+                    plan_month: currentTask.planned_month,
+                    production_plans_input: dataResult.production_plans_input || [],
+                    device_capacity: dataResult.device_capacity || null,
+                    monthly_crude_input: null,
+                    blend_mode: false,
+                    hangmei_target: hangmeiTarget
+                };
+                
+                // 调用综合求解接口
+                const solveResponse = await fetch('/api/scheduling/comprehensive_solve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+                
+                const solveResult = await solveResponse.json();
+                
+                if (solveResult.success) {
+                    showSolveResult(solveResult);
+                } else {
+                    alert('求解失败: ' + solveResult.message);
+                }
+            } catch (error) {
+                alert('求解失败: ' + error);
+            }
+        }
+        
+        // 显示求解结果
+        function showSolveResult(result) {
+            // 优先使用 optimal_revenue，如果不存在则使用 total_profit
+            const totalProfit = result.optimal_revenue !== undefined ? result.optimal_revenue : result.total_profit;
+            
+            // 构建方案对比表格
+            let plansHtml = '';
+            if (result.combination_results && result.combination_results.length > 0) {
+                plansHtml = `
+                    <div style="margin-top: 20px;">
+                        <h5 style="color: #38bdf8; margin-bottom: 10px;">方案对比</h5>
+                        <table class="data-table" style="font-size: 13px;">
+                            <thead>
+                                <tr>
+                                    <th>方案</th>
+                                    <th>切换位置</th>
+                                    <th>效益</th>
+                                    <th>评价</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${result.combination_results.map((combo, index) => `
+                                    <tr ${index === 0 ? 'style="background: rgba(34, 197, 94, 0.1);"' : ''}>
+                                        <td>${index === 0 ? '最优方案' : `方案${index + 1}`}</td>
+                                        <td>${combo.switch_position || '-'}</td>
+                                        <td>¥${combo.total_revenue !== undefined ? combo.total_revenue.toLocaleString() : '-'}</td>
+                                        <td>${combo.description || '-'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+            
+            // 构建批次详情
+            let batchesHtml = '';
+            if (result.batches && result.batches.length > 0) {
+                batchesHtml = `
+                    <div style="margin-top: 20px;">
+                        <h5 style="color: #38bdf8; margin-bottom: 10px;">批次详情</h5>
+                        <table class="data-table" style="font-size: 13px;">
+                            <thead>
+                                <tr>
+                                    <th>批次</th>
+                                    <th>原油品种</th>
+                                    <th>日期范围</th>
+                                    <th>加工量(吨)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${result.batches.map(batch => `
+                                    <tr>
+                                        <td>${batch.batch_id}</td>
+                                        <td>${batch.crude_type}</td>
+                                        <td>第${batch.start_day}-${batch.end_day}天</td>
+                                        <td>${batch.total_input.toLocaleString()}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+            
+            const html = `
+                <div class="solve-result">
+                    <h4>阀门切换优化结果</h4>
+                    <div class="profit">最优效益: ¥${totalProfit !== undefined && totalProfit !== null ? totalProfit.toLocaleString() : '计算中...'}</div>
+                    
+                    ${plansHtml}
+                    ${batchesHtml}
+                    
+                    ${result.message ? `<div style="margin-top: 20px; color: #94a3b8;">${result.message}</div>` : ''}
+                </div>
+            `;
+            
+            document.getElementById('solve-result-content').innerHTML = html;
+            document.getElementById('solve-result-modal').classList.add('active');
+        }
+        
+        // 关闭求解结果模态框
+        function closeSolveResultModal() {
+            document.getElementById('solve-result-modal').classList.remove('active');
+        }
+        
+        // 更新任务锁定状态
+        async function updateTaskLock(locked) {
+            if (!currentTask) return;
+            
+            try {
+                const endpoint = locked ? '/lock' : '/unlock';
+                const response = await fetch(`/api/scheduling/tasks/${currentTask.plan_id}${endpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(locked ? '任务已锁定' : '任务已解锁');
+                    currentTask.locked = locked;
+                    loadTasks();
+                } else {
+                    alert(result.message);
+                }
+            } catch (error) {
+                alert('操作失败: ' + error);
+            }
+        }
+        
+        // 删除任务
+        async function deleteTask() {
+            if (!currentTask || !confirm('确定要删除该任务吗？')) return;
+            
+            try {
+                const response = await fetch(`/api/scheduling/tasks/${currentTask.plan_id}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('任务删除成功');
+                    currentTask = null;
+                    document.getElementById('content-wrapper').innerHTML = `
+                        <div class="loading">
+                            <p>请选择或创建一个排厂任务</p>
+                        </div>
+                    `;
+                    loadTasks();
+                } else {
+                    alert(result.message);
+                }
+            } catch (error) {
+                alert('删除失败: ' + error);
+            }
+        }
+        
+        // 显示编辑参数模态框
+        function showEditParamsModal() {
+            const inputData = schedulingData.production_plans_input || [];
+            const currentMonthData = inputData.filter(item => item.planned_month === currentTask.planned_month);
+            
+            let html = `
+                <div class="modal-header">
+                    <span class="modal-title">编辑排厂参数</span>
+                    <button class="modal-close" onclick="closeEditParamsModal()">&times;</button>
+                </div>
+                <div style="max-height: 60vh; overflow-y: auto;">
+                    <table class="data-table" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>原油名称</th>
+                                <th>期初库存</th>
+                                <th>库存上限</th>
+                                <th>库存下限</th>
+                                <th>月加工量</th>
+                                <th>成本</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            currentMonthData.forEach((item, index) => {
+                html += `
+                    <tr>
+                        <td>${item.crude_type_name}</td>
+                        <td><input type="number" id="param-current-${index}" value="${item.current_stock}" step="1000"></td>
+                        <td><input type="number" id="param-max-${index}" value="${item.max_level_stock}" step="1000"></td>
+                        <td><input type="number" id="param-min-${index}" value="${item.min_level_stock}" step="1000"></td>
+                        <td><input type="number" id="param-capacity-${index}" value="${item.monthly_processing_capacity}" step="1000"></td>
+                        <td><input type="number" id="param-cost-${index}" value="${item.cost}" step="100"></td>
+                    </tr>
+                `;
+            });
+            
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="closeEditParamsModal()">取消</button>
+                    <button class="btn-primary" onclick="saveParams()">保存</button>
+                </div>
+            `;
+            
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay active';
+            modal.innerHTML = `<div class="modal">${html}</div>`;
+            document.body.appendChild(modal);
+            
+            window.editParamsModal = modal;
+            window.editParamsData = currentMonthData;
+        }
+        
+        // 关闭编辑参数模态框
+        function closeEditParamsModal() {
+            if (window.editParamsModal) {
+                document.body.removeChild(window.editParamsModal);
+                window.editParamsModal = null;
+            }
+        }
+        
+        // 保存参数
+        async function saveParams() {
+            const params = [];
+            const data = window.editParamsData || [];
+            
+            data.forEach((item, index) => {
+                params.push({
+                    planned_month: item.planned_month,
+                    crude_type_id: item.crude_type_id,
+                    crude_type_name: item.crude_type_name,
+                    arrival_plan: item.arrival_plan,
+                    monthly_processing_capacity: parseFloat(document.getElementById(`param-capacity-${index}`).value),
+                    current_stock: parseFloat(document.getElementById(`param-current-${index}`).value),
+                    max_level_stock: parseFloat(document.getElementById(`param-max-${index}`).value),
+                    min_level_stock: parseFloat(document.getElementById(`param-min-${index}`).value),
+                    cost: parseFloat(document.getElementById(`param-cost-${index}`).value)
+                });
+            });
+            
+            try {
+                const response = await fetch('/api/scheduling/init_data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ data: params })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('参数保存成功');
+                    closeEditParamsModal();
+                    loadTaskDetail(currentTask.plan_id);
+                } else {
+                    alert('保存失败: ' + result.message);
+                }
+            } catch (error) {
+                alert('保存失败: ' + error);
+            }
+        }
+        
+        // 显示编辑到货计划模态框
+        function showEditArrivalModal(index) {
+            editingCrudeIndex = index;
+            const inputData = schedulingData.production_plans_input || [];
+            const currentMonthData = inputData.filter(item => item.planned_month === currentTask.planned_month);
+            const crude = currentMonthData[index];
+            
+            document.getElementById('edit-arrival-crude-name').textContent = crude.crude_type_name;
+            
+            let arrivalPlan = crude.arrival_plan;
+            if (typeof arrivalPlan === 'string') {
+                try {
+                    arrivalPlan = JSON.parse(arrivalPlan);
+                } catch {
+                    arrivalPlan = {};
+                }
+            }
+            
+            let html = '';
+            if (Object.keys(arrivalPlan).length > 0) {
+                Object.entries(arrivalPlan).forEach(([date, qty], i) => {
+                    html += `
+                        <div class="arrival-item">
+                            <input type="date" value="${date}" id="arrival-date-${i}">
+                            <input type="number" value="${qty}" id="arrival-qty-${i}" placeholder="数量" step="1000">
+                            <button class="btn-remove-arrival" onclick="removeArrivalItem(${i})">删除</button>
+                        </div>
+                    `;
+                });
+            }
+            
+            html += '<button class="btn-add-arrival" onclick="addArrivalItem()">+ 添加到货</button>';
+            
+            document.getElementById('arrival-editor-content').innerHTML = html;
+            document.getElementById('edit-arrival-modal').classList.add('active');
+        }
+        
+        // 关闭编辑到货计划模态框
+        function closeEditArrivalModal() {
+            document.getElementById('edit-arrival-modal').classList.remove('active');
+            editingCrudeIndex = -1;
+        }
+        
+        // 添加到货项
+        function addArrivalItem() {
+            const count = document.querySelectorAll('.arrival-item').length;
+            const html = `
+                <div class="arrival-item">
+                    <input type="date" id="arrival-date-${count}">
+                    <input type="number" id="arrival-qty-${count}" placeholder="数量" step="1000">
+                    <button class="btn-remove-arrival" onclick="removeArrivalItem(${count})">删除</button>
+                </div>
+            `;
+            document.getElementById('arrival-editor-content').insertAdjacentHTML('beforeend', html);
+        }
+        
+        // 删除到货项
+        function removeArrivalItem(index) {
+            const items = document.querySelectorAll('.arrival-item');
+            if (items[index]) {
+                items[index].remove();
+                // 更新剩余项的ID
+                items.forEach((item, i) => {
+                    if (i > index) {
+                        const dateInput = item.querySelector('input[type="date"]');
+                        const qtyInput = item.querySelector('input[type="number"]');
+                        const btn = item.querySelector('button');
+                        dateInput.id = `arrival-date-${i - 1}`;
+                        qtyInput.id = `arrival-qty-${i - 1}`;
+                        btn.onclick = () => removeArrivalItem(i - 1);
+                    }
+                });
+            }
+        }
+        
+        // 保存到货计划
+        async function saveArrivalPlan() {
+            const items = document.querySelectorAll('.arrival-item');
+            const arrivalPlan = {};
+            
+            items.forEach((item, index) => {
+                const date = document.getElementById(`arrival-date-${index}`).value;
+                const qty = parseFloat(document.getElementById(`arrival-qty-${index}`).value);
+                
+                if (date && qty > 0) {
+                    arrivalPlan[date] = qty;
+                }
+            });
+            
+            const inputData = schedulingData.production_plans_input || [];
+            const currentMonthData = inputData.filter(item => item.planned_month === currentTask.planned_month);
+            const crude = currentMonthData[editingCrudeIndex];
+            
+            // 更新到货计划
+            crude.arrival_plan = arrivalPlan;
+            
+            // 保存所有参数
+            try {
+                const response = await fetch('/api/scheduling/init_data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ data: currentMonthData })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('到货计划保存成功');
+                    closeEditArrivalModal();
+                    loadTaskDetail(currentTask.plan_id);
+                } else {
+                    alert('保存失败: ' + result.message);
+                }
+            } catch (error) {
+                alert('保存失败: ' + error);
+            }
+        }
+        
+        // 显示编辑计划明细模态框
+        function showEditDetailModal(index) {
+            editingDetailIndex = index;
+            
+            const response = fetch(`/api/scheduling/tasks/${currentTask.plan_id}`);
+            response.then(res => res.json()).then(data => {
+                if (data.success) {
+                    const detail = data.details[index];
+                    document.getElementById('edit-detail-date').textContent = detail.plan_date;
+                    
+                    let blendDetail = detail.blend_detail;
+                    if (typeof blendDetail === 'string') {
+                        try {
+                            blendDetail = JSON.parse(blendDetail);
+                        } catch {
+                            blendDetail = {};
+                        }
+                    }
+                    
+                    let html = `
+                        <div class="form-group">
+                            <label>日加工量(吨)</label>
+                            <input type="number" id="detail-daily-input" value="${detail.daily_input}" step="1000">
+                        </div>
+                        <div class="form-group">
+                            <label>设备负荷(%)</label>
+                            <input type="number" id="detail-load-rate" value="${detail.device_load_rate}" step="0.1" max="100">
+                        </div>
+                        <div class="form-group">
+                            <label>加工明细 (原油ID:数量，逗号分隔)</label>
+                            <textarea id="detail-blend" rows="4" placeholder="如: bozhong_25_1:5000, qingdao:3000">${formatBlendDetailForEdit(blendDetail)}</textarea>
+                        </div>
+                    `;
+                    
+                    document.getElementById('detail-editor-content').innerHTML = html;
+                    document.getElementById('edit-detail-modal').classList.add('active');
+                }
+            });
+        }
+        
+        // 格式化加工明细用于编辑
+        function formatBlendDetailForEdit(detail) {
+            return Object.entries(detail)
+                .filter(([, qty]) => qty > 0)
+                .map(([id, qty]) => `${id}:${qty}`)
+                .join(', ');
+        }
+        
+        // 关闭编辑计划明细模态框
+        function closeEditDetailModal() {
+            document.getElementById('edit-detail-modal').classList.remove('active');
+            editingDetailIndex = -1;
+        }
+        
+        // 保存计划明细
+        async function saveDetail() {
+            const dailyInput = parseFloat(document.getElementById('detail-daily-input').value);
+            const loadRate = parseFloat(document.getElementById('detail-load-rate').value);
+            const blendText = document.getElementById('detail-blend').value;
+            
+            // 解析加工明细
+            const blendDetail = {};
+            blendText.split(',').forEach(item => {
+                const [id, qty] = item.split(':');
+                if (id && qty) {
+                    blendDetail[id.trim()] = parseFloat(qty.trim());
+                }
+            });
+            
+            try {
+                const response = await fetch(`/api/scheduling/tasks/${currentTask.plan_id}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const details = data.details;
+                    const detail = details[editingDetailIndex];
+                    
+                    // 更新明细
+                    detail.daily_input = dailyInput;
+                    detail.device_load_rate = loadRate;
+                    detail.blend_detail = blendDetail;
+                    
+                    // 这里需要后端支持更新明细，暂时只是前端演示
+                    alert('计划明细编辑功能已准备就绪，后端接口待完善');
+                    closeEditDetailModal();
+                }
+            } catch (error) {
+                alert('保存失败: ' + error);
+            }
+        }
+    </script>
+</body>
+</html>
