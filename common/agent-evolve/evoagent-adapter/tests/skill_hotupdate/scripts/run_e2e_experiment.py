@@ -16,7 +16,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +31,7 @@ VERIFY_END = "<!-- ADAPTER_HOTUPDATE_VERIFY_END -->"
 
 
 def make_marker() -> str:
-    return f"【SKILL热更-{datetime.now().strftime('%Y%m%d-%H%M%S')}】"
+    return f"【SKILL热更-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}】"
 
 
 def split_frontmatter(content: str) -> tuple[str, str]:

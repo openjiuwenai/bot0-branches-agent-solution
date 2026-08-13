@@ -1195,13 +1195,15 @@ class SkillDocumentOptimizer(BaseOptimizer):  # type: ignore[misc]
         # Extract patch from response
         patch_data = reflect_patch_data(result)
         edits_data = patch_data["edits"]
-        assert isinstance(edits_data, list)
+        if not isinstance(edits_data, list):
+            raise TypeError("edits must be a list")
 
         # R1 validation: filter to valid edits
         valid_edits: list[Edit] = []
         for ed in valid_edit_items(edits_data):
             op = ed["op"]
-            assert op in _VALID_OPS
+            if op not in _VALID_OPS:
+                raise ValueError(f"unsupported edit op: {op!r}")
             valid_edits.append(
                 Edit(
                     op=op,
@@ -1462,10 +1464,12 @@ class SkillDocumentOptimizer(BaseOptimizer):  # type: ignore[misc]
                     dict.fromkeys(source_id for edit in edits for source_id in edit.source_ids)
                 )
                 edits_data = result["edits"]
-                assert isinstance(edits_data, list)
+                if not isinstance(edits_data, list):
+                    raise TypeError("edits must be a list")
                 for ed in valid_edit_items(edits_data):
                     op = ed["op"]
-                    assert op in _VALID_OPS
+                    if op not in _VALID_OPS:
+                        raise ValueError(f"unsupported edit op: {op!r}")
                     merged.append(
                         Edit(
                             op=op,
@@ -1619,7 +1623,8 @@ class SkillDocumentOptimizer(BaseOptimizer):  # type: ignore[misc]
                 )
             if result is not None:
                 indices = result["selected_indices"]
-                assert isinstance(indices, list)
+                if not isinstance(indices, list):
+                    raise TypeError("selected_indices must be a list")
                 selected = [
                     edits[index]
                     for index in valid_selected_indices(

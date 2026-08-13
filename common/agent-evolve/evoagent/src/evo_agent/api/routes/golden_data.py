@@ -18,7 +18,6 @@ import asyncio
 import json
 import logging
 import time
-import traceback
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any, Literal
@@ -356,7 +355,7 @@ async def submit_build_gu(
     """
     try:
         parsed = BuildGUConfig.model_validate_json(config)
-    except (ValueError, json.JSONDecodeError) as e:
+    except ValueError as e:
         raise HTTPException(status_code=422, detail=f"Invalid config: {e}") from e
 
     data = await file.read()
@@ -403,11 +402,10 @@ async def submit_build_gu(
             job.status = JobStatus.COMPLETED
             job.push_event("completed", {"status": "completed"})
         except asyncio.CancelledError:
-            print(f"[BUILD GU CANCELLED] job_id={job.job_id}", flush=True)
+            logger.warning("[BUILD GU CANCELLED] job_id=%s", job.job_id)
             raise
         except Exception as e:  # noqa: BLE001 — 后台 task 吞异常入 job
-            tb = traceback.format_exc()
-            print(f"[BUILD GU FAILED] {type(e).__name__}: {e}\n{tb}", flush=True)
+            logger.exception("[BUILD GU FAILED] %s: %s", type(e).__name__, e)
             job.status = JobStatus.FAILED
             job.error = f"{type(e).__name__}: {e}"
             job.push_event("error", {"status": "failed", "error": job.error})

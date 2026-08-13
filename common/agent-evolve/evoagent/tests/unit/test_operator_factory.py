@@ -281,7 +281,7 @@ class TestPreserveFrontmatterSwitch:
             adapter_client=mock_client,
             preserve_frontmatter=False,
         )
-        assert type(op) is SkillDocumentOperator
+        assert isinstance(op, SkillDocumentOperator)
         assert not isinstance(op, FrontmatterPreservingSkillDocumentOperator)
 
     def test_preserve_false_set_parameter_does_not_strip(self) -> None:

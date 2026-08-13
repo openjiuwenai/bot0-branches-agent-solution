@@ -182,7 +182,7 @@ def step_submit_optimize(
 
     if response.status_code != 200:
         print(f"  ERROR: HTTP {response.status_code} — {response.text}")
-        sys.exit(1)
+        raise RuntimeError(f"optimize submit failed: HTTP {response.status_code}")
 
     data = response.json()
     job_id = data["job_id"]
@@ -216,7 +216,7 @@ def step_poll_job(
         elapsed = time.monotonic() - start
         if elapsed > MAX_WAIT:
             print(f"  TIMEOUT after {elapsed:.0f}s!")
-            sys.exit(1)
+            raise RuntimeError(f"polling timed out after {elapsed:.0f}s")
 
         time.sleep(POLL_INTERVAL)
         response = client.get(f"/optimize/{job_id}")
@@ -498,12 +498,17 @@ def main() -> None:
 
     # Step 2 + 3: Submit and poll via TestClient
     # TestClient 维护持久事件循环，避免 ASGITransport 的 "Event loop is closed" 问题
-    with TestClient(app) as client:
-        # Submit
-        job_id, status = step_submit_optimize(client)
+    # 步骤函数以 RuntimeError 上报失败（不在函数内 sys.exit，G.ERR.11），由 main 捕获后干净退出
+    try:
+        with TestClient(app) as client:
+            # Submit
+            job_id, status = step_submit_optimize(client)
 
-        # Poll
-        final_data = step_poll_job(client, job_id, status)
+            # Poll
+            final_data = step_poll_job(client, job_id, status)
+    except RuntimeError as exc:
+        print(f"  FAILED: {exc}")
+        sys.exit(1)
 
     # Step 4: Validate response
     print("── Validation ──")

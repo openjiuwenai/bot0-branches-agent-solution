@@ -32,7 +32,7 @@ class TestEvolveConfig:
         assert config.llm_api_key == ""
         assert config.llm_base_url == "https://api.openai.com/v1"
         assert config.optimizer_model == "gpt-4o"
-        assert config.remote_timeout == 300.0
+        assert config.remote_timeout == pytest.approx(300.0)
         assert config.remote_max_retries == 2
         assert config.remote_parallel == 4
         assert config.default_epochs == 3
@@ -48,7 +48,7 @@ class TestEvolveConfig:
         config = EvolveConfig()
         assert config.llm_api_key == "test-key"
         assert config.optimizer_model == "gpt-4o-mini"
-        assert config.remote_timeout == 600.0
+        assert config.remote_timeout == pytest.approx(600.0)
 
     def test_no_remote_endpoint_field(self) -> None:
         """remote_endpoint 字段已从 EvolveConfig 移除。"""
@@ -245,14 +245,14 @@ class TestEvolveConfig:
         """managed_doc_apply_deadline 默认 600s（spec 部署契约）。"""
         monkeypatch.delenv("EVO_MANAGED_DOC_APPLY_DEADLINE", raising=False)
         config = EvolveConfig(_env_file=None)
-        assert config.managed_doc_apply_deadline == 600.0
+        assert config.managed_doc_apply_deadline == pytest.approx(600.0)
 
     def test_managed_doc_apply_deadline_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """EVO_MANAGED_DOC_APPLY_DEADLINE 环境变量注入。"""
         monkeypatch.setenv("EVO_MANAGED_DOC_APPLY_DEADLINE", "1200.0")
         monkeypatch.setenv("EVO_MANAGED_DOC_CANCEL_ROLLBACK_DEADLINE", "1500.0")
         config = EvolveConfig()
-        assert config.managed_doc_apply_deadline == 1200.0
+        assert config.managed_doc_apply_deadline == pytest.approx(1200.0)
 
     def test_cancel_rollback_deadline_must_exceed_apply_deadline(self) -> None:
         with pytest.raises(ValueError, match="cancel_rollback_deadline"):

@@ -34,7 +34,11 @@ class TestCleanTraces:
             self._make_generation_record(
                 messages=[
                     {"role": "user", "content": "推荐一款示例产品"},
-                    {"role": "assistant", "content": "好的，我来为您推荐", "tool_calls": [{"function": {"name": "call_demo_tool"}}]},
+                    {
+                        "role": "assistant",
+                        "content": "好的，我来为您推荐",
+                        "tool_calls": [{"function": {"name": "call_demo_tool"}}],
+                    },
                     {"role": "tool", "name": "call_demo_tool", "content": '{"result": "..."}'},
                     {"role": "assistant", "content": "根据结果推荐如下"},
                 ],
@@ -120,9 +124,17 @@ class TestCleanTraces:
             self._make_generation_record(
                 messages=[
                     {"role": "user", "content": "do stuff"},
-                    {"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "ask_user"}}]},
+                    {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [{"function": {"name": "ask_user"}}],
+                    },
                     {"role": "tool", "name": "ask_user", "content": "user input"},
-                    {"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "call_demo_tool"}}]},
+                    {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [{"function": {"name": "call_demo_tool"}}],
+                    },
                     {"role": "tool", "name": "call_demo_tool", "content": "result"},
                 ],
             ),
@@ -157,34 +169,52 @@ class TestCleanedTracesEndpoint:
         output_dir = tmp_path / "output" / "edp"
 
         # Write a JSONL archive with a GENERATION record
-        self._write_archive(output_dir, "conv1", [
-            {
-                "type": "GENERATION",
-                "id": "gen-001",
-                "input": {"messages": [
-                    {"role": "user", "content": "推荐一款示例产品"},
-                    {"role": "assistant", "content": "好的", "tool_calls": [{"function": {"name": "call_demo_tool"}}]},
-                    {"role": "tool", "name": "call_demo_tool", "content": '{"result": "..."}'},
-                ]},
-                "output": {"role": "assistant", "content": "推荐如下"},
-            },
-        ])
+        self._write_archive(
+            output_dir,
+            "conv1",
+            [
+                {
+                    "type": "GENERATION",
+                    "id": "gen-001",
+                    "input": {
+                        "messages": [
+                            {"role": "user", "content": "推荐一款示例产品"},
+                            {
+                                "role": "assistant",
+                                "content": "好的",
+                                "tool_calls": [{"function": {"name": "call_demo_tool"}}],
+                            },
+                            {
+                                "role": "tool",
+                                "name": "call_demo_tool",
+                                "content": '{"result": "..."}',
+                            },
+                        ]
+                    },
+                    "output": {"role": "assistant", "content": "推荐如下"},
+                },
+            ],
+        )
 
         from agent_adapter.config import load_config
         from agent_adapter.api.app import create_app
 
         yaml_path = tmp_path / "config.yaml"
-        yaml_path.write_text(textwrap.dedent(f"""\
+        yaml_path.write_text(
+            textwrap.dedent(f"""\
             agents:
               - name: edp_agent
                 log_dir: {log_dir}
                 output_dir: {output_dir}
                 offset_file: {tmp_path}/offsets/edp.json
-        """), encoding="utf-8")
+        """),
+            encoding="utf-8",
+        )
         config = load_config(yaml_path)
         app = create_app(config)
 
         from fastapi.testclient import TestClient
+
         client = TestClient(app)
 
         response = client.get("/api/v1/agents/edp_agent/cleaned-traces/conv1")
@@ -203,17 +233,21 @@ class TestCleanedTracesEndpoint:
         from agent_adapter.api.app import create_app
 
         yaml_path = tmp_path / "config.yaml"
-        yaml_path.write_text(textwrap.dedent(f"""\
+        yaml_path.write_text(
+            textwrap.dedent(f"""\
             agents:
               - name: edp_agent
                 log_dir: {log_dir}
                 output_dir: {tmp_path}/output/edp
                 offset_file: {tmp_path}/offsets/edp.json
-        """), encoding="utf-8")
+        """),
+            encoding="utf-8",
+        )
         config = load_config(yaml_path)
         app = create_app(config)
 
         from fastapi.testclient import TestClient
+
         client = TestClient(app)
 
         response = client.get("/api/v1/agents/nonexistent/cleaned-traces/conv1")
@@ -225,25 +259,33 @@ class TestCleanedTracesEndpoint:
         output_dir = tmp_path / "output" / "edp"
 
         # Write a JSONL archive with NO GENERATION record
-        self._write_archive(output_dir, "conv1", [
-            {"type": "TOOL", "id": "tool-001"},
-        ])
+        self._write_archive(
+            output_dir,
+            "conv1",
+            [
+                {"type": "TOOL", "id": "tool-001"},
+            ],
+        )
 
         from agent_adapter.config import load_config
         from agent_adapter.api.app import create_app
 
         yaml_path = tmp_path / "config.yaml"
-        yaml_path.write_text(textwrap.dedent(f"""\
+        yaml_path.write_text(
+            textwrap.dedent(f"""\
             agents:
               - name: edp_agent
                 log_dir: {log_dir}
                 output_dir: {output_dir}
                 offset_file: {tmp_path}/offsets/edp.json
-        """), encoding="utf-8")
+        """),
+            encoding="utf-8",
+        )
         config = load_config(yaml_path)
         app = create_app(config)
 
         from fastapi.testclient import TestClient
+
         client = TestClient(app)
 
         response = client.get("/api/v1/agents/edp_agent/cleaned-traces/conv1")

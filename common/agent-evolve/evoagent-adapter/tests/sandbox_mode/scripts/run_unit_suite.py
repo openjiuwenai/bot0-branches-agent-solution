@@ -43,7 +43,7 @@ def main() -> int:
     passed = proc.returncode == 0
 
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     report = REPORT_DIR / f"unit_suite_{stamp}.json"
     report.write_text(
         json.dumps(

@@ -139,7 +139,8 @@ class SubmissionControlStore:
                 "SELECT * FROM optimization_submissions WHERE client_task_id = ?",
                 (client_task_id,),
             ).fetchone()
-            assert row is not None
+            if row is None:
+                raise RuntimeError("submission row missing after insert")
             return self._from_row(row), True
 
     def get(self, client_task_id: str) -> SubmissionReceipt | None:

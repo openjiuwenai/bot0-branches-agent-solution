@@ -35,7 +35,7 @@ def _copy_json_utf8(src: Path, dst: Path) -> None:
     try:
         data = json.loads(src.read_text(encoding="utf-8"))
         dst.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    except (json.JSONDecodeError, ValueError):
+    except ValueError:
         shutil.copy2(src, dst)
 
 

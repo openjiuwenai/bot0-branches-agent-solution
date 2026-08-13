@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import types
 from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 
@@ -90,12 +91,19 @@ def _make_opt(*, group_size: int = 2) -> TfGrpoOptimizer:
     opt._trace_retry_backoff = 0.01
     opt._artifact_exporter = _Exporter()
 
-    opt._sample_cases = TfGrpoOptimizer._sample_cases.__get__(opt, TfGrpoOptimizer)
-    opt._push_phase = TfGrpoOptimizer._push_phase.__get__(opt, TfGrpoOptimizer)
-    opt._on_step_apply = TfGrpoOptimizer._on_step_apply.__get__(opt, TfGrpoOptimizer)
-    opt._export_experience_libraries = TfGrpoOptimizer._export_experience_libraries.__get__(
-        opt, TfGrpoOptimizer
-    )
+    # 绑定受保护实例方法到裸实例（_backward 内部按 self.<method> 派发，需真实绑定）；
+    # 通过名取方法并 setattr，避免类外直接 Cls._method 点号访问
+    for _method_name in (
+        "_sample_cases",
+        "_push_phase",
+        "_on_step_apply",
+        "_export_experience_libraries",
+    ):
+        setattr(
+            opt,
+            _method_name,
+            types.MethodType(getattr(TfGrpoOptimizer, _method_name), opt),
+        )
     setattr(
         opt,
         "_read_skills_from_operators",

@@ -359,7 +359,8 @@ class SkillStore:
         tmp.write_text(current, encoding="utf-8")
         os.replace(tmp, snapshot_path)
 
-    def _write_meta(self, agent_dir: Path, skill_name: str, revision: str) -> None:
+    @staticmethod
+    def _write_meta(agent_dir: Path, skill_name: str, revision: str) -> None:
         meta_dir = agent_dir / _META_DIR
         meta_dir.mkdir(parents=True, exist_ok=True)
         payload = {

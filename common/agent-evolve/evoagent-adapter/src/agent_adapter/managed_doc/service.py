@@ -67,7 +67,8 @@ class ManagedDocService:
     def _config(self, agent_name: str, doc_kind: str) -> ManagedDocConfig:
         return self._registry.get(agent_name, doc_kind)
 
-    def _storage(self, cfg: ManagedDocConfig) -> DocStorage:
+    @staticmethod
+    def _storage(cfg: ManagedDocConfig) -> DocStorage:
         # Prefer an explicit allow_root (real path-traversal protection, spec D3);
         # fall back to the doc's parent dir when unset (only catches ``..`` escape).
         allow_root = Path(cfg.allow_root) if cfg.allow_root else Path(cfg.path).parent

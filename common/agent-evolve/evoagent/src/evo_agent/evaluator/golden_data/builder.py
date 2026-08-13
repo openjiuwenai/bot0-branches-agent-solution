@@ -324,8 +324,8 @@ class GlobalUnderstandingBuilder:
         save_system_wide(self._gu_root, system_wide)
         return oos_count
 
+    @staticmethod
     def _group_traces_by_skill(
-        self,
         traces: list[StandardTrajectory],
         known_skills: set[str],
     ) -> tuple[dict[str, list[StandardTrajectory]], int]:

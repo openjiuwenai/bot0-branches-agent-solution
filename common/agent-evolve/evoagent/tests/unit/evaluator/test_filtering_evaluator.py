@@ -61,7 +61,7 @@ class TestShortCircuit:
         result = evaluator.evaluate(_case(_TRAJECTORY), {"answer": "x"})
 
         assert isinstance(result, EvaluatedCase)
-        assert result.score == 0.0
+        assert result.score == pytest.approx(0.0)
         assert result.per_metric == {"filter_failure": 0.0}
         delegate.evaluate.assert_not_called()
 

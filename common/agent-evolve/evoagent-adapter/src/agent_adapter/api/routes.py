@@ -162,14 +162,16 @@ async def skills_action(request: Request) -> JSONResponse:
             )
 
         if action == "skill_content":
-            assert skill_request.skill_name is not None
+            if skill_request.skill_name is None:
+                return _contract_error("INVALID_ACTION", "skill_name is required", 400)
             doc = skill_store.read_skill(agent_name, skill_request.skill_name)
             return JSONResponse(
                 content={"skill_name": doc.skill_name, "content": doc.content},
             )
 
         if action == "restore_skill":
-            assert skill_request.skill_names is not None
+            if skill_request.skill_names is None:
+                return _contract_error("INVALID_ACTION", "skill_names is required", 400)
             restored = skill_store.restore_skills(agent_name, skill_request.skill_names)
             return JSONResponse(
                 content={
@@ -185,8 +187,10 @@ async def skills_action(request: Request) -> JSONResponse:
             )
 
         if action == "update_skill":
-            assert skill_request.skill_name is not None
-            assert skill_request.skill_content is not None
+            if skill_request.skill_name is None:
+                return _contract_error("INVALID_ACTION", "skill_name is required", 400)
+            if skill_request.skill_content is None:
+                return _contract_error("INVALID_ACTION", "skill_content is required", 400)
             result = skill_store.update_skill(
                 agent_name,
                 skill_request.skill_name,

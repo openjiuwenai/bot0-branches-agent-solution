@@ -35,7 +35,7 @@ class TestAdapterConfigDefaults:
         assert config.output_retention_days == 30
         assert config.output_max_files == 2000
         assert config.output_max_file_size == "20MB"
-        assert config.output_trim_target_ratio == 0.7
+        assert config.output_trim_target_ratio == pytest.approx(0.7)
         assert config.host == "0.0.0.0"
         assert config.port == 8900
 

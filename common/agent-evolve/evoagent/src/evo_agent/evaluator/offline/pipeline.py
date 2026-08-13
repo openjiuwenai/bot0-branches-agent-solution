@@ -15,7 +15,6 @@ import io
 import json
 import logging
 import re
-import traceback
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from typing import Any
@@ -372,11 +371,10 @@ async def run_offline_eval(
         job.push_event("completed", {"status": "completed"})
         return summary
     except asyncio.CancelledError:
-        print(f"[OFFLINE EVAL CANCELLED] job_id={job.job_id}", flush=True)
+        logger.warning("[OFFLINE EVAL CANCELLED] job_id=%s", job.job_id)
         raise
     except Exception as e:
-        tb = traceback.format_exc()
-        print(f"[OFFLINE EVAL FAILED] {type(e).__name__}: {e}\n{tb}", flush=True)
+        logger.exception("[OFFLINE EVAL FAILED] %s: %s", type(e).__name__, e)
         job.status = JobStatus.FAILED
         job.error = f"{type(e).__name__}: {e}"
         job.push_event("error", {"status": "failed", "error": job.error})

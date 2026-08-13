@@ -45,7 +45,8 @@ def _parse_meta_skill_response(raw: str) -> str:
     if parsed is None:
         return ""
     content = parsed.get("meta_skill_content", "")
-    assert isinstance(content, str)
+    if not isinstance(content, str):
+        raise TypeError("meta_skill_content must be a string")
     return content
 
 
