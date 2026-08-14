@@ -34,6 +34,12 @@ services:
       - "9876:9876"
     environment:
       JAVA_OPT_EXT: "-server -Xms512m -Xmx512m -Xmn128m"
+    healthcheck:
+      test: ["CMD-SHELL", "sh /home/rocketmq/rocketmq-5.3.1/bin/mqadmin topicList -n 127.0.0.1:9876 >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
 
   rocketmq-broker:
     image: apache/rocketmq:5.3.1
@@ -51,6 +57,12 @@ services:
       - ./broker.conf:/etc/rocketmq/broker.conf:ro
     depends_on:
       - rocketmq-nameserver
+    healthcheck:
+      test: ["CMD-SHELL", "sh /home/rocketmq/rocketmq-5.3.1/bin/mqadmin clusterList -n rocketmq-nameserver:9876 2>/dev/null | grep -Fq broker-a"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
 
   rocketmq-init:
     image: apache/rocketmq:5.3.1
