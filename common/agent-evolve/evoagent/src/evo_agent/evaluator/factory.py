@@ -64,6 +64,14 @@ def create_evaluator(config: dict[str, Any]) -> BaseEvaluator:
                 "user_feedback": {"enabled": True},
             },
         })
+
+        # Agent-as-judge (HTTP-only; drives claude/codex CLIs as subprocesses)
+        create_evaluator({
+            "type": "agent",
+            "preset": "default",
+            "model_config": model_config,
+            "model_client_config": model_client_config,
+        })
     """
     evaluator_type = config.get("type")
 
@@ -73,10 +81,12 @@ def create_evaluator(config: dict[str, Any]) -> BaseEvaluator:
         return _create_llm_evaluator(config)
     elif evaluator_type == "filtered":
         return _create_filtering_evaluator(config)
+    elif evaluator_type == "agent":
+        return _create_agent_evaluator(config)
     else:
         raise ValueError(
             f"Unknown evaluator type: {evaluator_type!r}. "
-            f"Supported types: 'metric', 'llm', 'filtered'."
+            f"Supported types: 'metric', 'llm', 'filtered', 'agent'."
         )
 
 
@@ -209,3 +219,140 @@ def _create_filtering_evaluator(config: dict[str, Any]) -> FilteringEvaluator:
     if not filters:
         raise ValueError("Filtered evaluator requires at least one enabled filter.")
     return FilteringEvaluator(delegate=create_evaluator(delegate_config), filters=filters)
+
+
+def _create_agent_evaluator(config: dict[str, Any]) -> Any:
+    """Build an AgentEvaluator (agent-as-judge) from explicit configuration.
+
+    Drives real coding-agent CLIs (claude / codex) as bounded subprocesses across
+    a preset's dimensions, then fuses the verdicts via an LLM aggregator.
+    Scope is HTTP-only — it is **not** wired into the optimization pipeline.
+
+    Inputs are read from the raw ``config`` dict (the HTTP route assembles it);
+    per-dimension overrides are folded into a resolved preset via
+    :func:`dataclasses.replace` so :class:`AgentEvaluator` reads every knob from
+    its preset object alone.
+
+    Imports are local to avoid pulling the agent_judge package + LLM invocation
+    stack into the import path of the other evaluator types.
+    """
+    import dataclasses
+    from pathlib import Path
+
+    from openjiuwen.core.foundation.llm import Model
+
+    from evo_agent.evaluator.agent_judge.aggregator import SkillAggregator
+    from evo_agent.evaluator.agent_judge.presets import get_preset
+    from evo_agent.evaluator.agent_judge.runtime import make_runtime
+    from evo_agent.evaluator.agent_judge.scorers import get_scorer
+    from evo_agent.evaluator.evaluators.agent import AgentEvaluator
+    from evo_agent.evaluator.golden_data.skill_provider import make_skill_provider
+    from evo_agent.llm.invocation import LLMInvocation, LLMProviderCapabilities
+
+    preset_name = config.get("preset")
+    if not isinstance(preset_name, str) or not preset_name:
+        raise ValueError("Agent evaluator requires a 'preset' name.")
+    preset = get_preset(preset_name)
+
+    runtime = config.get("runtime") or preset.runtime
+    if runtime not in ("claude", "codex"):
+        raise ValueError(f"Agent evaluator 'runtime' must be 'claude' or 'codex', got {runtime!r}.")
+
+    model_config = config.get("model_config")
+    model_client_config = config.get("model_client_config")
+    if model_config is None:
+        raise ValueError("Agent evaluator requires 'model_config'.")
+    if model_client_config is None:
+        raise ValueError("Agent evaluator requires 'model_client_config'.")
+    if not isinstance(model_config, ModelRequestConfig):
+        raise TypeError(
+            f"'model_config' must be ModelRequestConfig, got {type(model_config).__name__}."
+        )
+    if not isinstance(model_client_config, ModelClientConfig):
+        raise TypeError(
+            f"'model_client_config' must be ModelClientConfig, "
+            f"got {type(model_client_config).__name__}."
+        )
+
+    tool_allowlist_raw = config.get("tool_allowlist")
+    if tool_allowlist_raw is None:
+        tool_allowlist = preset.tool_allowlist
+    elif isinstance(tool_allowlist_raw, list):
+        tool_allowlist = tuple(str(t) for t in tool_allowlist_raw)
+    else:
+        raise TypeError("'tool_allowlist' must be a list[str].")
+
+    max_concurrent = config.get("max_concurrent") or preset.max_concurrent
+    run_timeout = config.get("run_timeout") or preset.run_timeout
+    reserved = (
+        config.get("aggregator_reserved_output_tokens") or preset.aggregator_reserved_output_tokens
+    )
+
+    extra_env = dict(preset.extra_env)
+    extra_env_raw = config.get("extra_env")
+    if isinstance(extra_env_raw, dict):
+        extra_env.update({str(k): str(v) for k, v in extra_env_raw.items()})
+
+    resolved_preset = dataclasses.replace(
+        preset,
+        runtime=runtime,
+        tool_allowlist=tool_allowlist,
+        max_concurrent=max_concurrent,
+        run_timeout=run_timeout,
+        aggregator_reserved_output_tokens=reserved,
+        extra_env=extra_env,
+    )
+
+    # Skill doc source for the aggregator's attribution prompt.
+    skill_source = config.get("skill_source", "none")
+    skill_provider = None
+    if skill_source == "local":
+        skill_root = config.get("skill_root")
+        if not isinstance(skill_root, str) or not skill_root:
+            raise ValueError("skill_source='local' requires 'skill_root'.")
+        skill_provider = make_skill_provider("local", skill_root=Path(skill_root))
+    elif skill_source == "adapter":
+        adapter_client = config.get("adapter_client")
+        if adapter_client is None:
+            raise ValueError("skill_source='adapter' requires 'adapter_client'.")
+        skill_provider = make_skill_provider("adapter", adapter_client=adapter_client)
+    elif skill_source != "none":
+        raise ValueError(
+            f"Unknown skill_source: {skill_source!r} (use 'local', 'adapter', or 'none')."
+        )
+
+    invocation = LLMInvocation(
+        Model(model_client_config, model_config),
+        capabilities=LLMProviderCapabilities(
+            context_window_tokens=32768,
+            supports_max_output_tokens=False,
+            supports_finish_reason=True,
+            supports_usage=True,
+            supports_json_mode=True,
+            completion_signal="either",
+        ),
+        parallelism=4,
+        safety_margin_tokens=512,
+        chars_per_token=2.0,
+        default_output_reserve_tokens=1200,
+    )
+    scorer_name = config.get("scorer") or preset.scorer
+    scorer = get_scorer(scorer_name)
+    aggregator = SkillAggregator(
+        invocation,
+        scorer=scorer,
+        reserved_output_tokens=reserved,
+        skill_provider=skill_provider,
+    )
+    runtime_adapter = make_runtime(runtime, extra_env=extra_env)
+
+    workdir_base = config.get("workdir_base")
+    keep_on_error = bool(config.get("keep_on_error", False))
+
+    return AgentEvaluator(
+        preset=resolved_preset,
+        runtime=runtime_adapter,
+        aggregator=aggregator,
+        workdir_base=workdir_base if isinstance(workdir_base, str) else None,
+        keep_on_error=keep_on_error,
+    )
