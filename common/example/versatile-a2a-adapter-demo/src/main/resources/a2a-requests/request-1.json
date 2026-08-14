@@ -13,8 +13,8 @@
       ]
     },
     "metadata": {
+      "agent_id": "main_planner",
       "body": {
-        "agent_id": "main_planner",
         "input": {
           "query": "xxx",
           "intent": "xxx",

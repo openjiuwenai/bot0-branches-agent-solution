@@ -1,13 +1,14 @@
 server:
   port: ${SERVER_PORT:18080}
 
-# url-template 默认值里的 {conversation_id} 必须用嵌套占位符引用：
-# Spring 解析 ${VERSATILE_URL:...} 时会把默认值里第一个裸 '}'（即 {conversation_id} 的 }）
+# url-template 默认值里的 {conversation_id} / {agent_id} 必须用嵌套占位符引用：
+# Spring 解析 ${VERSATILE_URL:...} 时会把默认值里第一个裸 '}'（即 {xxx} 的 }）
 # 误认为占位符结束符，导致设置 VERSATILE_URL 后模板残留一个 '}'，变成
 # .../conversations/{conversation_id}}（替换后 URL 里出现 .../xxxx}）。
 # 嵌套 ${...} 会被 PropertyPlaceholderHelper 计数跳过，解析结果正确。
 versatile-demo:
   conversation-id-placeholder: "{conversation_id}"
+  agent-id-placeholder: "{agent_id}"
 
 openjiuwen:
   service:
@@ -17,7 +18,7 @@ openjiuwen:
       webflux:
         enabled: false
     versatile:
-      url-template: ${VERSATILE_URL:http://127.0.0.1:31113/v1/0/agents/main_planner/conversations/${versatile-demo.conversation-id-placeholder}}
+      url-template: ${VERSATILE_URL:http://127.0.0.1:31113/v1/0/agents/${versatile-demo.agent-id-placeholder}/conversations/${versatile-demo.conversation-id-placeholder}}
       timeout: 600s
       forward-header-whitelist:
         - stream
