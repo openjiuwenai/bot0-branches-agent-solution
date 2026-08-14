@@ -11,8 +11,9 @@
 # 关键环境变量（可覆盖）:
 #   SERVER_PORT    本地 A2A runtime 监听端口，默认 18080
 #   VERSATILE_URL  远端 Versatile HTTP 地址模板，默认
-#                  http://127.0.0.1:31113/v1/0/agents/main_planner/conversations/{conversation_id}
-#                  注意 {conversation_id} 会被 adapter 替换为请求里的 contextId
+#                  http://127.0.0.1:31113/v1/0/agents/{agent_id}/conversations/{conversation_id}
+#                  {conversation_id} 会被 adapter 替换为请求里的 contextId；
+#                  {agent_id} 会被替换为 params.metadata.agent_id（缺失则替换为空串）
 #   JAR            显式指定 jar 路径；不指定时自动探测 target/versatile-a2a-adapter-demo-*.jar
 #
 # 启动后 A2A 入口为: http://127.0.0.1:${SERVER_PORT}/a2a/
@@ -68,7 +69,7 @@ export SERVER_PORT="${SERVER_PORT:-18080}"
 # 使 VERSATILE_URL 变成 .../{conversation_id}}（替换后 URL 出现 .../xxxx}）。
 # 因此用 if + 直接赋值，避开 ${var:-default} 展开。
 if [[ -z "${VERSATILE_URL:-}" ]]; then
-  export VERSATILE_URL="http://127.0.0.1:31113/v1/0/agents/main_planner/conversations/{conversation_id}"
+  export VERSATILE_URL="http://127.0.0.1:31113/v1/0/agents/{agent_id}/conversations/{conversation_id}"
 fi
 
 # ---------- 检查端口是否被占用 ----------

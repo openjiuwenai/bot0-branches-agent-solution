@@ -53,7 +53,7 @@ docker run -d --name versatile-demo --network host versatile-a2a-adapter-demo:la
 
 #   方式二（Docker Desktop / 端口映射）：远端 Versatile 地址需指向宿主机入口
 docker run -d --name versatile-demo -p 18080:18080 \
-  -e VERSATILE_URL=http://host.docker.internal:31113/v1/0/agents/main_planner/conversations/{conversation_id} \
+  -e VERSATILE_URL=http://host.docker.internal:31113/v1/0/agents/{agent_id}/conversations/{conversation_id} \
   versatile-a2a-adapter-demo:latest
 
 # 3) 进入容器，手动启动服务并发请求（容器内路径与仓库一致）
@@ -104,7 +104,7 @@ docker exec versatile-demo /app/script/send-requests.sh --file /app/a2a-requests
 | 环境变量 | 默认值 | 说明 |
 |---|---|---|
 | `SERVER_PORT` | `18080` | 本地 A2A runtime 端口 |
-| `VERSATILE_URL` | `http://127.0.0.1:31113/v1/0/agents/main_planner/conversations/{conversation_id}` | 远端 Versatile 地址模板，`{conversation_id}` 会被替换为请求的 contextId |
+| `VERSATILE_URL` | `http://127.0.0.1:31113/v1/0/agents/{agent_id}/conversations/{conversation_id}` | 远端 Versatile 地址模板；`{conversation_id}`→请求 contextId，`{agent_id}`→`params.metadata.agent_id`（缺失替换为空串） |
 | `JAR` | 自动探测 `target/*.jar` | 显式指定 jar 路径 |
 
 `./start.sh --stop` 通过 `.demo.pid` 停止进程。日志写入 `target/demo.log`。
@@ -156,7 +156,7 @@ message.parts[0].text
 metadata.body
     ├─ custom_data        → 远端 HTTP body 的【基底】：整个 custom_data 原样成为远端 body 顶层字段
     │    └─ inputs        → 远端 body.inputs 的基底，query/intent 会被上面的 message.text 覆盖
-    └─ 顶层字段 (agent_id / input / conversation_id / timeout / role_id / role_name / stream ...)
+    └─ 顶层字段 (input / conversation_id / timeout / role_id / role_name / stream ...)
          默认【不会】进入远端请求！除非 application.yml 配置了
          interrupt.resume-request-template.body，用 {字段名} 占位符引用
 
@@ -166,10 +166,15 @@ metadata.headers
 
 metadata.query
     └─ 作为 query 参数拼到远端 URL 上
+
+metadata.agent_id            (顶层字段，非 body.agent_id)
+    └─ 当 url-template 含 {agent_id} 占位符时，用它替换；缺失则替换为空串。
+       与 {conversation_id}（取自 contextId）一起决定远端 URL。
 ```
 
 一句话：**message.text 决定 query/intent；metadata.body.custom_data 决定远端 body
-基底；metadata.headers 按白名单透传；metadata.query 进 URL。**
+基底；metadata.headers 按白名单透传；metadata.query 进 URL；
+metadata.agent_id + contextId 进 url-template 占位符。**
 
 完整实现见
 `common/agent-runtime-ext-java/agent-service-adapters/agent-service-adapters-versatile/
