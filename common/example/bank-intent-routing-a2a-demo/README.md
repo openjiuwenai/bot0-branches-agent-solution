@@ -15,47 +15,27 @@
 目录；计算器、日期和天气是只通过意图目录暴露的本地工具。入口服务关闭普通的逐 Agent Card Tool
 注入，因此模型只通过 `intent_match` 选择并执行目标能力。
 
-## 1. 准备环境
+## 使用 smoke 脚本快速验证
 
-手工验证需要以下命令：
+smoke 脚本会自动构建示例，按顺序启动四个业务 Agent 和入口 Agent，检查健康状态与 Agent Card，
+执行全部端到端场景，并在验证结束后停止服务。脚本可从任意工作目录运行。
 
-```bash
-java -version
-mvn -version
-curl --version
-python3 --version
-```
+运行前需要准备 JDK 17、Maven 和可访问的 LLM、reranker。Bash 脚本还需要 `curl` 和 Python 3；
+PowerShell 脚本需要 PowerShell 7 或 Windows PowerShell。五个默认端口 `18200` 至 `18204` 不能被
+其他进程占用。首次运行前还需将当前功能分支的 Runtime、Core 扩展和 Runtime 扩展安装到本地
+Maven 仓库，具体命令见“手工逐步验证”的“构建跨仓依赖和示例”。
 
-建议使用 JDK 17 或项目当前声明的 JDK 版本。后续命令均从本示例目录执行：
-
-```bash
-cd common/example/bank-intent-routing-a2a-demo
-```
-
-确认端口没有被其他进程占用：
-
-```bash
-for port in 18200 18201 18202 18203 18204; do
-  curl -fsS "http://127.0.0.1:${port}/health" && echo "port ${port} is already in use"
-done
-```
-
-如果某个端口已有服务，请先停止该服务，或通过对应环境变量修改五个服务的端口和远端地址。
-
-## 2. 配置真实模型
+### 配置真实模型
 
 复制可提交的配置模板：
 
 ```bash
+cd /path/to/agent-solution/common/example/bank-intent-routing-a2a-demo
 cp application-intent_local-example.yml application-intent_local.yml
 ```
 
 编辑 `application-intent_local.yml`，填写 LLM 和 reranker 的真实地址、模型及密钥。该文件已被仓库
-根目录的 `.gitignore` 忽略，不能提交。检查忽略规则是否生效：
-
-```bash
-git check-ignore -v application-intent_local.yml
-```
+根目录的 `.gitignore` 忽略，不能提交。
 
 五个模块都包含以下配置：
 
@@ -65,10 +45,80 @@ spring:
     import: optional:file:./application-intent_local.yml
 ```
 
-因此必须从本示例根目录启动五个 Jar。Spring Boot 会自动加载本地 YAML，不需要 `.env.local` 或
-额外的环境变量加载器。
+Spring Boot 会自动加载本地 YAML，不需要 `.env.local` 或额外的环境变量加载器。smoke 脚本会自动
+使用本示例目录作为工作目录；手工运行 Jar 时也必须从本示例目录启动。
 
-## 3. 构建跨仓依赖和示例
+### 执行脚本
+
+Linux、macOS 或 Git Bash：
+
+```bash
+bash /path/to/agent-solution/common/example/bank-intent-routing-a2a-demo/smoke-bank-intent.sh
+```
+
+PowerShell：
+
+```powershell
+& "C:\path\to\agent-solution\common\example\bank-intent-routing-a2a-demo\smoke-bank-intent.ps1"
+```
+
+脚本会打印每次发送的完整 JSON-RPC 报文、收到的完整 SSE 事件和每个场景的 `PASS` 结果。最后看到
+以下内容表示全部验证通过：
+
+```text
+PASS: business routing and exact execution audit
+All bank intent routing scenarios passed.
+```
+
+脚本覆盖以下场景：
+
+| 场景 | 预期行为 |
+|---|---|
+| 余额、理财推荐 | 分别路由到正确的远端业务 Agent |
+| 计算器、日期、天气 | 执行入口 Agent 的本地意图函数 |
+| fallback | 返回银行能力范围提示，不调用业务 Agent |
+| 转账追问与确认 | 补齐收款人和金额，在同一 A2A Task 中确认后执行 |
+| 理财购买确认 | 在同一 A2A Task 中确认后执行购买 |
+| 语义指代 | 根据同一会话的推荐结果解析“刚才推荐的第一个产品” |
+| 意图变化 | 转账中断期间切换到理财购买，重新执行意图匹配 |
+| 多目标转账 | 先创建计划，再逐笔路由、确认和执行 |
+
+成功时脚本默认停止五个服务并删除临时产物。需要保留本次运行的日志和 A2A 请求、响应时使用：
+
+```bash
+BANK_INTENT_KEEP_ARTIFACTS=true \
+  bash /path/to/agent-solution/common/example/bank-intent-routing-a2a-demo/smoke-bank-intent.sh
+```
+
+```powershell
+& "C:\path\to\agent-solution\common\example\bank-intent-routing-a2a-demo\smoke-bank-intent.ps1" `
+  -KeepArtifacts
+```
+
+Bash 脚本可通过 `BANK_INTENT_REQUEST_TIMEOUT_SECONDS` 调整单次请求超时；PowerShell 使用
+`-RequestTimeoutSeconds`：
+
+```bash
+BANK_INTENT_REQUEST_TIMEOUT_SECONDS=900 bash smoke-bank-intent.sh
+```
+
+```powershell
+./smoke-bank-intent.ps1 -RequestTimeoutSeconds 900
+```
+
+验证失败时脚本会停止已启动的服务，打印临时目录位置并保留日志；应先查看 `intent.log` 和对应业务
+Agent 日志。PowerShell 运行时，标准输出和错误日志分别保存为 `*.out.log` 和 `*.err.log`。
+
+## 手工逐步验证
+
+以下章节用于开发者手工启动服务、逐条发送完整 A2A 报文，并观察每一步的 Task 状态和执行日志。
+后续命令均从本示例目录执行：
+
+```bash
+cd /path/to/agent-solution/common/example/bank-intent-routing-a2a-demo
+```
+
+### 1. 构建跨仓依赖和示例
 
 先在 `agent-runtime-java` 仓安装当前 Runtime：
 
@@ -102,7 +152,7 @@ wealth-purchase-agent-runtime/target/intent-bank-wealth-purchase-agent-runtime-0
 intent-agent-runtime/target/intent-bank-intent-agent-runtime-0.1.0.jar
 ```
 
-## 4. 启动五个服务
+### 2. 启动五个服务
 
 以下命令在后台启动服务，并将日志统一保存到 `/tmp/bank-intent-manual`。保持当前终端不要退出。
 
@@ -168,7 +218,7 @@ done
 grep -E 'Intent catalog|Agent Card|catalog' "$MANUAL_DIR/intent.log" | tail -n 30
 ```
 
-## 5. 准备手工请求工具
+### 3. 准备手工请求工具
 
 所有请求都发送到入口 Agent 的 A2A 流式接口 `http://127.0.0.1:18200/a2a/`。在当前终端定义下面
 三个函数。`send_a2a` 会先打印完整请求，再保存并打印服务器返回的完整 SSE 响应。
@@ -223,9 +273,9 @@ PY
 
 模型输出措辞可能略有变化。手工验收时应以最终 Task 状态、业务关键字段和服务日志为准。
 
-## 6. 基础路由验证
+### 4. 基础路由验证
 
-### 6.1 远端余额 Agent
+#### 4.1 远端余额 Agent
 
 ```bash
 cat >"$MANUAL_DIR/balance-request.json" <<'JSON'
@@ -254,7 +304,7 @@ grep 'BANK_DEMO_EXECUTION tool=query_balance' "$MANUAL_DIR/balance.log" | tail -
 grep -E 'Intent selected|intent_match|a2a_delegate' "$MANUAL_DIR/intent.log" | tail -n 20
 ```
 
-### 6.2 入口 Agent 本地计算器
+#### 4.2 入口 Agent 本地计算器
 
 ```bash
 cat >"$MANUAL_DIR/calculator-request.json" <<'JSON'
@@ -281,7 +331,7 @@ last_state "$MANUAL_DIR/calculator-response.sse"
 grep 'BANK_DEMO_EXECUTION tool=bank_calculator' "$MANUAL_DIR/intent.log" | tail -n 1
 ```
 
-### 6.3 日期和天气本地工具
+#### 4.3 日期和天气本地工具
 
 日期请求：
 
@@ -328,7 +378,7 @@ last_state "$MANUAL_DIR/weather-response.sse"
 两个请求的最终状态都应为 `TASK_STATE_COMPLETED`。日期响应包含当天日期，天气响应包含“深圳”；入口
 日志分别包含 `current_date` 和 `weather_query` 的本地执行记录。
 
-### 6.4 fallback
+#### 4.4 fallback
 
 ```bash
 cat >"$MANUAL_DIR/fallback-request.json" <<'JSON'
@@ -352,12 +402,12 @@ last_state "$MANUAL_DIR/fallback-response.sse"
 预期最终状态为 `TASK_STATE_COMPLETED`，响应说明入口只支持银行相关能力；入口日志中的意图结果应
 包含 `FALLBACK` 和 `bank-intent-fallback`。
 
-## 7. 转账追问、确认和同 Task 续接
+### 5. 转账追问、确认和同 Task 续接
 
 本场景从缺少收款人和金额的请求开始，连续进行三次续接。四次请求必须使用同一个
 `manual-transfer-context`；第二至第四次还必须携带第一次响应返回的同一个 `taskId`。
 
-### 7.1 发起信息不完整的转账
+#### 5.1 发起信息不完整的转账
 
 ```bash
 cat >"$MANUAL_DIR/transfer-1-request.json" <<'JSON'
@@ -383,7 +433,7 @@ echo "$TRANSFER_TASK_ID"
 预期状态为 `TASK_STATE_INPUT_REQUIRED`，问题要求补充收款人和金额，且
 `TRANSFER_TASK_ID` 不是空字符串。
 
-### 7.2 补充收款人
+#### 5.2 补充收款人
 
 ```bash
 cat >"$MANUAL_DIR/transfer-2-request.json" <<JSON
@@ -407,7 +457,7 @@ last_state "$MANUAL_DIR/transfer-2-response.sse"
 
 预期仍为 `TASK_STATE_INPUT_REQUIRED`，继续询问转账金额。
 
-### 7.3 补充金额
+#### 5.3 补充金额
 
 ```bash
 cat >"$MANUAL_DIR/transfer-3-request.json" <<JSON
@@ -431,7 +481,7 @@ last_state "$MANUAL_DIR/transfer-3-response.sse"
 
 预期仍为 `TASK_STATE_INPUT_REQUIRED`，确认文案必须同时包含“李四”和“200元”。
 
-### 7.4 确认执行
+#### 5.4 确认执行
 
 ```bash
 cat >"$MANUAL_DIR/transfer-4-request.json" <<JSON
@@ -460,9 +510,9 @@ last_state "$MANUAL_DIR/transfer-4-response.sse"
 grep 'BANK_DEMO_EXECUTION tool=execute_transfer' "$MANUAL_DIR/transfer.log" | tail -n 1
 ```
 
-## 8. 理财购买确认
+### 6. 理财购买确认
 
-### 8.1 发起购买
+#### 6.1 发起购买
 
 ```bash
 cat >"$MANUAL_DIR/purchase-1-request.json" <<'JSON'
@@ -486,7 +536,7 @@ export PURCHASE_TASK_ID="$(task_id "$MANUAL_DIR/purchase-1-response.sse")"
 
 预期为 `TASK_STATE_INPUT_REQUIRED`，确认文案包含“稳盈90天”和“10000元”。
 
-### 8.2 确认购买
+#### 6.2 确认购买
 
 ```bash
 cat >"$MANUAL_DIR/purchase-2-request.json" <<JSON
@@ -514,12 +564,12 @@ last_state "$MANUAL_DIR/purchase-2-response.sse"
 grep 'BANK_DEMO_EXECUTION tool=purchase_wealth' "$MANUAL_DIR/wealth-purchase.log" | tail -n 1
 ```
 
-## 9. 同一会话中的语义指代
+### 7. 同一会话中的语义指代
 
 本场景先推荐产品，再使用“刚才推荐的第一个产品”发起新任务。第二次请求复用 `contextId`，但它是
 新任务，因此不能携带第一次已经完成的 `taskId`。
 
-### 9.1 获取推荐
+#### 7.1 获取推荐
 
 ```bash
 cat >"$MANUAL_DIR/reference-1-request.json" <<'JSON'
@@ -542,7 +592,7 @@ last_state "$MANUAL_DIR/reference-1-response.sse"
 
 预期为 `TASK_STATE_COMPLETED`，推荐结果包含“稳盈90天”。
 
-### 9.2 使用上一轮信息购买
+#### 7.2 使用上一轮信息购买
 
 ```bash
 cat >"$MANUAL_DIR/reference-2-request.json" <<'JSON'
@@ -566,7 +616,7 @@ export REFERENCE_TASK_ID="$(task_id "$MANUAL_DIR/reference-2-response.sse")"
 
 预期为 `TASK_STATE_INPUT_REQUIRED`，确认文案应将指代解析为“稳盈90天”，并包含“5000元”。
 
-### 9.3 确认指代后的购买
+#### 7.3 确认指代后的购买
 
 ```bash
 cat >"$MANUAL_DIR/reference-3-request.json" <<JSON
@@ -590,12 +640,12 @@ last_state "$MANUAL_DIR/reference-3-response.sse"
 
 预期最终状态为 `TASK_STATE_COMPLETED`，结果包含“稳盈90天”和“5000元”。
 
-## 10. 中断期间发生意图变化
+### 8. 中断期间发生意图变化
 
 本场景先进入转账确认中断，然后在同一个 A2A Task 中输入新的理财购买意图。TransferAgent 不执行
 原转账，入口 Agent 使用最新语义重新调用 `intent_match`，并进入理财购买确认。
 
-### 10.1 发起转账并等待确认
+#### 8.1 发起转账并等待确认
 
 ```bash
 cat >"$MANUAL_DIR/change-1-request.json" <<'JSON'
@@ -619,7 +669,7 @@ export CHANGE_TASK_ID="$(task_id "$MANUAL_DIR/change-1-response.sse")"
 
 预期为 `TASK_STATE_INPUT_REQUIRED`，确认文案包含“王五”和“50元”。
 
-### 10.2 使用同一 Task 输入新意图
+#### 8.2 使用同一 Task 输入新意图
 
 ```bash
 cat >"$MANUAL_DIR/change-2-request.json" <<JSON
@@ -644,7 +694,7 @@ last_state "$MANUAL_DIR/change-2-response.sse"
 预期仍为 `TASK_STATE_INPUT_REQUIRED`，但确认文案已经变为购买“稳盈90天”理财 1000 元，而不是确认
 原来的转账。
 
-### 10.3 确认新意图
+#### 8.3 确认新意图
 
 ```bash
 cat >"$MANUAL_DIR/change-3-request.json" <<JSON
@@ -678,12 +728,12 @@ fi
 grep 'BANK_DEMO_EXECUTION tool=purchase_wealth' "$MANUAL_DIR/wealth-purchase.log" | tail -n 1
 ```
 
-## 11. 多目标转账规划并逐笔执行
+### 9. 多目标转账规划并逐笔执行
 
 该场景必须先由入口 DeepAgent 调用 `todo_create` 生成两步计划，再逐次调用意图工具。每一笔转账仍由
 TransferAgent 单独处理和确认。
 
-### 11.1 发起复杂请求
+#### 9.1 发起复杂请求
 
 ```bash
 cat >"$MANUAL_DIR/plan-1-request.json" <<'JSON'
@@ -716,7 +766,7 @@ export PLAN_TASK_ID="$(task_id "$MANUAL_DIR/plan-1-response.sse")"
 请确认是否向张三转账100元
 ```
 
-### 11.2 确认第一笔转账
+#### 9.2 确认第一笔转账
 
 ```bash
 cat >"$MANUAL_DIR/plan-2-request.json" <<JSON
@@ -741,7 +791,7 @@ last_state "$MANUAL_DIR/plan-2-response.sse"
 预期仍为 `TASK_STATE_INPUT_REQUIRED`。响应应先显示“第 1/2 步已完成：给张三转账100元”，然后显示
 “当前执行第 2/2 步”并要求确认给李四转账 100 元。
 
-### 11.3 确认第二笔转账
+#### 9.3 确认第二笔转账
 
 ```bash
 cat >"$MANUAL_DIR/plan-3-request.json" <<JSON
@@ -775,33 +825,9 @@ grep 'BANK_DEMO_EXECUTION tool=execute_transfer' "$MANUAL_DIR/transfer.log" | ta
 日志顺序应为一次 `todo_create`、两次单点 `intent_match`；TransferAgent 应分别执行张三和李四的
 转账，而不是一次执行两个收款人。
 
-## 12. 自动化端到端验收
+### 10. 停止服务
 
-手工验证完成后，可运行自动化脚本复核全部场景。如果第 4 节启动的服务仍在运行，请先按第 13 节
-停止服务，避免端口冲突。
-
-```bash
-bash smoke-bank-intent.sh
-```
-
-需要保留自动化脚本启动的五个进程日志和响应作为验收证据时使用：
-
-```bash
-BANK_INTENT_KEEP_ARTIFACTS=true bash smoke-bank-intent.sh
-```
-
-Windows PowerShell 使用：
-
-```powershell
-./smoke-bank-intent.ps1 -KeepArtifacts
-```
-
-自动脚本统一使用 A2A `SendStreamingMessage`，打印每次完整 JSON-RPC 请求和完整 SSE 事件序列，并
-校验 Task 状态、用户可见结果、规划 Artifact、业务 Tool 执行次数及执行顺序。
-
-## 13. 停止服务
-
-完成验证后停止第 4 节启动的五个进程：
+完成验证后停止“启动五个服务”步骤创建的进程：
 
 ```bash
 for name in intent balance transfer wealth-advisor wealth-purchase; do
