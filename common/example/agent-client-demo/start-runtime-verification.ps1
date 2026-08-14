@@ -57,8 +57,8 @@ try {
     if (`$null -eq `$process) { throw 'Process.Start returned null' }
     [Console]::Out.WriteLine(`$process.Id)
     [Console]::Out.Flush()
-    `$stdout = [System.IO.File]::Open($quotedLog, 'Create', 'Write', 'ReadWrite')
-    `$stderr = [System.IO.File]::Open($quotedErrorLog, 'Create', 'Write', 'ReadWrite')
+    `$stdout = [System.IO.FileStream]::new($quotedLog, 'Create', 'Write', 'ReadWrite', 1, 'WriteThrough')
+    `$stderr = [System.IO.FileStream]::new($quotedErrorLog, 'Create', 'Write', 'ReadWrite', 1, 'WriteThrough')
     `$stdoutCopy = `$process.StandardOutput.BaseStream.CopyToAsync(`$stdout)
     `$stderrCopy = `$process.StandardError.BaseStream.CopyToAsync(`$stderr)
     `$process.WaitForExit()

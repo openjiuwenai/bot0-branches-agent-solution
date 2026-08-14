@@ -25,7 +25,8 @@
 .\stop-runtime-verification.ps1
 ```
 
-日志位于 `target/runtime-verification-logs/`。
+日志位于 `target/runtime-verification-logs/`。标准输出写入 `mock-runtime.log` 和
+`verification-app.log`，标准错误分别写入对应的 `*.error.log`。
 
 若默认端口已被其他本地服务占用，请使用自定义端口启动。脚本只记录并停止自己本次
 启动的监听进程，不会扫描或终止其他 Java 服务。
