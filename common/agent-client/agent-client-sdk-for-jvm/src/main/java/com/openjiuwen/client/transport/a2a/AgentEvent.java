@@ -18,7 +18,8 @@ record AgentEvent(String type, AgentRef source, AgentRef target, String state) {
         }
         return switch (type) {
             case "delegation" -> source != null && source.valid() && target != null && target.valid();
-            case "output", "status" -> source != null && source.valid();
+            case "output" -> source != null && source.valid();
+            case "status" -> source != null && source.valid() && state != null && !state.isBlank();
             default -> false;
         };
     }

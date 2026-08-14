@@ -6,6 +6,7 @@ package com.openjiuwen.client.transport.a2a;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -23,6 +24,7 @@ import com.openjiuwen.client.api.calltree.Completeness;
 import com.openjiuwen.client.api.calltree.SpeakingPhase;
 import com.openjiuwen.client.transport.spi.CredentialProvider;
 import com.openjiuwen.client.transport.spi.TransportProvider;
+import com.openjiuwen.client.transport.spi.ToolWireSpec;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -32,9 +34,12 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -42,7 +47,23 @@ class EndpointAndCallTreeTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Test
-    void runtimeBuilderOmitsGatewayIdentityAndReturnsUnavailableBlockingTree() throws Exception {
+    void runtimePolicyDropsAllAttributesButKeepsClientTools() {
+        ToolWireSpec tool = new ToolWireSpec("lookup", "lookup data", "{\"type\":\"object\"}");
+        TransportProvider.CreateCommand source = new TransportProvider.CreateCommand(
+                "inv", "inv", "key", "ctx", "agent-a", InvocationMode.ASYNC, "hello",
+                List.of(tool), "secret", null,
+                Map.of("traceId", "trace-1", "tenant_id", "tenant-a", "routingAgent", "agent-b"));
+
+        TransportProvider.CreateCommand projected = RuntimeEndpointPolicy.INSTANCE.createCommand(source);
+
+        assertTrue(projected.attributes().isEmpty());
+        assertEquals(List.of(tool), projected.clientTools());
+        assertNull(projected.agentId());
+        assertNull(projected.credentialToken());
+    }
+
+    @Test
+    void runtimeBuilderOmitsGatewayIdentityAndDoesNotBuildBlockingTree() throws Exception {
         AtomicReference<JsonNode> request = new AtomicReference<>();
         AtomicReference<String> authorization = new AtomicReference<>();
         HttpServer server = server(exchange -> {
@@ -68,14 +89,10 @@ class EndpointAndCallTreeTest {
 
             assertNull(authorization.get());
             assertFalse(request.get().path("params").path("metadata").has("agentId"));
-            assertEquals("trace-1", request.get().path("params").path("metadata")
-                    .path("attributes").path("traceId").asText());
-            assertFalse(request.get().path("params").path("metadata")
-                    .path("attributes").has("tenantId"));
-            assertFalse(request.get().path("params").path("metadata")
-                    .path("attributes").has("Authorization"));
+            assertFalse(request.get().path("params").path("metadata").has("attributes"),
+                    "Runtime direct mode must not forward arbitrary request attributes");
             assertEquals("root answer", snapshot.outputText());
-            assertEquals(Completeness.UNAVAILABLE_FOR_MODE, snapshot.callTree().completeness());
+            assertNull(snapshot.callTree(), "BLOCKING must not construct a call tree");
         } finally {
             server.stop(0);
         }
@@ -134,6 +151,26 @@ class EndpointAndCallTreeTest {
     }
 
     @Test
+    void streamingRootOutputHonorsArtifactReplaceAndAppend() throws Exception {
+        HttpServer server = server(exchange -> sse(exchange,
+                frame("1", rootArtifact("root-output", "a", "old", false, false)),
+                frame("2", rootArtifact("root-output", "b", "tail", false, true)),
+                frame("3", rootArtifact("root-output", "a", "new", false, false)),
+                frame("4", rootArtifact("root-output", "a", "!", true, true)),
+                frame("5", completed("root-output"))));
+        try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
+                .endpointUrl(url(server)).build()) {
+            InvocationSnapshot snapshot = client.invoke(InvocationRequest.builder()
+                    .conversationId("root-replace").mode(InvocationMode.STREAMING).input("hello").build())
+                    .completion().toCompletableFuture().get(3, TimeUnit.SECONDS);
+
+            assertEquals("new!tail", snapshot.outputText());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void builderRejectsAmbiguousTransportConfiguration() {
         assertThrows(IllegalArgumentException.class, () -> AgentClients.builder()
                 .endpointUrl("http://localhost:1")
@@ -157,7 +194,22 @@ class EndpointAndCallTreeTest {
     }
 
     @Test
-    void runtimeReconnectsWithSubscribeAndLastEventId() throws Exception {
+    void codecMarksClientToolInterruptWithoutResumeTargetInvalid() {
+        A2aJsonCodec codec = new A2aJsonCodec(MAPPER);
+        JsonNode result = MAPPER.valueToTree(Map.of("task", Map.of(
+                "id", "task-incomplete", "contextId", "ctx",
+                "status", Map.of("state", "TASK_STATE_INPUT_REQUIRED",
+                        "message", Map.of("metadata", Map.of("_interrupt", Map.of(
+                                "context", Map.of("_interrupt_kind", "client_tool"))))))));
+
+        A2aJsonCodec.Frame frame = codec.parseFrame(result).orElseThrow();
+
+        assertNotNull(frame.interrupt());
+        assertFalse(frame.interrupt().validResumeTarget());
+    }
+
+    @Test
+    void runtimeReconnectsWithTaskSubscriptionWithoutCursor() throws Exception {
         AtomicInteger calls = new AtomicInteger();
         CopyOnWriteArrayList<String> methods = new CopyOnWriteArrayList<>();
         AtomicReference<String> lastEventId = new AtomicReference<>();
@@ -184,8 +236,8 @@ class EndpointAndCallTreeTest {
             assertNull(snapshot.recovery(), String.valueOf(snapshot.recovery()));
             subscribed.await(3, TimeUnit.SECONDS);
             assertEquals(java.util.List.of("SendStreamingMessage", "SubscribeToTask"), methods);
-            assertEquals("2", lastEventId.get());
-            assertEquals(Completeness.RECOVERED_REPLAYED, snapshot.callTree().completeness());
+            assertNull(lastEventId.get(), "Runtime subscription must not send Last-Event-ID");
+            assertEquals(Completeness.PARTIAL, snapshot.callTree().completeness());
             assertEquals(2, calls.get());
         } finally {
             server.stop(0);
@@ -193,7 +245,7 @@ class EndpointAndCallTreeTest {
     }
 
     @Test
-    void cursorExpiredFallsBackToCurrentTaskSnapshot() throws Exception {
+    void terminalSubscriptionFallsBackToDirectCurrentTaskSnapshot() throws Exception {
         CopyOnWriteArrayList<String> methods = new CopyOnWriteArrayList<>();
         AtomicInteger calls = new AtomicInteger();
         HttpServer server = server(exchange -> {
@@ -204,10 +256,9 @@ class EndpointAndCallTreeTest {
                         frame("1", delegation("root-expired", "agent-a", "root-expired",
                                 "agent-b", "task-b")));
                 case 1 -> json(exchange, "{\"jsonrpc\":\"2.0\",\"id\":\"rpc\",\"error\":{"
-                        + "\"code\":-32010,\"message\":\"cursor expired\","
-                        + "\"data\":{\"code\":\"CURSOR_EXPIRED\"}}}");
+                        + "\"code\":-32004,\"message\":\"task is already terminal\"}}");
                 default -> json(exchange,
-                        taskResponse("root-expired", "TASK_STATE_COMPLETED", "root done", null));
+                        directTaskResponse("root-expired", "TASK_STATE_COMPLETED", "root done"));
             }
         });
         try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
@@ -218,14 +269,58 @@ class EndpointAndCallTreeTest {
 
             assertEquals(java.util.List.of("SendStreamingMessage", "SubscribeToTask", "GetTask"), methods);
             assertEquals("root done", snapshot.outputText());
-            assertEquals(Completeness.RECOVERED_CURRENT_STATE, snapshot.callTree().completeness());
+            assertEquals(Completeness.PARTIAL, snapshot.callTree().completeness());
         } finally {
             server.stop(0);
         }
     }
 
     @Test
-    void runtimeDoesNotRetryCreateWhenOutcomeIsUnknown() throws Exception {
+    void directGetTaskParsesArtifactsAndBuildsPartialRecoveredTree() throws Exception {
+        HttpServer server = server(exchange -> json(exchange,
+                directTaskResponse("root-direct", "TASK_STATE_COMPLETED", "root result")));
+        try (RuntimeTransportProvider transport = new RuntimeTransportProvider(url(server))) {
+            InvocationSnapshot snapshot = transport.getTask("root-direct", null)
+                    .toCompletableFuture().get(3, TimeUnit.SECONDS);
+
+            assertEquals("root result", snapshot.outputText());
+            assertEquals(com.openjiuwen.client.api.TaskState.COMPLETED, snapshot.state());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void malformedSubscriptionFrameFallsBackToGetTaskAndSettles() throws Exception {
+        CopyOnWriteArrayList<String> methods = new CopyOnWriteArrayList<>();
+        AtomicInteger calls = new AtomicInteger();
+        HttpServer server = server(exchange -> {
+            JsonNode request = MAPPER.readTree(exchange.getRequestBody().readAllBytes());
+            methods.add(request.path("method").asText());
+            switch (calls.getAndIncrement()) {
+                case 0 -> sse(exchange, frame("ignored", delegation("root-malformed", "agent-a",
+                        "root-malformed", "agent-b", "task-b")));
+                case 1 -> sse(exchange, "event:jsonrpc\ndata:{not-json}\n\n");
+                default -> json(exchange,
+                        directTaskResponse("root-malformed", "TASK_STATE_COMPLETED", "reconciled"));
+            }
+        });
+        try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
+                .endpointUrl(url(server)).build()) {
+            InvocationSnapshot snapshot = client.invoke(InvocationRequest.builder().conversationId("malformed")
+                    .mode(InvocationMode.STREAMING).input("hello").build())
+                    .completion().toCompletableFuture().get(5, TimeUnit.SECONDS);
+
+            assertEquals(java.util.List.of("SendStreamingMessage", "SubscribeToTask", "GetTask"), methods);
+            assertEquals("reconciled", snapshot.outputText());
+            assertEquals(Completeness.PARTIAL, snapshot.callTree().completeness());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void runtimeFailsCreateWithoutTaskIdAndDoesNotRetry() throws Exception {
         AtomicInteger calls = new AtomicInteger();
         HttpServer server = server(exchange -> {
             calls.incrementAndGet();
@@ -239,8 +334,9 @@ class EndpointAndCallTreeTest {
                     .completion().toCompletableFuture().get(5, TimeUnit.SECONDS);
 
             assertEquals(1, calls.get());
-            assertEquals(InvocationSnapshot.Recovery.Action.MANUAL_RECONCILIATION,
-                    snapshot.recovery().suggestedAction());
+            assertEquals(com.openjiuwen.client.api.TaskState.FAILED, snapshot.state());
+            assertEquals(com.openjiuwen.client.api.ErrorCodes.CREATE_FAILED_NO_TASK_ID, snapshot.errorCode());
+            assertNull(snapshot.recovery());
         } finally {
             server.stop(0);
         }
@@ -265,14 +361,49 @@ class EndpointAndCallTreeTest {
         });
         try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
                 .endpointUrl(url(server)).build()) {
-            InvocationSnapshot snapshot = client.invoke(InvocationRequest.builder().conversationId("circuit")
+            InvocationCall call = client.invoke(InvocationRequest.builder().conversationId("circuit")
+                    .mode(InvocationMode.STREAMING).input("hello").build());
+            ExecutionException failure = assertThrows(ExecutionException.class,
+                    () -> call.completion().toCompletableFuture().get(5, TimeUnit.SECONDS));
+
+            assertEquals(4, calls.get());
+            assertTrue(failure.getCause().getMessage().contains("recovery failed 3 times"));
+            assertEquals("RECOVERY_RETRY_EXHAUSTED",
+                    ((com.openjiuwen.client.api.ClassifiedError) failure.getCause()).code());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void successfulGetTaskReconciliationResetsSubscribeFailureCounter() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        CopyOnWriteArrayList<String> methods = new CopyOnWriteArrayList<>();
+        HttpServer server = server(exchange -> {
+            JsonNode request = MAPPER.readTree(exchange.getRequestBody().readAllBytes());
+            String method = request.path("method").asText();
+            methods.add(method);
+            int call = calls.getAndIncrement();
+            if (call == 0) {
+                sse(exchange, frame("1", delegation("root-reset", "agent-a", "root-reset",
+                        "agent-b", "task-b")));
+            } else if ("SubscribeToTask".equals(method)) {
+                serviceUnavailable(exchange);
+            } else if (call < 6) {
+                json(exchange, directTaskResponse("root-reset", "TASK_STATE_WORKING", "working"));
+            } else {
+                json(exchange, directTaskResponse("root-reset", "TASK_STATE_COMPLETED", "done"));
+            }
+        });
+        try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
+                .endpointUrl(url(server)).build()) {
+            InvocationSnapshot snapshot = client.invoke(InvocationRequest.builder().conversationId("reset")
                     .mode(InvocationMode.STREAMING).input("hello").build())
                     .completion().toCompletableFuture().get(5, TimeUnit.SECONDS);
 
-            assertEquals(4, calls.get());
-            assertEquals(InvocationSnapshot.Recovery.Action.QUERY_INVOCATION,
-                    snapshot.recovery().suggestedAction());
-            assertTrue(snapshot.recovery().reason().contains("recovery failed 3 times"));
+            assertEquals("done", snapshot.outputText());
+            assertEquals(java.util.List.of("SendStreamingMessage", "SubscribeToTask", "GetTask",
+                    "SubscribeToTask", "GetTask", "SubscribeToTask", "GetTask"), methods);
         } finally {
             server.stop(0);
         }
@@ -302,6 +433,15 @@ class EndpointAndCallTreeTest {
         exchange.close();
     }
 
+    private static void serviceUnavailable(HttpExchange exchange) throws IOException {
+        byte[] bytes = "{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"retry\"}"
+                .getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(503, bytes.length);
+        exchange.getResponseBody().write(bytes);
+        exchange.close();
+    }
+
     private static void sse(HttpExchange exchange, String... events) throws IOException {
         exchange.getRequestBody().readAllBytes();
         String body = String.join("", events);
@@ -313,8 +453,15 @@ class EndpointAndCallTreeTest {
     }
 
     private static String frame(String id, String result) {
-        return "id: " + id + "\ndata: {\"jsonrpc\":\"2.0\",\"id\":\"rpc\",\"result\":"
+        return "event: jsonrpc\ndata: {\"jsonrpc\":\"2.0\",\"id\":\"rpc\",\"result\":"
                 + result + "}\n\n";
+    }
+
+    private static String directTaskResponse(String taskId, String state, String rootText) {
+        return "{\"jsonrpc\":\"2.0\",\"id\":\"rpc\",\"result\":{\"id\":\""
+                + taskId + "\",\"contextId\":\"ctx\",\"status\":{\"state\":\"" + state
+                + "\"},\"artifacts\":[{\"artifactId\":\"root\",\"parts\":[{\"text\":\""
+                + rootText + "\"}]}]}}";
     }
 
     private static String delegation(String outerTask, String sourceAgent, String sourceTask,
@@ -336,6 +483,14 @@ class EndpointAndCallTreeTest {
                 + "\",\"contextId\":\"tree\",\"artifact\":{\"artifactId\":\"" + artifactId
                 + "\",\"parts\":[" + part + "],\"metadata\":{\"agentEvent\":" + agentEvent
                 + "}},\"append\":false,\"lastChunk\":true}}";
+    }
+
+    private static String rootArtifact(String task, String artifactId, String text,
+            boolean append, boolean lastChunk) {
+        return "{\"artifactUpdate\":{\"taskId\":\"" + task
+                + "\",\"contextId\":\"tree\",\"artifact\":{\"artifactId\":\"" + artifactId
+                + "\",\"parts\":[{\"text\":\"" + text + "\"}]},\"append\":" + append
+                + ",\"lastChunk\":" + lastChunk + "}}";
     }
 
     private static String controller(String task) {

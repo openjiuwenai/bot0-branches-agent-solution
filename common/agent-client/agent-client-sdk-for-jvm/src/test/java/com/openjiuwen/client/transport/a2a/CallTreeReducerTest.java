@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.api.calltree.CallTreeNode;
+import com.openjiuwen.client.api.calltree.CallTreeDiagnostic;
 import com.openjiuwen.client.api.calltree.CallTreeSnapshot;
 import com.openjiuwen.client.api.calltree.Completeness;
 import com.openjiuwen.client.api.calltree.TextPartSnapshot;
@@ -43,6 +44,7 @@ class CallTreeReducerTest {
 
         CallTreeSnapshot tree = reducer.current().orElseThrow();
         assertEquals(Completeness.DEGRADED, tree.completeness());
+        assertEquals(CallTreeDiagnostic.ARTIFACT_ID_CONFLICT, tree.diagnostics().get(0).code());
         assertEquals(1, tree.root().children().get(0).artifacts().size());
         assertTrue(tree.root().children().get(1).artifacts().isEmpty());
     }
@@ -85,6 +87,18 @@ class CallTreeReducerTest {
         reducer.close();
 
         assertEquals(Completeness.DEGRADED, reducer.current().orElseThrow().completeness());
+    }
+
+    @Test
+    void statusWithoutStateProducesAgentEventDiagnostic() {
+        CallTreeReducer reducer = new CallTreeReducer(InvocationMode.STREAMING);
+        reducer.bindRoot("root");
+        reducer.accept(artifact("bad-status", "", new AgentEvent("status",
+                new AgentEvent.AgentRef("agent-a", "root"), null, null)));
+
+        CallTreeSnapshot tree = reducer.current().orElseThrow();
+        assertEquals(Completeness.DEGRADED, tree.completeness());
+        assertEquals(CallTreeDiagnostic.AGENT_EVENT_INVALID, tree.diagnostics().get(0).code());
     }
 
     private static CallTreeReducer twoChildren() {

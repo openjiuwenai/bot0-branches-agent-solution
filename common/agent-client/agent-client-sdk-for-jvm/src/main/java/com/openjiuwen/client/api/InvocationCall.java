@@ -80,7 +80,10 @@ public interface InvocationCall extends AutoCloseable {
     }
 
     /**
-     * 在调用到达终态时完成，携带最终快照。
+     * 在调用到达终态时正常完成，携带最终快照。自动观察超时或调用方
+     * 关闭观察时异常完成；这两种情况都不表示服务端 Task 已失败或取消。
+     * 需要业务用户输入时，当前句柄可在 {@code INPUT_REQUIRED} 等待点结算，后续由
+     * {@link AgentClient#continueInput(ContinueInputRequest)} 返回的新句柄继续观察。
      *
      * @return 终态快照 future
      */

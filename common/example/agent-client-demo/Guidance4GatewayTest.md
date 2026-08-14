@@ -100,7 +100,7 @@ verification-app 启动的那个终端会实时打印调用过程，包括：
 | 方法 | `SendStreamingMessage`（SSE 流式响应，用于创建 STREAMING 调用）、`SendMessage`（单条 JSON，用于创建 BLOCKING/ASYNC 调用 + 一切续传）、`GetTask`（单条 JSON，状态查询） |
 | 方法白名单 | 建议只放行上面三个；其余（如 `CancelTask` / `SubscribeToTask`）返回 `400 {"code":"VALIDATION_METHOD"}`。**客户端 v0730 不会调用这两个方法** |
 | unary 返回时机 | client 在 `SendMessage` 的 `params.configuration.returnImmediately` 写布尔值：ASYNC=`true`，BLOCKING=`false`；字段缺省按 `false` 兼容。不要从 method 推断二者，也不要新增私有 mode 字段 |
-| 状态查询 | `GetTask`，参数是标准 A2A **`params.id`**。返回该 Task 当前权威快照。客户端在显式 `getInvocation`、ASYNC 观察以及**流中断后确认真实进展**时调用它；严格 unary BLOCKING 不会自动调用 |
+| 状态查询 | `GetTask`，参数是标准 A2A **`params.id`**。返回该 Task 当前权威快照。SDK 在 BLOCKING 收到非终态响应及流中断对账时自动调用；ASYNC 只在业务显式调用 `getInvocation` 时查询 |
 | 创建调用 | `params.message.taskId` 为空；按 `message.messageId` 幂等去重；读 `params.metadata.clientTools` 获取客户端工具清单 |
 | 请求工具 | `INPUT_REQUIRED` 状态，工具调用意图放在 `result.status.message.metadata._interrupt`（`_interrupt_kind=client_tool`，含 `toolCallId`/`toolName`/`arguments`） |
 | 续传 | 客户端对既有 `taskId` 再发 unary `SendMessage`，正文为一个 text part（工具结果或用户输入文本），稳定携带 `contextId`，并按当前 mode 写 `returnImmediately`。**v0730 不在 wire 上回传 `toolCallId`**：同一时刻只有单个 pending，由 runtime 按该 pending 自动关联即可。`toolCallId` 只在客户端本地用于去重 |
@@ -112,11 +112,11 @@ verification-app 启动的那个终端会实时打印调用过程，包括：
 | 场景 | 考察点 | 对你 gateway 的要求 |
 |------|--------|------------------|
 | S1 | 流式 + 工具多轮：逐个 `_interrupt` 请求工具，收续传推进，全部完成转 COMPLETED | `SendStreamingMessage` + `_interrupt` + 续传推进 |
-| S2 | BLOCKING 走同步接口拿本轮结果；再用 STREAMING 跑一次单工具 | 识别 `returnImmediately=false` 并进入同步等待；返回 Task 当前完整状态。若等待窗口只能返回 WORKING，client 会以 `ProgressUncertain` 结算且不会自动轮询 |
+| S2 | BLOCKING 走同步接口拿本轮结果；再用 STREAMING 跑一次单工具 | 识别 `returnImmediately=false` 并进入同步等待；返回 Task 当前完整状态。若等待窗口只能返回 WORKING，client 会有界轮询 `GetTask` 到终态、根级 INPUT_REQUIRED 或观察期限耗尽 |
 | S3 | 用户输入续传：`_interrupt_kind=user_input`，收用户输入后完成 | `_interrupt_kind=user_input` + 同步续传 |
 | S4 / S5 | 不带工具的普通多轮，直接 COMPLETED | 同 conversationId 多次创建，各自独立 Task |
 | S6 | 故意不带鉴权 token，期望 gateway 返回 401 | 401 + `{"code":"AUTH_MISSING"}` |
-| S7 | ASYNC 受理后用 `GetTask` 观察进展 | 识别 `returnImmediately=true`，取得 taskId 后立即返回受理快照；后续支持 **`GetTask` + `params.id`** |
+| S7 | ASYNC 受理后由业务调用 `getInvocation` 观察进展 | 识别 `returnImmediately=true`，取得 taskId 后立即返回受理快照；后续支持 **`GetTask` + `params.id`**，client 不会自行后台轮询 |
 | S8 | 流在非终态下中断，但服务端其实已完成 → 客户端靠 `GetTask` 恢复为终态，业务不感知中断 | 中断后 `GetTask` 仍能查到该 Task 的真实状态 |
 | S9 | 流在非终态下中断且服务端仍在跑 → 客户端投影「进展不确定」并给出恢复线索，**不判失败、不悬挂** | 同上；此场景验证客户端行为，gateway 只需如实返回 WORKING |
 | S10 | 续接一个已终态的调用，应拿到稳定错误码而非裸异常 | 纯客户端行为，不发请求到 gateway |

@@ -27,6 +27,7 @@ import com.openjiuwen.client.tool.spi.ToolView;
 import com.openjiuwen.client.transport.spi.CredentialProvider;
 import com.openjiuwen.client.transport.spi.ToolWireSpec;
 import com.openjiuwen.client.transport.spi.CallTreeTransportProvider;
+import com.openjiuwen.client.transport.spi.InvocationOutputTransportProvider;
 import com.openjiuwen.client.transport.spi.TransportProvider;
 import com.openjiuwen.client.api.calltree.CallTreeSnapshot;
 
@@ -39,6 +40,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -60,6 +62,7 @@ import java.util.concurrent.TimeUnit;
  * @since 2026-07-27
  */
 public final class DefaultAgentClient implements AgentClient {
+    private static final int MAX_RETAINED_TERMINAL_INVOCATIONS = 256;
     private final TransportProvider transport;
     private final LocalToolRegistry registry;
     private final ClientStateStore store;
@@ -71,6 +74,8 @@ public final class DefaultAgentClient implements AgentClient {
     private final ConcurrentMap<String, ToolExposurePolicy> conversationExposure = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, InvocationState> invocations = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, CallImpl> calls = new ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentLinkedQueue<String> terminalInvocations =
+            new java.util.concurrent.ConcurrentLinkedQueue<>();
     private final java.util.Set<String> resumeGuard = ConcurrentHashMap.newKeySet();
 
     /**
@@ -150,7 +155,15 @@ public final class DefaultAgentClient implements AgentClient {
         }
         return transport.getTask(state.taskRef, state.credentialToken)
                 .thenApply(snap -> withInvocationRef(invocationRef, snap,
-                        currentCallTree(invocationRef).orElse(snap != null ? snap.callTree() : null)));
+                        currentCallTree(invocationRef).orElse(snap != null ? snap.callTree() : null)))
+                .thenApply(snap -> {
+                    CallImpl call = calls.get(invocationRef);
+                    if (call != null && snap != null && (snap.terminal()
+                            || snap.state() == TaskState.INPUT_REQUIRED)) {
+                        call.completeFromQuery(snap);
+                    }
+                    return snap;
+                });
     }
 
     /**
@@ -183,6 +196,13 @@ public final class DefaultAgentClient implements AgentClient {
     private Optional<CallTreeSnapshot> currentCallTree(String invocationRef) {
         if (transport instanceof CallTreeTransportProvider trees) {
             return trees.currentCallTree(invocationRef);
+        }
+        return Optional.empty();
+    }
+
+    private Optional<String> currentOutputText(String invocationRef) {
+        if (transport instanceof InvocationOutputTransportProvider outputs) {
+            return outputs.currentOutputText(invocationRef);
         }
         return Optional.empty();
     }
@@ -233,6 +253,8 @@ public final class DefaultAgentClient implements AgentClient {
         CallImpl newCall = new CallImpl(newInvocationRef, request.conversationId(),
                 callTreePublisher(related.treeInvocationRef), related.treeInvocationRef);
         calls.put(newInvocationRef, newCall);
+        // 续轮关联的 Task 已存在，新句柄的 accepted 无需等待最终 GetTask 观察。
+        newCall.acceptExistingTask(related.taskRef);
 
         // 交接：原 invocation 的可观测生命到"等待输入"为止，后续由新 invocationRef 承载（006 §3.4.1）。
         // 不做交接，原句柄的 completion() 会永远悬挂——它的事件流已不会再收到任何帧。
@@ -555,9 +577,13 @@ public final class DefaultAgentClient implements AgentClient {
             } catch (IllegalStateException | NullPointerException ignore) {
                 // AutoCloseable 契约：close 不抛异常。
             }
-            if (!downstream.isClosed()) {
-                downstream.close();
+            transport.closeObservation(treeInvocationRef);
+            if (!finished.get()) {
+                finishExceptionally(new CancellationException(
+                        "local observation closed by caller; server Task was not cancelled"));
             }
+            calls.remove(invocationRef, this);
+            invocations.remove(invocationRef);
         }
 
         @Override
@@ -601,14 +627,16 @@ public final class DefaultAgentClient implements AgentClient {
                     lastState = TaskState.INPUT_REQUIRED;
                     forward(ir);
                 }
+            } else if (event instanceof InvocationEvent.ProtocolDiagnostic diagnostic) {
+                forward(diagnostic);
             } else if (event instanceof InvocationEvent.ProgressUncertain pu) {
-                // FEAT-006 §5.1.4：流中断不等于失败。记录原因，由 finishTerminal 附带恢复线索结算。
+                // 记录恢复线索。Gateway 正常关流时由 onComplete 按既有契约结算；
+                // Runtime 会紧随一个 onError，使 completion 异常完成，不伪造 Task 终态。
                 lastState = (pu.lastKnownState() != null) ? pu.lastKnownState() : TaskState.UNKNOWN;
                 uncertainReason = pu.reason();
                 forward(pu);
-                finishTerminal(lastState, null, null);
             } else if (event instanceof InvocationEvent.Completed c) {
-                if (c.outputText() != null && !c.outputText().isEmpty()) {
+                if (c.outputText() != null) {
                     output.setLength(0);
                     output.append(c.outputText());
                 }
@@ -625,10 +653,16 @@ public final class DefaultAgentClient implements AgentClient {
 
         @Override
         public void onError(Throwable throwable) {
-            String code = ClassifiedError.codeOf(throwable);
-            forward(new InvocationEvent.Failed(invocationRef, code, throwable.getMessage(),
-                    ClassifiedError.retryableOf(throwable)));
-            finishTerminal(TaskState.FAILED, code, throwable.getMessage());
+            if (accepted.isDone() && !accepted.isCompletedExceptionally()) {
+                // Task 已受理后这里只能说明 Client 失去观察能力，不能伪造服务端 FAILED 终态。
+                finishExceptionally(throwable);
+            } else {
+                // taskId 尚未取得时创建本身失败，保持既有“创建失败快照”契约。
+                String code = ClassifiedError.codeOf(throwable);
+                forward(new InvocationEvent.Failed(invocationRef, code, throwable.getMessage(),
+                        ClassifiedError.retryableOf(throwable)));
+                finishTerminal(TaskState.FAILED, code, throwable.getMessage());
+            }
         }
 
         @Override
@@ -667,6 +701,13 @@ public final class DefaultAgentClient implements AgentClient {
             finishTerminal(TaskState.INPUT_REQUIRED, null, null);
         }
 
+        void acceptExistingTask(String taskRef) {
+            if (!accepted.isDone()) {
+                accepted.complete(new Handle(invocationRef, conversationId, taskRef));
+                forward(new InvocationEvent.Accepted(invocationRef, taskRef, conversationId));
+            }
+        }
+
         /**
          * continueInput 续跑 unary 响应成功：把响应快照转为面向业务的事件投递到新 Call 的事件流，
          * 并据此完成 completion（006 §3.4.1：新 invocationRef 的 events/completion 复用同一 Task 后续投影）。
@@ -690,7 +731,7 @@ public final class DefaultAgentClient implements AgentClient {
             // 必须累积到 output：finishTerminal 用它组装 completion() 快照的 outputText。
             // 只 forward 事件而不累积，会让快照驱动的 invocation（continueInput 及其内部工具续跑）
             // 拿到 outputText=null 的 completion，业务侧表现为"续轮结果为空"。
-            if (text != null && !text.isEmpty()) {
+            if (text != null) {
                 output.setLength(0);
                 output.append(text);
             }
@@ -703,6 +744,13 @@ public final class DefaultAgentClient implements AgentClient {
                 return;
             }
             finishTerminal(st, snap.errorCode(), snap.message());
+        }
+
+        void completeFromQuery(InvocationSnapshot snap) {
+            if (finished.get()) {
+                return;
+            }
+            completeFromResume(snap);
         }
 
         /**
@@ -773,6 +821,11 @@ public final class DefaultAgentClient implements AgentClient {
          * @param ex 异常
          */
         void failFromResume(Throwable ex) {
+            if (accepted.isDone() && !accepted.isCompletedExceptionally()) {
+                // 续轮关联的 Task 已受理；续传/观察失败不等于服务端 Task FAILED。
+                finishExceptionally(ex);
+                return;
+            }
             String code = ClassifiedError.codeOf(ex);
             forward(new InvocationEvent.Failed(invocationRef, code, ex.getMessage(),
                     ClassifiedError.retryableOf(ex)));
@@ -798,15 +851,37 @@ public final class DefaultAgentClient implements AgentClient {
             }
             InvocationState is = invocations.get(invocationRef);
             String taskRef = (is != null) ? is.taskRef : null;
+            String materializedOutput = currentOutputText(treeInvocationRef)
+                    .orElse(output.length() > 0 ? output.toString() : null);
             InvocationSnapshot snapshot = new InvocationSnapshot(
                     invocationRef, settled, settled.isTerminal(), taskRef, null,
-                    output.length() > 0 ? output.toString() : null, errorCode, message,
+                    materializedOutput, errorCode, message,
                     recoveryHint(is, taskRef).orElse(null), currentCallTree(treeInvocationRef).orElse(null));
             completion.complete(snapshot);
             downstream.close();
             if (subscription != null) {
                 subscription.cancel();
             }
+            if (settled.isTerminal()) {
+                calls.remove(invocationRef, this);
+                retainTerminalInvocation(invocationRef);
+            }
+        }
+
+        private void finishExceptionally(Throwable failure) {
+            if (!finished.compareAndSet(false, true)) {
+                return;
+            }
+            if (!accepted.isDone()) {
+                accepted.completeExceptionally(failure);
+            }
+            completion.completeExceptionally(failure);
+            downstream.closeExceptionally(failure);
+            if (subscription != null) {
+                subscription.cancel();
+            }
+            calls.remove(invocationRef, this);
+            retainTerminalInvocation(invocationRef);
         }
 
         /**
@@ -833,6 +908,16 @@ public final class DefaultAgentClient implements AgentClient {
             }
             return Optional.of(new InvocationSnapshot.Recovery(reason, conversationId,
                     (is != null) ? is.idempotencyKey : null, action));
+        }
+    }
+
+    private void retainTerminalInvocation(String invocationRef) {
+        terminalInvocations.add(invocationRef);
+        while (terminalInvocations.size() > MAX_RETAINED_TERMINAL_INVOCATIONS) {
+            String expired = terminalInvocations.poll();
+            if (expired != null) {
+                invocations.remove(expired);
+            }
         }
     }
 }

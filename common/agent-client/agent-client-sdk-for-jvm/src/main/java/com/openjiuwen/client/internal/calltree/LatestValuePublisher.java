@@ -6,20 +6,44 @@ package com.openjiuwen.client.internal.calltree;
 
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Flow;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /** 只保留最新值、遵守 demand、关闭后仍向晚订阅者回放最终值的 Publisher。 */
 public final class LatestValuePublisher<T> implements Flow.Publisher<T>, AutoCloseable {
+    private static final int MAX_DISPATCH_THREADS = 32;
+    private static final Executor DISPATCHER = new ThreadPoolExecutor(0, MAX_DISPATCH_THREADS,
+            30L, TimeUnit.SECONDS, new SynchronousQueue<>(), runnable -> {
+                Thread thread = Executors.defaultThreadFactory().newThread(runnable);
+                thread.setName("agent-client-calltree-dispatch");
+                thread.setDaemon(true);
+                return thread;
+            }, new ThreadPoolExecutor.AbortPolicy());
+
     private final CopyOnWriteArrayList<LatestSubscription<T>> subscriptions = new CopyOnWriteArrayList<>();
+    private final Executor dispatcher;
     private volatile Versioned<T> latest;
     private volatile boolean closed;
     private long version;
 
+    public LatestValuePublisher() {
+        this(DISPATCHER);
+    }
+
+    LatestValuePublisher(Executor dispatcher) {
+        this.dispatcher = Objects.requireNonNull(dispatcher, "dispatcher");
+    }
+
     @Override
     public void subscribe(Flow.Subscriber<? super T> subscriber) {
         Objects.requireNonNull(subscriber, "subscriber");
-        LatestSubscription<T> subscription = new LatestSubscription<>(subscriber, this);
+        LatestSubscription<T> subscription = new LatestSubscription<>(subscriber, this, dispatcher);
         subscriptions.add(subscription);
         subscriber.onSubscribe(subscription);
         subscription.drain();
@@ -62,15 +86,18 @@ public final class LatestValuePublisher<T> implements Flow.Publisher<T>, AutoClo
     private static final class LatestSubscription<T> implements Flow.Subscription {
         private final Flow.Subscriber<? super T> subscriber;
         private final LatestValuePublisher<T> owner;
+        private final Executor dispatcher;
         private long demand;
         private long deliveredVersion;
         private boolean cancelled;
         private boolean completed;
         private final AtomicInteger drainWork = new AtomicInteger();
 
-        private LatestSubscription(Flow.Subscriber<? super T> subscriber, LatestValuePublisher<T> owner) {
+        private LatestSubscription(Flow.Subscriber<? super T> subscriber, LatestValuePublisher<T> owner,
+                Executor dispatcher) {
             this.subscriber = subscriber;
             this.owner = owner;
+            this.dispatcher = dispatcher;
         }
 
         @Override
@@ -105,6 +132,18 @@ public final class LatestValuePublisher<T> implements Flow.Publisher<T>, AutoClo
             if (drainWork.getAndIncrement() != 0) {
                 return;
             }
+            try {
+                dispatcher.execute(this::runDrain);
+            } catch (RejectedExecutionException overloaded) {
+                drainWork.set(0);
+                synchronized (this) {
+                    cancelled = true;
+                }
+                owner.remove(this);
+            }
+        }
+
+        private void runDrain() {
             int missed = 1;
             for (;;) {
                 Versioned<T> value = owner.versioned();

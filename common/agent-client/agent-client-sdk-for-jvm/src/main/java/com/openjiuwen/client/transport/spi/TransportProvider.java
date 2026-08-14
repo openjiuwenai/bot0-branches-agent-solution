@@ -60,6 +60,15 @@ public interface TransportProvider extends AutoCloseable {
      */
     CompletionStage<InvocationSnapshot> resumeToolResult(ResumeCommand command);
 
+    /**
+     * 停止某次调用的本地观察资源。不得把该操作映射为服务端 CancelTask。
+     *
+     * @param invocationRef 调用句柄
+     */
+    default void closeObservation(String invocationRef) {
+        // 兼容第三方 Transport；没有长期观察资源的实现无需处理。
+    }
+
     @Override
     void close();
 

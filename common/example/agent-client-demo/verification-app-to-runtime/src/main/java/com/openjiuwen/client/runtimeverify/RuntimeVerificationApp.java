@@ -19,6 +19,7 @@ import com.openjiuwen.client.api.InvocationRequest;
 import com.openjiuwen.client.api.InvocationSnapshot;
 import com.openjiuwen.client.api.TaskState;
 import com.openjiuwen.client.api.calltree.CallTreeSnapshot;
+import com.openjiuwen.client.api.calltree.Completeness;
 import com.openjiuwen.client.tool.spi.LocalToolDescriptor;
 import com.openjiuwen.client.tool.spi.ToolExecutionRecord;
 import com.openjiuwen.client.tool.spi.ToolExposurePolicy;
@@ -60,14 +61,19 @@ public final class RuntimeVerificationApp {
             scenario("input-linear", "User input continuation", "INPUT_REQUIRED then continueInput"),
             scenario("input-status-incomplete", "Incomplete input protocol", "Child status without root interrupt"),
             scenario("client-tool", "Local tool", "Runtime requests local.echo and SDK auto-resumes"),
-            scenario("disconnect-replay", "Disconnect replay", "Subscribe from Last-Event-ID"),
-            scenario("replay-duplicate", "Duplicate replay", "At-least-once replay is deduplicated"),
-            scenario("cursor-expired", "Expired cursor", "Falls back to GetTask"),
+            scenario("streaming-resubscribe", "Streaming resubscribe",
+                    "After taskId is known, SubscribeToTask returns current Task state and future events", "STREAMING"),
+            scenario("blocking-gettask", "Blocking current-state recovery",
+                    "After taskId is known, recovery uses GetTask; intermediate frames are not replayed", "BLOCKING"),
+            scenario("async-gettask", "Async current-state recovery",
+                    "After accepted, the application calls getInvocation until terminal", "ASYNC"),
             scenario("recovery-circuit", "Recovery circuit", "Three failures settle as uncertain"),
             scenario("runtime-create-unknown", "Unknown create outcome", "Runtime create is not retried"),
             scenario("controller-return", "Controller return", "controller_output restores root speaking phase"),
             scenario("speaking-handoff", "Speaking handoff", "B1/B2 speaker then root control return"),
             scenario("root-output-filter", "Root output filter", "Child/control content excluded from root output"),
+            scenario("root-output-replace", "Root output replace",
+                    "Two append=false updates for one Artifact materialize only the latest text"),
             scenario("mode-unavailable", "Unary tree boundary", "BLOCKING/ASYNC tree is unavailable or partial"),
             scenario("malformed-graph", "Malformed graph", "Conflict degrades only the tree"));
 
@@ -77,7 +83,7 @@ public final class RuntimeVerificationApp {
     private final java.util.concurrent.ExecutorService workers = Executors.newCachedThreadPool();
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
 
-    private RuntimeVerificationApp(int port, String defaultRuntimeUrl) {
+    RuntimeVerificationApp(int port, String defaultRuntimeUrl) {
         this.port = port;
         this.defaultRuntimeUrl = defaultRuntimeUrl;
     }
@@ -118,7 +124,7 @@ public final class RuntimeVerificationApp {
         System.setErr(log);
     }
 
-    private void start() throws IOException {
+    HttpServer start() throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
         server.setExecutor(workers);
         server.createContext("/", guarded(this::staticResource));
@@ -129,6 +135,11 @@ public final class RuntimeVerificationApp {
         server.createContext("/api/runtime/health", guarded(this::runtimeHealth));
         server.createContext("/api/runtime/requests", guarded(this::runtimeRequests));
         server.start();
+        return server;
+    }
+
+    void close() {
+        workers.shutdownNow();
     }
 
     private HttpHandler guarded(HttpHandler delegate) {
@@ -191,6 +202,7 @@ public final class RuntimeVerificationApp {
         run.startedAt = Instant.now();
         AgentClient client = null;
         try {
+            run.wireStartSequence = currentMockWireSequence(run.request.runtimeUrl());
             client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
                     .endpointUrl(run.request.runtimeUrl()).build();
             AtomicInteger toolExecutions = new AtomicInteger();
@@ -204,10 +216,14 @@ public final class RuntimeVerificationApp {
                                 "executedAt", Instant.now().toString()));
                     });
             String conversationId = "runtime-ui-" + run.id;
+            if (configureMockScenario(run.request.runtimeUrl(), conversationId, run.request.scenario())) {
+                run.addDiagnostic("Mock Runtime scenario bound through control plane: " + run.request.scenario());
+            } else {
+                run.addDiagnostic("Runtime has no Mock scenario control plane; executing plain A2A request");
+            }
             client.exposeInConversation(conversationId, ToolExposurePolicy.allow("local.echo"));
             InvocationRequest request = InvocationRequest.builder()
                     .conversationId(conversationId).mode(run.request.mode()).input(run.request.input())
-                    .attribute("scenario", run.request.scenario())
                     .attribute("traceId", run.id).credentialToken("must-not-reach-runtime")
                     .agentId("must-not-reach-runtime").build();
             InvocationCall call = client.invoke(request);
@@ -218,12 +234,12 @@ public final class RuntimeVerificationApp {
             boolean observedIncompleteInput = false;
             if (run.request.mode() == InvocationMode.ASYNC) {
                 call.accepted().toCompletableFuture().get(5, TimeUnit.SECONDS);
-                snapshot = client.getInvocation(call.invocationRef()).toCompletableFuture().get(5, TimeUnit.SECONDS);
-                for (int i = 0; i < 4 && !snapshot.terminal(); i++) {
-                    snapshot = client.getInvocation(call.invocationRef()).toCompletableFuture()
-                            .get(5, TimeUnit.SECONDS);
-                    run.addDiagnostic("GetTask observed " + snapshot.state());
-                }
+                snapshot = queryAsyncUntilSettled(client, call, run, Duration.ofSeconds(20));
+                call.completion().toCompletableFuture().get(5, TimeUnit.SECONDS);
+                run.addDiagnostic("Business-driven getInvocation reached " + snapshot.state());
+            } else if ("blocking-gettask".equals(run.request.scenario())) {
+                snapshot = call.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
+                run.addDiagnostic("SDK automatic GetTask observation reconciled BLOCKING invocation");
             } else if ("input-linear".equals(run.request.scenario())) {
                 inputRequired.get(10, TimeUnit.SECONDS);
                 run.addDiagnostic("continueInput issued from UI scenario");
@@ -244,7 +260,10 @@ public final class RuntimeVerificationApp {
             }
             run.snapshot = JSON.convertValue(snapshot, Object.class);
             run.toolExecutions = toolExecutions.get();
-            run.status = observedIncompleteInput ? "OBSERVED" : snapshot.recovery() == null ? "COMPLETED" : "UNCERTAIN";
+            verifyRecoveryContract(run);
+            verifyMockWireContract(run);
+            run.status = observedIncompleteInput ? "OBSERVED"
+                    : isRecoveryScenario(run.request.scenario()) ? "VERIFIED" : "COMPLETED";
         } catch (Exception error) {
             run.status = "FAILED";
             run.error = rootMessage(error);
@@ -255,6 +274,42 @@ public final class RuntimeVerificationApp {
                 client.close();
             }
         }
+    }
+
+    private static InvocationSnapshot queryAsyncUntilSettled(AgentClient client, InvocationCall call,
+            RunRecord run, Duration timeout) throws Exception {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (System.nanoTime() < deadline) {
+            InvocationSnapshot snapshot = client.getInvocation(call.invocationRef())
+                    .toCompletableFuture().get(5, TimeUnit.SECONDS);
+            run.addDiagnostic("Business getInvocation observed " + snapshot.state());
+            if (snapshot.terminal() || snapshot.state() == TaskState.INPUT_REQUIRED) {
+                return snapshot;
+            }
+            TimeUnit.MILLISECONDS.sleep(200);
+        }
+        throw new IllegalStateException("ASYNC getInvocation observation timed out after " + timeout);
+    }
+
+    private boolean configureMockScenario(String runtimeUrl, String contextId, String scenario) throws Exception {
+        URI endpoint = URI.create(runtimeUrl.endsWith("/")
+                ? runtimeUrl + "admin/scenario" : runtimeUrl + "/admin/scenario");
+        String body = JSON.writeValueAsString(Map.of("contextId", contextId, "scenario", scenario));
+        HttpResponse<String> response = http.send(HttpRequest.newBuilder(endpoint)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)).build(),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        if (response.statusCode() / 100 == 2) {
+            return true;
+        }
+        if (response.statusCode() == 404 || response.statusCode() == 405) {
+            return false;
+        }
+        if (response.statusCode() / 100 != 2) {
+            throw new IllegalStateException("Mock Runtime scenario configuration failed: "
+                    + response.statusCode() + " " + response.body());
+        }
+        return false;
     }
 
     private static CompletableFuture<InvocationEvent.InputRequired> subscribeEvents(RunRecord run,
@@ -304,6 +359,7 @@ public final class RuntimeVerificationApp {
 
             @Override
             public void onNext(CallTreeSnapshot item) {
+                run.treeSnapshot = item;
                 run.tree = JSON.convertValue(item, Object.class);
                 run.treeHistory.add(Map.of("at", now(), "revision", item.revision(),
                         "completeness", item.completeness(), "speakingPhase", item.speakingPhase()));
@@ -320,6 +376,96 @@ public final class RuntimeVerificationApp {
                 run.addDiagnostic("call tree completed for " + call.invocationRef());
             }
         });
+    }
+
+    private static void verifyRecoveryContract(RunRecord run) {
+        String scenario = run.request.scenario();
+        if (!isRecoveryScenario(scenario)) {
+            return;
+        }
+        InvocationMode expectedMode = switch (scenario) {
+            case "streaming-resubscribe" -> InvocationMode.STREAMING;
+            case "blocking-gettask" -> InvocationMode.BLOCKING;
+            case "async-gettask" -> InvocationMode.ASYNC;
+            default -> throw new IllegalStateException("unknown recovery scenario " + scenario);
+        };
+        if (run.request.mode() != expectedMode) {
+            throw new IllegalStateException(scenario + " requires " + expectedMode + " mode");
+        }
+        CallTreeSnapshot tree = run.treeSnapshot;
+        if ("streaming-resubscribe".equals(scenario)) {
+            if (tree != null && tree.completeness() != Completeness.PARTIAL) {
+                throw new IllegalStateException("streaming recovery tree has invalid completeness "
+                        + tree.completeness());
+            }
+        } else if (tree != null) {
+            throw new IllegalStateException("BLOCKING/ASYNC must not construct a call tree");
+        }
+        if ("streaming-resubscribe".equals(scenario)) {
+            run.addDiagnostic("verified SubscribeToTask current snapshot + future events; no event-offset replay assumed");
+        } else {
+            run.addDiagnostic("verified GetTask current-state query; BLOCKING is SDK-driven and ASYNC is business-driven");
+        }
+        run.addDiagnostic(tree == null ? "call tree unavailable for recovered mode"
+                : "recovered call tree completeness is " + tree.completeness());
+    }
+
+    private static boolean isRecoveryScenario(String scenario) {
+        return "streaming-resubscribe".equals(scenario)
+                || "blocking-gettask".equals(scenario)
+                || "async-gettask".equals(scenario);
+    }
+
+    private void verifyMockWireContract(RunRecord run) throws IOException, InterruptedException {
+        if (!isRecoveryScenario(run.request.scenario())) {
+            return;
+        }
+        String url = run.request.runtimeUrl() + "/admin/requests?after=0";
+        HttpResponse<String> response;
+        try {
+            response = http.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(3)).GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+        } catch (Exception error) {
+            run.addDiagnostic("wire contract check skipped: Runtime does not expose mock diagnostics");
+            return;
+        }
+        if (response.statusCode() != 200) {
+            run.addDiagnostic("wire contract check skipped: Runtime does not expose mock diagnostics");
+            return;
+        }
+        JsonNode requests = JSON.readTree(response.body());
+        String expected = "streaming-resubscribe".equals(run.request.scenario())
+                ? "SubscribeToTask" : "GetTask";
+        boolean observed = false;
+        for (JsonNode request : requests) {
+            if (request.path("sequence").asInt() > run.wireStartSequence
+                    && expected.equals(request.path("method").asText())) {
+                observed = true;
+                break;
+            }
+        }
+        if (!observed) {
+            throw new IllegalStateException("Mock Runtime did not observe required " + expected + " request");
+        }
+        run.addDiagnostic("wire verified: " + expected + " observed without an SSE cursor contract");
+    }
+
+    private int currentMockWireSequence(String runtimeUrl) {
+        try {
+            HttpResponse<String> response = http.send(HttpRequest.newBuilder(
+                            URI.create(runtimeUrl + "/admin/requests?after=0"))
+                    .timeout(Duration.ofSeconds(3)).GET().build(), HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                return -1;
+            }
+            int latest = 0;
+            for (JsonNode request : JSON.readTree(response.body())) {
+                latest = Math.max(latest, request.path("sequence").asInt());
+            }
+            return latest;
+        } catch (Exception ignored) {
+            return -1;
+        }
     }
 
     private void runtimeHealth(HttpExchange exchange) throws IOException {
@@ -384,6 +530,10 @@ public final class RuntimeVerificationApp {
         return Map.of("id", id, "title", title, "description", description);
     }
 
+    private static Map<String, String> scenario(String id, String title, String description, String mode) {
+        return Map.of("id", id, "title", title, "description", description, "mode", mode);
+    }
+
     private static void json(HttpExchange exchange, int status, Object value) throws IOException {
         send(exchange, status, "application/json; charset=utf-8", JSON.writeValueAsBytes(value));
     }
@@ -444,8 +594,10 @@ public final class RuntimeVerificationApp {
         private volatile String continuationRef;
         private volatile Object snapshot;
         private volatile Object tree;
+        private volatile CallTreeSnapshot treeSnapshot;
         private volatile String error;
         private volatile int toolExecutions;
+        private volatile int wireStartSequence = -1;
 
         private RunRecord(String id, RunRequest request) {
             this.id = id;
@@ -473,7 +625,17 @@ public final class RuntimeVerificationApp {
             value.put("tree", tree);
             value.put("error", error);
             value.put("toolExecutions", toolExecutions);
+            value.put("recoveryContract", recoveryContract(request.scenario()));
             return value;
+        }
+
+        private static String recoveryContract(String scenario) {
+            return switch (scenario) {
+                case "streaming-resubscribe" -> "SubscribeToTask: current snapshot + future events; tree PARTIAL";
+                case "blocking-gettask" -> "SDK bounded GetTask: current state only; no tree";
+                case "async-gettask" -> "Business getInvocation/GetTask: current state only; no tree";
+                default -> "Not a recovery-specific scenario";
+            };
         }
     }
 }

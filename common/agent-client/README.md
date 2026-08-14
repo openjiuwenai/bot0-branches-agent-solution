@@ -218,10 +218,10 @@ public class QuickStart {
 | 模式 | wire 方法 | 业务消费方式 | 状态 |
 |------|-----------|--------------|------|
 | `STREAMING` | `SendStreamingMessage`（HTTP + SSE） | 订阅 `events()` 增量消费 | **已交付** |
-| `BLOCKING` | 严格 unary `SendMessage` + `params.configuration.returnImmediately=false`，不自动调用 `GetTask`；非终态时以 `ProgressUncertain` 结算 | 忽略事件流，直接等 `completion()`；需要持续观察时改用 ASYNC 或显式 `getInvocation` | **client 已交付** |
-| `ASYNC` | `SendMessage` + `params.configuration.returnImmediately=true`，要求受理即返回 | 拿到 `accepted()` 即返回，之后用 `getInvocation` 观察 | **client 已交付；gateway 需执行该字段** |
+| `BLOCKING` | unary `SendMessage` + `params.configuration.returnImmediately=false`；若返回已受理但非终态，SDK 有界轮询 `GetTask` | 直接等待 `completion()`；不构造调用树 | **client 已交付** |
+| `ASYNC` | `SendMessage` + `params.configuration.returnImmediately=true`，要求受理即返回；SDK 不启动后台轮询 | 拿到 `accepted()` 即返回，之后由业务按需调用 `getInvocation`；不构造调用树 | **client 已交付；gateway 需执行该字段** |
 
-> BLOCKING **不是**"在本地把流式结果聚合"，也不是隐藏的 `GetTask` 轮询；它只消费一次创建 `SendMessage` 响应。`SendMessage` 只表示 unary，真正区分 ASYNC/BLOCKING 返回时机的是 `returnImmediately`。client-tool / 用户输入续跑仍可按协议另发关联原 Task 的 `SendMessage`。
+> BLOCKING **不是**"在本地把流式结果聚合"：它先消费一次 `SendMessage` 响应，仅在服务端已受理但返回非终态时有界查询同一 Task。ASYNC accepted 后不会产生后台 `GetTask`，其后续进度完全由业务调用 `getInvocation` 驱动。client-tool / 用户输入续跑仍可按协议另发关联原 Task 的 `SendMessage`。
 
 ### 事件流（sealed `InvocationEvent`）
 

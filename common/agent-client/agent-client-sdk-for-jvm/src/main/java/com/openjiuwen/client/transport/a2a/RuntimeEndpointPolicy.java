@@ -5,19 +5,14 @@
 package com.openjiuwen.client.transport.a2a;
 
 import com.openjiuwen.client.api.EndpointType;
+import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.transport.spi.TransportProvider;
 
-import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
-/** Runtime 直连策略：使用 metadata allowlist，且不发送 Gateway 身份信息。 */
+/** Runtime 直连策略：只投影已类型化的 A2A/客户端工具字段，不透传任意 attributes。 */
 final class RuntimeEndpointPolicy implements EndpointPolicy {
     static final RuntimeEndpointPolicy INSTANCE = new RuntimeEndpointPolicy();
-    private static final Set<String> RESERVED_ATTRIBUTES = Set.of(
-            "authorization", "agentid", "tenantid", "userid", "spaceid",
-            "x-agent-id", "x-tenant-id", "x-user-id", "x-space-id");
 
     private RuntimeEndpointPolicy() {
     }
@@ -34,19 +29,23 @@ final class RuntimeEndpointPolicy implements EndpointPolicy {
 
     @Override
     public TransportProvider.CreateCommand createCommand(TransportProvider.CreateCommand command) {
-        Map<String, String> attributes = new LinkedHashMap<>();
-        command.attributes().forEach((key, value) -> {
-            if (key != null && !RESERVED_ATTRIBUTES.contains(key.toLowerCase(Locale.ROOT))) {
-                attributes.put(key, value);
-            }
-        });
         return new TransportProvider.CreateCommand(command.invocationRef(), command.invocationId(),
                 command.idempotencyKey(), command.conversationId(), null, command.mode(), command.input(),
-                command.clientTools(), null, command.relatedTaskRef(), attributes);
+                command.clientTools(), null, command.relatedTaskRef(), Map.of());
     }
 
     @Override
     public boolean retryUnconfirmedCreate() {
+        return false;
+    }
+
+    @Override
+    public boolean useSubscriptionForRecovery(InvocationMode mode) {
+        return mode == InvocationMode.STREAMING;
+    }
+
+    @Override
+    public boolean cursorReplaySupported() {
         return false;
     }
 }

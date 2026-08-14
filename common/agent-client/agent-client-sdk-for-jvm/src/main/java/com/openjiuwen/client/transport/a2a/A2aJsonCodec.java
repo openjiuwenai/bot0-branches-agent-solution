@@ -202,7 +202,7 @@ final class A2aJsonCodec {
         return root;
     }
 
-    /** SubscribeToTask 请求。断点 cursor 通过标准 Last-Event-ID header 承载。 */
+    /** SubscribeToTask 请求。Runtime 只接受 Task id，不携带 cursor。 */
     ObjectNode buildSubscribe(String taskRef) {
         ObjectNode root = newRequest("SubscribeToTask");
         root.putObject("params").put("id", taskRef);
@@ -254,12 +254,12 @@ final class A2aJsonCodec {
      */
     record Frame(String taskId, String contextId, TaskState state, Interrupt interrupt,
             String text, String errorCode, String errorMessage, ProtocolArtifact artifact,
-            List<ProtocolArtifact> taskArtifacts) {
+            List<ProtocolArtifact> taskArtifacts, boolean taskSnapshot) {
         // 仅规范构造器，无额外成员。
     }
 
     record Interrupt(boolean userInput, String toolCallId, String toolName,
-            Map<String, Object> arguments, String prompt, Long deadlineMs) {
+            Map<String, Object> arguments, String prompt, Long deadlineMs, boolean validResumeTarget) {
         // 仅规范构造器，无额外成员。
     }
 
@@ -297,15 +297,20 @@ final class A2aJsonCodec {
                     ? result.path("artifactUpdate").path("contextId").asText(null)
                     : result.path("contextId").asText(null);
             return Optional.of(new Frame(taskId, contextId, null, null, text, null, null,
-                    protocolArtifact, List.of()));
+                    protocolArtifact, List.of(), false));
         }
 
         // status 节点定位：流式在 result.statusUpdate.status；非流式在 result.task.status；
         // 旧 mock 兼容在 result.status。
         JsonNode statusUpdate = result.path("statusUpdate");
-        JsonNode taskNode = result.path("task");
+        JsonNode wrappedTask = result.path("task");
         boolean isStatusUpdate = !statusUpdate.isMissingNode() && !statusUpdate.isNull();
-        boolean isTask = !taskNode.isMissingNode() && !taskNode.isNull();
+        boolean isWrappedTask = !wrappedTask.isMissingNode() && !wrappedTask.isNull();
+        // Runtime GetTask 的成功响应会把 Task 直接放在 result 下；SendMessage 则可能使用 result.task。
+        boolean isDirectTask = !isStatusUpdate && !isWrappedTask
+                && result.hasNonNull("id") && result.path("status").isObject();
+        boolean isTask = isWrappedTask || isDirectTask;
+        JsonNode taskNode = isWrappedTask ? wrappedTask : (isDirectTask ? result : wrappedTask);
 
         JsonNode status;
         String taskId;
@@ -342,7 +347,7 @@ final class A2aJsonCodec {
         }
         List<ProtocolArtifact> taskArtifacts = isTask ? parseTaskArtifacts(taskNode) : List.of();
         return Optional.of(new Frame(taskId, contextId, state, interrupt, text, errorCode, text,
-                null, taskArtifacts));
+                null, taskArtifacts, isTask));
     }
 
     private List<ProtocolArtifact> parseTaskArtifacts(JsonNode task) {
@@ -437,7 +442,10 @@ final class A2aJsonCodec {
             arguments = mapper.convertValue(argsNode, Map.class);
         }
         boolean userInput = "user_input".equals(ikind);
-        return Optional.of(new Interrupt(userInput, toolCallId, toolName, arguments, prompt, deadlineMs));
+        boolean validClientTool = userInput || (toolCallId != null && !toolCallId.isBlank()
+                && toolName != null && !toolName.isBlank());
+        return Optional.of(new Interrupt(userInput, toolCallId, toolName, arguments, prompt, deadlineMs,
+                validClientTool));
     }
 
     /**

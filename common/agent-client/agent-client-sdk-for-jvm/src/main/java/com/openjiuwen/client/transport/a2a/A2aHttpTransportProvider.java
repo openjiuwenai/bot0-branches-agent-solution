@@ -5,12 +5,15 @@
 package com.openjiuwen.client.transport.a2a;
 
 import com.openjiuwen.client.api.ErrorCodes;
+import com.openjiuwen.client.api.ClassifiedError;
 import com.openjiuwen.client.api.InvocationEvent;
 import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.api.InvocationSnapshot;
+import com.openjiuwen.client.api.ObservationTimeoutException;
 import com.openjiuwen.client.api.TaskState;
 import com.openjiuwen.client.api.calltree.CallTreeSnapshot;
 import com.openjiuwen.client.transport.spi.CallTreeTransportProvider;
+import com.openjiuwen.client.transport.spi.InvocationOutputTransportProvider;
 import com.openjiuwen.client.transport.spi.TransportProvider;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -27,6 +30,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -42,6 +48,7 @@ import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 默认传输实现：A2A JSON-RPC 2.0 over HTTP + SSE（基于 JDK 内置 {@link HttpClient}，无额外网络框架）。
@@ -50,7 +57,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * 沿用首轮 mode（FEAT-006 §47）：首轮 STREAMING 的续跑走 {@code SendStreamingMessage}（SSE），
  * 首轮 BLOCKING/ASYNC 的续跑走 unary {@code SendMessage}（单次 JSON），
  * 后者由 {@code params.configuration.returnImmediately} 决定受理即返或等待本轮结果。
- * 状态查询走 {@code GetTask}。{@code CancelTask} / {@code SubscribeToTask} 延至后续版本，本类不实现。
+ * 状态查询走 {@code GetTask}。Runtime STREAMING 在已知 taskId 后可用
+ * {@code SubscribeToTask} 恢复当前状态并继续接收新事件；{@code CancelTask} 本版本不实现。
  * 每一次出站 HTTP 都附带 {@code Authorization: Bearer <token>}。
  *
  * <p><b>续跑帧的归属</b>：由 {@link TransportProvider.ResumeDelivery} 决定。工具结果续跑属同一 invocation，
@@ -70,7 +78,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * @since 2026-07-27
  */
-public class A2aHttpTransportProvider implements TransportProvider, CallTreeTransportProvider {
+public class A2aHttpTransportProvider
+        implements TransportProvider, CallTreeTransportProvider, InvocationOutputTransportProvider {
     private static final java.util.logging.Logger LOG =
             java.util.logging.Logger.getLogger(A2aHttpTransportProvider.class.getName());
 
@@ -80,9 +89,16 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
     /** 同步请求超时。 */
     private static final Duration UNARY_TIMEOUT = Duration.ofSeconds(60);
 
+    /** BLOCKING 从首次获得 taskId 起的最长自动观察时间。 */
+    private static final Duration DEFAULT_BLOCKING_OBSERVATION_TIMEOUT = Duration.ofMinutes(10);
+
+    /** 有效非终态快照之间的查询间隔；不限制有效 WORKING 返回次数。 */
+    private static final Duration DEFAULT_BLOCKING_POLL_INTERVAL = Duration.ofMillis(500);
+
     /** UNKNOWN 恢复的最大重发次数（含首次恢复尝试）。耗尽后投递进展不确定，不无限重试。 */
     private static final int MAX_CREATE_RECOVERY_ATTEMPTS = 3;
     private static final int MAX_OBSERVATION_RECOVERY_FAILURES = 3;
+    private static final int MAX_COMPLETED_TREES = 256;
 
     private final URI endpoint;
     private final HttpClient http;
@@ -90,11 +106,30 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
     private final ExecutorService io;
     private final ScheduledExecutorService scheduler;
     private final Duration sseIdleTimeout;
+    private final Duration blockingObservationTimeout;
+    private final Duration blockingPollInterval;
     private final EndpointPolicy endpointPolicy;
 
     private final ConcurrentMap<String, Channel> byInvocationRef = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Channel> byTaskRef = new ConcurrentHashMap<>();
-    private final ConcurrentMap<String, CallTreeSnapshot> completedTrees = new ConcurrentHashMap<>();
+    private final Map<String, CallTreeSnapshot> completedTrees = Collections.synchronizedMap(
+            new LinkedHashMap<>(32, 0.75f, true) {
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, CallTreeSnapshot> eldest) {
+                    return size() > MAX_COMPLETED_TREES;
+                }
+            });
+    private final Map<String, String> completedOutputs = Collections.synchronizedMap(
+            new LinkedHashMap<>(32, 0.75f, true) {
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
+                    return size() > MAX_COMPLETED_TREES;
+                }
+            });
 
     /**
      * 构造传输实现（使用默认 ObjectMapper 与 SSE 读空闲超时）。
@@ -128,9 +163,17 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
 
     A2aHttpTransportProvider(String baseUrl, ObjectMapper mapper, Duration sseIdleTimeout,
             EndpointPolicy endpointPolicy) {
+        this(baseUrl, mapper, sseIdleTimeout, endpointPolicy,
+                DEFAULT_BLOCKING_OBSERVATION_TIMEOUT, DEFAULT_BLOCKING_POLL_INTERVAL);
+    }
+
+    A2aHttpTransportProvider(String baseUrl, ObjectMapper mapper, Duration sseIdleTimeout,
+            EndpointPolicy endpointPolicy, Duration blockingObservationTimeout, Duration blockingPollInterval) {
         String normalized = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.endpoint = URI.create(normalized.endsWith("/a2a") ? normalized : normalized + "/a2a");
         this.sseIdleTimeout = sseIdleTimeout;
+        this.blockingObservationTimeout = blockingObservationTimeout;
+        this.blockingPollInterval = blockingPollInterval;
         this.endpointPolicy = endpointPolicy;
         this.io = new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
                 new SynchronousQueue<>(), daemonFactory("a2a-transport-io"));
@@ -144,6 +187,16 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
 
     static Duration defaultIdleTimeout() {
         return DEFAULT_SSE_IDLE_TIMEOUT;
+    }
+
+    /** 包级测试探针：活动 invocation Channel 数。 */
+    int activeInvocationCount() {
+        return byInvocationRef.size();
+    }
+
+    /** 包级测试探针：活动 taskId Channel 数。 */
+    int activeTaskCount() {
+        return byTaskRef.size();
     }
 
     private static java.util.concurrent.ThreadFactory daemonFactory(String name) {
@@ -191,6 +244,7 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
                     "no active channel for taskRef " + cmd.taskRef(), null,
                     ErrorCodes.STREAM_INTERRUPTED, 0, false));
         }
+        Channel resolvedChannel = ch;
         String credential = (cmd.credentialToken() != null) ? cmd.credentialToken() : ch.credential;
         String body = codec.write(codec.buildResume(cmd));
         // 帧归属（FRZ-1）：只有仍属原 invocation 的续跑才汇入原事件流；
@@ -202,7 +256,20 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
         if (cmd.mode() == InvocationMode.STREAMING) {
             return sendResumeStreaming(ch, sink, body, credential, snapshotRef);
         }
-        return sendUnary(ch, sink, body, credential, snapshotRef);
+        return sendUnary(resolvedChannel, sink, body, credential, snapshotRef).thenCompose(snapshot -> {
+            if (cmd.mode() != InvocationMode.BLOCKING
+                    || snapshot == null || snapshot.state() == TaskState.INPUT_REQUIRED
+                    || snapshot.terminal() || resolvedChannel.taskRef == null) {
+                return CompletableFuture.completedFuture(snapshot);
+            }
+            // BLOCKING 续轮与首次创建保持同一有界观察契约；ASYNC 只返回当前快照，
+            // 后续由业务显式 getInvocation 驱动。
+            resolvedChannel.lastState = snapshot.state();
+            resolvedChannel.blockingObservationStartedNanos = 0L;
+            CompletableFuture<InvocationSnapshot> terminal = new CompletableFuture<>();
+            beginBlockingObservation(resolvedChannel, snapshotRef, terminal);
+            return terminal;
+        });
     }
 
     @Override
@@ -210,13 +277,28 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
         Channel ch = byTaskRef.get(taskRef);
         String credential = (credentialToken != null) ? credentialToken : (ch != null ? ch.credential : null);
         String ref = (ch != null) ? ch.invocationRef : taskRef;
-        return sendForSnapshot(codec.buildGet(taskRef), credential, ref, ch);
+        Channel channel = ch;
+        return sendForSnapshot(codec.buildGet(taskRef), credential, ref, channel).thenApply(snapshot -> {
+            if (channel != null && snapshot != null && (snapshot.terminal()
+                    || snapshot.state() == TaskState.INPUT_REQUIRED)) {
+                projectQueriedState(channel, snapshot);
+            }
+            return snapshot;
+        });
+    }
+
+    @Override
+    public void closeObservation(String invocationRef) {
+        Channel ch = byInvocationRef.get(invocationRef);
+        if (ch != null) {
+            cancelLocalObservation(ch);
+        }
     }
 
     @Override
     public Flow.Publisher<CallTreeSnapshot> callTree(String invocationRef) {
         Channel channel = byInvocationRef.get(invocationRef);
-        if (channel == null) {
+        if (channel == null || channel.callTree == null) {
             return subscriber -> subscriber.onSubscribe(new Flow.Subscription() {
                 @Override
                 public void request(long n) {
@@ -234,7 +316,16 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
     @Override
     public Optional<CallTreeSnapshot> currentCallTree(String invocationRef) {
         Channel channel = byInvocationRef.get(invocationRef);
-        return channel == null ? Optional.ofNullable(completedTrees.get(invocationRef)) : channel.callTree.current();
+        return channel == null ? Optional.ofNullable(completedTrees.get(invocationRef))
+                : channel.callTree == null ? Optional.empty() : channel.callTree.current();
+    }
+
+    @Override
+    public Optional<String> currentOutputText(String invocationRef) {
+        Channel channel = byInvocationRef.get(invocationRef);
+        return channel == null
+                ? Optional.ofNullable(completedOutputs.get(invocationRef))
+                : channel.rootOutput.currentText();
     }
 
     @Override
@@ -248,6 +339,7 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
         byInvocationRef.clear();
         byTaskRef.clear();
         completedTrees.clear();
+        completedOutputs.clear();
         scheduler.shutdownNow();
         io.shutdownNow();
     }
@@ -376,7 +468,7 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
             if (!ack.isDone()) {
                 flushResumeFrame(ch, sink, data).ifPresent(f -> lastFrame[0] = f);
             }
-        } catch (IOException | IllegalStateException | NullPointerException e) {
+        } catch (IOException | RuntimeException e) {
             failure = e;
         }
         return new ResumeTail(lastFrame[0], failure);
@@ -454,6 +546,8 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
         bindTaskRef(ch, f);
         if (sink != null) {
             emit(sink, f);
+        } else {
+            applyRootOutput(ch, f);
         }
         return Optional.ofNullable(f);
     }
@@ -482,7 +576,7 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
             }
             return;
         }
-        sendForSnapshot(codec.buildGet(ch.taskRef), ch.credential, snapshotRef)
+        sendForSnapshot(codec.buildGet(ch.taskRef), ch.credential, snapshotRef, ch)
                 .whenComplete((snap, ex) -> onQueryComplete(sink, ack, failure, snap, ex));
     }
 
@@ -535,8 +629,12 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
                     if (ex != null) {
                         A2aTransportException e = A2aTransportException.network(
                                 "resume request failed: " + rootMessage(ex), ex);
-                        ack.completeExceptionally(e);
-                        failStream(sink, e);
+                        if (ch.taskRef != null) {
+                            recoverUnaryByQuery(ch, sink, ack, snapshotRef, e);
+                        } else {
+                            ack.completeExceptionally(e);
+                            failStream(sink, e);
+                        }
                         return;
                     }
                     if (resp.statusCode() / 100 != 2) {
@@ -551,6 +649,8 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
                         bindTaskRef(ch, f);
                         if (sink != null) {
                             emit(sink, f);
+                        } else {
+                            applyRootOutput(ch, f);
                         }
                         // 快照驱动的续跑（无 sink）走到终态：通道再无用处，及时释放，避免 taskRef 映射堆积；
                         // 未到终态则保留通道，等待后续续跑推进。
@@ -566,14 +666,35 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
         return ack;
     }
 
+    private void recoverUnaryByQuery(Channel ch, Channel sink, CompletableFuture<InvocationSnapshot> ack,
+            String snapshotRef, Throwable originalFailure) {
+        sendForSnapshot(codec.buildGet(ch.taskRef), ch.credential, snapshotRef, ch)
+                .whenComplete((snapshot, queryFailure) -> {
+                    if (queryFailure != null) {
+                        A2aTransportException failure = A2aTransportException.network(
+                                "unary request failed: " + rootMessage(originalFailure)
+                                        + "; GetTask reconciliation failed: " + rootMessage(queryFailure),
+                                queryFailure);
+                        ack.completeExceptionally(failure);
+                        failStream(sink, failure);
+                        return;
+                    }
+                    if (ch.callTree != null) {
+                        ch.callTree.markRecovered(false);
+                    }
+                    if (sink != null && snapshot != null) {
+                        projectQueriedState(sink, snapshot);
+                    }
+                    ack.complete(snapshot);
+                });
+    }
+
     /**
      * 非流式创建（{@code BLOCKING} / {@code ASYNC}）：单次 {@code SendMessage} 取回当前状态。
      *
-     * <p>{@code BLOCKING} 严格保持 unary 语义，不在响应非终态时追加 {@code GetTask} 轮询。
-     * 服务端若返回 {@code SUBMITTED}/{@code WORKING}，本次调用以
-     * {@link InvocationEvent.ProgressUncertain} 非终态结算；需要持续查询的业务应使用
-     * {@code ASYNC} 并显式调用 {@code getInvocation}。协议要求的 client-tool / 用户输入续跑
-     * 仍可另行发送关联原 Task 的 {@code SendMessage}。
+     * <p>BLOCKING 在任一 Endpoint 取得 taskId 且结果仍为 {@code SUBMITTED}/{@code WORKING} 时，
+     * SDK 自动用 {@code GetTask} 观察到终态或观察超时。ASYNC 在受理后停止自动网络活动，
+     * 由业务通过 {@code getInvocation} 按需查询。
      *
      * @param ch 通道
      * @param body 请求正文
@@ -596,12 +717,106 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
                 }
                 return;
             }
-            if (ch.mode == InvocationMode.BLOCKING) {
-                publishUncertain(ch, "strict BLOCKING SendMessage returned non-terminal state "
-                        + snap.state() + "; SDK did not poll GetTask");
+            if (ch.mode == InvocationMode.BLOCKING && ch.taskRef != null) {
+                beginBlockingObservation(ch, ch.invocationRef, null);
             }
-            // ASYNC：受理后由调用方按需 getInvocation，不主动轮询。
+            // ASYNC 在 accepted 后不保留后台观察任务，由调用方按需 getInvocation。
         });
+    }
+
+    private void beginBlockingObservation(Channel ch, String snapshotRef,
+            CompletableFuture<InvocationSnapshot> observationResult) {
+        if (ch.blockingObservationStartedNanos == 0L) {
+            ch.blockingObservationStartedNanos = System.nanoTime();
+        }
+        scheduleBlockingPoll(ch, snapshotRef, observationResult, 0L);
+    }
+
+    private void scheduleBlockingPoll(Channel ch, String snapshotRef,
+            CompletableFuture<InvocationSnapshot> observationResult, long delayMillis) {
+        ch.recoveryFuture = scheduler.schedule(() -> {
+            if (ch.terminal.get()) {
+                if (observationResult != null && !observationResult.isDone()) {
+                    observationResult.completeExceptionally(new IllegalStateException(
+                            "observation channel closed before a final snapshot"));
+                }
+                return;
+            }
+            if (blockingObservationExpired(ch)) {
+                ObservationTimeoutException timeout = new ObservationTimeoutException(snapshotRef, ch.taskRef,
+                        ch.lastState != null ? ch.lastState : TaskState.UNKNOWN, blockingObservationTimeout);
+                if (observationResult != null) {
+                    observationResult.completeExceptionally(timeout);
+                }
+                failStream(ch, timeout);
+                return;
+            }
+            pollBlockingTask(ch, snapshotRef, observationResult);
+        }, delayMillis, TimeUnit.MILLISECONDS);
+    }
+
+    private boolean blockingObservationExpired(Channel ch) {
+        return ch.blockingObservationStartedNanos != 0L
+                && System.nanoTime() - ch.blockingObservationStartedNanos
+                >= blockingObservationTimeout.toNanos();
+    }
+
+    private void pollBlockingTask(Channel ch, String snapshotRef,
+            CompletableFuture<InvocationSnapshot> observationResult) {
+        sendForSnapshot(codec.buildGet(ch.taskRef), ch.credential, snapshotRef, ch)
+                .whenComplete((snap, failure) -> {
+                    if (ch.terminal.get()) {
+                        return;
+                    }
+                    if (failure != null) {
+                        retryBlockingObservation(ch, snapshotRef, observationResult, failure);
+                        return;
+                    }
+                    if (!recordTaskObservationSuccess(ch, snap)) {
+                        retryBlockingObservation(ch, snapshotRef, observationResult,
+                                new IllegalStateException("GetTask returned an invalid Task snapshot"));
+                        return;
+                    }
+                    if (projectQueriedState(ch, snap)) {
+                        if (observationResult != null) {
+                            observationResult.complete(snap);
+                        }
+                        if (snap != null && snap.state() == TaskState.INPUT_REQUIRED
+                                && snap.pendingToolCall() == null && !ch.publisher.isClosed()) {
+                            ch.publisher.close();
+                        }
+                        if (snap != null && snap.state() == TaskState.INPUT_REQUIRED) {
+                            ch.blockingObservationStartedNanos = 0L;
+                        }
+                        return;
+                    }
+                    scheduleBlockingPoll(ch, snapshotRef, observationResult, blockingPollInterval.toMillis());
+                });
+    }
+
+    private void retryBlockingObservation(Channel ch, String snapshotRef,
+            CompletableFuture<InvocationSnapshot> observationResult, Throwable failure) {
+        ClassifiedError classified = ClassifiedError.unwrap(failure).orElse(null);
+        if (classified != null && !classified.retryable()) {
+            if (observationResult != null) {
+                observationResult.completeExceptionally(failure);
+            }
+            failStream(ch, failure);
+            return;
+        }
+        int failures = ++ch.observationFailures;
+        if (failures >= MAX_OBSERVATION_RECOVERY_FAILURES) {
+            Throwable exhausted = classified != null ? failure : A2aTransportException.network(
+                    "automatic GetTask observation failed " + failures + " times: "
+                            + rootMessage(failure), failure);
+            if (observationResult != null) {
+                observationResult.completeExceptionally(exhausted);
+            }
+            failStream(ch, exhausted);
+            return;
+        }
+        long delay = blockingPollInterval.toMillis() * (1L << (failures - 1));
+        scheduleBlockingPoll(ch, snapshotRef, observationResult, delay);
     }
 
     /**
@@ -682,6 +897,7 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
     }
 
     private void readSse(Channel ch, InputStream in, boolean subscription) {
+        ch.activeInput.set(in);
         ch.touch();
         ch.idleTimedOut.set(false);
         ScheduledFuture<?> watchdog = armWatchdog(ch, in);
@@ -713,18 +929,19 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
             }
             if (subscription && acceptedFrames > 0) {
                 ch.observationFailures = 0;
-                ch.callTree.markRecovered(true);
+                markRecoveredTree(ch);
             }
-        } catch (IOException | IllegalStateException | NullPointerException e) {
+        } catch (IOException | RuntimeException e) {
             failure = e;
         } finally {
+            ch.activeInput.compareAndSet(in, null);
             if (watchdog != null) {
                 watchdog.cancel(false);
             }
         }
         if (subscription && acceptedFrames == 0 && !ch.terminal.get()
                 && ch.lastState != TaskState.INPUT_REQUIRED) {
-            onObservationFailure(ch, "SubscribeToTask closed before a valid event",
+            onSubscriptionFailure(ch, "SubscribeToTask closed before a valid event",
                     failure != null ? failure : new IOException("empty subscription stream"));
             return;
         }
@@ -794,7 +1011,9 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
         }
         if (ch.taskRef == null) {
             if (!endpointPolicy.retryUnconfirmedCreate()) {
-                publishUncertain(ch, reason + "; runtime create outcome unknown; automatic retry is unsafe");
+                failStream(ch, new A2aTransportException(
+                        reason + "; Runtime create failed before a taskId was observed",
+                        null, ErrorCodes.CREATE_FAILED_NO_TASK_ID, 0, false));
                 return;
             }
             // 创建未确认：不能简单重发（会产生重复 Task），走同键同正文的幂等重发。
@@ -806,7 +1025,7 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
     }
 
     private void recoverKnownTask(Channel ch, String reason) {
-        if (endpointPolicy.subscribeSupported()) {
+        if (endpointPolicy.useSubscriptionForRecovery(ch.mode)) {
             openSubscription(ch, reason);
         } else {
             pollTask(ch, reason);
@@ -815,18 +1034,19 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
 
     private void openSubscription(Channel ch, String reason) {
         HttpRequest.Builder request = base("text/event-stream", ch.credential, false);
-        if (ch.replayCursor != null && !ch.replayCursor.isBlank()) {
+        if (endpointPolicy.cursorReplaySupported()
+                && ch.replayCursor != null && !ch.replayCursor.isBlank()) {
             request.header("Last-Event-ID", ch.replayCursor);
         }
         HttpRequest httpRequest = request.POST(HttpRequest.BodyPublishers.ofString(
                 codec.write(codec.buildSubscribe(ch.taskRef)), StandardCharsets.UTF_8)).build();
         http.sendAsync(httpRequest, HttpResponse.BodyHandlers.ofInputStream()).whenComplete((resp, failure) -> {
             if (failure != null) {
-                onObservationFailure(ch, reason, failure);
+                onSubscriptionFailure(ch, reason, failure);
                 return;
             }
             if (resp.statusCode() / 100 != 2) {
-                onObservationFailure(ch, reason, governanceError(resp.statusCode(), readAll(resp.body())));
+                onSubscriptionFailure(ch, reason, governanceError(resp.statusCode(), readAll(resp.body())));
                 return;
             }
             String contentType = resp.headers().firstValue("Content-Type").orElse("");
@@ -836,15 +1056,16 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
                     extractResult(codec.readTree(body));
                     onObservationFailure(ch, reason, new IllegalStateException("SubscribeToTask returned JSON"));
                 } catch (A2aTransportException error) {
-                    if (ErrorCodes.REPLAY_CURSOR_EXPIRED.equals(error.code())) {
+                    if (ErrorCodes.REPLAY_CURSOR_EXPIRED.equals(error.code())
+                            || ErrorCodes.SUBSCRIPTION_UNAVAILABLE.equals(error.code())) {
                         ch.recovering.set(false);
-                        pollTask(ch, reason + "; replay cursor expired");
+                        pollTask(ch, reason + "; subscription requires current Task reconciliation");
                     } else if (ErrorCodes.METHOD_NOT_SUPPORTED.equals(error.code())
                             && endpointPolicy.type() == com.openjiuwen.client.api.EndpointType.GATEWAY) {
                         ch.recovering.set(false);
                         pollTask(ch, reason + "; gateway subscribe unsupported");
                     } else {
-                        onObservationFailure(ch, reason, error);
+                        onSubscriptionFailure(ch, reason, error);
                     }
                 }
                 return;
@@ -852,6 +1073,20 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
             ch.recovering.set(false);
             io.execute(() -> readSse(ch, resp.body(), true));
         });
+    }
+
+    private void onSubscriptionFailure(Channel ch, String reason, Throwable failure) {
+        if (endpointPolicy.type() == com.openjiuwen.client.api.EndpointType.RUNTIME && ch.taskRef != null) {
+            ch.recovering.set(false);
+            if (++ch.observationFailures >= MAX_OBSERVATION_RECOVERY_FAILURES) {
+                publishUncertain(ch, reason + "; recovery failed " + ch.observationFailures
+                        + " times: " + rootMessage(failure), ErrorCodes.RECOVERY_RETRY_EXHAUSTED);
+                return;
+            }
+            pollTask(ch, reason + "; SubscribeToTask failed: " + rootMessage(failure));
+            return;
+        }
+        onObservationFailure(ch, reason, failure);
     }
 
     private void onObservationFailure(Channel ch, String reason, Throwable failure) {
@@ -862,11 +1097,12 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
         }
         int attempts = ++ch.observationFailures;
         if (attempts >= MAX_OBSERVATION_RECOVERY_FAILURES) {
-            publishUncertain(ch, reason + "; recovery failed " + attempts + " times: " + rootMessage(failure));
+            publishUncertain(ch, reason + "; recovery failed " + attempts + " times: " + rootMessage(failure),
+                    ErrorCodes.RECOVERY_RETRY_EXHAUSTED);
             return;
         }
         long delay = 200L * (1L << (attempts - 1));
-        scheduler.schedule(() -> {
+        ch.recoveryFuture = scheduler.schedule(() -> {
             if (!ch.terminal.get()) {
                 beginDisconnectRecovery(ch, reason);
             }
@@ -881,12 +1117,27 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
                 onObservationFailure(ch, reason, failure);
                 return;
             }
-            ch.observationFailures = 0;
-            ch.callTree.markRecovered(false);
+            if (!recordTaskObservationSuccess(ch, snap)) {
+                onObservationFailure(ch, reason,
+                        new IllegalStateException("GetTask returned an invalid Task snapshot"));
+                return;
+            }
+            markRecoveredTree(ch);
             if (!projectQueriedState(ch, snap)) {
-                scheduler.schedule(() -> beginDisconnectRecovery(ch, reason), 200L, TimeUnit.MILLISECONDS);
+                ch.recoveryFuture = scheduler.schedule(
+                        () -> beginDisconnectRecovery(ch, reason), 200L, TimeUnit.MILLISECONDS);
             }
         });
+    }
+
+    private boolean recordTaskObservationSuccess(Channel ch, InvocationSnapshot snapshot) {
+        if (snapshot == null || snapshot.state() == null || snapshot.state() == TaskState.UNKNOWN
+                || snapshot.diagnosticTaskRef() == null || snapshot.diagnosticTaskRef().isBlank()
+                || !snapshot.diagnosticTaskRef().equals(ch.taskRef)) {
+            return false;
+        }
+        ch.observationFailures = 0;
+        return true;
     }
 
     /**
@@ -896,7 +1147,7 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
      * @param reason 中断原因
      */
     private void confirmByQuery(Channel ch, String reason) {
-        sendForSnapshot(codec.buildGet(ch.taskRef), ch.credential, ch.invocationRef)
+        sendForSnapshot(codec.buildGet(ch.taskRef), ch.credential, ch.invocationRef, ch)
                 .whenComplete((snap, ex) -> {
                     if (ex != null) {
                         publishUncertain(ch, reason + "; state query failed: " + rootMessage(ex));
@@ -1015,6 +1266,20 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
      * @param reason 原因
      */
     private void publishUncertain(Channel ch, String reason) {
+        publishUncertain(ch, reason, ErrorCodes.STREAM_INTERRUPTED);
+    }
+
+    private void publishUncertain(Channel ch, String reason, String runtimeErrorCode) {
+        if (endpointPolicy.type() == com.openjiuwen.client.api.EndpointType.RUNTIME) {
+            if (ch.terminal.get()) {
+                return;
+            }
+            TaskState last = (ch.lastState != null) ? ch.lastState : TaskState.UNKNOWN;
+            submit(ch, new InvocationEvent.ProgressUncertain(ch.invocationRef, last, reason));
+            failStream(ch, new A2aTransportException(reason, null,
+                    runtimeErrorCode, 0, false));
+            return;
+        }
         if (ch.terminal.getAndSet(true)) {
             return;
         }
@@ -1058,21 +1323,42 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
         }
         String json = data.toString();
         data.setLength(0);
-        if (eventId != null && !eventId.isBlank() && ch.seenEventIds.contains(eventId)) {
+        if (endpointPolicy.cursorReplaySupported() && eventId != null && !eventId.isBlank()
+                && ch.seenEventIds.contains(eventId)) {
             return false;
         }
         JsonNode result = extractResult(codec.readTree(json));
         A2aJsonCodec.Frame f = codec.parseFrame(result).orElse(null);
         bindTaskRef(ch, f);
-        if (replayed && f != null) {
+        boolean validObservation = isValidObservationFrame(ch, f);
+        if (replayed && validObservation) {
             ch.observationFailures = 0;
-            ch.callTree.markRecovered(true);
+            markRecoveredTree(ch);
         }
         emit(ch, f);
-        if (eventId != null && !eventId.isBlank()) {
+        if (endpointPolicy.cursorReplaySupported() && eventId != null && !eventId.isBlank()) {
             ch.recordEventId(eventId);
         }
-        return f != null;
+        return validObservation;
+    }
+
+    private static boolean isValidObservationFrame(Channel ch, A2aJsonCodec.Frame frame) {
+        if (frame == null || frame.taskId() == null || frame.taskId().isBlank()
+                || ch.taskRef == null || !ch.taskRef.equals(frame.taskId())) {
+            return false;
+        }
+        return frame.state() != null || frame.artifact() != null || frame.taskSnapshot();
+    }
+
+    private void markRecoveredTree(Channel ch) {
+        if (ch.callTree == null) {
+            return;
+        }
+        if (endpointPolicy.type() == com.openjiuwen.client.api.EndpointType.RUNTIME) {
+            ch.callTree.markPartialRecovery();
+        } else {
+            ch.callTree.markRecovered(endpointPolicy.cursorReplaySupported());
+        }
     }
 
     private CompletionStage<InvocationSnapshot> sendForSnapshot(ObjectNode req, String credential,
@@ -1094,10 +1380,13 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
                     A2aJsonCodec.Frame frame = codec.parseFrame(result).orElse(null);
                     if (channel != null && frame != null) {
                         bindTaskRef(channel, frame);
-                        for (ProtocolArtifact artifact : frame.taskArtifacts()) {
-                            channel.callTree.accept(artifact);
+                        applyRootOutput(channel, frame);
+                        if (channel.callTree != null) {
+                            for (ProtocolArtifact artifact : frame.taskArtifacts()) {
+                                channel.callTree.accept(artifact);
+                            }
+                            channel.callTree.updateRootState(frame.state());
                         }
-                        channel.callTree.updateRootState(frame.state());
                     }
                     return snapshotFromFrame(invocationRef, frame);
                 });
@@ -1123,22 +1412,38 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
         }
         ch.taskRef = f.taskId();
         ch.contextId = f.contextId();
-        ch.callTree.bindRoot(f.taskId());
+        if (ch.callTree != null) {
+            ch.callTree.bindRoot(f.taskId());
+        }
         byTaskRef.put(f.taskId(), ch);
         submit(ch, new InvocationEvent.Accepted(ch.invocationRef, f.taskId(), f.contextId()));
+    }
+
+    private void applyRootOutput(Channel ch, A2aJsonCodec.Frame frame) {
+        if (ch == null || frame == null) {
+            return;
+        }
+        if (frame.taskSnapshot()) {
+            ch.rootOutput.replaceWithTaskSnapshot(frame.taskArtifacts());
+        } else if (frame.artifact() != null) {
+            ch.rootOutput.accept(frame.artifact());
+        }
     }
 
     private void emit(Channel ch, A2aJsonCodec.Frame f) {
         if (f == null) {
             return;
         }
-        if (f.artifact() != null) {
-            ch.callTree.accept(f.artifact());
+        applyRootOutput(ch, f);
+        if (ch.callTree != null) {
+            if (f.artifact() != null) {
+                ch.callTree.accept(f.artifact());
+            }
+            for (ProtocolArtifact artifact : f.taskArtifacts()) {
+                ch.callTree.accept(artifact);
+            }
+            ch.callTree.updateRootState(f.state());
         }
-        for (ProtocolArtifact artifact : f.taskArtifacts()) {
-            ch.callTree.accept(artifact);
-        }
-        ch.callTree.updateRootState(f.state());
         if (f.state() == null) {
             if (f.text() != null) {
                 submit(ch, new InvocationEvent.ContentDelta(ch.invocationRef, f.text()));
@@ -1148,7 +1453,8 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
         ch.lastState = f.state();
         switch (f.state()) {
             case COMPLETED -> {
-                submit(ch, new InvocationEvent.Completed(ch.invocationRef, f.text()));
+                submit(ch, new InvocationEvent.Completed(ch.invocationRef,
+                        ch.rootOutput.currentText().orElse(f.text())));
                 terminate(ch);
             }
             case FAILED -> {
@@ -1168,6 +1474,11 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
                 if (it == null) {
                     submit(ch, new InvocationEvent.InputRequired(ch.invocationRef, null, null));
                 } else if (it.userInput()) {
+                    submit(ch, new InvocationEvent.InputRequired(ch.invocationRef, null, it.prompt()));
+                } else if (!it.validResumeTarget()) {
+                    submit(ch, new InvocationEvent.ProtocolDiagnostic(ch.invocationRef,
+                            ErrorCodes.INPUT_RESUME_TARGET_MISSING,
+                            "client_tool interrupt requires non-blank toolCallId and toolName"));
                     submit(ch, new InvocationEvent.InputRequired(ch.invocationRef, null, it.prompt()));
                 } else {
                     Duration dl = (it.deadlineMs() != null) ? Duration.ofMillis(it.deadlineMs()) : null;
@@ -1190,6 +1501,8 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
         ch.terminal.set(true);
         unregister(ch);
         ch.cancelWatchdog();
+        ch.cancelRecovery();
+        ch.closeActiveInput();
         if (!ch.publisher.isClosed()) {
             ch.publisher.close();
         }
@@ -1204,14 +1517,19 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
         ch.terminal.set(true);
         unregister(ch);
         ch.cancelWatchdog();
+        ch.cancelRecovery();
+        ch.closeActiveInput();
         if (!ch.publisher.isClosed()) {
             ch.publisher.close();
         }
     }
 
     private void unregister(Channel ch) {
-        ch.callTree.close();
-        ch.callTree.current().ifPresent(tree -> completedTrees.put(ch.invocationRef, tree));
+        if (ch.callTree != null) {
+            ch.callTree.close();
+            ch.callTree.current().ifPresent(tree -> completedTrees.put(ch.invocationRef, tree));
+        }
+        ch.rootOutput.currentText().ifPresent(text -> completedOutputs.put(ch.invocationRef, text));
         if (ch.taskRef != null) {
             byTaskRef.remove(ch.taskRef);
         }
@@ -1223,6 +1541,8 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
             return;
         }
         ch.cancelWatchdog();
+        ch.cancelRecovery();
+        ch.closeActiveInput();
         if (!ch.terminal.getAndSet(true) && !ch.publisher.isClosed()) {
             unregister(ch);
             ch.publisher.closeExceptionally(ex);
@@ -1233,14 +1553,21 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
         String ref = (invocationRef != null) ? invocationRef : (f != null ? f.taskId() : null);
         TaskState st = (f != null && f.state() != null) ? f.state() : TaskState.UNKNOWN;
         InvocationEvent.ToolCall pending = null;
-        if (f != null && f.interrupt() != null && !f.interrupt().userInput()) {
+        if (f != null && f.interrupt() != null && !f.interrupt().userInput()
+                && f.interrupt().validResumeTarget()) {
             A2aJsonCodec.Interrupt it = f.interrupt();
             Duration dl = (it.deadlineMs() != null) ? Duration.ofMillis(it.deadlineMs()) : null;
             pending = new InvocationEvent.ToolCall(it.toolCallId(), it.toolName(), it.arguments(), dl);
         }
+        String outputText = null;
+        if (f != null) {
+            outputText = f.taskSnapshot()
+                    ? RootOutputReducer.materializeTaskSnapshot(f.taskArtifacts()).orElse(f.text())
+                    : f.text();
+        }
         return new InvocationSnapshot(ref, st, st.isTerminal(),
                 (f != null) ? f.taskId() : null, pending,
-                (f != null) ? f.text() : null,
+                outputText,
                 (f != null) ? f.errorCode() : null,
                 (f != null) ? f.errorMessage() : null);
     }
@@ -1264,6 +1591,7 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
                     : switch (rpcCode) {
                         case -32601 -> ErrorCodes.METHOD_NOT_SUPPORTED;
                         case -32001 -> ErrorCodes.TASK_NOT_FOUND;
+                        case -32004 -> ErrorCodes.SUBSCRIPTION_UNAVAILABLE;
                         default -> "JSONRPC_" + rpcCode;
                     };
             throw new A2aTransportException(
@@ -1286,15 +1614,19 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
         final String credential;
         final SubmissionPublisher<InvocationEvent> publisher;
         final CallTreeReducer callTree;
+        final RootOutputReducer rootOutput;
         volatile String taskRef;
         volatile String contextId;
         volatile TaskState lastState;
         volatile long lastActivityNanos = System.nanoTime();
         volatile int recoveryAttempt;
         volatile int observationFailures;
+        volatile long blockingObservationStartedNanos;
         volatile String replayCursor;
         final java.util.LinkedHashSet<String> seenEventIds = new java.util.LinkedHashSet<>();
         volatile ScheduledFuture<?> watchdog;
+        volatile ScheduledFuture<?> recoveryFuture;
+        final AtomicReference<InputStream> activeInput = new AtomicReference<>();
         final AtomicBoolean terminal = new AtomicBoolean(false);
         final AtomicBoolean recovering = new AtomicBoolean(false);
         final AtomicBoolean idleTimedOut = new AtomicBoolean(false);
@@ -1307,7 +1639,8 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
             this.mode = mode;
             this.createBody = createBody;
             this.credential = credential;
-            this.callTree = new CallTreeReducer(mode);
+            this.callTree = mode == InvocationMode.STREAMING ? new CallTreeReducer(mode) : null;
+            this.rootOutput = new RootOutputReducer();
             // 事件投递放到 IO 线程池，避免订阅者的处理逻辑跑在 SSE 读线程上把读取拖停。
             this.publisher = new SubmissionPublisher<>(deliveryExecutor, Flow.defaultBufferSize());
         }
@@ -1323,6 +1656,20 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
             }
         }
 
+        void cancelRecovery() {
+            ScheduledFuture<?> future = recoveryFuture;
+            if (future != null) {
+                future.cancel(false);
+            }
+        }
+
+        void closeActiveInput() {
+            InputStream in = activeInput.getAndSet(null);
+            if (in != null) {
+                closeQuietly(in);
+            }
+        }
+
         synchronized void recordEventId(String eventId) {
             seenEventIds.add(eventId);
             replayCursor = eventId;
@@ -1331,6 +1678,19 @@ public class A2aHttpTransportProvider implements TransportProvider, CallTreeTran
                 iterator.next();
                 iterator.remove();
             }
+        }
+    }
+
+    private void cancelLocalObservation(Channel ch) {
+        if (ch.terminal.getAndSet(true)) {
+            return;
+        }
+        ch.cancelWatchdog();
+        ch.cancelRecovery();
+        ch.closeActiveInput();
+        unregister(ch);
+        if (!ch.publisher.isClosed()) {
+            ch.publisher.close();
         }
     }
 

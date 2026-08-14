@@ -12,13 +12,15 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Flow;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 class LatestValuePublisherTest {
     @Test
     void slowSubscriberReceivesOnlyLatestSnapshotOnNextDemand() {
-        LatestValuePublisher<Integer> publisher = new LatestValuePublisher<>();
+        LatestValuePublisher<Integer> publisher = directPublisher();
         TestSubscriber<Integer> subscriber = new TestSubscriber<>();
         publisher.subscribe(subscriber);
 
@@ -33,7 +35,7 @@ class LatestValuePublisherTest {
 
     @Test
     void lateSubscriberReceivesFinalValueBeforeCompletion() {
-        LatestValuePublisher<String> publisher = new LatestValuePublisher<>();
+        LatestValuePublisher<String> publisher = directPublisher();
         publisher.submit("final");
         publisher.close();
         TestSubscriber<String> subscriber = new TestSubscriber<>();
@@ -47,7 +49,7 @@ class LatestValuePublisherTest {
 
     @Test
     void reentrantSubmitIsNotLost() {
-        LatestValuePublisher<Integer> publisher = new LatestValuePublisher<>();
+        LatestValuePublisher<Integer> publisher = directPublisher();
         List<Integer> values = new ArrayList<>();
         publisher.subscribe(new Flow.Subscriber<>() {
             @Override
@@ -79,7 +81,7 @@ class LatestValuePublisherTest {
 
     @Test
     void throwingSubscriberDoesNotBlockOtherSubscribers() {
-        LatestValuePublisher<Integer> publisher = new LatestValuePublisher<>();
+        LatestValuePublisher<Integer> publisher = directPublisher();
         publisher.subscribe(new Flow.Subscriber<>() {
             @Override
             public void onSubscribe(Flow.Subscription subscription) {
@@ -110,7 +112,7 @@ class LatestValuePublisherTest {
 
     @Test
     void throwingCompletionDoesNotBlockOtherSubscribers() {
-        LatestValuePublisher<Integer> publisher = new LatestValuePublisher<>();
+        LatestValuePublisher<Integer> publisher = directPublisher();
         publisher.subscribe(new Flow.Subscriber<>() {
             @Override
             public void onSubscribe(Flow.Subscription subscription) {
@@ -138,6 +140,63 @@ class LatestValuePublisherTest {
         publisher.close();
 
         assertTrue(healthy.completed.get());
+    }
+
+    @Test
+    void blockingSubscriberDoesNotBlockSubmitOrOtherSubscriber() throws Exception {
+        LatestValuePublisher<Integer> publisher = new LatestValuePublisher<>();
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        publisher.subscribe(new Flow.Subscriber<>() {
+            @Override
+            public void onSubscribe(Flow.Subscription subscription) {
+                subscription.request(2);
+            }
+
+            @Override
+            public void onNext(Integer item) {
+                entered.countDown();
+                try {
+                    release.await(2, TimeUnit.SECONDS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+            }
+
+            @Override
+            public void onComplete() {
+            }
+        });
+        TestSubscriber<Integer> healthy = new TestSubscriber<>();
+        publisher.subscribe(healthy);
+        healthy.request(1);
+
+        long started = System.nanoTime();
+        publisher.submit(1);
+        assertTrue(entered.await(1, TimeUnit.SECONDS));
+        publisher.submit(2);
+        long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+
+        awaitValues(healthy, 1);
+        assertTrue(elapsedMillis < 500, "submit must not wait for subscriber callback");
+        assertEquals(1, healthy.values.size());
+        assertTrue(healthy.values.get(0) == 1 || healthy.values.get(0) == 2);
+        release.countDown();
+    }
+
+    private static <T> LatestValuePublisher<T> directPublisher() {
+        return new LatestValuePublisher<>(Runnable::run);
+    }
+
+    private static void awaitValues(TestSubscriber<?> subscriber, int count) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (subscriber.values.size() < count && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
     }
 
     private static final class TestSubscriber<T> implements Flow.Subscriber<T> {

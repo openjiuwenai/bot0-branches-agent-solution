@@ -31,17 +31,18 @@ public final class MockRuntimeServer {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final List<String> SCENARIOS = List.of(
             "single", "nested-5", "parallel-interleave", "multi-artifact", "output-before-edge",
-            "input-linear", "input-status-incomplete", "client-tool", "disconnect-replay",
-            "replay-duplicate", "cursor-expired", "mode-unavailable", "recovery-circuit",
+            "input-linear", "input-status-incomplete", "client-tool", "streaming-resubscribe",
+            "blocking-gettask", "async-gettask", "mode-unavailable", "recovery-circuit",
             "runtime-create-unknown", "controller-return", "speaking-handoff", "root-output-filter",
-            "malformed-graph");
+            "root-output-replace", "malformed-graph");
 
     private final Map<String, TaskRecord> tasks = new ConcurrentHashMap<>();
+    private final Map<String, String> scenariosByContext = new ConcurrentHashMap<>();
     private final List<RequestRecord> requests = new CopyOnWriteArrayList<>();
     private final AtomicInteger requestSequence = new AtomicInteger();
     private final int port;
 
-    private MockRuntimeServer(int port) {
+    public MockRuntimeServer(int port) {
         this.port = port;
     }
 
@@ -52,7 +53,9 @@ public final class MockRuntimeServer {
         String configured = args.length > 0 ? args[0]
                 : System.getenv().getOrDefault("MOCK_RUNTIME_PORT", "19090");
         int port = Integer.parseInt(configured);
-        new MockRuntimeServer(port).start();
+        MockRuntimeServer runtime = new MockRuntimeServer(port);
+        runtime.startServer();
+        Thread.currentThread().join();
     }
 
     private static void redirectOutput(String path) throws IOException {
@@ -63,7 +66,7 @@ public final class MockRuntimeServer {
         System.setErr(log);
     }
 
-    private void start() throws IOException, InterruptedException {
+    public HttpServer startServer() throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
         server.setExecutor(Executors.newCachedThreadPool(r -> {
             Thread thread = new Thread(r, "mock-runtime-http");
@@ -75,6 +78,7 @@ public final class MockRuntimeServer {
                 "status", "UP", "service", "mock-runtime", "port", port,
                 "tasks", tasks.size(), "requests", requests.size())));
         server.createContext("/admin/scenarios", exchange -> json(exchange, 200, SCENARIOS));
+        server.createContext("/admin/scenario", this::configureScenario);
         server.createContext("/admin/requests", this::handleRequests);
         server.createContext("/admin/tasks", exchange -> json(exchange, 200,
                 tasks.values().stream().sorted(Comparator.comparing(TaskRecord::createdAt).reversed())
@@ -82,12 +86,14 @@ public final class MockRuntimeServer {
         server.createContext("/admin/reset", exchange -> {
             tasks.clear();
             requests.clear();
+            scenariosByContext.clear();
             json(exchange, 200, Map.of("reset", true));
         });
         server.start();
-        System.out.println("Mock Runtime listening on http://127.0.0.1:" + port);
-        System.out.println("A2A endpoint: http://127.0.0.1:" + port + "/a2a");
-        Thread.currentThread().join();
+        int boundPort = server.getAddress().getPort();
+        System.out.println("Mock Runtime listening on http://127.0.0.1:" + boundPort);
+        System.out.println("A2A endpoint: http://127.0.0.1:" + boundPort + "/a2a");
+        return server;
     }
 
     private void handleA2a(HttpExchange exchange) throws IOException {
@@ -107,14 +113,13 @@ public final class MockRuntimeServer {
         }
         String method = request.path("method").asText();
         String authorization = exchange.getRequestHeaders().getFirst("Authorization");
-        String cursor = exchange.getRequestHeaders().getFirst("Last-Event-ID");
         requests.add(new RequestRecord(requestSequence.incrementAndGet(), Instant.now().toString(), method,
-                authorization, cursor, JSON.convertValue(request, Object.class)));
+                authorization, JSON.convertValue(request, Object.class)));
         switch (method) {
             case "SendStreamingMessage" -> sendStreaming(exchange, request);
             case "SendMessage" -> sendMessage(exchange, request);
             case "GetTask" -> getTask(exchange, request);
-            case "SubscribeToTask" -> subscribe(exchange, request, cursor);
+            case "SubscribeToTask" -> subscribe(exchange, request);
             default -> jsonRpcError(exchange, request.path("id").asText(), -32601,
                     "METHOD_NOT_FOUND", "unsupported method " + method);
         }
@@ -130,7 +135,7 @@ public final class MockRuntimeServer {
                 return;
             }
             task.completeAfterResume(text(message));
-            sse(exchange, task, task.resumeStartIndex, false, false);
+            sse(exchange, task, task.resumeStartIndex, false, false, request.path("id").asText());
             return;
         }
         String scenario = scenario(request);
@@ -140,11 +145,10 @@ public final class MockRuntimeServer {
         }
         TaskRecord task = TaskRecord.create(message.path("contextId").asText("context"), scenario);
         tasks.put(task.id, task);
-        if ("disconnect-replay".equals(scenario) || "replay-duplicate".equals(scenario)
-                || "cursor-expired".equals(scenario) || "recovery-circuit".equals(scenario)) {
-            sse(exchange, task, 0, false, true);
+        if ("streaming-resubscribe".equals(scenario) || "recovery-circuit".equals(scenario)) {
+            sse(exchange, task, 0, false, true, request.path("id").asText());
         } else {
-            sse(exchange, task, 0, false, false);
+            sse(exchange, task, 0, false, false, request.path("id").asText());
         }
     }
 
@@ -165,17 +169,25 @@ public final class MockRuntimeServer {
         }
         boolean immediately = request.path("params").path("configuration")
                 .path("returnImmediately").asBoolean(false);
-        if (immediately) {
+        boolean initialCreate = existingTask == null;
+        boolean waitingForInput = "TASK_STATE_INPUT_REQUIRED".equals(task.state);
+        if (initialCreate && immediately && !waitingForInput) {
             task.asyncQueriesRemaining.set(1);
             task.state = "TASK_STATE_WORKING";
-        } else if (!"input-linear".equals(task.scenario)) {
+        } else if (initialCreate && !waitingForInput) {
             task.state = "TASK_STATE_COMPLETED";
         }
-        jsonRpcResult(exchange, request.path("id").asText(), task.taskNode());
+        jsonRpcWrappedTaskResult(exchange, request.path("id").asText(), task.taskNode());
     }
 
     private void getTask(HttpExchange exchange, JsonNode request) throws IOException {
-        TaskRecord task = tasks.get(request.path("params").path("id").asText());
+        String taskId = taskId(request);
+        if (taskId == null) {
+            jsonRpcError(exchange, request.path("id").asText(), -32602, "INVALID_PARAMS",
+                    "Invalid params: params.id is required and must be a non-blank string");
+            return;
+        }
+        TaskRecord task = tasks.get(taskId);
         if (task == null) {
             jsonRpcError(exchange, request.path("id").asText(), -32001, "TASK_NOT_FOUND", "task not found");
             return;
@@ -184,13 +196,24 @@ public final class MockRuntimeServer {
                 && "TASK_STATE_WORKING".equals(task.state)) {
             task.state = "TASK_STATE_COMPLETED";
         }
-        jsonRpcResult(exchange, request.path("id").asText(), task.taskNode());
+        jsonRpcTaskResult(exchange, request.path("id").asText(), task.taskNode());
     }
 
-    private void subscribe(HttpExchange exchange, JsonNode request, String cursor) throws IOException {
-        TaskRecord task = tasks.get(request.path("params").path("id").asText());
+    private void subscribe(HttpExchange exchange, JsonNode request) throws IOException {
+        String taskId = taskId(request);
+        if (taskId == null) {
+            jsonRpcError(exchange, request.path("id").asText(), -32602, "INVALID_PARAMS",
+                    "Invalid params: params.id is required and must be a non-blank string");
+            return;
+        }
+        TaskRecord task = tasks.get(taskId);
         if (task == null) {
             jsonRpcError(exchange, request.path("id").asText(), -32001, "TASK_NOT_FOUND", "task not found");
+            return;
+        }
+        if (task.isTerminal()) {
+            jsonRpcError(exchange, request.path("id").asText(), -32004, "UNSUPPORTED_OPERATION",
+                    "Cannot subscribe to task " + task.id + " in terminal state " + task.state);
             return;
         }
         int attempt = task.subscribeAttempts.incrementAndGet();
@@ -198,33 +221,41 @@ public final class MockRuntimeServer {
             json(exchange, 503, Map.of("code", "SERVICE_UNAVAILABLE", "message", "injected failure " + attempt));
             return;
         }
-        if ("cursor-expired".equals(task.scenario) && attempt == 1) {
-            ObjectNode root = JSON.createObjectNode();
-            root.put("jsonrpc", "2.0").put("id", request.path("id").asText());
-            ObjectNode error = root.putObject("error");
-            error.put("code", -32010).put("message", "cursor expired");
-            error.putObject("data").put("code", "CURSOR_EXPIRED");
-            json(exchange, 200, root);
-            return;
-        }
-        int last = parseCursor(cursor);
-        int start = "replay-duplicate".equals(task.scenario) ? Math.max(0, last - 1) : last;
-        sse(exchange, task, start, true, false);
+        sseSubscription(exchange, task, request.path("id").asText());
     }
 
     private void sse(HttpExchange exchange, TaskRecord task, int startIndex,
-            boolean subscription, boolean disconnect) throws IOException {
+            boolean subscription, boolean disconnect, String requestId) throws IOException {
         List<Frame> selected = new ArrayList<>();
         int end = disconnect ? Math.min(task.initialFrameCount, task.frames.size()) : task.frames.size();
         for (int index = Math.max(0, startIndex); index < end; index++) {
             selected.add(task.frames.get(index));
         }
-        StringBuilder body = new StringBuilder();
-        for (Frame frame : selected) {
-            body.append("id: ").append(frame.id()).append('\n')
-                    .append("data: ").append(frame.payload()).append("\n\n");
+        byte[] bytes = sseBody(selected.stream().map(frame -> frame.withRequestId(requestId)).toList());
+        writeSse(exchange, bytes, subscription);
+    }
+
+    private void sseSubscription(HttpExchange exchange, TaskRecord task, String requestId) throws IOException {
+        List<String> payloads = new ArrayList<>();
+        payloads.add(task.snapshotPayload(requestId));
+        for (int index = task.initialFrameCount; index < task.frames.size(); index++) {
+            payloads.add(task.frames.get(index).withRequestId(requestId));
         }
-        byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
+        writeSse(exchange, sseBody(payloads), true);
+        task.state = "TASK_STATE_COMPLETED";
+        task.output = "Root agent completed the request.";
+    }
+
+    private static byte[] sseBody(List<String> payloads) {
+        StringBuilder body = new StringBuilder();
+        for (String payload : payloads) {
+            body.append("event:jsonrpc\n")
+                    .append("data:").append(payload).append("\n\n");
+        }
+        return body.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static void writeSse(HttpExchange exchange, byte[] bytes, boolean subscription) throws IOException {
         addCors(exchange);
         exchange.getResponseHeaders().set("Content-Type", "text/event-stream; charset=utf-8");
         exchange.getResponseHeaders().set("Cache-Control", "no-cache");
@@ -249,7 +280,29 @@ public final class MockRuntimeServer {
         json(exchange, 200, requests.stream().filter(record -> record.sequence() > lower).toList());
     }
 
-    private static String scenario(JsonNode request) {
+    private void configureScenario(HttpExchange exchange) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            json(exchange, 405, Map.of("error", "method not allowed"));
+            return;
+        }
+        JsonNode body = JSON.readTree(exchange.getRequestBody());
+        String contextId = body.path("contextId").asText("");
+        String scenario = body.path("scenario").asText("");
+        if (contextId.isBlank() || !SCENARIOS.contains(scenario)) {
+            json(exchange, 400, Map.of("error", "valid contextId and scenario are required"));
+            return;
+        }
+        scenariosByContext.put(contextId, scenario);
+        json(exchange, 200, Map.of("contextId", contextId, "scenario", scenario));
+    }
+
+    private String scenario(JsonNode request) {
+        String contextId = request.path("params").path("message").path("contextId").asText("");
+        String configured = scenariosByContext.remove(contextId);
+        if (configured != null) {
+            return configured;
+        }
+        // 兼容旧的直接 Mock 测试；真实 Runtime policy 已不会发送该字段。
         String value = request.path("params").path("metadata").path("attributes")
                 .path("scenario").asText("single");
         return SCENARIOS.contains(value) ? value : "single";
@@ -260,21 +313,25 @@ public final class MockRuntimeServer {
         return parts.isArray() && !parts.isEmpty() ? parts.get(0).path("text").asText("") : "";
     }
 
-    private static int parseCursor(String cursor) {
-        if (cursor == null || cursor.isBlank()) {
-            return 0;
+    private static String taskId(JsonNode request) {
+        JsonNode id = request.path("params").path("id");
+        if (!id.isTextual() || id.asText().isBlank()) {
+            return null;
         }
-        try {
-            return Integer.parseInt(cursor);
-        } catch (NumberFormatException ignored) {
-            return 0;
-        }
+        return id.asText();
     }
 
-    private static void jsonRpcResult(HttpExchange exchange, String id, JsonNode task) throws IOException {
+    private static void jsonRpcWrappedTaskResult(HttpExchange exchange, String id, JsonNode task) throws IOException {
         ObjectNode root = JSON.createObjectNode();
         root.put("jsonrpc", "2.0").put("id", id);
         root.putObject("result").set("task", task);
+        json(exchange, 200, root);
+    }
+
+    private static void jsonRpcTaskResult(HttpExchange exchange, String id, JsonNode task) throws IOException {
+        ObjectNode root = JSON.createObjectNode();
+        root.put("jsonrpc", "2.0").put("id", id);
+        root.set("result", task);
         json(exchange, 200, root);
     }
 
@@ -299,15 +356,24 @@ public final class MockRuntimeServer {
 
     private static void addCors(HttpExchange exchange) {
         exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-        exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, Last-Event-ID");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, Authorization");
         exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     }
 
     private record Frame(int id, String payload) {
+        private String withRequestId(String requestId) {
+            try {
+                ObjectNode root = (ObjectNode) JSON.readTree(payload);
+                root.put("id", requestId);
+                return root.toString();
+            } catch (IOException error) {
+                throw new IllegalStateException("invalid scripted frame", error);
+            }
+        }
     }
 
     private record RequestRecord(int sequence, String receivedAt, String method,
-            String authorization, String lastEventId, Object body) {
+            String authorization, Object body) {
     }
 
     private static final class TaskRecord {
@@ -345,6 +411,7 @@ public final class MockRuntimeServer {
                 case "client-tool" -> clientTool();
                 case "controller-return" -> controllerReturn();
                 case "root-output-filter" -> rootOutputFilter();
+                case "root-output-replace" -> rootOutputReplace();
                 case "mode-unavailable" -> modeUnavailable();
                 case "malformed-graph" -> malformed();
                 default -> single();
@@ -353,9 +420,11 @@ public final class MockRuntimeServer {
                     && !"client-tool".equals(scenario)) {
                 addStatus("TASK_STATE_COMPLETED", true, null);
             }
-            initialFrameCount = Math.min(2, frames.size());
-            if (!scenario.contains("disconnect") && !scenario.contains("replay")
-                    && !"cursor-expired".equals(scenario) && !"recovery-circuit".equals(scenario)) {
+            initialFrameCount = Math.min(1, frames.size());
+            if ("streaming-resubscribe".equals(scenario) || "recovery-circuit".equals(scenario)) {
+                state = "TASK_STATE_WORKING";
+                output = "Root agent is processing the request. ";
+            } else {
                 initialFrameCount = frames.size();
             }
         }
@@ -446,6 +515,11 @@ public final class MockRuntimeServer {
             addOutput("agent-b", id + "-b", "CHILD_ONLY_MARKER", false, true);
             addController();
             addRootText("ROOT_ONLY_MARKER", false, true);
+        }
+
+        private void rootOutputReplace() {
+            addRootText("OLD_ROOT_TEXT", false, false);
+            addRootText("NEW_ROOT_TEXT", false, true);
         }
 
         private void modeUnavailable() {
@@ -554,11 +628,29 @@ public final class MockRuntimeServer {
             if ("TASK_STATE_INPUT_REQUIRED".equals(state) && "input-linear".equals(scenario)) {
                 statusNode.putObject("message").putObject("metadata").set("_interrupt", JSON.valueToTree(
                         interrupt("user_input", "input-" + id, null, "Please provide the account suffix.", null)));
+            } else if ("TASK_STATE_INPUT_REQUIRED".equals(state) && "client-tool".equals(scenario)) {
+                statusNode.putObject("message").putObject("metadata").set("_interrupt", JSON.valueToTree(
+                        interrupt("client_tool", "tool-" + id, "local.echo", null,
+                                Map.of("text", "hello from Runtime"))));
             }
             ArrayNode artifacts = task.putArray("artifacts");
-            artifacts.addObject().put("artifactId", "root-final").putArray("parts")
+            String artifactId = "streaming-resubscribe".equals(scenario) || "recovery-circuit".equals(scenario)
+                    ? "root-output" : "root-final";
+            artifacts.addObject().put("artifactId", artifactId).putArray("parts")
                     .addObject().put("text", output);
             return task;
+        }
+
+        private String snapshotPayload(String requestId) {
+            ObjectNode root = JSON.createObjectNode();
+            root.put("jsonrpc", "2.0").put("id", requestId);
+            root.set("result", taskNode());
+            return root.toString();
+        }
+
+        private boolean isTerminal() {
+            return "TASK_STATE_COMPLETED".equals(state) || "TASK_STATE_FAILED".equals(state)
+                    || "TASK_STATE_CANCELED".equals(state) || "TASK_STATE_REJECTED".equals(state);
         }
 
         private Map<String, Object> summary() {

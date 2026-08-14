@@ -22,6 +22,13 @@ async function boot() {
 function updateScenario() {
   const selected = state.config.scenarios.find(s => s.id === $('scenario').value);
   $('scenarioCopy').textContent = selected?.description || '';
+  if (selected?.mode) {
+    $('mode').value = selected.mode;
+    $('mode').disabled = true;
+    $('scenarioCopy').textContent += ` Required mode: ${selected.mode}.`;
+  } else {
+    $('mode').disabled = false;
+  }
   $('continueWrap').hidden = $('scenario').value !== 'input-linear';
 }
 
@@ -76,8 +83,9 @@ async function pollRun() {
 
 function renderRun(run) {
   $('runStatus').textContent = run.status;
-  $('runStatus').style.color = run.status === 'COMPLETED' ? '#147d64' : run.status === 'FAILED' ? '#b23a3a' : '#9b6512';
+  $('runStatus').style.color = ['COMPLETED', 'VERIFIED'].includes(run.status) ? '#147d64' : run.status === 'FAILED' ? '#b23a3a' : '#9b6512';
   $('invocationRef').textContent = run.invocationRef || '-';
+  $('recoveryContract').textContent = run.recoveryContract || '-';
   $('toolExecutions').textContent = run.toolExecutions ?? 0;
   renderEvents(run.events || []);
   renderDiagnostics(run.diagnostics || []);
@@ -139,7 +147,7 @@ async function refreshWire() {
     if (!items.length) { $('wireList').className = 'wire-list empty-state'; $('wireList').textContent = 'No A2A requests yet.'; return; }
     $('wireList').className = 'wire-list';
     $('wireList').innerHTML = items.slice().reverse().map(item => `<article class="wire-item"><div class="wire-head">` +
-      `<strong>#${item.sequence} ${escapeHtml(item.method)}</strong><span>${clock(item.receivedAt)} · cursor ${escapeHtml(item.lastEventId || '-')}</span></div>` +
+      `<strong>#${item.sequence} ${escapeHtml(item.method)}</strong><span>${clock(item.receivedAt)}</span></div>` +
       `<pre>${escapeHtml(pretty(item.body))}</pre></article>`).join('');
   } catch (error) {
     $('wireList').className = 'wire-list empty-state'; $('wireList').textContent = error.message;
@@ -152,6 +160,7 @@ function resetView() {
   $('eventList').className = 'timeline empty-state'; $('eventList').textContent = 'Waiting for SDK events.';
   $('treeCanvas').className = 'tree-canvas empty-state'; $('treeCanvas').textContent = 'Waiting for call tree snapshots.';
   $('snapshotJson').textContent = 'Waiting for completion.';
+  $('recoveryContract').textContent = '-';
   renderDiagnostics([]); renderHistory([]); $('eventCount').textContent = '0';
 }
 

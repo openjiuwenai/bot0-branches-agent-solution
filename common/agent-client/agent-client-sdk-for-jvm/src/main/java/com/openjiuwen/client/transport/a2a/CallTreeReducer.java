@@ -7,6 +7,7 @@ package com.openjiuwen.client.transport.a2a;
 import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.api.calltree.ArtifactSnapshot;
 import com.openjiuwen.client.api.calltree.CallTreeNode;
+import com.openjiuwen.client.api.calltree.CallTreeDiagnostic;
 import com.openjiuwen.client.api.calltree.CallTreeSnapshot;
 import com.openjiuwen.client.api.calltree.Completeness;
 import com.openjiuwen.client.api.calltree.DataPartSnapshot;
@@ -35,12 +36,14 @@ final class CallTreeReducer implements AutoCloseable {
     private static final int MAX_ORPHAN_SIGNALS = 512;
     private static final long MAX_TREE_BYTES = 8L * 1024 * 1024;
     private static final long MAX_ARTIFACT_BYTES = 2L * 1024 * 1024;
+    private static final int MAX_DIAGNOSTICS = 64;
 
     private final InvocationMode mode;
     private final Map<NodeKey, MutableNode> nodes = new LinkedHashMap<>();
     private final Map<NodeKey, List<PendingDelegation>> orphanEdges = new LinkedHashMap<>();
     private final Map<NodeKey, List<PendingSignal>> orphanSignals = new LinkedHashMap<>();
     private final Map<String, String> artifactOwnerTaskIds = new LinkedHashMap<>();
+    private final List<CallTreeDiagnostic> diagnostics = new ArrayList<>();
     private final LatestValuePublisher<CallTreeSnapshot> publisher = new LatestValuePublisher<>();
     private MutableNode root;
     private String rootTaskId;
@@ -88,6 +91,8 @@ final class CallTreeReducer implements AutoCloseable {
         if (event == null) {
             if (artifact.agentEventDeclared()) {
                 completeness = Completeness.DEGRADED;
+                diagnose(CallTreeDiagnostic.AGENT_EVENT_INVALID,
+                        "agentEvent is missing required fields or uses an unsupported type", artifact.artifactId());
                 publish();
                 return;
             }
@@ -98,6 +103,10 @@ final class CallTreeReducer implements AutoCloseable {
             return;
         }
         if (!event.valid()) {
+            completeness = Completeness.DEGRADED;
+            diagnose(CallTreeDiagnostic.AGENT_EVENT_INVALID,
+                    "agentEvent is missing required fields or uses an unsupported type", artifact.artifactId());
+            publish();
             return;
         }
         if (mode != InvocationMode.STREAMING && completeness == Completeness.UNAVAILABLE_FOR_MODE) {
@@ -126,10 +135,13 @@ final class CallTreeReducer implements AutoCloseable {
         MutableNode target = createNode(event.target());
         if (target == null || source == target || createsCycle(source, target)) {
             completeness = Completeness.DEGRADED;
+            diagnose(CallTreeDiagnostic.ILLEGAL_CYCLE, "delegation would create a cycle", artifact.artifactId());
             return;
         }
         if (target.parent != null && target.parent != source) {
             completeness = Completeness.DEGRADED;
+            diagnose(CallTreeDiagnostic.MULTIPLE_PARENTS, "target already belongs to another parent",
+                    artifact.artifactId());
             return;
         }
         target.parent = source;
@@ -179,6 +191,8 @@ final class CallTreeReducer implements AutoCloseable {
         current.complete = current.complete || artifact.lastChunk();
         if (bounded.truncated()) {
             completeness = Completeness.DEGRADED;
+            diagnose(CallTreeDiagnostic.RESOURCE_LIMIT, "artifact or tree byte limit exceeded",
+                    artifact.artifactId());
         }
     }
 
@@ -204,6 +218,8 @@ final class CallTreeReducer implements AutoCloseable {
         String ownerTaskId = artifactOwnerTaskIds.putIfAbsent(artifactId, taskId);
         if (ownerTaskId != null && !ownerTaskId.equals(taskId)) {
             completeness = Completeness.DEGRADED;
+            diagnose(CallTreeDiagnostic.ARTIFACT_ID_CONFLICT,
+                    "artifactId is already owned by task " + ownerTaskId, artifactId);
             return false;
         }
         return true;
@@ -234,6 +250,7 @@ final class CallTreeReducer implements AutoCloseable {
         }
         if (nodes.size() >= MAX_NODES) {
             completeness = Completeness.DEGRADED;
+            diagnose(CallTreeDiagnostic.RESOURCE_LIMIT, "call tree node limit exceeded", null);
             return null;
         }
         MutableNode created = new MutableNode(new NodeKey(ref.agentId(), ref.taskId()));
@@ -244,6 +261,7 @@ final class CallTreeReducer implements AutoCloseable {
     private void bufferEdge(AgentEvent event, ProtocolArtifact artifact) {
         if (orphanEdgeCount >= MAX_ORPHAN_EDGES) {
             completeness = Completeness.DEGRADED;
+            diagnose(CallTreeDiagnostic.RESOURCE_LIMIT, "orphan edge limit exceeded", artifact.artifactId());
             return;
         }
         if (!claimArtifact(event.source().taskId(), artifact.artifactId())) {
@@ -260,6 +278,8 @@ final class CallTreeReducer implements AutoCloseable {
     private void bufferSignal(AgentEvent event, ProtocolArtifact artifact) {
         if (orphanSignalCount >= MAX_ORPHAN_SIGNALS) {
             completeness = Completeness.DEGRADED;
+            diagnose(CallTreeDiagnostic.RESOURCE_LIMIT, "orphan signal limit exceeded",
+                    artifact != null ? artifact.artifactId() : null);
             return;
         }
         if (artifact != null && !claimArtifact(event.source().taskId(), artifact.artifactId())) {
@@ -280,6 +300,7 @@ final class CallTreeReducer implements AutoCloseable {
         List<ProtocolPart> parts = artifact.parts();
         if (bytes > available) {
             completeness = Completeness.DEGRADED;
+            diagnose(CallTreeDiagnostic.RESOURCE_LIMIT, "orphan/tree byte limit exceeded", artifact.artifactId());
             parts = List.of();
             bytes = 0;
         }
@@ -343,6 +364,13 @@ final class CallTreeReducer implements AutoCloseable {
         }
     }
 
+    synchronized void markPartialRecovery() {
+        if (mode == InvocationMode.STREAMING && completeness != Completeness.DEGRADED) {
+            completeness = Completeness.PARTIAL;
+            publish();
+        }
+    }
+
     synchronized void updateRootState(com.openjiuwen.client.api.TaskState state) {
         if (root == null || state == null) {
             return;
@@ -368,7 +396,17 @@ final class CallTreeReducer implements AutoCloseable {
         }
         revision++;
         publisher.submit(new CallTreeSnapshot(snapshot(root), revision, completeness,
-                speakingPhase, currentSpeaker, Instant.now()));
+                speakingPhase, currentSpeaker, Instant.now(), diagnostics));
+    }
+
+    private void diagnose(String code, String message, String artifactId) {
+        if (diagnostics.size() >= MAX_DIAGNOSTICS) {
+            return;
+        }
+        CallTreeDiagnostic diagnostic = new CallTreeDiagnostic(code, message, artifactId);
+        if (!diagnostics.contains(diagnostic)) {
+            diagnostics.add(diagnostic);
+        }
     }
 
     private static CallTreeNode snapshot(MutableNode node) {
@@ -484,6 +522,8 @@ final class CallTreeReducer implements AutoCloseable {
         closed = true;
         if (orphanEdgeCount > 0 || orphanSignalCount > 0) {
             completeness = Completeness.DEGRADED;
+            diagnose(CallTreeDiagnostic.UNRESOLVED_ORPHAN,
+                    "call tree closed with unresolved orphan edges or signals", null);
             publish();
         }
         publisher.close();

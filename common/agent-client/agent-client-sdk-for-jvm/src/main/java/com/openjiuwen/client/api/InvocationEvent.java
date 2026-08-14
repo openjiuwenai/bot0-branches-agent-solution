@@ -23,6 +23,7 @@ public sealed interface InvocationEvent
                 InvocationEvent.StatusChanged,
                 InvocationEvent.ContentDelta,
                 InvocationEvent.InputRequired,
+                InvocationEvent.ProtocolDiagnostic,
                 InvocationEvent.ProgressUncertain,
                 InvocationEvent.Completed,
                 InvocationEvent.Failed {
@@ -92,15 +93,25 @@ public sealed interface InvocationEvent
     }
 
     /**
+     * 非致命协议诊断。该事件不把服务端 Task 标记为失败；业务可记录或展示诊断信息。
+     *
+     * @param invocationRef 调用句柄
+     * @param code 稳定诊断码
+     * @param message 诊断信息
+     */
+    record ProtocolDiagnostic(String invocationRef, String code, String message)
+            implements InvocationEvent {
+    }
+
+    /**
      * 当前观察窗口在非终态下结束，服务端进展<b>不确定</b>（<b>非</b>终态、<b>非</b>失败）。
      *
-     * <p>典型来源包括：SSE 在非终态下中断，或严格 unary {@code BLOCKING} 的单次
-     * {@code SendMessage} 返回 {@code SUBMITTED}/{@code WORKING}。SDK 既不伪造终态、也不让
-     * 调用方悬挂，而是投递本事件说明"本次调用不再自动观察进展"，并在 {@code completion()}
-     * 的快照上附带恢复线索（{@link InvocationSnapshot#recovery()}）。
+     * <p>典型来源是 SSE 在非终态下中断，且 SDK 的恢复/对账已无法继续确认进展。
+     * 该事件只描述 Client 观察状态，不表示 Task 失败或终止。Gateway 可按其既有契约
+     * 在快照上附带恢复线索（{@link InvocationSnapshot#recovery()}）；Runtime 观察失败会继续以事件流
+     * {@code onError} 和异常完成的 {@code completion()} 明确结束本地观察。
      *
-     * <p>SSE 中断时 SDK 会先尝试用 {@code GetTask} 主动确认；严格 unary {@code BLOCKING}
-     * 不会自动查询。调用方可据 {@link AgentClient#getInvocation} 稍后再次确认。
+     * <p>调用方可据 {@link AgentClient#getInvocation} 稍后再次确认服务端状态。
      *
      * @param invocationRef 调用句柄
      * @param lastKnownState 中断前最后一次观测到的状态

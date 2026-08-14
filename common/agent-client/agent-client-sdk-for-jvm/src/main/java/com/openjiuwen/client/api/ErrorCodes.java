@@ -64,14 +64,29 @@ public final class ErrorCodes {
     /** 网络失败（连接/读超时/连接重置）。可重试。 */
     public static final String NETWORK_ERROR = "NETWORK_ERROR";
 
+    /** Runtime 创建连接在取得 taskId 前失败；创建不会自动重发。 */
+    public static final String CREATE_FAILED_NO_TASK_ID = "CREATE_FAILED_NO_TASK_ID";
+
+    /** 已知 Task 的自动恢复连续失败达到熔断阈值。 */
+    public static final String RECOVERY_RETRY_EXHAUSTED = "RECOVERY_RETRY_EXHAUSTED";
+
+    /** client_tool interrupt 缺少 toolCallId/toolName，SDK 禁止猜测续传目标。 */
+    public static final String INPUT_RESUME_TARGET_MISSING = "INPUT_RESUME_TARGET_MISSING";
+
+    /** Client 自动观察已超过约定时限；服务端 Task 可能仍在运行。不可自动重试创建。 */
+    public static final String OBSERVATION_TIMEOUT = "OBSERVATION_TIMEOUT";
+
     /** 服务端 Task 失败。不可重试（不是网络问题，不得包装为网络失败）。 */
     public static final String AGENT_ERROR = "AGENT_ERROR";
 
     /** 流在非终态下中断，进展不确定（FEAT-006 §5.1.4：中断不等于失败）。 */
     public static final String STREAM_INTERRUPTED = "STREAM_INTERRUPTED";
 
-    /** 断点游标已不在 Runtime 的重放窗口中；SDK 应降级查询当前 Task 快照。 */
+    /** Gateway 的可选断点游标已过期；Runtime 直连模式不使用该能力。 */
     public static final String REPLAY_CURSOR_EXPIRED = "REPLAY_CURSOR_EXPIRED";
+
+    /** Task 已终态等原因导致 SubscribeToTask 不可建立；调用方应以 GetTask 收敛。 */
+    public static final String SUBSCRIPTION_UNAVAILABLE = "SUBSCRIPTION_UNAVAILABLE";
 
     /** 未支持的调用模式。不可重试。 */
     public static final String UNSUPPORTED_MODE = "UNSUPPORTED_MODE";
