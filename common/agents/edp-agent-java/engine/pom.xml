@@ -103,7 +103,9 @@
       <version>5.1.5</version>
     </dependency>
     <!--
-      agent-core 的 ReActAgent 通过 OkHttp 调用 LLM，但 agent-core-java 发布的 POM 是不含 <dependencies> 的元数据 stub，不传递 okhttp 依赖，运行时 NoClassDefFoundError: okhttp3/MediaType，故在此显式引入（与 agent-core 版本一致）。
+      agent-core-java 的 LLM 客户端（OpenAiCompatibleModelClient 等）通过 OkHttp 调用 LLM，
+      agent-core-java 的发布 POM 已声明 okhttp 4.12.0 为 compile 依赖，
+      此处显式引入以强化版本确定性（与 agent-core-java 内部使用的 okhttp 版本一致）。
     -->
     <dependency>
       <groupId>com.squareup.okhttp3</groupId>

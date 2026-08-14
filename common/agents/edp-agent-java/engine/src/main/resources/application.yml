@@ -87,6 +87,10 @@ deep-agent:
     max_retries: 5
     # 是否验证 SSL 证书
     verify_ssl: false
+    # 自定义请求头（模型服务鉴权，可选）
+    headers:
+      userId: ${EDP_AGENT_MODEL_USERID:9999}
+      token: ${EDP_AGENT_MODEL_TOKEN:}
     # 自定义 SSL 证书路径（可选）
     # ssl_cert: /path/to/cert.pem
     # 客户端 ID（可选，不填会自动生成 UUID）

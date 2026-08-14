@@ -880,6 +880,8 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
             backendMap.put("timeout", backend.getTimeout());
             backendMap.put("max_retries", backend.getMaxRetries());
             backendMap.put("verify_ssl", backend.isVerifySsl());
+            backendMap.put("headers", backend.getHeaders());
+            LOGGER.info("[EDP-LLM-CONFIG] backend headers={}", backend.getHeaders());
             if (backend.getSslCert() != null && !backend.getSslCert().isBlank()) {
                 backendMap.put("ssl_cert", backend.getSslCert());
             }
