@@ -218,58 +218,29 @@ done
 grep -E 'Intent catalog|Agent Card|catalog' "$MANUAL_DIR/intent.log" | tail -n 30
 ```
 
-### 3. 准备手工请求工具
+### 3. 读取流式响应
 
-所有请求都发送到入口 Agent 的 A2A 流式接口 `http://127.0.0.1:18200/a2a/`。在当前终端定义下面
-三个函数。`send_a2a` 会先打印完整请求，再保存并打印服务器返回的完整 SSE 响应。
+所有业务请求都直接发送到入口 Agent 的 A2A 流式接口 `http://127.0.0.1:18200/a2a/`，不直接调用
+四个业务 Agent。下面每条 `curl` 命令都会实时打印完整 SSE 响应，并通过 `tee` 保存到
+`$MANUAL_DIR`。
+
+流式响应由多行 `data:` 事件组成。可直接观察或检索响应文件：
 
 ```bash
-send_a2a() {
-  request_file="$1"
-  response_file="$2"
-  echo "===== REQUEST: ${request_file} ====="
-  python3 -m json.tool "$request_file"
-  echo "===== RESPONSE: ${response_file} ====="
-  curl -fsS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
-    -H 'Content-Type: application/json' \
-    -H 'Accept: text/event-stream' \
-    --data-binary "@${request_file}" | tee "$response_file"
-}
+# 查看完整响应
+less "$MANUAL_DIR/transfer-1-response.sse"
 
-last_state() {
-  python3 - "$1" <<'PY'
-import json, sys
-states = []
-for line in open(sys.argv[1], encoding="utf-8"):
-    if not line.startswith("data:"):
-        continue
-    result = json.loads(line[5:].strip()).get("result") or {}
-    status = (result.get("statusUpdate") or {}).get("status") or {}
-    if status.get("state"):
-        states.append(status["state"])
-print(states[-1] if states else "NO_STATE")
-PY
-}
+# 查看最后一个 Task 状态
+grep -o 'TASK_STATE_[A-Z_]*' "$MANUAL_DIR/transfer-1-response.sse" | tail -n 1
 
-task_id() {
-  python3 - "$1" <<'PY'
-import json, sys
-ids = []
-for line in open(sys.argv[1], encoding="utf-8"):
-    if not line.startswith("data:"):
-        continue
-    result = json.loads(line[5:].strip()).get("result") or {}
-    update = result.get("statusUpdate") or result.get("artifactUpdate") or {}
-    if update.get("taskId"):
-        ids.append(str(update["taskId"]))
-print(ids[-1] if ids else "")
-PY
-}
+# 查看响应中的外层 Task ID
+grep -o '"taskId":"[^"]*"' "$MANUAL_DIR/transfer-1-response.sse" | head -n 1
 ```
 
-首次请求只需要 `contextId`。当响应进入 `TASK_STATE_INPUT_REQUIRED` 时，后续请求必须同时复用原
-`contextId` 和响应中的 `taskId`，这样 Runtime 才会恢复原 A2A Task。普通的新一轮对话只复用
-`contextId`，不携带旧 `taskId`。
+首次请求只需要 `contextId`。首轮进入 `TASK_STATE_INPUT_REQUIRED` 后，从响应中复制 `taskId`，将后续
+报文中的 `TASK_ID_FROM_FIRST_RESPONSE` 替换为该值；后续请求必须同时复用原 `contextId` 和
+`taskId`，Runtime 才会恢复原 A2A Task。普通的新一轮对话只复用 `contextId`，不携带已完成 Task
+的 `taskId`。
 
 模型输出措辞可能略有变化。手工验收时应以最终 Task 状态、业务关键字段和服务日志为准。
 
@@ -278,7 +249,10 @@ PY
 #### 4.1 远端余额 Agent
 
 ```bash
-cat >"$MANUAL_DIR/balance-request.json" <<'JSON'
+curl -sS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @- <<'JSON' | tee "$MANUAL_DIR/balance-response.sse"
 {
   "jsonrpc": "2.0",
   "id": "manual-balance-1",
@@ -292,8 +266,6 @@ cat >"$MANUAL_DIR/balance-request.json" <<'JSON'
   }
 }
 JSON
-send_a2a "$MANUAL_DIR/balance-request.json" "$MANUAL_DIR/balance-response.sse"
-last_state "$MANUAL_DIR/balance-response.sse"
 ```
 
 预期最终状态为 `TASK_STATE_COMPLETED`，响应包含余额 `12800.5` 或等价展示。确认请求实际路由到
@@ -307,7 +279,10 @@ grep -E 'Intent selected|intent_match|a2a_delegate' "$MANUAL_DIR/intent.log" | t
 #### 4.2 入口 Agent 本地计算器
 
 ```bash
-cat >"$MANUAL_DIR/calculator-request.json" <<'JSON'
+curl -sS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @- <<'JSON' | tee "$MANUAL_DIR/calculator-response.sse"
 {
   "jsonrpc": "2.0",
   "id": "manual-calculator-1",
@@ -321,8 +296,6 @@ cat >"$MANUAL_DIR/calculator-request.json" <<'JSON'
   }
 }
 JSON
-send_a2a "$MANUAL_DIR/calculator-request.json" "$MANUAL_DIR/calculator-response.sse"
-last_state "$MANUAL_DIR/calculator-response.sse"
 ```
 
 预期最终状态为 `TASK_STATE_COMPLETED`，结果包含 `42`。入口日志应包含本地工具执行记录：
@@ -336,7 +309,10 @@ grep 'BANK_DEMO_EXECUTION tool=bank_calculator' "$MANUAL_DIR/intent.log" | tail 
 日期请求：
 
 ```bash
-cat >"$MANUAL_DIR/date-request.json" <<'JSON'
+curl -sS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @- <<'JSON' | tee "$MANUAL_DIR/date-response.sse"
 {
   "jsonrpc": "2.0",
   "id": "manual-date-1",
@@ -350,14 +326,15 @@ cat >"$MANUAL_DIR/date-request.json" <<'JSON'
   }
 }
 JSON
-send_a2a "$MANUAL_DIR/date-request.json" "$MANUAL_DIR/date-response.sse"
-last_state "$MANUAL_DIR/date-response.sse"
 ```
 
 天气请求：
 
 ```bash
-cat >"$MANUAL_DIR/weather-request.json" <<'JSON'
+curl -sS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @- <<'JSON' | tee "$MANUAL_DIR/weather-response.sse"
 {
   "jsonrpc": "2.0",
   "id": "manual-weather-1",
@@ -371,8 +348,6 @@ cat >"$MANUAL_DIR/weather-request.json" <<'JSON'
   }
 }
 JSON
-send_a2a "$MANUAL_DIR/weather-request.json" "$MANUAL_DIR/weather-response.sse"
-last_state "$MANUAL_DIR/weather-response.sse"
 ```
 
 两个请求的最终状态都应为 `TASK_STATE_COMPLETED`。日期响应包含当天日期，天气响应包含“深圳”；入口
@@ -381,7 +356,10 @@ last_state "$MANUAL_DIR/weather-response.sse"
 #### 4.4 fallback
 
 ```bash
-cat >"$MANUAL_DIR/fallback-request.json" <<'JSON'
+curl -sS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @- <<'JSON' | tee "$MANUAL_DIR/fallback-response.sse"
 {
   "jsonrpc": "2.0",
   "id": "manual-fallback-1",
@@ -395,8 +373,6 @@ cat >"$MANUAL_DIR/fallback-request.json" <<'JSON'
   }
 }
 JSON
-send_a2a "$MANUAL_DIR/fallback-request.json" "$MANUAL_DIR/fallback-response.sse"
-last_state "$MANUAL_DIR/fallback-response.sse"
 ```
 
 预期最终状态为 `TASK_STATE_COMPLETED`，响应说明入口只支持银行相关能力；入口日志中的意图结果应
@@ -410,7 +386,10 @@ last_state "$MANUAL_DIR/fallback-response.sse"
 #### 5.1 发起信息不完整的转账
 
 ```bash
-cat >"$MANUAL_DIR/transfer-1-request.json" <<'JSON'
+curl -sS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @- <<'JSON' | tee "$MANUAL_DIR/transfer-1-response.sse"
 {
   "jsonrpc": "2.0",
   "id": "manual-transfer-1",
@@ -424,19 +403,18 @@ cat >"$MANUAL_DIR/transfer-1-request.json" <<'JSON'
   }
 }
 JSON
-send_a2a "$MANUAL_DIR/transfer-1-request.json" "$MANUAL_DIR/transfer-1-response.sse"
-last_state "$MANUAL_DIR/transfer-1-response.sse"
-export TRANSFER_TASK_ID="$(task_id "$MANUAL_DIR/transfer-1-response.sse")"
-echo "$TRANSFER_TASK_ID"
 ```
 
-预期状态为 `TASK_STATE_INPUT_REQUIRED`，问题要求补充收款人和金额，且
-`TRANSFER_TASK_ID` 不是空字符串。
+预期状态为 `TASK_STATE_INPUT_REQUIRED`，问题要求补充收款人和金额。从响应中复制外层 `taskId`，
+在后续三条报文中替换 `TASK_ID_FROM_FIRST_RESPONSE`。
 
 #### 5.2 补充收款人
 
 ```bash
-cat >"$MANUAL_DIR/transfer-2-request.json" <<JSON
+curl -sS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @- <<'JSON' | tee "$MANUAL_DIR/transfer-2-response.sse"
 {
   "jsonrpc": "2.0",
   "id": "manual-transfer-2",
@@ -445,14 +423,12 @@ cat >"$MANUAL_DIR/transfer-2-request.json" <<JSON
     "message": {
       "role": "ROLE_USER",
       "contextId": "manual-transfer-context",
-      "taskId": "${TRANSFER_TASK_ID}",
+      "taskId": "TASK_ID_FROM_FIRST_RESPONSE",
       "parts": [{"text": "收款人是李四"}]
     }
   }
 }
 JSON
-send_a2a "$MANUAL_DIR/transfer-2-request.json" "$MANUAL_DIR/transfer-2-response.sse"
-last_state "$MANUAL_DIR/transfer-2-response.sse"
 ```
 
 预期仍为 `TASK_STATE_INPUT_REQUIRED`，继续询问转账金额。
@@ -460,7 +436,10 @@ last_state "$MANUAL_DIR/transfer-2-response.sse"
 #### 5.3 补充金额
 
 ```bash
-cat >"$MANUAL_DIR/transfer-3-request.json" <<JSON
+curl -sS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @- <<'JSON' | tee "$MANUAL_DIR/transfer-3-response.sse"
 {
   "jsonrpc": "2.0",
   "id": "manual-transfer-3",
@@ -469,14 +448,12 @@ cat >"$MANUAL_DIR/transfer-3-request.json" <<JSON
     "message": {
       "role": "ROLE_USER",
       "contextId": "manual-transfer-context",
-      "taskId": "${TRANSFER_TASK_ID}",
+      "taskId": "TASK_ID_FROM_FIRST_RESPONSE",
       "parts": [{"text": "金额是200元"}]
     }
   }
 }
 JSON
-send_a2a "$MANUAL_DIR/transfer-3-request.json" "$MANUAL_DIR/transfer-3-response.sse"
-last_state "$MANUAL_DIR/transfer-3-response.sse"
 ```
 
 预期仍为 `TASK_STATE_INPUT_REQUIRED`，确认文案必须同时包含“李四”和“200元”。
@@ -484,7 +461,10 @@ last_state "$MANUAL_DIR/transfer-3-response.sse"
 #### 5.4 确认执行
 
 ```bash
-cat >"$MANUAL_DIR/transfer-4-request.json" <<JSON
+curl -sS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @- <<'JSON' | tee "$MANUAL_DIR/transfer-4-response.sse"
 {
   "jsonrpc": "2.0",
   "id": "manual-transfer-4",
@@ -493,14 +473,12 @@ cat >"$MANUAL_DIR/transfer-4-request.json" <<JSON
     "message": {
       "role": "ROLE_USER",
       "contextId": "manual-transfer-context",
-      "taskId": "${TRANSFER_TASK_ID}",
+      "taskId": "TASK_ID_FROM_FIRST_RESPONSE",
       "parts": [{"text": "确认"}]
     }
   }
 }
 JSON
-send_a2a "$MANUAL_DIR/transfer-4-request.json" "$MANUAL_DIR/transfer-4-response.sse"
-last_state "$MANUAL_DIR/transfer-4-response.sse"
 ```
 
 预期最终状态为 `TASK_STATE_COMPLETED`，结果包含收款人李四和金额 200。确认有且仅有确认后才执行
@@ -515,7 +493,10 @@ grep 'BANK_DEMO_EXECUTION tool=execute_transfer' "$MANUAL_DIR/transfer.log" | ta
 #### 6.1 发起购买
 
 ```bash
-cat >"$MANUAL_DIR/purchase-1-request.json" <<'JSON'
+curl -sS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @- <<'JSON' | tee "$MANUAL_DIR/purchase-1-response.sse"
 {
   "jsonrpc": "2.0",
   "id": "manual-purchase-1",
@@ -529,17 +510,18 @@ cat >"$MANUAL_DIR/purchase-1-request.json" <<'JSON'
   }
 }
 JSON
-send_a2a "$MANUAL_DIR/purchase-1-request.json" "$MANUAL_DIR/purchase-1-response.sse"
-last_state "$MANUAL_DIR/purchase-1-response.sse"
-export PURCHASE_TASK_ID="$(task_id "$MANUAL_DIR/purchase-1-response.sse")"
 ```
 
-预期为 `TASK_STATE_INPUT_REQUIRED`，确认文案包含“稳盈90天”和“10000元”。
+预期为 `TASK_STATE_INPUT_REQUIRED`，确认文案包含“稳盈90天”和“10000元”。复制响应中的外层
+`taskId`，替换下一条报文中的 `TASK_ID_FROM_FIRST_RESPONSE`。
 
 #### 6.2 确认购买
 
 ```bash
-cat >"$MANUAL_DIR/purchase-2-request.json" <<JSON
+curl -sS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @- <<'JSON' | tee "$MANUAL_DIR/purchase-2-response.sse"
 {
   "jsonrpc": "2.0",
   "id": "manual-purchase-2",
@@ -548,14 +530,12 @@ cat >"$MANUAL_DIR/purchase-2-request.json" <<JSON
     "message": {
       "role": "ROLE_USER",
       "contextId": "manual-purchase-context",
-      "taskId": "${PURCHASE_TASK_ID}",
+      "taskId": "TASK_ID_FROM_FIRST_RESPONSE",
       "parts": [{"text": "确认"}]
     }
   }
 }
 JSON
-send_a2a "$MANUAL_DIR/purchase-2-request.json" "$MANUAL_DIR/purchase-2-response.sse"
-last_state "$MANUAL_DIR/purchase-2-response.sse"
 ```
 
 预期最终状态为 `TASK_STATE_COMPLETED`。验证 WealthPurchaseAgent 确实执行：
@@ -572,7 +552,10 @@ grep 'BANK_DEMO_EXECUTION tool=purchase_wealth' "$MANUAL_DIR/wealth-purchase.log
 #### 7.1 获取推荐
 
 ```bash
-cat >"$MANUAL_DIR/reference-1-request.json" <<'JSON'
+curl -sS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @- <<'JSON' | tee "$MANUAL_DIR/reference-1-response.sse"
 {
   "jsonrpc": "2.0",
   "id": "manual-reference-1",
@@ -586,8 +569,6 @@ cat >"$MANUAL_DIR/reference-1-request.json" <<'JSON'
   }
 }
 JSON
-send_a2a "$MANUAL_DIR/reference-1-request.json" "$MANUAL_DIR/reference-1-response.sse"
-last_state "$MANUAL_DIR/reference-1-response.sse"
 ```
 
 预期为 `TASK_STATE_COMPLETED`，推荐结果包含“稳盈90天”。
@@ -595,7 +576,10 @@ last_state "$MANUAL_DIR/reference-1-response.sse"
 #### 7.2 使用上一轮信息购买
 
 ```bash
-cat >"$MANUAL_DIR/reference-2-request.json" <<'JSON'
+curl -sS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @- <<'JSON' | tee "$MANUAL_DIR/reference-2-response.sse"
 {
   "jsonrpc": "2.0",
   "id": "manual-reference-2",
@@ -609,17 +593,18 @@ cat >"$MANUAL_DIR/reference-2-request.json" <<'JSON'
   }
 }
 JSON
-send_a2a "$MANUAL_DIR/reference-2-request.json" "$MANUAL_DIR/reference-2-response.sse"
-last_state "$MANUAL_DIR/reference-2-response.sse"
-export REFERENCE_TASK_ID="$(task_id "$MANUAL_DIR/reference-2-response.sse")"
 ```
 
-预期为 `TASK_STATE_INPUT_REQUIRED`，确认文案应将指代解析为“稳盈90天”，并包含“5000元”。
+预期为 `TASK_STATE_INPUT_REQUIRED`，确认文案应将指代解析为“稳盈90天”，并包含“5000元”。复制
+本次响应中的外层 `taskId`，替换确认报文中的 `TASK_ID_FROM_SECOND_RESPONSE`。
 
 #### 7.3 确认指代后的购买
 
 ```bash
-cat >"$MANUAL_DIR/reference-3-request.json" <<JSON
+curl -sS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @- <<'JSON' | tee "$MANUAL_DIR/reference-3-response.sse"
 {
   "jsonrpc": "2.0",
   "id": "manual-reference-3",
@@ -628,14 +613,12 @@ cat >"$MANUAL_DIR/reference-3-request.json" <<JSON
     "message": {
       "role": "ROLE_USER",
       "contextId": "manual-reference-context",
-      "taskId": "${REFERENCE_TASK_ID}",
+      "taskId": "TASK_ID_FROM_SECOND_RESPONSE",
       "parts": [{"text": "确认"}]
     }
   }
 }
 JSON
-send_a2a "$MANUAL_DIR/reference-3-request.json" "$MANUAL_DIR/reference-3-response.sse"
-last_state "$MANUAL_DIR/reference-3-response.sse"
 ```
 
 预期最终状态为 `TASK_STATE_COMPLETED`，结果包含“稳盈90天”和“5000元”。
@@ -648,7 +631,10 @@ last_state "$MANUAL_DIR/reference-3-response.sse"
 #### 8.1 发起转账并等待确认
 
 ```bash
-cat >"$MANUAL_DIR/change-1-request.json" <<'JSON'
+curl -sS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @- <<'JSON' | tee "$MANUAL_DIR/change-1-response.sse"
 {
   "jsonrpc": "2.0",
   "id": "manual-change-1",
@@ -662,17 +648,18 @@ cat >"$MANUAL_DIR/change-1-request.json" <<'JSON'
   }
 }
 JSON
-send_a2a "$MANUAL_DIR/change-1-request.json" "$MANUAL_DIR/change-1-response.sse"
-last_state "$MANUAL_DIR/change-1-response.sse"
-export CHANGE_TASK_ID="$(task_id "$MANUAL_DIR/change-1-response.sse")"
 ```
 
-预期为 `TASK_STATE_INPUT_REQUIRED`，确认文案包含“王五”和“50元”。
+预期为 `TASK_STATE_INPUT_REQUIRED`，确认文案包含“王五”和“50元”。复制响应中的外层 `taskId`，
+替换后续两条报文中的 `TASK_ID_FROM_FIRST_RESPONSE`。
 
 #### 8.2 使用同一 Task 输入新意图
 
 ```bash
-cat >"$MANUAL_DIR/change-2-request.json" <<JSON
+curl -sS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @- <<'JSON' | tee "$MANUAL_DIR/change-2-response.sse"
 {
   "jsonrpc": "2.0",
   "id": "manual-change-2",
@@ -681,14 +668,12 @@ cat >"$MANUAL_DIR/change-2-request.json" <<JSON
     "message": {
       "role": "ROLE_USER",
       "contextId": "manual-change-context",
-      "taskId": "${CHANGE_TASK_ID}",
+      "taskId": "TASK_ID_FROM_FIRST_RESPONSE",
       "parts": [{"text": "改为购买1000元稳盈90天理财"}]
     }
   }
 }
 JSON
-send_a2a "$MANUAL_DIR/change-2-request.json" "$MANUAL_DIR/change-2-response.sse"
-last_state "$MANUAL_DIR/change-2-response.sse"
 ```
 
 预期仍为 `TASK_STATE_INPUT_REQUIRED`，但确认文案已经变为购买“稳盈90天”理财 1000 元，而不是确认
@@ -697,7 +682,10 @@ last_state "$MANUAL_DIR/change-2-response.sse"
 #### 8.3 确认新意图
 
 ```bash
-cat >"$MANUAL_DIR/change-3-request.json" <<JSON
+curl -sS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @- <<'JSON' | tee "$MANUAL_DIR/change-3-response.sse"
 {
   "jsonrpc": "2.0",
   "id": "manual-change-3",
@@ -706,14 +694,12 @@ cat >"$MANUAL_DIR/change-3-request.json" <<JSON
     "message": {
       "role": "ROLE_USER",
       "contextId": "manual-change-context",
-      "taskId": "${CHANGE_TASK_ID}",
+      "taskId": "TASK_ID_FROM_FIRST_RESPONSE",
       "parts": [{"text": "确认"}]
     }
   }
 }
 JSON
-send_a2a "$MANUAL_DIR/change-3-request.json" "$MANUAL_DIR/change-3-response.sse"
-last_state "$MANUAL_DIR/change-3-response.sse"
 ```
 
 预期最终状态为 `TASK_STATE_COMPLETED`，结果包含“稳盈90天”和“1000元”。确认原转账没有执行，
@@ -736,7 +722,10 @@ TransferAgent 单独处理和确认。
 #### 9.1 发起复杂请求
 
 ```bash
-cat >"$MANUAL_DIR/plan-1-request.json" <<'JSON'
+curl -sS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @- <<'JSON' | tee "$MANUAL_DIR/plan-1-response.sse"
 {
   "jsonrpc": "2.0",
   "id": "manual-plan-1",
@@ -750,9 +739,6 @@ cat >"$MANUAL_DIR/plan-1-request.json" <<'JSON'
   }
 }
 JSON
-send_a2a "$MANUAL_DIR/plan-1-request.json" "$MANUAL_DIR/plan-1-response.sse"
-last_state "$MANUAL_DIR/plan-1-response.sse"
-export PLAN_TASK_ID="$(task_id "$MANUAL_DIR/plan-1-response.sse")"
 ```
 
 预期为 `TASK_STATE_INPUT_REQUIRED`。在首次确认请求之前，完整 SSE 响应应先出现
@@ -766,10 +752,15 @@ export PLAN_TASK_ID="$(task_id "$MANUAL_DIR/plan-1-response.sse")"
 请确认是否向张三转账100元
 ```
 
+复制响应中的外层 `taskId`，替换后续两条确认报文中的 `TASK_ID_FROM_FIRST_RESPONSE`。
+
 #### 9.2 确认第一笔转账
 
 ```bash
-cat >"$MANUAL_DIR/plan-2-request.json" <<JSON
+curl -sS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @- <<'JSON' | tee "$MANUAL_DIR/plan-2-response.sse"
 {
   "jsonrpc": "2.0",
   "id": "manual-plan-2",
@@ -778,14 +769,12 @@ cat >"$MANUAL_DIR/plan-2-request.json" <<JSON
     "message": {
       "role": "ROLE_USER",
       "contextId": "manual-plan-context",
-      "taskId": "${PLAN_TASK_ID}",
+      "taskId": "TASK_ID_FROM_FIRST_RESPONSE",
       "parts": [{"text": "确认"}]
     }
   }
 }
 JSON
-send_a2a "$MANUAL_DIR/plan-2-request.json" "$MANUAL_DIR/plan-2-response.sse"
-last_state "$MANUAL_DIR/plan-2-response.sse"
 ```
 
 预期仍为 `TASK_STATE_INPUT_REQUIRED`。响应应先显示“第 1/2 步已完成：给张三转账100元”，然后显示
@@ -794,7 +783,10 @@ last_state "$MANUAL_DIR/plan-2-response.sse"
 #### 9.3 确认第二笔转账
 
 ```bash
-cat >"$MANUAL_DIR/plan-3-request.json" <<JSON
+curl -sS -N --max-time 600 -X POST http://127.0.0.1:18200/a2a/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  --data-binary @- <<'JSON' | tee "$MANUAL_DIR/plan-3-response.sse"
 {
   "jsonrpc": "2.0",
   "id": "manual-plan-3",
@@ -803,14 +795,12 @@ cat >"$MANUAL_DIR/plan-3-request.json" <<JSON
     "message": {
       "role": "ROLE_USER",
       "contextId": "manual-plan-context",
-      "taskId": "${PLAN_TASK_ID}",
+      "taskId": "TASK_ID_FROM_FIRST_RESPONSE",
       "parts": [{"text": "确认"}]
     }
   }
 }
 JSON
-send_a2a "$MANUAL_DIR/plan-3-request.json" "$MANUAL_DIR/plan-3-response.sse"
-last_state "$MANUAL_DIR/plan-3-response.sse"
 ```
 
 预期最终状态为 `TASK_STATE_COMPLETED`，汇总结果同时包含张三、李四和两笔 100 元转账。检查入口和
