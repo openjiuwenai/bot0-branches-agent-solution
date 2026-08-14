@@ -18,6 +18,8 @@ openjiuwen:
       agent-name: "DeepResearchAgent"
       agent-description: "Deep research agent comparing domestic LLM API offerings (2026 Q2)"
       provider-organization: "OpenJiuwen"
+      public-url: ${DEEP_RESEARCH_PUBLIC_URL:}
+      push-notifications: ${DEEP_RESEARCH_PUSH_NOTIFICATIONS:false}
       streaming: true
       default-input-modes: ["text", "text/plain"]
       default-output-modes: ["text", "text/plain"]
@@ -32,10 +34,10 @@ openjiuwen:
       remote-agents:
         - name: search-agent
           url: ${SEARCH_AGENT_URL:}
-          streaming: true
+          streaming: ${SEARCH_AGENT_STREAMING:true}
         - name: verify-agent
           url: ${VERIFY_AGENT_URL:}
-          streaming: true
+          streaming: ${VERIFY_AGENT_STREAMING:true}
         # read-agent — uncomment when the respective runtime is up:
         # - name: read-agent
         #   url: ${READ_AGENT_URL:}
@@ -80,6 +82,8 @@ openjiuwen:
       timeout: ${LLM_TIMEOUT:120s}
       completion-timeout: ${DEEP_RESEARCH_COMPLETION_TIMEOUT:600s}
       max-iterations: ${DEEP_RESEARCH_MAX_ITERATIONS:10}
+      callback-auth:
+        bearer-token: ${DEEP_RESEARCH_CALLBACK_TOKEN:}
       # 搜索执行模式：serial（默认，单轮至多一次远端 A2A 调用）| parallel（COMPARISON
       # 模式把互不依赖的 per-(vendor, dimension) search-agent 调用合到同一轮并行分发，
       # 需运行时支持 parentContextId 并行分发）。激活 `parallel-search` profile 即切到
@@ -87,14 +91,14 @@ openjiuwen:
       search-execution-mode: ${DEEP_RESEARCH_SEARCH_EXECUTION_MODE:serial}
       workspace-path: ${DEEP_RESEARCH_WORKSPACE:target/deep-research-workspace}
       workspace-language: ${DEEP_RESEARCH_LANGUAGE:zh-CN}
-      # FEAT-005 层 3 收尾：允许 LLM 通过 readFile 工具读取的额外根目录。
+      # 允许 LLM 通过 readFile 工具读取的额外根目录。
       # 缺省仅信任 workspace-path。SkillHub 的 local-dir 由
       # DeepResearchRuntimeApplication 自动 merge 进白名单（跟随
       # openjiuwen.service.middleware.skillhub.local-dir），此处只列**额外**
       # 需要开放给 LLM 读取的根目录。默认留空即可。
       # extra-readable-roots:
       #   - /some/extra/readable/root
-      # FEAT-005 credential decryptor（对 SkillHub encryptedToken 生效）。
+      # Credential decryptor（对 SkillHub encryptedToken 生效）。
       # mode 留空 → runtime 默认 PassthroughCredentialDecryptor（明文透传）；
       # mode=aes-gcm → 激活 DemoAesGcmCredentialDecryptor（AES-256-GCM），
       # 需同时提供 aes-key-hex（32 字节 hex）。
@@ -122,7 +126,7 @@ logging:
     com.openjiuwen.service.app.orchestrator: DEBUG
 
 ---
-# FEAT-005 log-leak guard (mirrors agent-solution issue #30's approved pattern).
+# SkillHub log-leak guard.
 # When the SkillHub middleware is on, SKILL.md content flows through the readFile
 # tool and reaches agent-core's `[tool]` (AbilityManager.logToolResult) and `[llm]`
 # (BaseModelClient message-history dump) loggers at INFO. Suppressing those two

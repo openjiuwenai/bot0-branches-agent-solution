@@ -24,6 +24,7 @@ public class SearchAgentProperties {
     private String apiKey = "";
     private String apiBase = "";
     private String modelName = "deepseek-chat";
+    private String tavilyApiKey = "";
     private boolean isSslVerify = true;
     private Double temperature = 0.2;
     private Double topP = 0.8;
@@ -145,6 +146,9 @@ public class SearchAgentProperties {
         requireText(apiKey, "search-agent.llm.api-key");
         requireText(apiBase, "search-agent.llm.api-base");
         requireText(modelName, "search-agent.llm.model-name");
+        if (!isUseStub) {
+            requireText(tavilyApiKey, "search-agent.tavily-api-key");
+        }
     }
 
     private static void requireText(String value, String propertyName) {
@@ -277,6 +281,24 @@ public class SearchAgentProperties {
      */
     public void setModelName(String modelName) {
         this.modelName = modelName;
+    }
+
+    /**
+     * Gets the Tavily API key used by the production web-search provider.
+     *
+     * @return the Tavily API key
+     */
+    public String getTavilyApiKey() {
+        return tavilyApiKey;
+    }
+
+    /**
+     * Sets the Tavily API key used by the production web-search provider.
+     *
+     * @param tavilyApiKey the Tavily API key
+     */
+    public void setTavilyApiKey(String tavilyApiKey) {
+        this.tavilyApiKey = tavilyApiKey;
     }
 
     /**

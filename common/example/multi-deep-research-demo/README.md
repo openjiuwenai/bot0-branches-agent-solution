@@ -31,7 +31,7 @@
 ## 拓扑与架构
 
 ```
-   user query (A2A JSON-RPC)             POST /custom/{agentId}  [opt-in FEAT-022]
+   user query (A2A JSON-RPC)             POST /custom/{agentId}  [opt-in Custom REST]
              │                                        │
              │                                        ▼
              │                       ┌────────────────────────────────┐
@@ -68,7 +68,7 @@
   ┌──────────┐  ┌───────────┐  ┌────────────┐  ┌────────┐  ┌────────────┐
   │ search-  │  │ verify-   │  │ jiuwenbox  │  │ Redis  │  │ SkillHub   │
   │ agent    │  │ agent     │  │ sandbox    │  │(stand- │  │ endpoint   │
-  │ ReAct    │  │ ReAct     │  │ (HTTP,     │  │alone / │  │(FEAT-005)  │
+  │ ReAct    │  │ ReAct     │  │ (HTTP,     │  │alone / │  │(SkillHub)   │
   │ + web    │  │(LLM judge)│  │ pandas /   │  │cluster)│  │            │
   │ search   │  │           │  │ matplotlib)│  │checkpt │  │            │
   └──────────┘  └───────────┘  └────────────┘  │+ Todo  │  └────────────┘
@@ -107,17 +107,22 @@ multi-deep-research-demo/
 │   │   │       ├── AutoPersistMemoryRail.java  extends MemoryRail；afterInvoke 落盘
 │   │   │       ├── SandboxRail.java            render_comparison_table / render_chart
 │   │   │       ├── UrlVerifyRail.java          verify_urls
-│   │   │       ├── SkillReadFileRail.java      readFile 工具；SkillHub SKILL.md 读取入口（FEAT-005）
+│   │   │       ├── SkillReadFileRail.java      readFile 工具；SkillHub SKILL.md 读取入口
 │   │   │       └── SkillObservationRail.java   观察 rail；打 skills_available / tool_call hit_skill / invoke_summary
 │   │   └── runtime/                            ← Spring Boot 层
 │   │       ├── DeepResearchRuntimeApplication.java     Spring 装配；SandboxClient → SandboxOps 适配；SKILLHUB_ENABLED→profile 自动激活
 │   │       ├── config/
 │   │       │   └── DeepResearchSpringProperties.java   继承库层 Properties 加 @ConfigurationProperties
-│   │       ├── credential/                              FEAT-005 凭据解密
+│   │       ├── credential/                              SkillHub 凭据解密
 │   │       │   ├── DemoAesGcmCredentialDecryptor.java  @ConditionalOnProperty(credential.mode=aes-gcm)
 │   │       │   └── EncryptTokenCli.java                加密 CLI（`main` 方法，非 Spring bean）
 │   │       ├── customrest/
-│   │       │   └── DeepResearchCustomRestAdapter.java  CustomRestProtocolAdapter SPI 实现（FEAT-022）；REST body ↔ A2A Task 双向映射
+│   │       │   └── DeepResearchCustomRestAdapter.java  CustomRestProtocolAdapter SPI 实现；REST body ↔ A2A Task 双向映射
+│   │       ├── a2a/
+│   │       │   ├── DeepResearchOutboundPushConfiguration.java      Push 出站装配
+│   │       │   └── DeepResearchOutboundPushRemoteAgentCaller.java  为 Search 调用注入 callback 配置
+│   │       ├── security/
+│   │       │   └── DeepResearchCallbackBearerTokenFilter.java  callback HTTP Bearer 认证
 │   │       └── diagnostics/
 │   │           └── SandboxSmokeTest.java               启动阶段沙箱连通性自检（`sandbox.smoke-test=true` 时激活）
 │   └── src/main/resources/
@@ -167,18 +172,20 @@ multi-deep-research-demo/
 | 长期记忆读写 | MemoryRail tools | core-java 提供 `write_memory` / `read_memory` / `memory_search` / `memory_get` / `edit_memory` | LLM 显式调用或 rail 自动写 |
 | **确定性落盘** | Rail 生命周期钩子 | `AutoPersistMemoryRail.afterInvoke` | 每次 `result_type=="answer"` 自动写 `memory/answer-*.md` + `reports/answer-*.md` |
 | 多轮上下文 | Checkpointer | in-memory（默认）或 Redis（`application.yml` 内 `redis-checkpointer` profile 段，支持 standalone / cluster） | 同 `conversationId` 请求走同一状态 |
-| **任务 Todolist 持久化**（FEAT-003 v3 MUST #2） | `TaskPlanningRail` + `KvTodoStorage` / `FileTodoStorage` | core-java `TaskPlanningRail` 装配 todo_* tool；solution 侧 `DeepResearchRuntimeApplication` 通过 `ObjectProvider<RuntimeRedisClient>` 桥接为 core `BaseKVStore` | `redis-checkpointer` profile 激活 + `RuntimeRedisClient` bean 就位 → `todoStorageType="kv"`（同一 runtime redis 连接池，§5.1.4）；否则 kvStore==null → `todoStorageType="file"`（workspace `.todo/` 目录） |
+| **Push Notification 配置面**（opt-in） | Runtime transport | 本端开关控制是否在出站请求中携带 callback 配置并开放本端 callback 接口；按入站请求要求回调对方是 Runtime 常驻基础能力 | Deep Research 开启以请求 Search 回调；Search/Verify 在本场景无需开启 |
+| **Callback receiver 认证**（opt-in） | Demo runtime HTTP Filter | Deep Research 的 `callback-auth` profile + callback-only Bearer Filter | 在进入 Runtime callback Controller 前校验 Search Runtime 返回的 HTTP Bearer credential |
+| **任务 Todolist 持久化** | `TaskPlanningRail` + `KvTodoStorage` / `FileTodoStorage` | core-java `TaskPlanningRail` 装配 todo_* tool；solution 侧 `DeepResearchRuntimeApplication` 通过 `ObjectProvider<RuntimeRedisClient>` 桥接为 core `BaseKVStore` | `redis-checkpointer` profile 激活 + `RuntimeRedisClient` bean 就位 → `todoStorageType="kv"`（同一 runtime redis 连接池，§5.1.4）；否则 kvStore==null → `todoStorageType="file"`（workspace `.todo/` 目录） |
 | **多 vendor 并行搜索**（可选） | Spring profile + prompt 规则段组合 | `application-parallel-search.yml` 把 `openjiuwen.demo.deep-research.search-execution-mode` 切到 `parallel`；`DeepResearchProperties` 按模式组合 system-prompt（HEAD + 规则段 + TAIL） | `--spring.profiles.active=parallel-search`；COMPARISON 模式下 root 在同一轮批量发出多个互不依赖的 per-(vendor, dimension) `search-agent` 调用，由运行时经 `parentContextId` 并行分发；SINGLE 模式、render/verify 顺序与预算规则不变。详见 [Sub-agent 路由约束 §（4）](#sub-agent-路由约束root-prompt-硬规则) |
 | 中文字体 | 沙箱代码内置 | `SandboxRail` Python 头部 | Noto Sans CJK SC → Microsoft YaHei → DejaVu Sans 降级 |
-| Wire 层 metadata 观测 | Servlet filter | `agent-verify` 的 `A2aMetadataLoggingFilter`（`OncePerRequestFilter` + `ContentCachingRequestWrapper`） | 每次 `/a2a` POST 打一行 `[A2A wire] verify-agent received: {method, contextId, params.metadata, params.message.metadata}`，用于 FEAT-004 §Metadata 转发验收 |
-| **Custom REST 入口**（FEAT-022，opt-in） | Runtime 协议桥接 | `agent-service-app-custom-rest` 提供 `CustomRestProtocolAdapter` SPI + 自动装配；demo 侧 [`DeepResearchCustomRestAdapter`](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/runtime/customrest/DeepResearchCustomRestAdapter.java) 把 REST body ↔ A2A Task 双向映射 | opt-in（`openjiuwen.service.custom-rest.query-path` 非空即启用）；复用同一 A2A Task 管线，非流返回统一 envelope，流式走 SSE。见 [Custom REST 入口](#custom-rest-入口) |
+| Wire 层 metadata 观测 | Servlet filter | `agent-verify` 的 `A2aMetadataLoggingFilter`（`OncePerRequestFilter` + `ContentCachingRequestWrapper`） | 每次 `/a2a` POST 打一行 `[A2A wire] verify-agent received: {method, contextId, params.metadata, params.message.metadata}`，用于观察 A2A metadata 转发 |
+| **Custom REST 入口**（opt-in） | Runtime 协议桥接 | `agent-service-app-custom-rest` 提供 `CustomRestProtocolAdapter` SPI + 自动装配；demo 侧 [`DeepResearchCustomRestAdapter`](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/runtime/customrest/DeepResearchCustomRestAdapter.java) 把 REST body ↔ A2A Task 双向映射 | opt-in（`openjiuwen.service.custom-rest.query-path` 非空即启用）；复用同一 A2A Task 管线，非流返回统一 envelope，流式走 SSE。见 [Custom REST 入口](#custom-rest-入口) |
 | **SkillHub skill 注入**（可选） | Runtime 中间件 | `agent-service-adapters-agentcore-ext` 的 `SkillHubManager` + `SkillHubInstaller` | opt-in（`SKILLHUB_ENABLED=true`）；启动阶段从 SkillHub 拉 skill 注册为工具。凭据支持**明文透传**与 **AES-256-GCM 加密**两种模式，见 [SkillHub 中间件与凭据加密](#skillhub-中间件与凭据加密) |
-| **SkillHub SKILL.md 读取**（FEAT-005 L3 收尾） | Harness tool | `SkillReadFileRail` → `readFile(file_path)`，路径必须落在 workspace 或运维显式声明的白名单根目录下 | LLM 按 core-java `SkillUtil.getSkillPrompt` 硬编码指令主动调用；工具名固定 camelCase `readFile`（core-java `warnMissingSkillReadFileTool` 用同一字符串按名查找）；64 KB 上限 + UTF-8 强制解码，成功日志只打 basename + 字节数 |
-| **Skill 观察日志**（FEAT-005 层 2 观察） | 纯观察 Rail | `SkillObservationRail`（priority 90，业务 rail 之后跑） | 每次请求打 `skills_available count=N names=[...]`；名称变化时补 `skills_delta`；每次 tool 决策打 `tool_call iter=N tool=X hit_skill=<bool>`；请求收尾打 `invoke_summary tool_calls=N skill_hits=M` |
-| **SKILL.md 日志脱敏**（FEAT-005 log-leak fix） | Spring profile | `application.yml` 内 `spring.config.activate.on-profile: skillhub-remote` 的多文档块把 `logging.level.tool` / `logging.level.llm` 压到 WARN | 由 `DeepResearchRuntimeApplication.main()` 在 `openjiuwen.service.middleware.skillhub.enabled=true` 时自动 `setAdditionalProfiles("skillhub-remote")`；三种识别源：`--openjiuwen.service.middleware.skillhub.enabled=true` 启动参数、`-Dopenjiuwen.service.middleware.skillhub.enabled=true` sysprop、`SKILLHUB_ENABLED=true` 环境变量。屏蔽 `AbilityManager.logToolResult` 与 `BaseModelClient` 消息历史两处 INFO 泄露通道，参见 [SkillHub 中间件与凭据加密 § SKILL.md 日志脱敏](#skillmd-日志脱敏skillhub-remote-profile) |
+| **SkillHub SKILL.md 读取** | Harness tool | `SkillReadFileRail` → `readFile(file_path)`，路径必须落在 workspace 或运维显式声明的白名单根目录下 | LLM 按 core-java `SkillUtil.getSkillPrompt` 硬编码指令主动调用；工具名固定 camelCase `readFile`（core-java `warnMissingSkillReadFileTool` 用同一字符串按名查找）；64 KB 上限 + UTF-8 强制解码，成功日志只打 basename + 字节数 |
+| **Skill 观察日志** | 纯观察 Rail | `SkillObservationRail`（priority 90，业务 rail 之后跑） | 每次请求打 `skills_available count=N names=[...]`；名称变化时补 `skills_delta`；每次 tool 决策打 `tool_call iter=N tool=X hit_skill=<bool>`；请求收尾打 `invoke_summary tool_calls=N skill_hits=M` |
+| **SKILL.md 日志脱敏** | Spring profile | `application.yml` 内 `spring.config.activate.on-profile: skillhub-remote` 的多文档块把 `logging.level.tool` / `logging.level.llm` 压到 WARN | 由 `DeepResearchRuntimeApplication.main()` 在 `openjiuwen.service.middleware.skillhub.enabled=true` 时自动 `setAdditionalProfiles("skillhub-remote")`；三种识别源：`--openjiuwen.service.middleware.skillhub.enabled=true` 启动参数、`-Dopenjiuwen.service.middleware.skillhub.enabled=true` sysprop、`SKILLHUB_ENABLED=true` 环境变量。屏蔽 `AbilityManager.logToolResult` 与 `BaseModelClient` 消息历史两处 INFO 泄露通道，参见 [SkillHub 中间件与凭据加密 § SKILL.md 日志脱敏](#skillmd-日志脱敏skillhub-remote-profile) |
 | **MCP 服务器接入**（可选） | 启动期 probe + 注册 | `McpRegistrar` → `Runner.resourceMgr().addMcpServer()`；配套独立子项目 `agent-mcp-docserver` 提供 spec-compliant MCP docserver 测桩 | opt-in（`MCP_DOCSERVER_URL` 非空即启用）；启动前 HTTP `initialize` probe，通过则注册，失败降级不阻塞启动。工具集通过 `DeepAgent.syncMcpServersFromResourceMgr()` 曝光给 LLM。见 [MCP 服务器接入](#mcp-服务器接入) |
 
-`search-agent` 支持 `stub` profile 用本地 fixture 演示，无需 Tavily key；prod profile 需要 `TAVILY_API_KEY`。`verify-agent` 是纯 LLM judge，只需 LLM 环境变量，无外部依赖。
+`search-agent` 支持 `stub` profile 用本地 fixture 演示，无需 Tavily key；prod profile 需要 `TAVILY_API_KEY`。`LLM_API_KEY` 与 `TAVILY_API_KEY` 均通过 `application.yml` 绑定到 `SearchAgentProperties`，Agent 业务代码不直接读取进程环境变量。`verify-agent` 是纯 LLM judge，只需 LLM 环境变量，无外部依赖。
 
 ### Sub-agent 路由约束（root prompt 硬规则）
 
@@ -241,12 +248,12 @@ verify-agent 是一个纯 LLM judge，本身没有工具，其"判定 → 兜底
 在仓库根目录下执行（用 repo 内 `.m2`，避免污染全局）：
 
 ```powershell
-# 1. 先装 agent-runtime-ext-java 的两个 SPI 适配（agentcore-ext 提供
-#    JiuwenCoreAgentExtHandler + RemoteA2aToolInstaller；agentcore 提供
-#    AgentCoreSandboxClientFactory）
+# 1. 先安装 agent-runtime-ext-java 的 agentcore-ext 适配模块。
+#    它提供 JiuwenCoreAgentExtHandler + RemoteA2aToolInstaller；其依赖的
+#    Runtime agentcore 基础适配（含 AgentCoreSandboxClientFactory）由 Maven 按版本解析。
 mvn "-Dmaven.repo.local=.m2\repository" `
   -f "common\agent-runtime-ext-java\pom.xml" `
-  -pl agent-service-adapters/agent-service-adapters-agentcore-ext,agent-service-adapters/agent-service-adapters-agentcore `
+  -pl agent-service-adapters/agent-service-adapters-agentcore-ext `
   -am clean install -DskipTests
 
 # 2. 构建本 demo
@@ -347,7 +354,7 @@ Runtime 侧的 Redis 中间件（`agent-runtime-java` 提供的 `RuntimeRedisCli
 
 两个 runtime 都激活 `redis-checkpointer` profile 即可共享同一 Redis 后端；库层代码只通过 SPI 访问 Redis，切换 standalone/cluster 不涉及任何 solution 侧代码改动。
 
-**FEAT-003 v3 Todolist**：`redis-checkpointer` profile 激活后，runtime 侧 `RuntimeRedisClient` bean 也会自动被 [DeepResearchRuntimeApplication.deepResearchHandler](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/runtime/DeepResearchRuntimeApplication.java) 拾取，通过 `KVStoreFactory.create("redis", Map.of("redis_client", <runtimeClient>))` 桥接为 core `BaseKVStore` 传给 `HarnessFactory.createDeepAgent`，`TaskPlanningRail` 的 todo_* tool 会自动落到同一 Redis 连接池（key 形如 `<sessionId>:todo`）。未启 profile 时 kvStore==null，Todolist 回退 workspace 下的 `.todo/` 文件后端；行为对旧基线向后兼容。
+**Todolist 存储**：`redis-checkpointer` profile 激活后，runtime 侧 `RuntimeRedisClient` bean 也会自动被 [DeepResearchRuntimeApplication.deepResearchHandler](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/runtime/DeepResearchRuntimeApplication.java) 拾取，通过 `KVStoreFactory.create("redis", Map.of("redis_client", <runtimeClient>))` 桥接为 core `BaseKVStore` 传给 `HarnessFactory.createDeepAgent`，`TaskPlanningRail` 的 todo_* tool 会自动落到同一 Redis 连接池（key 形如 `<sessionId>:todo`）。未启 profile 时 kvStore==null，Todolist 回退 workspace 下的 `.todo/` 文件后端；行为对旧基线向后兼容。
 
 ```bash
 # 两个 runtime 共享同一个 Redis 实例；env 一次设置，进程分别激活 profile
@@ -554,6 +561,99 @@ $reader.ReadToEnd()
 
 把 `method` 改为 `SendMessage`，请求 header 换成 `Accept: application/json`，其余字段不变。返回是聚合后的一次性 JSON，`result` 里携带最终答案。
 
+### A2A Push Notification
+
+Push Notification 的 sender、receiver、TaskStore 和 callback 恢复均由 Runtime 提供。Demo 不复制这些能力，只负责两项应用策略：Deep Research 调用 Search 时提供自己的 callback 配置，以及在 callback 进入 Runtime Controller 前校验 Bearer token。
+
+#### 角色与边界
+
+- 普通 Client 调用 Deep Research，不携带 `taskPushNotificationConfig` 或 `runtime.a2a.callback*` metadata；异步请求通过 `returnImmediately + GetTask` 获取状态。
+- Deep Research Agent 编排任务；Deep Research Runtime 给 Search 请求附加自己的 callback URL、callback id 和 token，并接收 Search callback。
+- Search Agent 执行搜索；Search Runtime 按入站 `taskPushNotificationConfig` 在任务 `COMPLETED` 或 `FAILED` 后回调 Deep Research。该发送能力不依赖 Search 本端 Push 开关。
+- Verify Agent 保持普通 blocking/streaming 调用，不参与本场景的 Push Notification。
+
+因此，本场景只开启 Deep Research 的 Push 配置。Search 和 Verify 的 Agent Card 均保持 `pushNotifications=false`；这不会阻止 Search 按 Deep Research 的请求回调。
+
+#### 启用配置
+
+Deep Research Runtime：
+
+```bash
+export SPRING_PROFILES_ACTIVE=callback-auth
+export DEEP_RESEARCH_PUSH_NOTIFICATIONS=true
+export DEEP_RESEARCH_PUBLIC_URL=http://DEEP_RESEARCH_HOST:18090
+export DEEP_RESEARCH_CALLBACK_TOKEN=<callback-bearer-token>
+export SEARCH_AGENT_URL=http://SEARCH_HOST:18091
+export SEARCH_AGENT_STREAMING=false
+export VERIFY_AGENT_URL=http://VERIFY_HOST:18093
+export VERIFY_AGENT_STREAMING=true
+```
+
+`DEEP_RESEARCH_PUBLIC_URL` 必须是 Search Runtime 可访问、不带 query/fragment 的绝对 HTTP(S) 地址。Demo 会在其后追加 `/a2a/push-notifications/callback`；Push 开启但地址非法时，Deep Research 启动失败。
+
+`DEEP_RESEARCH_CALLBACK_TOKEN` 是直接使用的 Bearer credential。YAML 只引用环境变量，Demo 不提供 AES/KMS 解密；生产部署应由 Secret Manager、Kubernetes Secret 等设施注入原始 token，不得把真实 token 写进 YAML 或启动脚本。
+
+#### 请求与内部时序
+
+普通 Client 继续使用本 README 前面的标准 `SendMessage` 请求，只需将 `configuration.returnImmediately` 设为 `true`，不要增加 callback 字段。内部顺序如下：
+
+```text
+1. 普通 Client -> Deep Research Runtime: SendMessage(returnImmediately=true)
+2. Deep Research Agent -> search-agent tool
+3. Demo RemoteAgentCaller 写入 Deep Research 自己的 callback 配置
+4. Runtime A2ARemoteAgentClient 转成标准 taskPushNotificationConfig
+5. Search Runtime 返回初始 Search taskId；Deep Research Runtime 将其保存为 shadow.remoteTaskId
+6. Search Task 进入 COMPLETED/FAILED，Search Runtime callback Deep Research Runtime
+7. Deep Research Runtime 以 callback result.task.id 匹配 shadow.remoteTaskId，并更新 shadow
+```
+
+callback 绑定键是 Search Task ID：
+
+```text
+callback.result.task.id == shadow._remote_batch.members[].remoteTaskId
+```
+
+`X-A2A-Notification-Id` 只用于 callback 幂等，不用于绑定父任务。Deep Research 父 taskId、contextId、messageId 或 notification id 都不能替代 Search Task ID。
+
+#### Demo 出站接线
+
+```text
+Deep Research Runtime RemoteInvocationBatchCoordinator 构造 RemoteCall
+  -> DeepResearchOutboundPushRemoteAgentCaller 清除上游同名 runtime.a2a.callback* key
+  -> 写入部署配置生成的 callbackUrl / callbackId / callbackToken
+  -> Runtime A2ARemoteAgentClient 转成标准 taskPushNotificationConfig
+  -> Search Runtime 保存配置并在终态发送 callback
+```
+
+三个 `runtime.a2a.callback*` key 是当前 Runtime 的内部出站契约，不是 A2A 标准字段，也不允许普通 Client 或 LLM 工具参数控制。Verify 调用直接委托给 Runtime 默认链路，不携带 callback 配置。
+
+#### 已验证能力与限制
+
+本 Demo 已使用真实 Deep Research Agent 和 Search Agent 验证：
+
+- Search 本端 `pushNotifications=false` 时仍会按入站配置自动 callback。
+- Search callback 携带 notification id、Bearer token 和 Search Task ID，Deep Research receiver 返回 HTTP 200。
+- Search Task ID 与 `shadow.remoteTaskId` 一致，callback 后 shadow 更新为 `READY_TO_RESUME`。
+- 使用 Deep Research 父 taskId 替代 Search Task ID 时，receiver 返回 HTTP 404 `callback binding not found`。
+
+当前仍有以下 Runtime 能力边界：
+
+- shadow 已为 `READY_TO_RESUME` 后，Deep Research 父任务仍停在 `TASK_STATE_INPUT_REQUIRED`；Runtime 尚未自动重新调度 Agent。Demo 不通过第二次 `SendMessage` 规避该问题。
+- notification id 幂等 store 仅为进程内存，重启后丢失，多实例之间不共享。
+- Runtime 尚未对普通 Client 提供 callback target 的 caller trust gate；Demo 会清除上游同名内部 metadata，只使用自身部署配置。
+- FAILED callback 的稳定错误码和自动续跑仍需 Runtime 进一步明确。
+
+`GetTask` 可查询父任务状态，但查询本身不会重新触发 Agent：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "deep-research-get-task",
+  "method": "GetTask",
+  "params": {"id": "<deep-research-parent-task-id>"}
+}
+```
+
 ### 跨会话回顾
 
 用**同一个 `contextId`** 追问 "我上次问了你什么？"，DeepAgent 应直接从 checkpointer 恢复的消息历史复述，**不走** `memory_search`（对应 system prompt 的 recall routing (a) 分支）。
@@ -564,7 +664,7 @@ $reader.ReadToEnd()
 
 ## Custom REST 入口
 
-除了 A2A JSON-RPC 入口，deep-research 还挂了一条 **REST 风格**的调用入口（FEAT-022），实现同一 A2A Task 管线的 REST 语义封装。当接入方走的是「传统 REST + path 里的资源 ID」而不是 A2A JSON-RPC 时，用这条。
+除了 A2A JSON-RPC 入口，deep-research 还挂了一条 **REST 风格**的调用入口，实现同一 A2A Task 管线的 REST 语义封装。当接入方走的是「传统 REST + path 里的资源 ID」而不是 A2A JSON-RPC 时，用这条。
 
 ### 何时用
 
@@ -653,7 +753,7 @@ curl -N -X POST "http://127.0.0.1:18090/v1/proj-x/agents/deep_research/conversat
 
 ## SkillHub 中间件与凭据加密
 
-FEAT-005 定义的 opt-in skill 分发能力。默认关闭；开启后 root DeepAgent 在启动阶段从远端 SkillHub 服务拉取 skill 定义（markdown / prompt）并注入为工具。
+SkillHub 提供 opt-in 的 skill 分发能力。默认关闭；开启后 root DeepAgent 在启动阶段从远端 SkillHub 服务拉取 skill 定义（markdown / prompt）并注入为工具。
 
 ### 何时用
 
@@ -676,7 +776,7 @@ export SKILLHUB_TOKEN=<your-plaintext-bearer-token>
 - 后台走 `agent-service-adapters-common` 默认的 `PassthroughCredentialDecryptor`（`decrypt(x) == x` 直通）
 - 适合本地开发、CI、或 token 已由 secret manager 在进程 env 层注入的场景
 
-#### 模式 B：AES-256-GCM 加密（参考实现，FEAT-005 L2 §5.2）
+#### 模式 B：AES-256-GCM 加密（参考实现）
 
 ```bash
 export SKILLHUB_ENABLED=true
@@ -758,7 +858,7 @@ SkillHub 把 skill 定义作为 SKILL.md 落到本地磁盘（`SKILLHUB_LOCAL_DI
 - **路径安全**：`Paths.get(x).toAbsolutePath().normalize()` 去掉 `..`，然后逐个 canonical allowed root 用 `startsWith` 做祖先匹配；未命中 → 拒绝；无根目录 → 拒绝（fail-closed）
 - **大小上限**：64 KB（超限直接返回 `{ok=false, error}`，杜绝大二进制炸上下文）
 - **编码**：UTF-8 强制解码；失败作为显式错误上抛，不返回乱码
-- **日志脱敏**：成功日志只写 basename + 字节数，永不打 body（DA-12 redaction policy 一致）
+- **日志脱敏**：成功日志只写 basename + 字节数，永不打 body（符合日志脱敏原则）
 - **优先级**：70（rail 内部 wiring 优先级，不影响 LLM 触发时机）
 
 返回 shape：
@@ -769,7 +869,7 @@ SkillHub 把 skill 定义作为 SKILL.md 落到本地磁盘（`SKILLHUB_LOCAL_DI
 
 ### Skill 观察日志（`SkillObservationRail`）
 
-[SkillObservationRail](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/agent/rail/SkillObservationRail.java) 是 FEAT-005 层 2 的观察 rail —— **不改** `SkillManager`、**不拦** tool 调用、**不注册**工具，纯往应用 logger 打事件。挂在任何 agent 上都安全；关掉只需把它的 logger 级别压到 WARN。
+[SkillObservationRail](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/agent/rail/SkillObservationRail.java) 是可选的 SkillHub 观察 rail —— **不改** `SkillManager`、**不拦** tool 调用、**不注册**工具，纯往应用 logger 打事件。挂在任何 agent 上都安全；关掉只需把它的 logger 级别压到 WARN。
 
 | 时机 | 事件 | 内容 |
 |---|---|---|
@@ -789,9 +889,9 @@ SkillHub 把 skill 定义作为 SKILL.md 落到本地磁盘（`SKILLHUB_LOCAL_DI
 | `[tool] Tool result: ...` | agent-core-java `AbilityManager.logToolResult` (`Loggers.TOOL.info(...)`) | 违反 core-java 自身 `.claude/rules/logging.md:80`（"不得在 INFO+ 级别打印 raw user input / LLM response / tool argument / tool result"） |
 | `[llm] ...messages={"role":"tool","content":"..."}...` | agent-core-java `BaseModelClient` 请求前 `Loggers.LLM.info(...)` 的完整 messages JSON dump | 同上 |
 
-`EventSanitizer` 的 11 字段字段级脱敏只覆盖**结构化事件**，不管上面两处 raw logger 调用，所以在 FEAT-005 DA-12 acceptance test 里 SKILL.md 内容（含 canary 短语）依然会明文出现在应用日志中。
+`EventSanitizer` 的 11 字段字段级脱敏只覆盖**结构化事件**，不管上面两处 raw logger 调用，因此在包含敏感标记的日志验证中，SKILL.md 内容依然会明文出现在应用日志中。
 
-**修法**：mirror agent-solution issue #30 已批准的做法 —— **不修 core-java**（保持 solution 侧的封闭 SDK 边界），而是在 solution 层的 `application.yml` 里加一段 profile-scoped 日志抑制：
+**处理方式**：在 solution 层的 `application.yml` 里增加 profile-scoped 日志抑制，避免改变 core-java 的全局日志行为：
 
 ```yaml
 ---
@@ -814,7 +914,7 @@ logging:
 2. **JVM 系统属性**：`-Dopenjiuwen.service.middleware.skillhub.enabled=true`
 3. **环境变量**：`SKILLHUB_ENABLED=true`
 
-设计这三源是因为 SIT 测试框架（`SutStack.AgentBuilder.property`）走 `--key=value` 启动参数、开发机习惯 `-D`、生产部署走 env —— 三条路都要能触发，不能只挑一条。
+同时支持这三种来源，以兼容 `--key=value` 启动参数、`-D` JVM system property 和生产环境变量等常见部署方式。
 
 **验证**：启用 SkillHub 后，进程启动日志应能看到 Spring Boot 打印：
 ```
@@ -947,12 +1047,20 @@ agent-mcp-docserver/
 |---|---|---|
 | `server.port` | `18090` | HTTP 端口 |
 | `openjiuwen.service.handler` | `agentcore-ext` | 走 `JiuwenCoreAgentExtHandler`，激活 A2A 远端注入 |
+| `openjiuwen.service.a2a.public-url` | `${DEEP_RESEARCH_PUBLIC_URL:}` | root 的公开服务身份 URL；异步研究时必须配置为下游 Runtime 可访问的地址 |
+| `openjiuwen.service.a2a.push-notifications` | `${DEEP_RESEARCH_PUSH_NOTIFICATIONS:false}` | root push capability/receiver 开关；通过唯一的环境变量入口显式开启 |
 | `openjiuwen.service.a2a.skills[0].id` | `deep_research` | A2A agent card 声明的技能 |
 | `openjiuwen.service.a2a.remote-agents[0].name` | `search-agent` | 远端搜索 sub-agent 名，`RemoteA2aToolInstaller` 用它把 card 注入为工具 |
 | `openjiuwen.service.a2a.remote-agents[0].url` | `${SEARCH_AGENT_URL}` | 远端搜索 sub-agent HTTP 地址 |
+| `openjiuwen.service.a2a.remote-agents[0].streaming` | `${SEARCH_AGENT_STREAMING:true}` | root 调 search 时的 streaming 偏好；异步研究场景设为 `false` |
 | `openjiuwen.service.a2a.remote-agents[1].name` | `verify-agent` | 远端 verify sub-agent 名（COMPARISON 模式强制调 1 次） |
 | `openjiuwen.service.a2a.remote-agents[1].url` | `${VERIFY_AGENT_URL:http://127.0.0.1:18093}` | 远端 verify sub-agent HTTP 地址 |
-| `openjiuwen.service.custom-rest.query-path` | `/v1/{project_id}/agents/{agent_id}/conversations/{conversation_id}` | Custom REST 入口路径模板（FEAT-022，opt-in）；`{conversation_id}` 直接作为 A2A `contextId`。字段为空即禁用。见 [Custom REST 入口](#custom-rest-入口) |
+| `openjiuwen.service.a2a.remote-agents[1].streaming` | `${VERIFY_AGENT_STREAMING:true}` | root 调 verify 时的 streaming 偏好；Verify 不使用 Push Notification，保持普通 streaming/blocking 调用 |
+| `DEEP_RESEARCH_PUSH_NOTIFICATIONS` | `false` | 开启后 Deep Research 给 Search 携带 callback 配置并开放自己的 callback 接口；本异步研究场景设为 `true` |
+| `DEEP_RESEARCH_PUBLIC_URL` | 空 | Deep Research Push 开启时必填；Demo 用它构造 callback URL，外部请求中的同名内部 metadata 始终先被清除 |
+| `spring.profiles.active=callback-auth` | 默认关闭 | Deep Research 注册 callback-only Bearer Filter；不启用 Runtime 全局细粒度授权 |
+| `openjiuwen.demo.deep-research.callback-auth.bearer-token` | `${DEEP_RESEARCH_CALLBACK_TOKEN:}` | callback Bearer token；由环境变量或 Secret 注入原始值，Demo 不做密文解密；启用 `callback-auth` 时必须配置 |
+| `openjiuwen.service.custom-rest.query-path` | `/v1/{project_id}/agents/{agent_id}/conversations/{conversation_id}` | Custom REST 入口路径模板（opt-in）；`{conversation_id}` 直接作为 A2A `contextId`。字段为空即禁用。见 [Custom REST 入口](#custom-rest-入口) |
 | `openjiuwen.service.external.sandbox.enabled` | `${SANDBOX_ENABLED:false}` | 是否启用沙箱工具（关掉则 `SandboxRail` / `UrlVerifyRail` 不注册） |
 | `openjiuwen.service.external.sandbox.servers[0].service-url` | `${SANDBOX_URL:http://127.0.0.1:8321}` | jiuwenbox 服务地址 |
 | `openjiuwen.service.external.sandbox.servers[0].idle-ttl-seconds` | `300` | 沙箱空闲回收秒数 |
