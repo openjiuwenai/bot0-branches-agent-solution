@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 
 /**
- * SubAgentDispatcher + SubAgentTool bearing tests.
+ * SubAgentDispatcher + SubAgentTool bearing tests (D3: now top-level types).
  *
  * <p>mutation-RED:
  * <ul>
@@ -24,10 +24,9 @@ import java.util.Map;
 class SubAgentDispatcherTest {
     @Test
     void subAgentTool_invokeDelegatesToExecutor() {
-        SubAgentDispatcher.SubAgentExecutor executor = (userInput, subGoal) -> "SubAgent result for: " + subGoal;
+        SubAgentExecutor executor = (userInput, subGoal) -> "SubAgent result for: " + subGoal;
 
-        SubAgentDispatcher.SubAgentTool tool = new SubAgentDispatcher.SubAgentTool("research_agent", "研究子智能体",
-                executor);
+        SubAgentTool tool = new SubAgentTool("research_agent", "研究子智能体", executor);
 
         Map<String, Object> args = Map.of("sub_goal", "分析市场趋势", "user_input", "分析A股");
         Object result = tool.invoke(args, Map.of());
@@ -40,8 +39,8 @@ class SubAgentDispatcherTest {
 
     @Test
     void subAgentTool_invokeWithNullArgsDoesNotCrash() {
-        SubAgentDispatcher.SubAgentExecutor executor = (userInput, subGoal) -> "ok";
-        SubAgentDispatcher.SubAgentTool tool = new SubAgentDispatcher.SubAgentTool("test_agent", "test", executor);
+        SubAgentExecutor executor = (userInput, subGoal) -> "ok";
+        SubAgentTool tool = new SubAgentTool("test_agent", "test", executor);
 
         Object result = tool.invoke(null, Map.of());
 
@@ -52,8 +51,7 @@ class SubAgentDispatcherTest {
 
     @Test
     void subAgentTool_cardHasCorrectIdAndName() {
-        SubAgentDispatcher.SubAgentTool tool = new SubAgentDispatcher.SubAgentTool("my_agent", "我的子智能体",
-                (u, g) -> "ok");
+        SubAgentTool tool = new SubAgentTool("my_agent", "我的子智能体", (u, g) -> "ok");
 
         assertThat(tool.getCard().getId()).as("card id must match tool name").isEqualTo("my_agent");
         assertThat(tool.getCard().getName()).as("card name must match tool name").isEqualTo("my_agent");
@@ -62,7 +60,7 @@ class SubAgentDispatcherTest {
 
     @Test
     void subAgentTool_cardHasInputParamsSchema() {
-        SubAgentDispatcher.SubAgentTool tool = new SubAgentDispatcher.SubAgentTool("agent", "test", (u, g) -> "ok");
+        SubAgentTool tool = new SubAgentTool("agent", "test", (u, g) -> "ok");
 
         assertThat(tool.getCard().getInputParams()).as("card must have inputParams schema for LLM tool-calling")
                 .isNotNull().isNotEmpty();
@@ -70,8 +68,8 @@ class SubAgentDispatcherTest {
 
     @Test
     void subAgentTool_streamWrapsInvokeResult() {
-        SubAgentDispatcher.SubAgentExecutor executor = (userInput, subGoal) -> "streamed result";
-        SubAgentDispatcher.SubAgentTool tool = new SubAgentDispatcher.SubAgentTool("agent", "test", executor);
+        SubAgentExecutor executor = (userInput, subGoal) -> "streamed result";
+        SubAgentTool tool = new SubAgentTool("agent", "test", executor);
 
         var iterator = tool.stream(Map.of("sub_goal", "test"), Map.of());
 
@@ -84,18 +82,58 @@ class SubAgentDispatcherTest {
 
     @Test
     void executorReceivesCorrectArguments() {
+        // P0 fix: user_input is resolved from supplier (or sub_goal fallback), not from LLM args
+        // (the LLM schema only declares sub_goal — LLM cannot provide user_input).
         String[] captured = new String[2];
-        SubAgentDispatcher.SubAgentExecutor executor = (userInput, subGoal) -> {
+        SubAgentExecutor executor = (userInput, subGoal) -> {
             captured[0] = userInput;
             captured[1] = subGoal;
             return "ok";
         };
 
-        SubAgentDispatcher.SubAgentTool tool = new SubAgentDispatcher.SubAgentTool("agent", "test", executor);
+        SubAgentTool tool = new SubAgentTool("agent", "test", executor, () -> "A股分析");
 
-        tool.invoke(Map.of("sub_goal", "分析趋势", "user_input", "A股分析"), Map.of());
+        tool.invoke(Map.of("sub_goal", "分析趋势"), Map.of());
 
-        assertThat(captured[0]).as("executor must receive user_input").isEqualTo("A股分析");
-        assertThat(captured[1]).as("executor must receive sub_goal").isEqualTo("分析趋势");
+        assertThat(captured[0]).as("user_input must come from supplier (P0 fix)")
+                .isEqualTo("A股分析");
+        assertThat(captured[1]).as("sub_goal must come from LLM args").isEqualTo("分析趋势");
+    }
+
+    @Test
+    void userInputSupplierResolvesOriginalInput() {
+        // P0 fix: supplier provides the original user input (from UserInputCaptureRail).
+        String[] captured = new String[2];
+        SubAgentExecutor executor = (userInput, subGoal) -> {
+            captured[0] = userInput;
+            captured[1] = subGoal;
+            return "ok";
+        };
+        SubAgentTool tool = new SubAgentTool("agent", "test", executor, () -> "原始用户请求");
+
+        // LLM schema only has sub_goal — user_input is resolved from supplier, not from LLM args.
+        tool.invoke(Map.of("sub_goal", "子任务"), Map.of());
+
+        assertThat(captured[0]).as("user_input must come from supplier (P0 fix)")
+                .isEqualTo("原始用户请求");
+        assertThat(captured[1]).as("sub_goal must come from LLM args").isEqualTo("子任务");
+    }
+
+    @Test
+    void userInputFallsBackToSubGoalWhenNoSupplier() {
+        // P0 fix: without supplier, user_input falls back to sub_goal (honest approximation).
+        String[] captured = new String[2];
+        SubAgentExecutor executor = (userInput, subGoal) -> {
+            captured[0] = userInput;
+            captured[1] = subGoal;
+            return "ok";
+        };
+        SubAgentTool tool = new SubAgentTool("agent", "test", executor);
+
+        tool.invoke(Map.of("sub_goal", "唯一的上下文"), Map.of());
+
+        assertThat(captured[0]).as("user_input must fall back to sub_goal when no supplier")
+                .isEqualTo("唯一的上下文");
+        assertThat(captured[1]).isEqualTo("唯一的上下文");
     }
 }
