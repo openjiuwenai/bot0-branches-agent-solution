@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+from typing import Any
 
 from evo_agent.optimizer.gepa.pareto_frontier import ParetoFrontier
 
@@ -31,8 +32,8 @@ def test_add_candidate_ties_kept_on_frontier() -> None:
     frontier.add_candidate(1, {"a": 0.5, "b": 0.6})
     # Both tie on "a" → both on frontier for "a"
     # Candidate 1 is uniquely best at "b"
-    assert frontier._candidates_at_front["a"] == {0, 1}
-    assert frontier._candidates_at_front["b"] == {1}
+    assert getattr(frontier, '_candidates_at_front')["a"] == {0, 1}
+    assert getattr(frontier, '_candidates_at_front')["b"] == {1}
 
 
 def test_non_dominated_preserves_uniquely_best() -> None:
@@ -41,7 +42,7 @@ def test_non_dominated_preserves_uniquely_best() -> None:
     frontier.add_candidate(0, {"a": 0.9, "b": 0.3, "c": 0.5})
     frontier.add_candidate(1, {"a": 0.3, "b": 0.9, "c": 0.5})
     frontier.add_candidate(2, {"a": 0.3, "b": 0.3, "c": 0.9})
-    non_dom = frontier._non_dominated()
+    non_dom = getattr(frontier, '_non_dominated')()
     # All three are uniquely best at one instance → all non-dominated
     assert set(non_dom.keys()) == {0, 1, 2}
 
@@ -52,7 +53,7 @@ def test_non_dominated_removes_never_uniquely_best() -> None:
     frontier.add_candidate(0, {"a": 0.5, "b": 0.5})
     frontier.add_candidate(1, {"a": 0.9, "b": 0.5})  # ties with 0 on b
     frontier.add_candidate(2, {"a": 0.9, "b": 0.9})  # dominates both
-    non_dom = frontier._non_dominated()
+    non_dom = getattr(frontier, '_non_dominated')()
     # Candidate 2 is uniquely best at both → only 2 survives
     # Candidates 0 and 1 are never uniquely best → dominated
     assert 2 in non_dom
@@ -115,11 +116,11 @@ def test_get_state_load_state() -> None:
     assert frontier2.candidate_scores(1)["a"] == 0.9
 
 
-def pytest_approx(expected: float) -> float:
+def pytest_approx(expected: float) -> Any:
     """Simple approx helper."""
     class _Approx:
         def __init__(self, val: float) -> None:
             self.val = val
         def __eq__(self, other: object) -> bool:
             return abs(self.val - float(other)) < 1e-6
-    return _Approx(expected)  # type: ignore[return-value]
+    return _Approx(expected)

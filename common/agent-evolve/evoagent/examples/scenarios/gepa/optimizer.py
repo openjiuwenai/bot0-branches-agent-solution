@@ -93,7 +93,8 @@ class GepaScenarioAdapter:
         except Exception:
             logger.debug("[gepa] phase_callback failed", exc_info=True)
 
-    def _extract_cases(self, train_cases: Any) -> list:
+    @staticmethod
+    def _extract_cases(train_cases: Any) -> list:
         """从 CaseLoader 或 list 提取 Case 列表。"""
         if train_cases is None:
             return []
@@ -136,7 +137,7 @@ class GepaScenarioAdapter:
             if isinstance(state, dict):
                 return str(state.get("skill_content", ""))
         if hasattr(op, "_content"):
-            return str(op._content)
+            return str(getattr(op, "_content", ""))
         return ""
 
     def _write_best_prompt(self, prompt: str) -> None:
@@ -145,7 +146,7 @@ class GepaScenarioAdapter:
             if hasattr(op, "set_parameter"):
                 op.set_parameter("skill_content", prompt)
             elif hasattr(op, "_content"):
-                op._content = prompt
+                setattr(op, "_content", prompt)
             logger.info("[gepa] prompt written to operator: %s", op_id)
 
 

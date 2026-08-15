@@ -52,7 +52,8 @@ class TestEvolveConfig:
 
     # --- GEPA vision model 配置 ---
 
-    def test_vision_model_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    @staticmethod
+    def test_vision_model_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
         """vision_model 默认空，回退到 target_model。"""
         for key in (
             "EVO_VISION_MODEL",
@@ -76,7 +77,8 @@ class TestEvolveConfig:
         assert config.vision_api_key == "vision-key-123"
         assert config.vision_base_url == "https://vision.api.com/v1"
 
-    def test_no_remote_endpoint_field(self) -> None:
+    @staticmethod
+    def test_no_remote_endpoint_field() -> None:
         """remote_endpoint 字段已从 EvolveConfig 移除。"""
         config = EvolveConfig(_env_file=None)
         assert not hasattr(config, "remote_endpoint")

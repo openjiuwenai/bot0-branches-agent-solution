@@ -146,6 +146,10 @@ class GepaOptimizer:
         """Hook for SSE phase events. Override in scenario adapter."""
         pass
 
+    def set_phase_callback(self, callback) -> None:
+        """Set a callback function for phase events."""
+        self._push_phase = callback
+
     # ── Initialization ───────────────────────────────────────────────────
 
     async def initialize(self, seed_prompt: str) -> None:
@@ -202,8 +206,10 @@ class GepaOptimizer:
 
     async def _run_iteration(self) -> bool:
         """Run one GEPA iteration. Returns True if should stop."""
-        assert self._pareto_frontier is not None and self._adapter is not None
-        assert self._reflection_engine is not None
+        if self._pareto_frontier is None or self._adapter is None:
+            raise RuntimeError("Pareto frontier and adapter must be initialized")
+        if self._reflection_engine is None:
+            raise RuntimeError("Reflection engine must be initialized")
 
         # 1. Select parent from Pareto frontier
         parent_idx = self._select_parent()
@@ -287,7 +293,8 @@ class GepaOptimizer:
 
     def _select_parent(self) -> int:
         """Select parent from Pareto frontier."""
-        assert self._pareto_frontier is not None
+        if self._pareto_frontier is None:
+            raise RuntimeError("Pareto frontier not initialized")
         if self._candidate_selection_strategy == "pareto":
             return self._pareto_frontier.sample_parent(self._rng)
         elif self._candidate_selection_strategy == "current_best":
@@ -320,7 +327,8 @@ class GepaOptimizer:
         minibatch_eval: Any,
     ) -> None:
         """Add accepted candidate: full val eval + Pareto frontier update."""
-        assert self._pareto_frontier is not None and self._adapter is not None
+        if self._pareto_frontier is None or self._adapter is None:
+            raise RuntimeError("Pareto frontier and adapter must be initialized")
 
         # Full eval on valset
         val_batch = await self._adapter.evaluate(
@@ -351,7 +359,8 @@ class GepaOptimizer:
 
     def _check_stop(self) -> bool:
         """Check if optimization should stop (perfect score or budget)."""
-        assert self._pareto_frontier is not None
+        if self._pareto_frontier is None:
+            raise RuntimeError("Pareto frontier not initialized")
         best_score = self._pareto_frontier.aggregate_score(self._best_idx)
         if best_score >= self._perfect_score:
             logger.info("[gepa] perfect score reached: %.4f", best_score)
@@ -362,7 +371,8 @@ class GepaOptimizer:
 
     async def _attempt_merge(self) -> None:
         """Attempt to merge two non-dominated candidates via LLM crossover."""
-        assert self._pareto_frontier is not None and self._reflection_engine is not None
+        if self._pareto_frontier is None or self._reflection_engine is None:
+            raise RuntimeError("Pareto frontier and reflection engine must be initialized")
         pair = self._pareto_frontier.find_merge_candidates(self._rng)
         if pair is None:
             return
@@ -460,7 +470,10 @@ class GepaOptimizer:
                 case = next((c for c in self._val_cases if c.case_id == case_id), None)
                 if case:
                     expected = case.label.get("expected_result", "") if isinstance(case.label, dict) else ""
-                    parts.append(f"- case_id={case_id} score={score:.2f} (other={other_score:.2f}) expected='{expected}'")
+                    parts.append(
+                        f"- case_id={case_id} score={score:.2f} "
+                        f"(other={other_score:.2f}) expected='{expected}'"
+                    )
                     count += 1
             if count >= 5:
                 break

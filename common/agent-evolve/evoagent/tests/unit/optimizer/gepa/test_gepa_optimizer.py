@@ -86,7 +86,12 @@ async def test_reflection_engine_fallback_on_failure() -> None:
     ):
         result = await engine.propose(
             current_prompt="Original",
-            reflective_dataset={"system_prompt": [{"Inputs": {}, "Generated Outputs": "", "Expected": "", "Feedback": "", "Score": 0}]},
+            reflective_dataset={
+                "system_prompt": [
+                    {"Inputs": {}, "Generated Outputs": "",
+                     "Expected": "", "Feedback": "", "Score": 0}
+                ]
+            },
             components_to_update=["system_prompt"],
             iteration=0,
         )
@@ -132,10 +137,10 @@ async def test_gepa_optimizer_initialization() -> None:
     with patch.object(GEPAAdapter, "evaluate", new_callable=AsyncMock, return_value=mock_batch):
         await opt.initialize("seed prompt")
 
-    assert len(opt._candidates) == 1
-    assert opt._candidates[0]["system_prompt"] == "seed prompt"
-    assert opt._pareto_frontier is not None
-    assert opt._pareto_frontier.n_candidates == 1
+    assert len(getattr(opt, '_candidates', [])) == 1
+    assert getattr(opt, '_candidates')[0]["system_prompt"] == "seed prompt"
+    assert getattr(opt, '_pareto_frontier', None) is not None
+    assert getattr(opt, '_pareto_frontier').n_candidates == 1
 
 
 @pytest.mark.asyncio
@@ -177,12 +182,20 @@ async def test_gepa_optimizer_run_optimization() -> None:
             outputs=[{"answer": "test"}] * n,
             scores=scores,
             case_ids=[c.case_id for c in cases],
-            trajectories=[{"case_id": c.case_id, "inputs": {}, "expected_result": "", "model_output": "", "score": s, "feedback": ""} for c, s in zip(cases, scores)] if capture_traces else None,
+            trajectories=(
+                [{"case_id": c.case_id, "inputs": {}, "expected_result": "",
+                  "model_output": "", "score": s, "feedback": ""}
+                 for c, s in zip(cases, scores)]
+                if capture_traces else None
+            ),
         )
 
     # Mock reflection engine to return a new prompt
     with patch.object(GEPAAdapter, "evaluate", new=_mock_evaluate), \
-         patch.object(ReflectionEngine, "propose", new_callable=AsyncMock, return_value={"system_prompt": "Improved prompt"}):
+         patch.object(
+             ReflectionEngine, "propose", new_callable=AsyncMock,
+             return_value={"system_prompt": "Improved prompt"},
+         ):
         result = await opt.run_optimization("seed prompt")
 
     assert result["n_candidates"] >= 1
@@ -222,11 +235,19 @@ async def test_gepa_optimizer_rejects_non_improvement() -> None:
             outputs=[{"answer": "test"}] * n,
             scores=scores,
             case_ids=[c.case_id for c in cases],
-            trajectories=[{"case_id": c.case_id, "inputs": {}, "expected_result": "", "model_output": "", "score": s, "feedback": ""} for c, s in zip(cases, scores)] if capture_traces else None,
+            trajectories=(
+                [{"case_id": c.case_id, "inputs": {}, "expected_result": "",
+                  "model_output": "", "score": s, "feedback": ""}
+                 for c, s in zip(cases, scores)]
+                if capture_traces else None
+            ),
         )
 
     with patch.object(GEPAAdapter, "evaluate", new=_mock_evaluate), \
-         patch.object(ReflectionEngine, "propose", new_callable=AsyncMock, return_value={"system_prompt": "Worse prompt"}):
+         patch.object(
+             ReflectionEngine, "propose", new_callable=AsyncMock,
+             return_value={"system_prompt": "Worse prompt"},
+         ):
         result = await opt.run_optimization("seed prompt")
 
     # Child was worse → not accepted → only seed candidate

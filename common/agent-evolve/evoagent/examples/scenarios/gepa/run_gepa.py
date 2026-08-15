@@ -13,6 +13,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+import atexit
 
 # ── 必须在 import openjiuwen 之前设置 ──────────────────────────────────
 # IS_SENSITIVE=false → openjiuwen 的 is_sensitive() 返回 True → 日志中省略 messages 体
@@ -20,7 +21,7 @@ os.environ.setdefault("IS_SENSITIVE", "false")
 
 # 确保项目根目录在 sys.path 中
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]  # evoagent/
-sys.path.insert(0, str(_PROJECT_ROOT / "src"))
+sys.path.append(str(_PROJECT_ROOT / "src"))
 
 from evo_agent.config import EvolveConfig
 from evo_agent.optimizer.gepa.gepa_optimizer import GepaOptimizer
@@ -51,9 +52,9 @@ def _silence_openjiuwen_logging():
                 if hasattr(lg, "set_level"):
                     lg.set_level(60)
             except Exception:
-                pass
+                logger.debug("Failed to silence openjiuwen logger", exc_info=True)
     except Exception:
-        pass
+        logger.debug("Failed to initialize openjiuwen logging", exc_info=True)
     # 同时屏蔽 stdlib 侧
     for name in ("llm", "common", "openjiuwen", "httpx", "httpcore", "urllib3"):
         lg = logging.getLogger(name)
@@ -64,7 +65,6 @@ def _silence_openjiuwen_logging():
 
 _silence_openjiuwen_logging()
 # 再次在 openjiuwen 首次使用后执行（lazy init）
-import atexit
 atexit.register(_silence_openjiuwen_logging)
 
 
@@ -223,8 +223,8 @@ DEFAULT_SEED_PROMPT = """你是一个高速公路监控系统助手。你的任�
 
 async def main():
     config = EvolveConfig()
-    print("=" * 60, flush=True)
-    print(f"GEPA 优化 | optimizer={config.optimizer_model} vision={(config.vision_model or '').strip() or config.target_model}", flush=True)
+    logger.info("=" * 60)
+    logger.info("GEPA 优化 | optimizer=%s vision=%s", config.optimizer_model, (config.vision_model or '').strip() or config.target_model)
 
     # 数据集 — 请将 JSONL 文件放入 gepa_dataset/ 目录
     dataset_dir = _PROJECT_ROOT / "examples" / "scenarios" / "gepa" / "gepa_dataset"
@@ -237,8 +237,8 @@ async def main():
         )
     train_cases = to_cases(load_jsonl(train_path))
     val_cases = to_cases(load_jsonl(val_path))
-    print(f"  train={len(train_cases)} val={len(val_cases)} iterations=10", flush=True)
-    print("=" * 60, flush=True)
+    logger.info("  train=%d val=%d iterations=10", len(train_cases), len(val_cases))
+    logger.info("=" * 60)
 
     # 再次静默 openjiuwen 日志（模型创建时可能触发 lazy init）
     _silence_openjiuwen_logging()
@@ -272,20 +272,20 @@ async def main():
 
     def phase_cb(event: str, data: dict):
         if event == "log":
-            print(f"  [{data.get('phase', '')}] {data.get('message', '')}", flush=True)
-    optimizer._push_phase = phase_cb
+            logger.info("[%s] %s", data.get('phase', ''), data.get('message', ''))
+    optimizer.set_phase_callback(phase_cb)
 
-    print("正在运行 GEPA 优化...", flush=True)
+    logger.info("正在运行 GEPA 优化...")
     result = await optimizer.run_optimization(DEFAULT_SEED_PROMPT)
 
     # 输出结果
-    print("=" * 60, flush=True)
-    print("GEPA 优化完成!", flush=True)
-    print(f"  迭代次数: {result['n_iterations']}", flush=True)
-    print(f"  候选数: {result['n_candidates']}", flush=True)
-    print(f"  最佳分数: {result['best_score']:.4f}", flush=True)
-    print("-" * 40, flush=True)
-    print(result["best_prompt"], flush=True)
+    logger.info("=" * 60)
+    logger.info("GEPA 优化完成!")
+    logger.info("  迭代次数: %s", result['n_iterations'])
+    logger.info("  候选数: %s", result['n_candidates'])
+    logger.info("  最佳分数: %.4f", result['best_score'])
+    logger.info("-" * 40)
+    logger.info("Best prompt:\n%s", result["best_prompt"])
 
     # 保存结果
     output_dir = _PROJECT_ROOT / "workspace" / "gepa_output"
@@ -293,7 +293,7 @@ async def main():
     output_dir.joinpath("best_prompt.txt").write_text(result["best_prompt"], encoding="utf-8")
     with open(output_dir / "gepa_result.json", "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2, default=str)
-    print(f"\n结果已保存: {output_dir}", flush=True)
+    logger.info("结果已保存: %s", output_dir)
 
 
 if __name__ == "__main__":

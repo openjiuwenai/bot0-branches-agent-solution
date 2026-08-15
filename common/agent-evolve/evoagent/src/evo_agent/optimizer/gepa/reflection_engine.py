@@ -76,8 +76,9 @@ class ReflectionEngine:
             "scenarios_dir": self._scenarios_dir,
         }
 
+    @staticmethod
     def _render_reflective_dataset(
-        self, records: list[dict[str, Any]]
+        records: list[dict[str, Any]]
     ) -> str:
         """Render the reflective dataset as markdown for the LLM prompt.
 
