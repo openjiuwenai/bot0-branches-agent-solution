@@ -17,7 +17,7 @@ import java.util.function.Supplier;
  * <p>Mirrors {@code ReplanTool.registerOnto}'s dual-registration contract:
  * <ol>
  *   <li>{@code agent.getAbilityManager().add(card)} — LLM visibility (listToolInfo)</li>
- *   <li>{@code Runner.resourceMgr().addTool(tool, null)} — runtime dispatch</li>
+     *   <li>{@code Runner.resourceMgr().addTool(tool, agentId)} — runtime dispatch</li>
  * </ol>
  *
  * <p><b>承重缺陷 D 治本</b>: ExploreTool.invoke needs userInput from a
@@ -48,7 +48,9 @@ public final class ExploreToolRegistrar {
         ExploreTool tool = new ExploreTool(explorer, budget, userInputSupplier);
         ToolCard card = tool.getCard();
         agent.getAbilityManager().add(card);
-        Runner.resourceMgr().addTool(tool, null);
+        // agent-scoped tag (attribution; ResourceMgr stores by tool id — see EdpaRails
+        // javadoc for the same-JVM multi-agent honest boundary)
+        Runner.resourceMgr().addTool(tool, agent.getCard().getId());
         return tool;
     }
 }

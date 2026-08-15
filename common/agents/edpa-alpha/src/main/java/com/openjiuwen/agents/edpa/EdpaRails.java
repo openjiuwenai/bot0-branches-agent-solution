@@ -59,7 +59,17 @@ public final class EdpaRails {
     /**
      * Registers the EDPA cognitive rail stack onto a ReActAgent.
      *
-     * <p>Assembly order (bearing — do not change without 4-lens):
+     * <p><b>Honest boundary — same-JVM multi-agent (red-team finding, 2026-08-16)</b>:
+ * ResourceMgr is a process-wide registry keyed by TOOL ID, and runtime dispatch looks
+ * tools up by id (the tag on {@code addTool} is for attribution, not lookup isolation).
+ * EDPA's cognitive tools use fixed ids ({@code explore}; react-rails {@code __replan__}
+ * likewise), so TWO EDPA agents in one JVM overwrite each other's registrations
+ * (last-writer-wins) — agent A's {@code explore} dispatch may execute agent B's
+ * ExploreTool (reading B's captured user input). Single agent per JVM is safe; hosts
+ * needing multiple EDPA agents must isolate at the process level until agent-core
+ * dispatch supports tag-scoped lookup (frozen-layer cross-repo decision, deferred).
+ *
+ * <p>Assembly order (bearing — do not change without 4-lens):
      * <ol>
      *   <li>SteeringProvisionRail — binds steering queue (issue-#13). Sole beforeInvoke
      *       override, so it precedes all consumer hooks via hook isolation.</li>

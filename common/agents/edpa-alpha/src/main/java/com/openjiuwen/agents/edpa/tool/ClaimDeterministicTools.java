@@ -110,7 +110,9 @@ public final class ClaimDeterministicTools {
             }
         };
         agent.getAbilityManager().add(card);
-        Runner.resourceMgr().addTool(tool, null);
+// agent-scoped tag (attribution; ResourceMgr stores by tool id — see EdpaRails
+        // javadoc for the same-JVM multi-agent honest boundary)
+        Runner.resourceMgr().addTool(tool, agent.getCard().getId());
     }
 
     private static void registerAuthorizePayment(ReActAgent agent) {
@@ -144,6 +146,8 @@ public final class ClaimDeterministicTools {
             }
         };
         agent.getAbilityManager().add(card);
-        Runner.resourceMgr().addTool(tool, null);
+// agent-scoped tag (attribution; ResourceMgr stores by tool id — see EdpaRails
+        // javadoc for the same-JVM multi-agent honest boundary)
+        Runner.resourceMgr().addTool(tool, agent.getCard().getId());
     }
 }

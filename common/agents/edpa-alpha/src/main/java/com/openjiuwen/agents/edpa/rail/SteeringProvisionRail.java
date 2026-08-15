@@ -12,6 +12,10 @@ import com.openjiuwen.harness.task_loop.LoopQueues;
  * Provisions a {@link LoopQueues} steering queue on the String-invoke path where
  * {@code ReActAgent.invoke(taskString, null)} never binds one — the issue-#13 structural gap.
  *
+ * <p><b>Offset citations</b>: bytecode offsets below were verified against
+ * agent-core-java 0.1.12 and may drift across versions — the structural claims
+ * (String-branch reachability, hook ordering) are the invariant, not the numbers.
+ *
  * <p><b>Root cause this rail closes</b>: {@code ReActAgent.invoke} only copies a
  * {@code loop_queues} entry out of the input {@code Map} (offset 131, inside the Map branch
  * [48,137]). On the String branch (offset 45 {@code ifeq 140}) that copy is physically

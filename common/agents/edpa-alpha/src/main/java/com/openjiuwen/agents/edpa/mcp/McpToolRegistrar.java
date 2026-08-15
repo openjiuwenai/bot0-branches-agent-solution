@@ -19,7 +19,7 @@ import java.util.Set;
  * {@code ReplanTool.registerOnto} dual-registration contract, per tool:
  * <ol>
  *   <li>{@code agent.getAbilityManager().add(card)} — LLM visibility (listToolInfo)</li>
- *   <li>{@code Runner.resourceMgr().addTool(adapter, null)} — runtime dispatch</li>
+     *   <li>{@code Runner.resourceMgr().addTool(adapter, agentId)} — runtime dispatch</li>
  * </ol>
  *
  * <p>This is the workaround entry point: instead of
@@ -48,7 +48,9 @@ public final class McpToolRegistrar {
         for (McpTool t : tools) {
             McpToolAdapter adapter = new McpToolAdapter(client, t);
             agent.getAbilityManager().add(adapter.getCard());
-            Runner.resourceMgr().addTool(adapter, null);
+// agent-scoped tag (attribution; ResourceMgr stores by tool id — see EdpaRails
+            // javadoc for the same-JVM multi-agent honest boundary)
+            Runner.resourceMgr().addTool(adapter, agent.getCard().getId());
             adapters.add(adapter);
         }
         return adapters;
