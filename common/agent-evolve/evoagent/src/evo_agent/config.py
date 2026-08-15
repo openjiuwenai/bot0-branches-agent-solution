@@ -35,6 +35,13 @@ class EvolveConfig(BaseSettings):
     # LLM 评估器模型；空字符串时回退到 optimizer_model（保持旧行为）。
     evaluator_model: str = ""
     target_model: str = "gpt-4o"
+    # ── GEPA 视觉标注模型（被优化的目标模型，支持多模态输入） ──
+    # 空字符串时回退到 target_model（保持与目标 Agent 一致）。
+    vision_model: str = ""  # EVO_VISION_MODEL
+    # 视觉模型凭证；空 → 回退到 llm_api_key（同 provider 场景零配置）。
+    vision_api_key: str = ""  # EVO_VISION_API_KEY
+    # 视觉模型端点；空 → 回退到 llm_base_url。
+    vision_base_url: str = ""  # EVO_VISION_BASE_URL
     # LLM HTTP 调用超时（秒）。大 prompt / 慢模型需调大（对齐 bank 150 / 建议 300）。
     # openjiuwen Model 默认 60s 易 408。EVO_LLM_TIMEOUT。
     llm_timeout: float = 300.0
