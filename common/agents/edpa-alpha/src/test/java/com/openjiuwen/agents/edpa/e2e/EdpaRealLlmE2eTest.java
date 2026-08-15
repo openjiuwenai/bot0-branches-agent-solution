@@ -6,17 +6,13 @@ package com.openjiuwen.agents.edpa.e2e;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.openjiuwen.agents.edpa.EdpaRails;
+import com.openjiuwen.agents.edpa.autoconfigure.EdpaProperties;
 import com.openjiuwen.agents.edpa.explore.ExploreBudget;
-import com.openjiuwen.agents.edpa.explore.ExploreToolRegistrar;
 import com.openjiuwen.agents.edpa.explore.Explorer;
 import com.openjiuwen.agents.edpa.explore.LlmExplorer;
-import com.openjiuwen.agents.edpa.rail.UserInputCaptureRail;
 import com.openjiuwen.agents.edpa.util.LlmResponseExtractor;
 import com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel;
-import com.openjiuwen.agents.reactrails.replan.ReplanRail;
-import com.openjiuwen.agents.reactrails.replan.ReplanTool;
-import com.openjiuwen.agents.reactrails.selfheal.RootCauseRail;
-import com.openjiuwen.agents.reactrails.verification.CriteriaReplanBridgeRail;
 import com.openjiuwen.agents.reactrails.verification.RuleBasedCriteriaVerifier;
 import com.openjiuwen.core.foundation.llm.model_clients.DefaultModelClientFactories;
 import com.openjiuwen.core.foundation.llm.schema.ModelClientConfig;
@@ -80,10 +76,10 @@ class EdpaRealLlmE2eTest {
     /**
      * Drives the EDPA-alpha Species E tool-driven Explore loop against a real LLM and asserts the data channel.
      *
-     * <p>Registers the {@code market_data} tool and the LLM-backed Explorer, wires the
-     * UserInputCaptureRail / CriteriaReplanBridgeRail / ReplanRail / RootCauseRail, then invokes the agent
-     * and asserts a non-null, non-empty result plus captured user input. Soft-observes (via logs) whether
-     * the LLM actually called the {@code explore} tool.
+     * <p>Registers the {@code market_data} tool and the LLM-backed Explorer, assembles the EDPA rail stack
+     * via {@code EdpaRails.registerOnto}（单一装配真源）, then invokes the agent
+     * and asserts a non-null, non-empty result plus the user query reaching the Explorer data channel.
+     * Soft-observes (via logs) whether the LLM actually called the {@code explore} tool.
      *
      * <p>Skipped via JUnit assumptions when {@code OPENJIUWEN_API_KEY} / {@code OPENJIUWEN_BASE_URL} are unset.
      */
@@ -98,17 +94,20 @@ class EdpaRealLlmE2eTest {
         DefaultModelClientFactories.ensureRegistered();
 
         AtomicInteger exploreCallCount = new AtomicInteger(0);
-        AtomicReference<String> userInputRef = new AtomicReference<>();
-        ReActAgent agent = buildWiredAgent(key, base, modelName, exploreCallCount, userInputRef);
+        AtomicReference<String> seenPrompt = new AtomicReference<>();
+        ReActAgent agent = buildWiredAgent(key, base, modelName, exploreCallCount, seenPrompt);
 
         Object result = agent.invoke(buildExplorePrompt(), null);
 
-        logResultPreview(result, userInputRef.get(), exploreCallCount.get());
+        logResultPreview(result, seenPrompt.get(), exploreCallCount.get());
 
         assertThat(result).as("EDPA tool-driven loop must produce a non-null result").isNotNull();
         assertThat(String.valueOf(result)).as("EDPA output must be non-empty (data channel proof)").isNotEmpty();
-        assertThat(userInputRef.get()).as("UserInputCaptureRail must have captured the user query").isNotNull()
-                .isNotEmpty();
+        assertThat(seenPrompt.get())
+                .as("captured user query must reach the Explorer (end-to-end data channel:"
+                        + " UserInputCaptureRail → ExploreTool supplier → Explorer; registerOnto wires the"
+                        + " capture ref internally, so the Explorer-seen prompt is the observable proof)")
+                .isNotNull().isNotEmpty().contains("经济");
         assertThat(exploreCallCount.get())
                 .as("LLM must dispatch the explore tool at least once (Species E tool-driven Explore proof)")
                 .isGreaterThan(0);
@@ -121,11 +120,12 @@ class EdpaRealLlmE2eTest {
      * @param base the API base URL
      * @param modelName the model name to request
      * @param exploreCallCount shared counter incremented per Explorer LLM call
-     * @param userInputRef reference filled by the UserInputCaptureRail
+     * @param seenPrompt reference filled with the prompt observed by the Explorer lambda (proves the
+     *                   captured user query traversed the capture → supplier → Explorer data channel)
      * @return the fully wired ReAct agent
      */
     private static ReActAgent buildWiredAgent(String key, String base, String modelName,
-            AtomicInteger exploreCallCount, AtomicReference<String> userInputRef) {
+            AtomicInteger exploreCallCount, AtomicReference<String> seenPrompt) {
         var cliCfg = ModelClientConfig.builder().clientId("edpa-e2e-" + System.nanoTime()).clientProvider("OpenAI")
                 .apiKey(key).apiBase(base).verifySsl(false).build();
         var reqCfg = ModelRequestConfig.builder().modelName(modelName).temperature(0.3).topP(0.9).maxTokens(500)
@@ -140,20 +140,15 @@ class EdpaRealLlmE2eTest {
 
         String explorerPath = System.getenv().getOrDefault("OPENJIUWEN_COMPLETIONS_PATH", "/chat/completions");
         ExplorerEndpoint endpoint = new ExplorerEndpoint(base, explorerPath, modelName, key);
-        Explorer explorer = new LlmExplorer(prompt -> callExplorerLlm(prompt, endpoint, exploreCallCount),
-                ExploreBudget.DEFAULT);
+        Explorer explorer = new LlmExplorer(prompt -> {
+            seenPrompt.set(prompt);
+            return callExplorerLlm(prompt, endpoint, exploreCallCount);
+        }, ExploreBudget.DEFAULT);
 
-        agent.registerRail(new UserInputCaptureRail(userInputRef));
-        ExploreToolRegistrar.registerOnto(agent, explorer, ExploreBudget.DEFAULT, () -> userInputRef.get());
-
-        ReplanRail sharedCounter = new ReplanRail(2);
-        agent.registerRail(new CriteriaReplanBridgeRail(new RuleBasedCriteriaVerifier(),
-                List.of("分析", "建议"), sharedCounter));
-
-        agent.registerRail(new ReplanRail(2));
-        ReplanTool.registerOnto(agent);
-
-        agent.registerRail(new RootCauseRail());
+        EdpaProperties props = new EdpaProperties();
+        props.setCriteria(List.of("分析", "建议"));
+        props.setMaxReplan(2);
+        EdpaRails.registerOnto(agent, props, new RuleBasedCriteriaVerifier(), explorer);
         return agent;
     }
 
@@ -256,18 +251,18 @@ class EdpaRealLlmE2eTest {
     }
 
     /**
-     * Logs the result type, length, preview, captured user input, and explore-call count for soft-observation.
+     * Logs the result type, length, preview, Explorer-seen prompt, and explore-call count for soft-observation.
      *
      * @param result the agent invocation result
-     * @param userInput the captured user input (may be null)
+     * @param explorerPrompt the prompt observed by the Explorer lambda (may be null)
      * @param exploreCallCount the number of Explorer LLM calls observed
      */
-    private static void logResultPreview(Object result, String userInput, int exploreCallCount) {
+    private static void logResultPreview(Object result, String explorerPrompt, int exploreCallCount) {
         String output = String.valueOf(result);
         LOG.log(Level.INFO, "[edpa-e2e] result type: {0}", result.getClass().getName());
         LOG.log(Level.INFO, "[edpa-e2e] output length: {0}", output.length());
         LOG.log(Level.INFO, "[edpa-e2e] output preview: {0}", output.substring(0, Math.min(300, output.length())));
-        LOG.log(Level.INFO, "[edpa-e2e] userInputRef: {0}", userInput);
+        LOG.log(Level.INFO, "[edpa-e2e] explorer-seen prompt: {0}", explorerPrompt);
         LOG.log(Level.INFO, "[edpa-e2e] exploreCallCount: {0}", exploreCallCount);
         String verdict = exploreCallCount > 0
                 ? "[edpa-e2e] ✅ LLM called explore tool — Species E tool-driven Explore verified"
