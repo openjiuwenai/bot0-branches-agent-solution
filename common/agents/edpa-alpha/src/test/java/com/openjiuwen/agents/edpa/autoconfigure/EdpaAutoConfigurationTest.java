@@ -9,8 +9,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.openjiuwen.agents.edpa.EdpaRails;
 import com.openjiuwen.agents.edpa.explore.ExplorationResult;
 import com.openjiuwen.agents.edpa.explore.Explorer;
-import com.openjiuwen.agents.reactrails.replan.ReplanRail;
-import com.openjiuwen.agents.reactrails.verification.CriteriaReplanBridgeRail;
 import com.openjiuwen.agents.reactrails.verification.CriteriaVerifier;
 import com.openjiuwen.agents.reactrails.verification.RuleBasedCriteriaVerifier;
 import com.openjiuwen.core.singleagent.agents.ReActAgent;
@@ -34,7 +32,6 @@ import java.util.List;
  * @since 2026-08
  */
 class EdpaAutoConfigurationTest {
-
     private static Explorer noopExplorer() {
         return (userInput, budget) -> new ExplorationResult("test");
     }

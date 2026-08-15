@@ -4,6 +4,8 @@
 
 package com.openjiuwen.agents.edpa.e2e;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.agents.edpa.EdpaRails;
 import com.openjiuwen.agents.edpa.autoconfigure.EdpaProperties;
 import com.openjiuwen.agents.edpa.explore.ExplorationResult;
@@ -25,13 +27,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * C1 refactor bearing e2e: {@link EdpaRails#registerOnto} is the sole assembly
@@ -77,113 +75,115 @@ class EdpaRailsAssemblyRealLlmE2eTest {
         RailTelemetry.setCurrent(null);
     }
 
-    @Test
-    void edpaRailsAssembly_firesCognitiveLoopWithRealLlm() {
+    /**
+     * Skips unless real-LLM env is present (OPENJIUWEN_API_KEY/BASE_URL +
+     * EDPA_RAILS_E2E_ENABLED=true).
+     */
+    private static void assumeRealLlmEnabled() {
         String key = System.getenv("OPENJIUWEN_API_KEY");
         String base = System.getenv("OPENJIUWEN_BASE_URL");
-        String model = System.getenv().getOrDefault("OPENJIUWEN_MODEL", "deepseek-v4-flash");
         String enabled = System.getenv("EDPA_RAILS_E2E_ENABLED");
         org.junit.jupiter.api.Assumptions.assumeTrue(
                 key != null && !key.isBlank() && base != null && !base.isBlank()
                         && "true".equalsIgnoreCase(enabled),
                 "EdpaRails e2e requires OPENJIUWEN_API_KEY/BASE_URL + EDPA_RAILS_E2E_ENABLED=true");
+    }
 
+    /**
+     * Builds a ReActAgent backed by a real LLM through the tool-calling
+     * enforcing model (same wiring the official demo uses).
+     *
+     * @param name agent/card name (also seeds the client id)
+     * @param key API key
+     * @param base OpenAI-compatible API base URL
+     * @param model model name
+     * @return a ready-to-configure ReActAgent
+     */
+    private static ReActAgent newToolCallingAgent(String name, String key, String base, String model) {
         DefaultModelClientFactories.ensureRegistered();
-
-        // 1. Build agent with real LLM
         var cliCfg = ModelClientConfig.builder()
-                .clientId("edpa-rails-e2e-" + System.nanoTime())
+                .clientId(name + "-" + System.nanoTime())
                 .clientProvider("OpenAI")
                 .apiKey(key).apiBase(base).verifySsl(false).build();
         var reqCfg = ModelRequestConfig.builder()
                 .modelName(model).temperature(0.3).maxTokens(4000).build();
-        ReActAgent agent = new ReActAgent(AgentCard.builder().name("edpa-rails-e2e").build());
+        ReActAgent agent = new ReActAgent(AgentCard.builder().name(name).build());
         agent.setLlm(new com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel(cliCfg, reqCfg));
+        return agent;
+    }
 
-        // 2. Assemble via C1 facade (the SOLE truth source)
+    /**
+     * Content-IFF assertion on the terminal forceFinish: at least one
+     * ForceFinishEvent fired, and its source_rail is a business rail (not the
+     * ObservingRail fallback) — zero casts via isInstanceOfSatisfying.
+     *
+     * @param events rail events captured during invoke
+     */
+    private static void assertForceFinishAttribution(List<RailEvent> events) {
+        assertThat(events)
+                .as("ForceFinishEvent must fire (cognitive loop terminal) — events: %s",
+                        events.stream().map(e -> e.type().name()).toList())
+                .filteredOn(e -> e.type() == RailEventType.FORCE_FINISH)
+                .isNotEmpty()
+                .allSatisfy(e -> assertThat(e).isInstanceOfSatisfying(RailEvent.ForceFinishEvent.class,
+                        ffe -> assertThat(ffe.railName())
+                                .as("source_rail must be a business rail (not ObservingRail fallback)")
+                                .isNotEqualTo("ObservingRail")));
+    }
+
+    @Test
+    void edpaRailsAssembly_firesCognitiveLoopWithRealLlm() {
+        assumeRealLlmEnabled();
+        String key = System.getenv("OPENJIUWEN_API_KEY");
+        String base = System.getenv("OPENJIUWEN_BASE_URL");
+        String model = System.getenv().getOrDefault("OPENJIUWEN_MODEL", "deepseek-v4-flash");
+
+        ReActAgent agent = newToolCallingAgent("edpa-rails-e2e", key, base, model);
+
+        // Assemble via C1 facade (the SOLE truth source). Keep convergence off
+        // for this basic test (it's tested separately).
         EdpaProperties props = new EdpaProperties();
         props.setMaxReplan(3);
         props.setCriteria(List.of("GDP", "CPI", "通胀率"));
-        // Keep convergence off for this basic test (it's tested separately)
         props.setProactiveConvergenceEnabled(false);
-
         CriteriaVerifier verifier = new RuleBasedCriteriaVerifier(); // C5: keyword default
         Explorer explorer = (userInput, budget) -> new ExplorationResult("测试探索结果", List.of("方案A"));
-
         EdpaRails.RegistrationSummary summary = EdpaRails.registerOnto(agent, props, verifier, explorer);
 
         // Observability bootstrap (MANDATORY — EdpaRails does NOT install it;
         // hosts must call ReactRailsObservability.install themselves). Without
         // ObservingRail, forceFinish still executes but no ForceFinishEvent fires.
-        // install() REPLACES the telemetry listener, so re-stack the test collector
-        // on top (production path + collector, both active).
+        // install() REPLACES the telemetry listener, so re-stack the test collector.
         com.openjiuwen.agents.reactrails.observability.ReactRailsObservability.install(agent);
         RailTelemetry.setCurrent(RailTelemetry.current().with(collectedEvents::add));
 
-        // 3. Content-IFF assertions on the summary
         assertThat(summary.toolMode()).as("default exploreMode is tool → toolMode=true").isTrue();
         assertThat(summary.criteriaRailCount()).as("non-empty criteria → 1 bridge rail").isEqualTo(1);
         assertThat(summary.replanBudget()).as("summary must reflect configured budget").isEqualTo(3);
 
-        // 4. ReplanTool is LLM-visible
         var toolInfos = agent.getAbilityManager().listToolInfo();
         boolean hasReplanTool = toolInfos.stream().anyMatch(t -> ReplanTool.TOOL_NAME.equals(t.getName()));
         assertThat(hasReplanTool).as("ReplanTool must be visible to the LLM after EdpaRails.registerOnto").isTrue();
 
-        // 5. Invoke with real LLM — hard criteria forces verify-fail → replan cycle
+        // Invoke with real LLM — hard criteria forces verify→(replan)→forceFinish cycle
         Object result = agent.invoke(
                 "分析当前经济形势。必须包含 GDP、CPI 和通胀率数据。", null);
-
         assertThat(result).as("invoke must return non-null").isNotNull();
 
-        // 6. Verify RailEvents were captured (content-IFF, not just "non-empty")
-        List<RailEvent> events = new ArrayList<>(collectedEvents);
-        assertThat(events).as("EdpaRails-assembled agent must produce rail events").isNotEmpty();
-
-        // At minimum, verify the ForceFinishEvent with source_rail attribution
-        boolean hasForceFinish = events.stream()
-                .anyMatch(e -> e.type() == RailEventType.FORCE_FINISH);
-        assertThat(hasForceFinish)
-                .as("ForceFinishEvent must fire (cognitive loop terminal) — events: %s",
-                        events.stream().map(e -> e.type().name()).toList())
-                .isTrue();
-
-        // Verify the forceFinish has a source_rail (not "ObservingRail" fallback)
-        events.stream()
-                .filter(e -> e.type() == RailEventType.FORCE_FINISH)
-                .forEach(e -> {
-                    RailEvent.ForceFinishEvent ffe = (RailEvent.ForceFinishEvent) e;
-                    assertThat(ffe.railName())
-                            .as("source_rail must be a business rail (not ObservingRail fallback)")
-                            .isNotEqualTo("ObservingRail");
-                });
+        assertForceFinishAttribution(new ArrayList<>(collectedEvents));
 
         LOG.log(Level.INFO, "[edpa-rails-e2e] events captured: {0}, result={1}",
-                new Object[]{events.size(),
+                new Object[]{collectedEvents.size(),
                         String.valueOf(result).substring(0, Math.min(200, String.valueOf(result).length()))});
     }
 
     @Test
     void edpaRailsAssembly_railModeStillFiresExplorePhase() {
-        String key = System.getenv("OPENJIUWEN_API_KEY");
-        String base = System.getenv("OPENJIUWEN_BASE_URL");
-        String enabled = System.getenv("EDPA_RAILS_E2E_ENABLED");
-        org.junit.jupiter.api.Assumptions.assumeTrue(
-                key != null && !key.isBlank() && base != null && !base.isBlank()
-                        && "true".equalsIgnoreCase(enabled),
-                "EdpaRails e2e requires OPENJIUWEN_API_KEY/BASE_URL + EDPA_RAILS_E2E_ENABLED=true");
+        assumeRealLlmEnabled();
 
-        DefaultModelClientFactories.ensureRegistered();
-
-        var cliCfg = ModelClientConfig.builder()
-                .clientId("edpa-rails-rail-e2e-" + System.nanoTime())
-                .clientProvider("OpenAI")
-                .apiKey(key).apiBase(base).verifySsl(false).build();
-        var reqCfg = ModelRequestConfig.builder()
-                .modelName(System.getenv().getOrDefault("OPENJIUWEN_MODEL", "deepseek-v4-flash"))
-                .temperature(0.3).maxTokens(4000).build();
-        ReActAgent agent = new ReActAgent(AgentCard.builder().name("edpa-rail-mode-e2e").build());
-        agent.setLlm(new com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel(cliCfg, reqCfg));
+        ReActAgent agent = newToolCallingAgent("edpa-rail-mode-e2e",
+                System.getenv("OPENJIUWEN_API_KEY"), System.getenv("OPENJIUWEN_BASE_URL"),
+                System.getenv().getOrDefault("OPENJIUWEN_MODEL", "deepseek-v4-flash"));
 
         // Rail mode (not tool mode)
         EdpaProperties props = new EdpaProperties();
@@ -207,8 +207,7 @@ class EdpaRailsAssemblyRealLlmE2eTest {
 
         // Rail mode should still produce events (ExploreRail fires SteeringEvent)
         List<RailEvent> events = new ArrayList<>(collectedEvents);
-        boolean hasAnyEvent = !events.isEmpty();
         LOG.log(Level.INFO, "[edpa-rails-rail-e2e] events={0}", events.size());
-        assertThat(hasAnyEvent).as("rail-mode agent must produce rail events (ExploreRail fires)").isTrue();
+        assertThat(events).as("rail-mode agent must produce rail events (ExploreRail fires)").isNotEmpty();
     }
 }

@@ -29,7 +29,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.logging.Logger;
 
@@ -165,14 +164,21 @@ public class EdpaAutoConfiguration {
      * (registered by {@code ReplanTool.registerOnto} during EDPA assembly) — an
      * observable proxy for "EDPA rails were registered on this agent".
      *
+     * <p>The probe runs through a {@link FutureTask} bridge so the ability manager's
+     * broad checked-exception contract surfaces as {@code ExecutionException} —
+     * a probe failure means "not assembled" (false), never propagates.
+     *
      * @param agent the agent to probe
      * @return true if EDPA assembly is detected
      */
     private static boolean hasEdpaRail(ReActAgent agent) {
+        FutureTask<Boolean> probe = new FutureTask<>(() -> agent.getAbilityManager().listToolInfo().stream()
+                .anyMatch(t -> "__replan__".equals(t.getName())));
+        probe.run();
         try {
-            return agent.getAbilityManager().listToolInfo().stream()
-                    .anyMatch(t -> "__replan__".equals(t.getName()));
-        } catch (Exception e) {
+            return probe.get();
+        } catch (InterruptedException | ExecutionException e) {
+            // probe failed — treat as "not assembled"
             return false;
         }
     }
