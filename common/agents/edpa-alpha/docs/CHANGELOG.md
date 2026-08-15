@@ -32,7 +32,9 @@ bean，或有 bean 但未挂 EDPA rail）。
 ### 变更明细
 
 - **新增 `EdpaRails.registerOnto`**：静态装配门面，单一装配真源。承载接线图契约
-  （`sharedReplanRail` 单实例共享预算 / `SteeringProvisionRail` 首位注册（issue-#13）/
+  （`sharedReplanRail` 单实例共享预算 / `SteeringProvisionRail` 绑定 String-invoke 路径的
+  steering 队列（issue-#13，靠 hook 隔离先于全部消费者——agent-core priority 为降序，
+  注册先后无执行语义）/
   `userInputRef` 闭包共享 / tool-rail 双模式分支）。返回 `RegistrationSummary` 供装配后断言。
 - **`EdpaAutoConfiguration` 基础设施化**：只保留 3 个基础设施 Bean
   （`EdpaProperties` / `CriteriaVerifier` / `Explorer`）+ 零命中 WARN 探测。
