@@ -17,7 +17,7 @@ EDPA-alpha 是 Spring Boot autoconfig + agent 库（无独立进程），但 MCP
 
 | 形态 | 物理位置 | 说明 |
 |---|---|---|
-| Spring Boot app | 宿主应用进程 | EdpaAutoConfiguration 经 BeanPostProcessor 自动给 ReActAgent 挂 rail。 |
+| Spring Boot app | 宿主应用进程 | 宿主在 @Bean AgentHandler 里显式调 EdpaRails.registerOnto；EdpaAutoConfiguration 只提供基础设施 Bean。 |
 | MCP subprocess | 宿主进程 fork 的子进程 | StdioMcpClient 启动 MCP 服务器 subprocess，经 stdin/stdout JSON-RPC 通信。 |
 
 ## 3. 进程与网络边界

@@ -126,7 +126,8 @@ SubAgentTool extends Tool
 ## 3. 逻辑责任面
 
 ```text
-┌─ autoconfigure ──────────── BeanPostProcessor → 给 ReActAgent 挂 rail（config-gated）
+┌─ (根) EdpaRails ─────────── registerOnto 静态装配门面（单一真源，config-gated）
+├─ autoconfigure ──────────── 基础设施 Bean（EdpaProperties/CriteriaVerifier/Explorer）+ 零命中探测
 ├─ verification ───────────── GroundTruthVerifier + DeterministicChecker + ProactiveConvergenceRail
 ├─ rail ──────────────────── ExploreRail + UserInputCaptureRail（注：DataFlowObserverRail 已于 MR !77 移除；EDPA 可观测性继承 react-rails RailTelemetry，无独立 OTel/DataFlow 层）
 ├─ explore ───────────────── Explorer/LlmExplorer + ExploreTool + ExploreBudget

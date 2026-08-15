@@ -21,21 +21,21 @@ FEAT-025 定义 `agents/edpa-alpha` 作为 **DeepAgent（ReAct）的认知增强
 
 - **Agent 开发者**：理解 EDPA 如何在 ReActAgent 上挂载认知 rail、如何写 DeterministicChecker、如何配置 convergence。
 - **同级模式作者**：理解 EDPA kernel的复用边界。
-- **平台集成方**：理解 EdpaAutoConfiguration 如何经 BeanPostProcessor 自动给 ReActAgent 挂 rail。
+- **平台集成方**：理解 EdpaRails.registerOnto 显式装配模式（EdpaAutoConfiguration 只提供基础设施 Bean）。
 - **测试与验收团队**：按 convergence fire / 确定性验证命中 / stall 检测设计验证场景。
 
 ## 2. 当前版本能力要求
 
 | 能力 | 要求级别 | 事实要求 |
 |---|---|---|
-| ReActAgent 认知 overlay | MUST | EDPA 必须经 BeanPostProcessor 给每个 ReActAgent bean 自动注册认知 rail（config-gated，`enabled=false` 默认关闭）。 |
+| ReActAgent 认知 overlay | MUST | 必须提供 `EdpaRails.registerOnto(agent, props, verifier, explorer)` 静态装配门面——单一装配真源（config-gated，`enabled=false` 默认关闭）。宿主在 `@Bean AgentHandler` 里显式调用（对齐官方 demo pattern，agent 不外露成 Spring bean）。 |
 | 主动收敛检测 | MUST | ProactiveConvergenceRail 必须在每个 tool round 后计算 success criteria 覆盖率，追踪滑动窗口覆盖率历史，检测停滞（flatlined stallWindow 轮且 coverage < coverageCritical），在停滞入口（edge-triggered）推 convergence steering。 |
 | 确定性验证层 | MUST | GroundTruthVerifier 必须先匹配 DeterministicChecker（零 LLM，纯计算），不命中的 criteria 才 fall through 到 keyword 验证。 |
 | DeterministicChecker SPI | MUST | 必须提供 SPI 接口，允许宿主注入领域特定 checker（如理赔 85% 共担、医疗≥50000 阈值），checker 声明它 own 哪些 criteria（`matches`）并确定性校验（`check`）。 |
 | 探索能力 | MUST（tool 模式注册见 FEAT-026） | 必须支持两种探索模式：tool 模式（ExploreTool 注册为可调用工具）和 rail 模式（ExploreRail 钩 afterModelCall（探索注入） 注入探索结果）。预算受限（maxRounds/maxSubAgents/timeout）。 |
 | EdpaKernel 决策核心 | MUST | 必须提供 EdpaKernel.toReplanAction（RootCause→ReplanAction IFF 映射），是 PEV kernel 的独立拷贝。 |
 | 数据流观测 | —（已移除） | DataFlowObserverRail（MR !77 移除：ext 层 OTel-as-source 错层；EDPA 无自带 OTel/DataFlow 层，deferred）。 |
-| 用户输入捕获 | MUST | UserInputCaptureRail 必须缓存首轮用户输入，供 ExploreTool 作为探索上下文。 |
+| 用户输入捕获 | MUST（tool 模式） | UserInputCaptureRail 必须缓存首轮用户输入，供 ExploreTool 作为探索上下文（tool 模式自动挂载；rail 模式不挂——rail 模式经 pushSteering 直接注入 findings）。 |
 | 配置 | MUST | EdpaProperties 必须暴露：enabled / exploreMode / exploreRounds / maxSubagents / exploreTimeout / criteria / maxReplan / proactiveConvergenceEnabled / proactiveConvergenceStallWindow。 |
 | LLM 响应提取 | SPI（内部工具） | LlmResponseExtractor 必须跨 provider 提取 LLM 响应内容（兼容不同 SDK 的 content 嵌套差异）。 |
 | 多 agent 编排 | OUT | 不承诺核心 EDPA 内置多 agent fan-out（SubAgent 派发属 FEAT-025）。 |
@@ -45,7 +45,7 @@ FEAT-025 定义 `agents/edpa-alpha` 作为 **DeepAgent（ReAct）的认知增强
 
 | 接入面 | 类型 | 输入要求 | 输出要求 | 约束 |
 |---|---|---|---|---|
-| EdpaAutoConfiguration | Spring @AutoConfiguration | EdpaProperties 配置 | BeanPostProcessor 自动给 ReActAgent 挂 rail | `enabled=false` 默认关闭。 |
+| EdpaAutoConfiguration | Spring @AutoConfiguration | EdpaProperties 配置 | 基础设施 Bean（EdpaProperties / CriteriaVerifier / Explorer）+ 零命中 WARN 探测 | `enabled=false` 默认关闭；rail 装配由宿主显式调 `EdpaRails.registerOnto`。 |
 | DeterministicChecker | SPI | `matches(criterion)` + `check(criterion, output, history)` | `Violation` 或 null（通过） | 零 LLM，纯函数；同输入同输出。 |
 | Explorer | SPI | `explore(topic, budget)` | `ExplorationResult(findings, candidateApproaches)` | 预算受限。 |
 | CriteriaVerifier | SPI | `verify(criteria, output, decisionHistory)` | `List<Violation>` | GroundTruthVerifier 是默认实现。 |

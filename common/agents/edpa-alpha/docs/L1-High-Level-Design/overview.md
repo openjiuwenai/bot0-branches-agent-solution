@@ -56,13 +56,13 @@ EDPA-alpha = ReActAgent + 认知 overlay + 能力扩展
               │
   ┌─ 认知 overlay（FEAT-025）─────────────────────────────────────┐
   │                                                                │
-  │  EDPA 新建 rail（autoconfig 注册）：                            │
+  │  EDPA 新建 rail（EdpaRails.registerOnto 显式装配）：           │
   │  ├ ProactiveConvergenceRail ── afterModelCall: coverage →     │
   │  │    stall 检测 → edge-triggered convergence steering         │
   │  ├ ExploreRail（rail）/ ExploreTool（tool）── 探索              │
-  │  └ UserInputCaptureRail ── 缓存首轮输入                         │
+  │  └ UserInputCaptureRail ── 缓存首轮输入（tool 模式）            │
   │                                                                │
-  │  复用 react-rails（autoconfig 注册）：                          │
+  │  复用 react-rails（同一装配门面注册）：                          │
   │  ├ CriteriaReplanBridgeRail ── criteria 验证 + replan 桥接     │
   │  ├ ReplanRail + ReplanTool ── 重试上限 + 工具                  │
   │  └ RootCauseRail ── DeviceFailure 降级门                         │
@@ -77,7 +77,8 @@ EDPA-alpha = ReActAgent + 认知 overlay + 能力扩展
   └───────────────────────────────────────────────────────────────┘
               │
               ▼  Spring Boot @AutoConfiguration
-  EdpaAutoConfiguration（BeanPostProcessor → 给每个 ReActAgent 挂 rail）
+  EdpaRails.registerOnto（宿主显式装配，单一真源）
+  EdpaAutoConfiguration（基础设施 Bean + 零命中 WARN 探测）
   EdpaProperties（enabled / exploreMode / criteria / maxReplan / convergence...）
 ```
 

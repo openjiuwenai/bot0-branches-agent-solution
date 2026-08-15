@@ -18,7 +18,7 @@ dependency: [overview.md, logical.md, ../features/FEAT-025-edpa-cognitive-loop.m
 ```text
 ReActAgent.invoke
  │
- ├─ beforeModelCall ◀── UserInputCaptureRail（首轮：缓存用户输入）
+ ├─ beforeModelCall ◀── UserInputCaptureRail（tool 模式首轮：缓存用户输入）
  │                      ExploreRail（rail 模式：记录探索轮次到 extra）
  ├─ LLM 推理（reason）──▶ tool call 决策
  ├─ afterModelCall ◀─── ProactiveConvergenceRail（convergence 检测，见 §3）
@@ -116,6 +116,6 @@ afterModelCall（每个 reason 后自动）
 
 - 领域对象、责任面、状态模型：`logical.md`。
 - 包/依赖红线/SPI/测试：`development.md`。
-- 部署/MCP subprocess/OTel/国产化：`physical.md`。
+- 部署/MCP subprocess/国产化：`physical.md`。
 - 技术场景：`scenarios.md`。
 - 详细设计：L2 `Feat-Func-025` + `Feat-Func-026`。

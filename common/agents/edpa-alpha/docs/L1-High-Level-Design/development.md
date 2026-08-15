@@ -19,7 +19,8 @@ dependency: [overview.md, logical.md]
 common/agents/edpa-alpha/
 ├── pom.xml          依赖 agent-core-java + react-rails + spring-boot-autoconfigure（OTel 依赖已移除，MR !77）
 └── src/main/java/com/openjiuwen/agents/edpa/
-    ├── autoconfigure/   Spring @AutoConfiguration + EdpaProperties
+    ├── EdpaRails.java   registerOnto 静态装配门面（单一装配真源）
+    ├── autoconfigure/   Spring @AutoConfiguration + EdpaProperties（基础设施 Bean）
     ├── kernel/          EdpaKernel + RootCause + ReplanAction
     ├── verification/    GroundTruthVerifier + DeterministicChecker + ProactiveConvergenceRail
     ├── rail/            ExploreRail + UserInputCaptureRail（DataFlowObserverRail 已移除，MR !77）
@@ -44,7 +45,7 @@ common/agents/edpa-alpha/
 |---|---|
 | `agent-core-java` | ReActAgent / BaseAgent / rail.* / AgentCard / Tool |
 | `react-rails` | CriteriaVerifier / Violation / ReplanRail 等认知 rail 基座 |
-| `spring-boot-autoconfigure` | EdpaAutoConfiguration @AutoConfiguration + BeanPostProcessor |
+| `spring-boot-autoconfigure` | EdpaAutoConfiguration @AutoConfiguration（基础设施 Bean，不装配 agent） |
 
 ### 3.3 公共 SPI 红线
 

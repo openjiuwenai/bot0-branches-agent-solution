@@ -45,15 +45,21 @@ EDPA 在 ReActAgent reason+act 循环上叠加主动收敛、确定性验证和�
 ### 2.1 接入契约
 
 ```java
-// Spring Boot 配置
+// Spring Boot 配置（基础设施 Bean，不装配 agent —— 对齐官方 agent-service-app 模式）
 @AutoConfiguration
 public class EdpaAutoConfiguration {
     @Bean public EdpaProperties edpaProperties() { ... }
-    @Bean public CriteriaVerifier edpaCriteriaVerifier() { ... }  // GroundTruthVerifier
+    @Bean public CriteriaVerifier edpaCriteriaVerifier() { ... }  // 默认 RuleBasedCriteriaVerifier
     @Bean public Explorer edpaExplorer(properties, modelProvider) { ... }  // LlmExplorer
-    @Bean public BeanPostProcessor edpaRegistrar(properties, verifier, explorer) {
-        // postProcessAfterInitialization: 给每个 ReActAgent 挂 rail
-    }
+}
+
+// 装配显式化：宿主在 @Bean AgentHandler 里调用（agent 不外露成 Spring bean）
+@Bean
+AgentHandler myAgentHandler(LlmConfigResolver r, EdpaProperties props,
+        CriteriaVerifier verifier, Explorer explorer) {
+    ReActAgent agent = ExampleReActAgentFactory.build("my-agent", ..., llm);
+    EdpaRails.registerOnto(agent, props, verifier, explorer);  // 单一装配真源
+    return new JiuwenCoreAgentHandler(agent);
 }
 ```
 
@@ -86,7 +92,7 @@ edpa:
 
 ### 3.1 EdpaAutoConfiguration wiring
 
-BeanPostProcessor 给每个 ReActAgent bean 注册 rail（config-gated）：
+`EdpaRails.registerOnto` 显式装配（单一真源，config-gated），装配顺序：
 1. tool 模式 → UserInputCaptureRail + ExploreToolRegistrar。
 2. rail 模式 → ExploreRail。
 3. criteria 非空 → CriteriaReplanBridgeRail +（可选）ProactiveConvergenceRail。
@@ -187,7 +193,7 @@ public class ClaimDeductibleChecker implements DeterministicChecker {
 
 | 编号 | 要求 |
 |---|---|
-| R-1 | ReActAgent bean 必须经 Spring 容器创建（BeanPostProcessor 才能拦截）。 |
+| R-1 | 宿主必须在 `@Bean AgentHandler` 方法里显式调用 `EdpaRails.registerOnto(agent, props, verifier, explorer)`（官方 demo pattern；agent 无需外露成 Spring bean）。autoconfig 会在启用但零命中时 WARN。 |
 | R-2 | ⚠ 当前 autoconfig 不自动发现 DeterministicChecker（用空 checker 构造 GroundTruthVerifier），需宿主手动 `new GroundTruthVerifier(List.of(myChecker))` 注入；宿主声明 own 哪些 criteria。 |
 | R-3 | DataFlowObserverRail 已于 MR !77 移除；EDPA 当前不产出 OTel span，可观测性继承 agent-core-ext-react-rails 的 RailTelemetry（SteeringEvent "EXPLORE_FINDINGS" / "CONVERGENCE_STALL"）。 |
 | R-4 | criteria 列表必须非空才启用 convergence（空列表 = 不检测）。 |
