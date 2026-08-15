@@ -59,6 +59,7 @@ AgentHandler myAgentHandler(LlmConfigResolver r, EdpaProperties props,
         CriteriaVerifier verifier, Explorer explorer) {
     ReActAgent agent = ExampleReActAgentFactory.build("my-agent", ..., llm);
     EdpaRails.registerOnto(agent, props, verifier, explorer);  // 单一装配真源
+    ReactRailsObservability.install(agent);  // 必调：不装则 ForceFinishEvent 静默不 fire
     return new JiuwenCoreAgentHandler(agent);
 }
 ```

@@ -9,6 +9,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.openjiuwen.agents.edpa.EdpaRails;
 import com.openjiuwen.agents.edpa.explore.ExplorationResult;
 import com.openjiuwen.agents.edpa.explore.Explorer;
+import com.openjiuwen.agents.reactrails.replan.ReplanRail;
+import com.openjiuwen.agents.reactrails.verification.CriteriaReplanBridgeRail;
 import com.openjiuwen.agents.reactrails.verification.CriteriaVerifier;
 import com.openjiuwen.agents.reactrails.verification.RuleBasedCriteriaVerifier;
 import com.openjiuwen.core.singleagent.agents.ReActAgent;
@@ -16,7 +18,9 @@ import com.openjiuwen.core.singleagent.schema.AgentCard;
 
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Set;
 
 /**
  * EdpaRails.registerOnto bearing tests — assembly truth source (C1/C2 refactor).
@@ -81,24 +85,58 @@ class EdpaAutoConfigurationTest {
         assertThat(hasReplanTool).as("ReplanTool.registerOnto must make __replan__ visible to the LLM").isTrue();
     }
 
+    /**
+     * Wiring graph contract, asserted for real (4-lens BLOCKER fix): the ReplanRail
+     * passed to CriteriaReplanBridgeRail and the one registered on the agent MUST be
+     * the SAME instance — violation = 2× replan budget (bridge counter + LLM
+     * {@code __replan__} counter each get their own limit).
+     *
+     * <p>Access path: {@code getAgentCallbackManager()} (public API) → reflect the
+     * {@code railRegistrations} map (private) for all registered rails; reflect the
+     * bridge's private {@code replanRail} field; assertSame. mutation-RED (verified
+     * 2026-08-15): change {@code agent.registerRail(sharedReplanRail)} to
+     * {@code agent.registerRail(new ReplanRail(...))} → this test fails.
+     */
     @Test
-    void registerOnto_sharedReplanRailWiringDocumented() {
-        // Wiring graph contract (documented, not directly assertable — BaseAgent has
-        // no rail listing API): the ReplanRail passed to CriteriaReplanBridgeRail and
-        // the one registered on the agent MUST be the same instance. Violation = 2×
-        // replan budget (4-lens MAJOR #1). EdpaRails.registerOnto enforces this by
-        // constructing ONE sharedReplanRail variable and passing it to both.
-        // mutation-RED: change `agent.registerRail(sharedReplanRail)` to
-        // `agent.registerRail(new ReplanRail(...))` → bridge and agent counters diverge
-        // → e2e replan budget assertion (2× budget) catches the bug.
+    void registerOnto_sharedReplanRailIsSingleInstance() throws Exception {
         EdpaProperties props = new EdpaProperties();
         props.setMaxReplan(3);
         props.setCriteria(List.of("必须包含金额"));
-        var summary = EdpaRails.registerOnto(newTestAgent(), props,
-                new RuleBasedCriteriaVerifier(), noopExplorer());
+        ReActAgent agent = newTestAgent();
+        EdpaRails.registerOnto(agent, props, new RuleBasedCriteriaVerifier(), noopExplorer());
 
-        assertThat(summary.replanBudget()).as("summary must reflect configured budget").isEqualTo(3);
-        assertThat(summary.criteriaRailCount()).as("bridge registered with shared budget").isEqualTo(1);
+        Set<com.openjiuwen.core.singleagent.rail.AgentRail> rails = registeredRails(agent);
+        ReplanRail replanRail = rails.stream().filter(r -> r instanceof ReplanRail)
+                .map(r -> (ReplanRail) r).findFirst()
+                .orElseThrow(() -> new AssertionError("no ReplanRail registered on agent"));
+        CriteriaReplanBridgeRail bridge = rails.stream().filter(r -> r instanceof CriteriaReplanBridgeRail)
+                .map(r -> (CriteriaReplanBridgeRail) r).findFirst()
+                .orElseThrow(() -> new AssertionError("no CriteriaReplanBridgeRail registered on agent"));
+
+        Field bridgeField = CriteriaReplanBridgeRail.class.getDeclaredField("replanRail");
+        bridgeField.setAccessible(true);
+        assertThat(bridgeField.get(bridge))
+                .as("bridge's replan counter must be the SAME instance as the registered ReplanRail "
+                        + "(violation = 2× replan budget)")
+                .isSameAs(replanRail);
+    }
+
+    /**
+     * Reflects the agent callback manager's rail registrations to enumerate all
+     * rails registered on the agent.
+     *
+     * @param agent the agent assembled by registerOnto
+     * @return all registered AgentRail instances
+     * @throws Exception if reflection into agent-core internals fails
+     */
+    private static Set<com.openjiuwen.core.singleagent.rail.AgentRail> registeredRails(ReActAgent agent)
+            throws Exception {
+        var manager = agent.getAgentCallbackManager();
+        Field regField = manager.getClass().getDeclaredField("railRegistrations");
+        regField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        var map = (java.util.Map<com.openjiuwen.core.singleagent.rail.AgentRail, ?>) regField.get(manager);
+        return map.keySet();
     }
 
     @Test

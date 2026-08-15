@@ -42,6 +42,10 @@ import java.util.concurrent.atomic.AtomicReference;
  * AgentHandler myAgentHandler(LlmConfigResolver r) {
  *     ReActAgent agent = ExampleReActAgentFactory.build("my-agent", ..., llm);
  *     EdpaRails.registerOnto(agent, props, verifier, explorer);
+ *     // MANDATORY observability bootstrap — EdpaRails does NOT install it.
+ *     // Skipping this leaves forceFinish functional but UNOBSERVABLE
+ *     // (no ForceFinishEvent ever fires — the e2e suite stepped on this).
+ *     ReactRailsObservability.install(agent);
  *     return new JiuwenCoreAgentHandler(agent);
  * }
  * }</pre>

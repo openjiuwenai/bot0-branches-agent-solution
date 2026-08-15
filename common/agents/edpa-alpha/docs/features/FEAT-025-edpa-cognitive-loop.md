@@ -32,7 +32,7 @@ FEAT-025 定义 `agents/edpa-alpha` 作为 **DeepAgent（ReAct）的认知增强
 | 主动收敛检测 | MUST | ProactiveConvergenceRail 必须在每个 tool round 后计算 success criteria 覆盖率，追踪滑动窗口覆盖率历史，检测停滞（flatlined stallWindow 轮且 coverage < coverageCritical），在停滞入口（edge-triggered）推 convergence steering。 |
 | 确定性验证层 | MUST | GroundTruthVerifier 必须先匹配 DeterministicChecker（零 LLM，纯计算），不命中的 criteria 才 fall through 到 keyword 验证。 |
 | DeterministicChecker SPI | MUST | 必须提供 SPI 接口，允许宿主注入领域特定 checker（如理赔 85% 共担、医疗≥50000 阈值），checker 声明它 own 哪些 criteria（`matches`）并确定性校验（`check`）。 |
-| 探索能力 | MUST（tool 模式注册见 FEAT-026） | 必须支持两种探索模式：tool 模式（ExploreTool 注册为可调用工具）和 rail 模式（ExploreRail 钩 afterModelCall（探索注入） 注入探索结果）。预算受限（maxRounds/maxSubAgents/timeout）。 |
+| 探索能力 | MUST（tool 模式注册见 FEAT-026） | 必须支持两种探索模式：tool 模式（ExploreTool 注册为可调用工具）和 rail 模式（ExploreRail 钩 afterModelCall（探索注入） 注入探索结果）。预算约束：仅 maxRounds 当前被生产消费（ExploreRail）；maxSubAgents/timeout 是 planned 配置面，当前无生产消费者（4-lens 诚实化 2026-08-15，实现 defer）。 |
 | EdpaKernel 决策核心 | MUST | 必须提供 EdpaKernel.toReplanAction（RootCause→ReplanAction IFF 映射），是 PEV kernel 的独立拷贝。 |
 | 数据流观测 | —（已移除） | DataFlowObserverRail（MR !77 移除：ext 层 OTel-as-source 错层；EDPA 无自带 OTel/DataFlow 层，deferred）。 |
 | 用户输入捕获 | MUST（tool 模式） | UserInputCaptureRail 必须缓存首轮用户输入，供 ExploreTool 作为探索上下文（tool 模式自动挂载；rail 模式不挂——rail 模式经 pushSteering 直接注入 findings）。 |

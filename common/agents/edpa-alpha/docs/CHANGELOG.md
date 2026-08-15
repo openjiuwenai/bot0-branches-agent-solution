@@ -21,11 +21,16 @@ AgentHandler myAgentHandler(LlmConfigResolver r, EdpaProperties props,
         CriteriaVerifier verifier, Explorer explorer) {
     ReActAgent agent = ExampleReActAgentFactory.build("my-agent", ..., llm);
     EdpaRails.registerOnto(agent, props, verifier, explorer);  // ← 加这一行
+    ReactRailsObservability.install(agent);  // ← 可观测性引导（必调，见下注）
     return new JiuwenCoreAgentHandler(agent);
 }
 ```
 
 未迁移的症状：EDPA 零生效（无 Explore / 无 criteria verify / 无 `__replan__` 工具）。
+
+**`ReactRailsObservability.install(agent)` 必调**（EdpaRails 有意不内置——install 会替换
+telemetry listener，语义上属宿主关注点）：不调用时 forceFinish 照常执行，但
+ForceFinishEvent 永不 fire——Exit-1/Exit-3 转换全部静默不可观测（本仓 e2e 开发中实际踩过）。
 零命中探测器会在 `ContextRefreshedEvent` 时 WARN（覆盖两种形态：上下文无 ReActAgent
 bean，或有 bean 但未挂 EDPA rail）。
 
