@@ -66,7 +66,8 @@ class TestEvolveConfig:
         assert config.vision_api_key == ""
         assert config.vision_base_url == ""
 
-    def test_vision_model_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    @staticmethod
+    def test_vision_model_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         """EVO_VISION_* 环境变量被正确读取。"""
         monkeypatch.setenv("EVO_VISION_MODEL", "gpt-4o-vision")
         monkeypatch.setenv("EVO_VISION_API_KEY", "vision-key-123")

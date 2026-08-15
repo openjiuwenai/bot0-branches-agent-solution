@@ -224,7 +224,8 @@ DEFAULT_SEED_PROMPT = """你是一个高速公路监控系统助手。你的任�
 async def main():
     config = EvolveConfig()
     logger.info("=" * 60)
-    logger.info("GEPA 优化 | optimizer=%s vision=%s", config.optimizer_model, (config.vision_model or '').strip() or config.target_model)
+    vision = (config.vision_model or '').strip() or config.target_model
+    logger.info("GEPA 优化 | optimizer=%s vision=%s", config.optimizer_model, vision)
 
     # 数据集 — 请将 JSONL 文件放入 gepa_dataset/ 目录
     dataset_dir = _PROJECT_ROOT / "examples" / "scenarios" / "gepa" / "gepa_dataset"

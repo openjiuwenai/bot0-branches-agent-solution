@@ -119,8 +119,10 @@ def test_get_state_load_state() -> None:
 def pytest_approx(expected: float) -> Any:
     """Simple approx helper."""
     class _Approx:
+
         def __init__(self, val: float) -> None:
             self.val = val
+
         def __eq__(self, other: object) -> bool:
             return abs(self.val - float(other)) < 1e-6
     return _Approx(expected)
