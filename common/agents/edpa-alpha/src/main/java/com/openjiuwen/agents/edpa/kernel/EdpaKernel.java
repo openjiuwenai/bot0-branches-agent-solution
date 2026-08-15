@@ -12,6 +12,14 @@ import java.util.Set;
  * <p>Zero LLM, zero framework coupling. Replaces the pev kernel dependency:
  * EDPA-alpha and PEV are peer agents that must not depend on each other.
  *
+ * <p><b>Honest boundary (4-lens 2026-08-16)</b>: the sole EDPA production caller is
+ * {@code ProactiveConvergenceRail} on convergence stall, which always passes
+ * {@code PlanOrAnswerError} with empty failed nodes — so only the
+ * empty-nodes {@code GlobalReplan} path fires in production. The other branches
+ * (device/perception degrade, local/global split by node count) are unreachable in EDPA
+ * today and exist to keep this a faithful PevKernel port; they are pinned by
+ * {@code EdpaKernelTest} rather than left as untested dead arms.
+ *
  * <p><b>Drift boundary (honest)</b>: {@link #toReplanAction} is a byte-identical port of
  * {@code PevKernel.toReplanAction}. There is currently NO automated cross-module sync
  * (no property/equivalence test). If PEV changes the IFF contract (thresholds, new RootCause

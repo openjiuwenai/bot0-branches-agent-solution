@@ -7,8 +7,14 @@ package com.openjiuwen.agents.edpa.kernel;
 import java.util.Set;
 
 /**
- * What to do next — 3-state sealed dispatch, output of {@link EdpaKernel#toReplanAction},
- * consumed by the EDPA agent loop's explicit dispatcher.
+ * What to do next — 3-state sealed dispatch, output of {@link EdpaKernel#toReplanAction}.
+ *
+ * <p><b>Honest boundary (4-lens 2026-08-16)</b>: EDPA production has exactly ONE consumer —
+ * {@link com.openjiuwen.agents.edpa.verification.ProactiveConvergenceRail}, and it acts only
+ * on {@link GlobalReplan} (steering push on convergence stall); {@link LocalReplan} and
+ * {@link AcceptPartial} are silently skipped on that path by design (stall semantics need a
+ * global re-plan) and have no other EDPA consumer today. They are retained from the
+ * PevKernel port and pinned by {@code EdpaKernelTest}.
  *
  * <p>Layers (keep distinct — do not collapse into one type):
  * <ul>
