@@ -116,7 +116,8 @@ public class EdpaTodoRail extends DeepAgentRail {
      * @param ToolConstants.CALL_VERSATILE the ToolConstants.CALL_VERSATILE value
      * @return the result
      */
-    private static final Set<String> BUSINESS_TOOLS = Set.of(ToolConstants.CALL_MCP, ToolConstants.CALL_VERSATILE);
+    private static final Set<String> BUSINESS_TOOLS = Set.of(ToolConstants.CALL_MCP, ToolConstants.CALL_VERSATILE,
+            ToolConstants.CALL_SUBAGENT);
 
     /**
      * 解析 LLM 原始 JSON 字符串形式 toolArgs（Core 经 ToolCallInputs 暴露给 rail 的是 String）。
@@ -224,7 +225,7 @@ public class EdpaTodoRail extends DeepAgentRail {
      *
      * <p>对 todo_create / todo_modify 生效（enriched字段、打anchor）。</p>
      *
-     * <p><b>规划前置守卫（bug 修复）</b>：当业务工具（call_mcp / call_versatile）被调用、
+     * <p><b>规划前置守卫（bug 修复）</b>：当业务工具（call_mcp / call_versatile / call_subagent）被调用、
      * 而当前会话尚未通过 todo_create 规划任何任务时，跳过本次工具执行并返回 PLAN_FIRST 合成结果，
      * 同时推送 steering 强制 LLM 先用 todo_create 规划。这根治「LLM 跳过规划直接调工具」的提示词不可靠问题
      * （harness SkillUseRail 的"先读 SKILL.md"指令与 EDPA"先规划"指令竞争，纯提示词无法保证）。</p>
@@ -451,7 +452,7 @@ public class EdpaTodoRail extends DeepAgentRail {
         inputs.setToolMsg(ToolMessage.builder().content(synthetic).toolCallId(callId).build());
 
         // steering 额外强化（若 ctx 已绑定 steeringQueue 则生效）
-        ctx.pushSteering("系统强制要求：执行任何业务工具（call_mcp/call_versatile）"
+        ctx.pushSteering("系统强制要求：执行任何业务工具（call_mcp/call_versatile/call_subagent）"
                 + "前必须先用 todo_create 按 catalog_id 创建任务列表。你刚才调用 "
                 + toolName + " 被blocked了。请立即调用 todo_create 规划任务，" + "然后再继续。不要跳过规划直接回答。");
     }

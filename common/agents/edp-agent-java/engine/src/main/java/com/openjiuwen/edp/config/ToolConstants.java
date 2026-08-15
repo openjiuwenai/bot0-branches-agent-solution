@@ -43,6 +43,9 @@ public final class ToolConstants {
     /** Call versatile tool name. */
     public static final String CALL_VERSATILE = "call_versatile";
 
+    /** Call subagent tool name（动态 agent_name，从 Skill 配置读取）。 */
+    public static final String CALL_SUBAGENT = "call_subagent";
+
     /** Ask user tool name. */
     public static final String ASK_USER = "ask_user";
 

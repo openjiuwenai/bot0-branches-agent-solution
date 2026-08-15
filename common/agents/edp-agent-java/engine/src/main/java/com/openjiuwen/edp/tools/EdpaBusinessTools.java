@@ -57,6 +57,12 @@ public final class EdpaBusinessTools {
     public static final String TOOL_CALL_VERSATILE = "call_versatile";
 
     /**
+     * 通用子智能体委托调用工具名（agent_name 由 Skill 配置动态传入）。
+     */
+
+    public static final String TOOL_CALL_SUBAGENT = "call_subagent";
+
+    /**
      * 用户追问工具名。该工具需要触发 OpenJiuwen interrupt，而不是普通工具返回。
      */
 
