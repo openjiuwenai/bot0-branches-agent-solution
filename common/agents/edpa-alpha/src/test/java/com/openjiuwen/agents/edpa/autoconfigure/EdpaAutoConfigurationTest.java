@@ -96,6 +96,9 @@ class EdpaAutoConfigurationTest {
      * bridge's private {@code replanRail} field; assertSame. mutation-RED (verified
      * 2026-08-15): change {@code agent.registerRail(sharedReplanRail)} to
      * {@code agent.registerRail(new ReplanRail(...))} → this test fails.
+     *
+     * @throws Exception if reflection into agent-core internals (railRegistrations /
+     *                   the bridge's replanRail field) fails
      */
     @Test
     void registerOnto_sharedReplanRailIsSingleInstance() throws Exception {

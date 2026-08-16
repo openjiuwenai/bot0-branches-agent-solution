@@ -17,7 +17,7 @@ import java.util.function.Supplier;
  * <p>Mirrors {@code ReplanTool.registerOnto}'s dual-registration contract:
  * <ol>
  *   <li>{@code agent.getAbilityManager().add(card)} — LLM visibility (listToolInfo)</li>
-     *   <li>{@code Runner.resourceMgr().addTool(tool, agentId)} — runtime dispatch</li>
+ *   <li>{@code Runner.resourceMgr().addTool(tool, agentId)} — runtime dispatch</li>
  * </ol>
  *
  * <p><b>承重缺陷 D 治本</b>: ExploreTool.invoke needs userInput from a

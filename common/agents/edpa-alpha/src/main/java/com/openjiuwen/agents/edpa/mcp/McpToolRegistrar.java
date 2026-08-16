@@ -19,7 +19,7 @@ import java.util.Set;
  * {@code ReplanTool.registerOnto} dual-registration contract, per tool:
  * <ol>
  *   <li>{@code agent.getAbilityManager().add(card)} — LLM visibility (listToolInfo)</li>
-     *   <li>{@code Runner.resourceMgr().addTool(adapter, agentId)} — runtime dispatch</li>
+ *   <li>{@code Runner.resourceMgr().addTool(adapter, agentId)} — runtime dispatch</li>
  * </ol>
  *
  * <p>This is the workaround entry point: instead of

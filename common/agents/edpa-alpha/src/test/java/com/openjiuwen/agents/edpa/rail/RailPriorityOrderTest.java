@@ -15,6 +15,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
 
 /**
  * agent-core rail priority 排序方向的生态级承重回归（2026-08-15 GEPA 三物种裁决的固化）。
@@ -30,22 +32,27 @@ import java.util.List;
  *
  * <p>Method: two probe rails (priority 1 vs 10) registered in both orders on a bare
  * {@link ReActAgent}; invoke throws without an LLM (expected — only the beforeInvoke
- * records matter). Content-IFF assertion: the sequence must equal the descending order
- * in BOTH registration orders (proves priority, not registration, drives execution).
+ * records matter, captured through a FutureTask bridge). Content-IFF assertion: the
+ * sequence must equal the descending order in BOTH registration orders (proves
+ * priority, not registration, drives execution).
  *
  * @since 2026-08
  */
 class RailPriorityOrderTest {
+    /** Per-test execution-order record (JUnit creates a fresh instance per method). */
+    private final List<String> order = new ArrayList<>();
 
-    /** Shared execution-order record; cleared per test method. */
-    static final List<String> ORDER = new ArrayList<>();
-
-    /** Probe rail with priority 1. */
+    /** Probe rail with priority 1, recording into the injected list. */
     static class ProbeRailA extends AgentRail {
+        private final List<String> sink;
+
         /**
-         * Construct with priority 1.
+         * Construct with priority 1, recording executions into the given sink.
+         *
+         * @param sink execution-order record (written on each beforeInvoke)
          */
-        ProbeRailA() {
+        ProbeRailA(List<String> sink) {
+            this.sink = sink;
             setPriority(1);
         }
 
@@ -56,16 +63,21 @@ class RailPriorityOrderTest {
          */
         @Override
         public void beforeInvoke(AgentCallbackContext ctx) {
-            ORDER.add("A(p1)");
+            sink.add("A(p1)");
         }
     }
 
-    /** Probe rail with priority 10. */
+    /** Probe rail with priority 10, recording into the injected list. */
     static class ProbeRailB extends AgentRail {
+        private final List<String> sink;
+
         /**
-         * Construct with priority 10.
+         * Construct with priority 10, recording executions into the given sink.
+         *
+         * @param sink execution-order record (written on each beforeInvoke)
          */
-        ProbeRailB() {
+        ProbeRailB(List<String> sink) {
+            this.sink = sink;
             setPriority(10);
         }
 
@@ -76,7 +88,7 @@ class RailPriorityOrderTest {
          */
         @Override
         public void beforeInvoke(AgentCallbackContext ctx) {
-            ORDER.add("B(p10)");
+            sink.add("B(p10)");
         }
     }
 
@@ -86,16 +98,11 @@ class RailPriorityOrderTest {
      */
     @Test
     void prioritySortsDescendingRegisterLowFirst() {
-        ORDER.clear();
         ReActAgent agent = new ReActAgent(AgentCard.builder().name("probe").build());
-        agent.registerRail(new ProbeRailA());
-        agent.registerRail(new ProbeRailB());
-        try {
-            agent.invoke("hi", null); // no LLM configured — exception is expected, ignored
-        } catch (Exception expected) {
-            // we only need the beforeInvoke execution records
-        }
-        assertThat(ORDER)
+        agent.registerRail(new ProbeRailA(order));
+        agent.registerRail(new ProbeRailB(order));
+        invokeExpectingFailure(agent);
+        assertThat(order)
                 .as("priority 10 must fire before priority 1 (descending), registration order A→B")
                 .containsExactly("B(p10)", "A(p1)");
     }
@@ -106,17 +113,29 @@ class RailPriorityOrderTest {
      */
     @Test
     void prioritySortsDescendingRegisterHighFirst() {
-        ORDER.clear();
         ReActAgent agent = new ReActAgent(AgentCard.builder().name("probe").build());
-        agent.registerRail(new ProbeRailB());
-        agent.registerRail(new ProbeRailA());
-        try {
-            agent.invoke("hi", null); // no LLM configured — exception is expected, ignored
-        } catch (Exception expected) {
-            // we only need the beforeInvoke execution records
-        }
-        assertThat(ORDER)
+        agent.registerRail(new ProbeRailB(order));
+        agent.registerRail(new ProbeRailA(order));
+        invokeExpectingFailure(agent);
+        assertThat(order)
                 .as("priority 10 must fire before priority 1 (descending), registration order B→A")
                 .containsExactly("B(p10)", "A(p1)");
+    }
+
+    /**
+     * Invokes without an LLM configured through a FutureTask bridge so the expected
+     * no-LLM failure surfaces as {@code ExecutionException} — only the already-recorded
+     * beforeInvoke executions matter, the failure itself is irrelevant.
+     *
+     * @param agent the probe agent (two rails registered, no LLM)
+     */
+    private static void invokeExpectingFailure(ReActAgent agent) {
+        FutureTask<Object> invocation = new FutureTask<>(() -> agent.invoke("hi", null));
+        invocation.run();
+        try {
+            invocation.get();
+        } catch (InterruptedException | ExecutionException expected) {
+            // no LLM configured — both beforeInvoke hooks have already run at this point
+        }
     }
 }

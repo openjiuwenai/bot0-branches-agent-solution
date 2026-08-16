@@ -27,7 +27,6 @@ import java.util.Set;
  * @since 2026-08
  */
 class EdpaKernelTest {
-
     /**
      * 生产真实路径：PlanOrAnswerError + 空 failedNodes → GlobalReplan（convergence
      * stall 消费的唯一形态）。

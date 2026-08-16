@@ -285,9 +285,10 @@ class McpInvestmentResearchE2eTest {
     private ExplorationHarness wireRails(ReActAgent agent, String base, String key, String modelName) {
         AtomicInteger exploreCallCount = new AtomicInteger(0);
         AtomicReference<String> seenUserInput = new AtomicReference<>();
-        Function<String, String> explorerFn = buildExplorerLlmFn(base, key, modelName,
-                System.getenv().getOrDefault("OPENJIUWEN_COMPLETIONS_PATH", "/chat/completions"), exploreCallCount,
-                seenUserInput);
+        String completionsPath = System.getenv().getOrDefault("OPENJIUWEN_COMPLETIONS_PATH",
+                "/chat/completions");
+        Function<String, String> explorerFn = buildExplorerLlmFn(
+                new ExplorerHttpEndpoint(base, key, modelName, completionsPath), exploreCallCount, seenUserInput);
         Explorer explorer = new LlmExplorer(explorerFn, ExploreBudget.DEFAULT);
 
         EdpaProperties props = new EdpaProperties();
@@ -466,8 +467,23 @@ class McpInvestmentResearchE2eTest {
      *                         — the end-to-end capture assertion reads this after invoke
      * @return a function mapping an explorer prompt to the LLM-generated analysis text
      */
-    private static Function<String, String> buildExplorerLlmFn(String base, String key, String modelName, String path,
+    /**
+     * Explorer 直连 HTTP 端点（CodeCheck G.MET.01：六散参收敛为参数对象）。
+     *
+     * @param base API base URL
+     * @param key bearer API key
+     * @param modelName model name for the explorer LLM call
+     * @param path completions path appended to the base URL
+     */
+    private record ExplorerHttpEndpoint(String base, String key, String modelName, String path) {
+    }
+
+    private static Function<String, String> buildExplorerLlmFn(ExplorerHttpEndpoint endpoint,
             AtomicInteger exploreCallCount, AtomicReference<String> seenUserInput) {
+        String base = endpoint.base();
+        String key = endpoint.key();
+        String modelName = endpoint.modelName();
+        String path = endpoint.path();
         return prompt -> {
             exploreCallCount.incrementAndGet();
             seenUserInput.set(prompt);
