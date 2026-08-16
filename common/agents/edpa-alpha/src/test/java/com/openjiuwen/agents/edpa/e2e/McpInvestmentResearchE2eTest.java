@@ -157,11 +157,24 @@ class McpInvestmentResearchE2eTest {
         CountingMcpClient mcpClient = startAndRegisterMcp(agent);
         try {
             ExplorationHarness exploration = wireRails(agent, base, key, modelName);
+            // variables reassigned on content-empty retry (effective-final workaround below)
 
             LOG.log(Level.INFO, "[mcp-research] Starting EDPA investment research e2e...");
             Object result = agent.invoke(INVESTMENT_RESEARCH_TASK, null);
-
             String output = String.valueOf(result);
+
+            // Transient content-empty retry (matrix idiom): thinking-mode models occasionally
+            // return an answer terminal with EMPTY content (reasoning absorbed the turn —
+            // pro+thinking hit this in the 2026-08-16 matrix). One fresh retry before failing.
+            if (isBlankAnswer(result, output)) {
+                LOG.log(Level.WARNING, "[mcp-research] content-empty answer terminal — retrying once");
+                mcpClient.close();
+                agent = buildAgent(key, base, modelName);
+                mcpClient = startAndRegisterMcp(agent);
+                exploration = wireRails(agent, base, key, modelName);
+                result = agent.invoke(INVESTMENT_RESEARCH_TASK, null);
+                output = String.valueOf(result);
+            }
             int previewLen = Math.min(500, output.length());
             LOG.log(Level.INFO, "[mcp-research] output length: {0,number,#}", output.length());
             LOG.log(Level.INFO, "[mcp-research] output preview: {0}", output.substring(0, previewLen));
@@ -509,5 +522,21 @@ class McpInvestmentResearchE2eTest {
                 throw new IllegalStateException("Explorer LLM call failed: " + e.getMessage(), e);
             }
         };
+    }
+
+    /**
+     * Detects the transient content-empty answer terminal (reasoning absorbed the turn,
+     * answer content is blank while the loop terminated normally).
+     *
+     * @param result the raw invoke result
+     * @param output the stringified result
+     * @return true when the answer terminal carries no usable content
+     */
+    private static boolean isBlankAnswer(Object result, String output) {
+        String text = output;
+        if (result instanceof java.util.Map<?, ?> rm && rm.get("output") != null) {
+            text = String.valueOf(rm.get("output"));
+        }
+        return text == null || text.isBlank();
     }
 }

@@ -112,6 +112,13 @@ class EdpaRailsAssemblyRealLlmE2eTest {
                 java.util.Map.of("type", "thinking-on".equals(thinkingMode) ? "enabled" : "disabled"));
         ReActAgent agent = new ReActAgent(AgentCard.builder().name(name).build());
         agent.setLlm(new com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel(cliCfg, reqCfg));
+        // 15 iterations (SDK default 5): thinking-mode models produce longer turns and need
+        // more room to converge to a verified forceFinish terminal (pro+thinking exhausted
+        // 5 rounds mid-replan in the 2026-08-16 matrix).
+        Object cfg = agent.getConfig();
+        if (cfg instanceof com.openjiuwen.core.singleagent.agents.ReActAgentConfig reactCfg) {
+            reactCfg.configureMaxIterations(15);
+        }
         return agent;
     }
 
