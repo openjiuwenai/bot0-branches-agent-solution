@@ -17,11 +17,9 @@ import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
     from config import HotUpdateConfig, parse_hotupdate_args
 else:
     from .config import HotUpdateConfig, parse_hotupdate_args
