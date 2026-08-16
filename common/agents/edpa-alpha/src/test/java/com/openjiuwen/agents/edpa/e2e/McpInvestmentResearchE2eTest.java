@@ -232,8 +232,9 @@ class McpInvestmentResearchE2eTest {
     private static void configureThinkingMode(ModelRequestConfig reqCfg) {
         String tMode = System.getenv().getOrDefault("LLM_THINKING", "glm-off");
         switch (tMode) {
-            case "qwen-off" -> reqCfg.setExtraField("enable_thinking", false);
-            case "qwen-on" -> reqCfg.setExtraField("enable_thinking", true);
+            case "qwen-off" -> reqCfg.setExtraField("reasoning", Map.of("enabled", false));
+            case "qwen-on" -> reqCfg.setExtraField("reasoning",
+                    Map.of("enabled", true, "include_reasoning", true));
             case "thinking-on" -> reqCfg.setExtraField("thinking", Map.of("type", "enabled"));
             default -> reqCfg.setExtraField("thinking", Map.of("type", "disabled"));
         }

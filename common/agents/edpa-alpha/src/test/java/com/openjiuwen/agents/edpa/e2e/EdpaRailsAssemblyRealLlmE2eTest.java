@@ -107,9 +107,7 @@ class EdpaRailsAssemblyRealLlmE2eTest {
                 .apiKey(key).apiBase(base).verifySsl(false).build();
         var reqCfg = ModelRequestConfig.builder()
                 .modelName(model).temperature(0.3).maxTokens(4000).build();
-        String thinkingMode = System.getenv().getOrDefault("LLM_THINKING", "thinking-off");
-        reqCfg.setExtraField("thinking",
-                java.util.Map.of("type", "thinking-on".equals(thinkingMode) ? "enabled" : "disabled"));
+        applyThinkingMode(reqCfg);
         ReActAgent agent = new ReActAgent(AgentCard.builder().name(name).build());
         agent.setLlm(new com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel(cliCfg, reqCfg));
         // 15 iterations (SDK default 5): thinking-mode models produce longer turns and need
@@ -219,5 +217,17 @@ class EdpaRailsAssemblyRealLlmE2eTest {
         List<RailEvent> events = new ArrayList<>(collectedEvents);
         LOG.log(Level.INFO, "[edpa-rails-rail-e2e] events={0}", events.size());
         assertThat(events).as("rail-mode agent must produce rail events (ExploreRail fires)").isNotEmpty();
+    }
+
+    private static void applyThinkingMode(ModelRequestConfig reqCfg) {
+        String mode = System.getenv().getOrDefault("LLM_THINKING", "thinking-off");
+        switch (mode) {
+            case "qwen-on" -> reqCfg.setExtraField("reasoning",
+                    java.util.Map.of("enabled", true, "include_reasoning", true));
+            case "qwen-off" -> reqCfg.setExtraField("reasoning", java.util.Map.of("enabled", false));
+            case "thinking-on" -> reqCfg.setExtraField("thinking",
+                    java.util.Map.of("type", "enabled"));
+            default -> reqCfg.setExtraField("thinking", java.util.Map.of("type", "disabled"));
+        }
     }
 }
