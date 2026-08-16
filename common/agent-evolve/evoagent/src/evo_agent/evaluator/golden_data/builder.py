@@ -41,7 +41,6 @@ from openjiuwen.core.foundation.llm import (
 from evo_agent.config import EvolveConfig
 from evo_agent.evaluator.domain.models import StandardTrajectory
 from evo_agent.evaluator.domain.scoring import EvaluationError
-from evo_agent.llm.invocation import _get_invocation_loop
 from evo_agent.evaluator.golden_data.gu_store import (
     OUT_OF_SCOPE_SKILL,
     route_skill,
@@ -58,6 +57,7 @@ from evo_agent.evaluator.golden_data.prompts.phase1_gu import (
 )
 from evo_agent.evaluator.golden_data.skill_provider import SkillProvider
 from evo_agent.evaluator.golden_data.trajectory_format import _format_turn_rich, _truncate
+from evo_agent.llm.invocation import _get_invocation_loop
 
 logger = logging.getLogger(__name__)
 

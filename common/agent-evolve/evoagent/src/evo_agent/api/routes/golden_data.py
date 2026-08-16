@@ -26,6 +26,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from evo_agent.adapter_client.client import AdapterClient
 from evo_agent.api.jobs import JobStatus, job_manager
 from evo_agent.api.sse import format_sse
 from evo_agent.config import EvolveConfig
@@ -33,7 +34,6 @@ from evo_agent.evaluator.domain.models import StandardTrajectory, TrajectoryMess
 from evo_agent.evaluator.golden_data.builder import GlobalUnderstandingBuilder
 from evo_agent.evaluator.golden_data.generator import ExpectedBehaviorGenerator
 from evo_agent.evaluator.golden_data.models import EBInput, GUSlice
-from evo_agent.adapter_client.client import AdapterClient
 from evo_agent.evaluator.golden_data.skill_provider import (
     AdapterSkillProvider,
     LocalSkillProvider,

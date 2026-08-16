@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 from unittest.mock import MagicMock
-import pytest
 
+import pytest
 from openjiuwen.agent_evolving.dataset import Case, EvaluatedCase
 
 from evo_agent.evaluator.domain.result import EvaluationResult
