@@ -205,7 +205,7 @@ class GlobalUnderstandingBuilder:
         current = ""
         for batch_num in range(1, total_batches + 1):
             start = (batch_num - 1) * batch_size
-            batch = traces[start : min(batch_num * batch_size, total)]
+            batch = traces[start: min(batch_num * batch_size, total)]
             batch_text = _format_batch(batch, batch_num, total_batches)
             if batch_num == 1:
                 current = self._global_induct(batch_text, len(batch), skills)

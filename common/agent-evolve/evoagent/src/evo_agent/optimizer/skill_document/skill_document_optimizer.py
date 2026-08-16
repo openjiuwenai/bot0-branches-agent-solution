@@ -865,7 +865,7 @@ class SkillDocumentOptimizer(BaseOptimizer):  # type: ignore[misc]
                     # Compatibility for subclasses/tests constructed without the
                     # production run-scoped invocation module.
                     formatted_batches = [
-                        self._format_batch(source_batch[start : start + self._minibatch_size])
+                        self._format_batch(source_batch[start: start + self._minibatch_size])
                         for start in range(0, len(source_batch), self._minibatch_size)
                     ]
                 for formatted in formatted_batches:

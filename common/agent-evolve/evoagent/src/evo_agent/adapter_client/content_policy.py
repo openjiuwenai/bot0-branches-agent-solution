@@ -26,7 +26,7 @@ def split_frontmatter(content: str) -> tuple[str, str]:
 
     for index in range(1, len(lines)):
         if lines[index].strip() == "---":
-            return "".join(lines[: index + 1]), "".join(lines[index + 1 :])
+            return "".join(lines[: index + 1]), "".join(lines[index + 1:])
 
     return "", content
 

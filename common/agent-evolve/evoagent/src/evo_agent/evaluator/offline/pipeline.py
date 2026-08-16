@@ -197,7 +197,7 @@ def _parse_json_cell(value: Any) -> dict[str, Any]:
         i, j = text.find("{"), text.rfind("}")  # 3. {..} 兜底
         if i >= 0 and j > i:
             try:
-                obj = json.loads(text[i : j + 1])
+                obj = json.loads(text[i: j + 1])
             except json.JSONDecodeError:
                 obj = None
     if not isinstance(obj, dict):

@@ -274,7 +274,7 @@ def _strip_field(line: str, prefixes: tuple[str, ...], cut_markers: tuple[str, .
     val = line
     for p in prefixes:
         if val.startswith(p):
-            val = val[len(p) :].strip()
+            val = val[len(p):].strip()
             break
     for marker in cut_markers:
         idx = val.find(marker)

@@ -70,7 +70,7 @@ def _parse_sse_frame(line: str) -> dict[str, Any] | None:
     line = line.strip()
     if not line or not line.startswith("data: "):
         return None
-    data_str = line[len("data: ") :]
+    data_str = line[len("data: "):]
     if data_str.strip() == "[DONE]":
         return None
     try:
