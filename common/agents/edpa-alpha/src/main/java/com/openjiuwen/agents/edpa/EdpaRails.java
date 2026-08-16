@@ -69,7 +69,7 @@ public final class EdpaRails {
      * needing multiple EDPA agents must isolate at the process level until agent-core
      * dispatch supports tag-scoped lookup (frozen-layer cross-repo decision, deferred).
      *
- * <p>Assembly order (bearing — do not change without 4-lens):
+     * <p>Assembly order (bearing — do not change without 4-lens):
      * <ol>
      *   <li>SteeringProvisionRail — binds steering queue (issue-#13). Sole beforeInvoke
      *       override, so it precedes all consumer hooks via hook isolation.</li>
