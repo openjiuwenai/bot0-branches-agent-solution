@@ -110,12 +110,13 @@ class EdpaRailsAssemblyRealLlmE2eTest {
         applyThinkingMode(reqCfg);
         ReActAgent agent = new ReActAgent(AgentCard.builder().name(name).build());
         agent.setLlm(new com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel(cliCfg, reqCfg));
-        // 15 iterations (SDK default 5): thinking-mode models produce longer turns and need
-        // more room to converge to a verified forceFinish terminal (pro+thinking exhausted
-        // 5 rounds mid-replan in the 2026-08-16 matrix).
+        // iteration ceiling from the model-dialect table (SDK default 5): thinking/reasoning
+        // models produce longer turns and need more room to reach a verified forceFinish
+        // terminal (pro+thinking exhausted 5 rounds mid-replan in the 2026-08-16 matrix).
         Object cfg = agent.getConfig();
         if (cfg instanceof com.openjiuwen.core.singleagent.agents.ReActAgentConfig reactCfg) {
-            reactCfg.configureMaxIterations(15);
+            reactCfg.configureMaxIterations(ModelDialect.recommendedMaxIterations(
+                    System.getenv().getOrDefault("LLM_THINKING", "thinking-off")));
         }
         return agent;
     }
@@ -221,13 +222,6 @@ class EdpaRailsAssemblyRealLlmE2eTest {
 
     private static void applyThinkingMode(ModelRequestConfig reqCfg) {
         String mode = System.getenv().getOrDefault("LLM_THINKING", "thinking-off");
-        switch (mode) {
-            case "qwen-on" -> reqCfg.setExtraField("reasoning",
-                    java.util.Map.of("enabled", true, "include_reasoning", true));
-            case "qwen-off" -> reqCfg.setExtraField("reasoning", java.util.Map.of("enabled", false));
-            case "thinking-on" -> reqCfg.setExtraField("thinking",
-                    java.util.Map.of("type", "enabled"));
-            default -> reqCfg.setExtraField("thinking", java.util.Map.of("type", "disabled"));
-        }
+        ModelDialect.thinkingParams(mode).forEach(reqCfg::setExtraField);
     }
 }

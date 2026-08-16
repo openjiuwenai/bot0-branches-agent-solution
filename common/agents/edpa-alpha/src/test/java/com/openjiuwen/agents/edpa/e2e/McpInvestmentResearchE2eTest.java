@@ -94,6 +94,13 @@ class McpInvestmentResearchE2eTest {
             - 数据采集阶段总工具调用不超过 5 次，获取到数据后立即进入撰写。
             - 不要反复确认同一信息；基于已采集数据直接撰写报告。
 
+            【终止条件 — 不可违反】
+            - 一旦你已获得 3 个以上不同维度的数据点（如营收、净利润、现金流、基本面），
+              必须立即停止一切工具调用，下一条消息直接输出完整 7 节报告正文。
+            - 工具调用累计达到 6 次即视为采集结束——即使仍有数据缺口，也必须基于已有
+              数据撰写，并在对应章节标注"数据缺失"。
+            - 持续调用工具而不输出报告 = 任务失败；有小缺口的完整报告远好于没有报告。
+
             【最终回复规则 — 极其重要，违反将导致任务失败】
             - 本系统遵循 ReAct 协议：你输出的任何【不含工具调用】的回复都会被立即当作最终结果返回，循环就此结束。
             - 因此：采集数据时务必带上工具调用；一旦你输出不含工具调用的纯文本，那就是最终报告。
@@ -103,6 +110,8 @@ class McpInvestmentResearchE2eTest {
               不要插任何过渡句，第一行就是"## 一、执行摘要"。
 
             【报告结构 — 摩根士丹利范式】
+            （七个二级标题必须逐字使用下列标题文本、按序连续输出；不得合并、不得省略、
+             不得改写标题；每个标题独占一行且以 ## 开头——标题不完整 = 报告不合格）
             ## 一、执行摘要（Executive Summary）
             包含：投资评级建议（买入/持有/卖出）、目标价、核心逻辑一句话概括。
             ## 二、市场环境概述（Market Overview）
@@ -230,14 +239,8 @@ class McpInvestmentResearchE2eTest {
      * @param reqCfg the request config to mutate with the chosen extra field
      */
     private static void configureThinkingMode(ModelRequestConfig reqCfg) {
-        String tMode = System.getenv().getOrDefault("LLM_THINKING", "glm-off");
-        switch (tMode) {
-            case "qwen-off" -> reqCfg.setExtraField("reasoning", Map.of("enabled", false));
-            case "qwen-on" -> reqCfg.setExtraField("reasoning",
-                    Map.of("enabled", true, "include_reasoning", true));
-            case "thinking-on" -> reqCfg.setExtraField("thinking", Map.of("type", "enabled"));
-            default -> reqCfg.setExtraField("thinking", Map.of("type", "disabled"));
-        }
+        String tMode = System.getenv().getOrDefault("LLM_THINKING", "thinking-off");
+        ModelDialect.thinkingParams(tMode).forEach(reqCfg::setExtraField);
     }
 
     /**

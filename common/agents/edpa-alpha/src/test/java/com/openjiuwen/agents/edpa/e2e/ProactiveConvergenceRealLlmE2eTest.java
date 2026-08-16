@@ -197,13 +197,6 @@ class ProactiveConvergenceRealLlmE2eTest {
      */
     static void applyThinkingMode(ModelRequestConfig reqCfg) {
         String mode = System.getenv().getOrDefault("LLM_THINKING", "thinking-off");
-        switch (mode) {
-            case "qwen-on" -> reqCfg.setExtraField("reasoning",
-                    java.util.Map.of("enabled", true, "include_reasoning", true));
-            case "qwen-off" -> reqCfg.setExtraField("reasoning", java.util.Map.of("enabled", false));
-            case "thinking-on" -> reqCfg.setExtraField("thinking",
-                    java.util.Map.of("type", "enabled"));
-            default -> reqCfg.setExtraField("thinking", java.util.Map.of("type", "disabled"));
-        }
+        ModelDialect.thinkingParams(mode).forEach(reqCfg::setExtraField);
     }
 }
