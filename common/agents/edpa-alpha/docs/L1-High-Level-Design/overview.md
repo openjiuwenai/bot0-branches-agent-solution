@@ -6,7 +6,7 @@ TAG:
   - architecture-fact
   - module-boundary
 status: active
-updated: 2026-08-08
+updated: 2026-08-15
 dependency:
   - ../features/FEAT-025-edpa-cognitive-loop.md
   - ../features/FEAT-026-edpa-capability-extensions.md
@@ -57,6 +57,8 @@ EDPA-alpha = ReActAgent + 认知 overlay + 能力扩展
   ┌─ 认知 overlay（FEAT-025）─────────────────────────────────────┐
   │                                                                │
   │  EDPA 新建 rail（EdpaRails.registerOnto 显式装配）：           │
+  │  ├ SteeringProvisionRail ── 绑定 steering 队列（issue-#13，    │
+  │  │    唯一 beforeInvoke 覆写者，hook 隔离先于全部消费者）       │
   │  ├ ProactiveConvergenceRail ── afterModelCall: coverage →     │
   │  │    stall 检测 → edge-triggered convergence steering         │
   │  ├ ExploreRail（rail）/ ExploreTool（tool）── 探索              │
@@ -102,7 +104,7 @@ EDPA 不替换 ReAct 控制流、不定义 HTTP/A2A 服务面（runtime 承接�
 | Agent 开发者 | 理解 EDPA 如何在 ReActAgent 上挂 rail、如何写 DeterministicChecker、如何配 convergence。 |
 | 工具提供者 | 理解 MCP 工具如何被适配为 agent Tool、SubAgent 如何注册。 |
 | 同级模式作者 | 理解 EdpaKernel的复用边界。 |
-| 平台集成方 | 理解 EdpaAutoConfiguration 如何自动给 ReActAgent 挂 rail（config-gated）。 |
+| 平台集成方 | 理解 EdpaRails.registerOnto 显式装配与 autoconfig 的基础设施 Bean 边界（config-gated）。 |
 | 架构评审者 | 判断 EDPA 是否保持 overlay 定位（不改 ReAct 本体）、确定性兜底是否守住。 |
 
 ## 问题领域

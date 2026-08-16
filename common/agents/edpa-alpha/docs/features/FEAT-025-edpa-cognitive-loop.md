@@ -1,10 +1,10 @@
 ---
-scope: v0.1.0
+scope: v0.1.0 → v0.2.0（装配显式化）
 module: agents/edpa-alpha
 feature_type: functional
 feature_id: FEAT-025
 status: active
-updated: 2026-08-08
+updated: 2026-08-15
 ---
 
 # EDPA 认知增强闭环（DeepAgent + Proactive Convergence + 确定性验证）
@@ -38,7 +38,7 @@ FEAT-025 定义 `agents/edpa-alpha` 作为 **DeepAgent（ReAct）的认知增强
 | 用户输入捕获 | MUST（tool 模式） | UserInputCaptureRail 必须缓存首轮用户输入，供 ExploreTool 作为探索上下文（tool 模式自动挂载；rail 模式不挂——rail 模式经 pushSteering 直接注入 findings）。 |
 | 配置 | MUST | EdpaProperties 必须暴露：enabled / exploreMode / exploreRounds / maxSubagents / exploreTimeout / criteria / maxReplan / proactiveConvergenceEnabled / proactiveConvergenceStallWindow。 |
 | LLM 响应提取 | SPI（内部工具） | LlmResponseExtractor 必须跨 provider 提取 LLM 响应内容（兼容不同 SDK 的 content 嵌套差异）。 |
-| 多 agent 编排 | OUT | 不承诺核心 EDPA 内置多 agent fan-out（SubAgent 派发属 FEAT-025）。 |
+| 多 agent 编排 | OUT | 不承诺核心 EDPA 内置多 agent fan-out（SubAgent 派发属 FEAT-026）。 |
 | 自包含 PEV 闭环 | OUT | EDPA 不替换 ReAct 为 PEV loop；它增强 ReAct。 |
 
 ## 3. 外部接口与入口要求
@@ -48,12 +48,12 @@ FEAT-025 定义 `agents/edpa-alpha` 作为 **DeepAgent（ReAct）的认知增强
 | EdpaAutoConfiguration | Spring @AutoConfiguration | EdpaProperties 配置 | 基础设施 Bean（EdpaProperties / CriteriaVerifier / Explorer）+ 零命中 WARN 探测 | `enabled=false` 默认关闭；rail 装配由宿主显式调 `EdpaRails.registerOnto`。 |
 | DeterministicChecker | SPI | `matches(criterion)` + `check(criterion, output, history)` | `Violation` 或 null（通过） | 零 LLM，纯函数；同输入同输出。 |
 | Explorer | SPI | `explore(topic, budget)` | `ExplorationResult(findings, candidateApproaches)` | 预算受限。 |
-| CriteriaVerifier | SPI | `verify(criteria, output, decisionHistory)` | `List<Violation>` | GroundTruthVerifier 是默认实现。 |
+| CriteriaVerifier | SPI | `verify(criteria, output, decisionHistory)` | `List<Violation>` | 默认 `RuleBasedCriteriaVerifier`（v0.2.0 起，名实一致）；需确定性层时宿主显式构造 `GroundTruthVerifier(List.of(checker))`。 |
 | EdpaProperties | 配置 | YAML/properties | — | 见 §2 配置项。 |
 
 ## 4. 场景
 
-技术场景见 `scenarios.md` TS-01/02/05/06（convergence fire / 确定性验证 / 探索 / 数据流）。
+技术场景见 `scenarios.md` TS-01/02/05（convergence fire / 确定性验证 / 探索；TS-06 数据流已随 MR !77 移除）。
 
 
 
@@ -87,8 +87,8 @@ FEAT-025 定义 `agents/edpa-alpha` 作为 **DeepAgent（ReAct）的认知增强
 
 | 边界 | 当前版本不承诺 |
 |---|---|
-| 多 agent 编排 | SubAgent 派发属 FEAT-025。 |
-| MCP 工具集成 | 属 FEAT-025。 |
+| 多 agent 编排 | SubAgent 派发属 FEAT-026。 |
+| MCP 工具集成 | 属 FEAT-026。 |
 | 自包含 PEV 闭环 | EDPA 不替换 ReAct；它增强。 |
 | LLM-as-judge | 涉数值/逻辑/合规的判断**不用** LLM（铁律：规则 > LLM judge）。 |
 
@@ -104,5 +104,5 @@ FEAT-025 定义 `agents/edpa-alpha` 作为 **DeepAgent（ReAct）的认知增强
 
 - `L1-High-Level-Design/{overview,logical,process,development,physical,scenarios}.md`（L1 4+1 视图）
 - `L2-Low-Level-Design/{README,Feat-Func-025-edpa-cognitive-loop}.md`（L2 详细设计）
-- FEAT-025（EDPA 能力扩展：MCP + SubAgent）
+- FEAT-026（EDPA 能力扩展：MCP + SubAgent）
 - FEAT-023（PEV 自愈执行闭环——EDPA kernel 的逻辑来源）

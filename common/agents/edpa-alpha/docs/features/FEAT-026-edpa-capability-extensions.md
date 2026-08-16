@@ -1,10 +1,10 @@
 ---
-scope: v0.1.0
+scope: v0.1.0 → v0.2.0（装配显式化）
 module: agents/edpa-alpha
 feature_type: functional
 feature_id: FEAT-026
 status: active
-updated: 2026-08-08
+updated: 2026-08-15
 ---
 
 # EDPA 能力扩展（MCP 工具集成 + SubAgent 派发 + Explore Tool）

@@ -3,7 +3,7 @@ level: L1-HLD
 module: agents/edpa-alpha
 TAG: [process-view, control-flow, architecture-fact]
 status: active
-updated: 2026-08-08
+updated: 2026-08-15
 dependency: [overview.md, logical.md, ../features/FEAT-025-edpa-cognitive-loop.md]
 ---
 
@@ -24,7 +24,8 @@ ReActAgent.invoke
  ├─ afterModelCall ◀─── ProactiveConvergenceRail（convergence 检测，见 §3）
  │                      ExploreRail（rail 模式：探索 + pushSteering 注入 findings）
  ├─ tool call ─────────▶ McpToolAdapter.invoke / SubAgentTool.invoke / ExploreTool / 内置 Tool
- ├─ afterToolCall ◀──── RootCauseRail（DeviceFailure 降级门）
+ ├─ onToolException ◀── RootCauseRail（DeviceFailure 降级门）
+ │                      （afterModelCall 亦监听：设备故障终态复核）
  └─ 循环（回到 beforeModelCall）或终止（forceFinish / maxRetries）
 ```
 
