@@ -81,24 +81,29 @@ class SkillRestoreResult:
 class SkillStoreProtocol(Protocol):
     """Shared surface used by API routes (local FS or jiuwenbox)."""
 
-    def list_skills(self, agent_name: str) -> list[SkillSummary]: ...
+    def list_skills(self, agent_name: str) -> list[SkillSummary]:
+        """List skills available for ``agent_name``."""
 
-    def read_skill(self, agent_name: str, skill_name: str) -> SkillContent: ...
+    def read_skill(self, agent_name: str, skill_name: str) -> SkillContent:
+        """Read a single skill's content."""
 
     def update_skill(
         self,
         agent_name: str,
         skill_name: str,
         content: str,
-    ) -> SkillUpdateResult: ...
+    ) -> SkillUpdateResult:
+        """Create or update a skill; return the new revision."""
 
     def restore_skills(
         self,
         agent_name: str,
         skill_names: list[str],
-    ) -> list[SkillRestoreResult]: ...
+    ) -> list[SkillRestoreResult]:
+        """Restore previously-deleted skills for the agent."""
 
-    def get_revision(self, agent_name: str, skill_name: str) -> str | None: ...
+    def get_revision(self, agent_name: str, skill_name: str) -> str | None:
+        """Return the current revision id of a skill."""
 
 
 class CompositeSkillStore:

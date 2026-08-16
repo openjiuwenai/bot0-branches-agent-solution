@@ -271,9 +271,12 @@ class _EpochEndFatalCallback:
         self._operator.set_parameter("skill_content", self._fail_content)
 
     # 其他 hook 空实现，满足 Callbacks 协议
-    def on_train_begin(self, *a: Any, **k: Any) -> None: ...
-    def on_train_end(self, *a: Any, **k: Any) -> None: ...
-    def on_train_epoch_begin(self, *a: Any, **k: Any) -> None: ...
+    def on_train_begin(self, *a: Any, **k: Any) -> None:
+        """No-op hook."""
+    def on_train_end(self, *a: Any, **k: Any) -> None:
+        """No-op hook."""
+    def on_train_epoch_begin(self, *a: Any, **k: Any) -> None:
+        """No-op hook."""
 
 
 async def test_epoch_end_apply_failure_is_not_swallowed_by_composed_callbacks() -> None:

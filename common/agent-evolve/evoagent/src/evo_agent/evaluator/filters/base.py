@@ -16,7 +16,8 @@ class TrajectoryFilter(Protocol):
 
     name: str
 
-    def inspect(self, trajectory: StandardTrajectory) -> list[FilterMatch]: ...
+    def inspect(self, trajectory: StandardTrajectory) -> list[FilterMatch]:
+        """Inspect the trajectory; return every deterministic match."""
 
 
 def build_patterns(
