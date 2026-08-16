@@ -6,15 +6,12 @@ package com.openjiuwen.agents.edpa.e2e;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.openjiuwen.agents.edpa.EdpaRails;
+import com.openjiuwen.agents.edpa.autoconfigure.EdpaProperties;
 import com.openjiuwen.agents.edpa.explore.ExploreBudget;
-import com.openjiuwen.agents.edpa.explore.ExploreToolRegistrar;
 import com.openjiuwen.agents.edpa.explore.Explorer;
 import com.openjiuwen.agents.edpa.explore.LlmExplorer;
-import com.openjiuwen.agents.edpa.rail.UserInputCaptureRail;
-import com.openjiuwen.agents.edpa.verification.ProactiveConvergenceRail;
 import com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel;
-import com.openjiuwen.agents.reactrails.replan.ReplanRail;
-import com.openjiuwen.agents.reactrails.replan.ReplanTool;
 import com.openjiuwen.agents.reactrails.verification.CriteriaReplanBridgeRail;
 import com.openjiuwen.agents.reactrails.verification.RuleBasedCriteriaVerifier;
 import com.openjiuwen.core.foundation.llm.model_clients.DefaultModelClientFactories;
@@ -35,7 +32,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -339,16 +335,21 @@ class FullEdpaUnifiedMatrixRealLlmE2eTest {
         AtomicInteger toolCalls = new AtomicInteger(0);
         registerMarketDataTool(agent, toolCalls);
 
-        AtomicReference<String> userInputRef = new AtomicReference<String>();
-        agent.registerRail(new UserInputCaptureRail(userInputRef));
-
         AtomicInteger exploreCount = new AtomicInteger(0);
         Function<String, String> explorerFn = buildExplorerFn(key, mc.base + "/chat/completions", mc.model,
                 thinking ? mc.thinkingJson : "", exploreCount);
         Explorer explorer = new LlmExplorer(explorerFn, ExploreBudget.DEFAULT);
-        ExploreToolRegistrar.registerOnto(agent, explorer, ExploreBudget.DEFAULT, userInputRef::get);
 
-        registerEdpaRails(agent);
+        // 装配经 EdpaRails.registerOnto（单一装配真源）：shared ReplanRail 单实例（预算×1）+
+        // SteeringProvisionRail（pushSteering 不再静默丢弃）+ UserInputCaptureRail/ExploreTool 闭包内建。
+        // 原手动构造 ProactiveConvergenceRail(verifier, CRITERIA, 2, DEFAULT_COVERAGE_CRITICAL)
+        // 与 registerOnto 内部参数完全一致，无差异。
+        EdpaProperties props = new EdpaProperties();
+        props.setCriteria(CRITERIA);
+        props.setMaxReplan(3);
+        props.setProactiveConvergenceEnabled(true);
+        props.setProactiveConvergenceStallWindow(2);
+        EdpaRails.registerOnto(agent, props, new RuleBasedCriteriaVerifier(), explorer);
 
         Object result = agent.invoke(TASK, null);
         return new AgentRun(result, toolCalls.get(), exploreCount.get());
@@ -359,16 +360,6 @@ class FullEdpaUnifiedMatrixRealLlmE2eTest {
         if (cfg instanceof com.openjiuwen.core.singleagent.agents.ReActAgentConfig rc) {
             rc.configureMaxIterations(12);
         }
-    }
-
-    private void registerEdpaRails(ReActAgent agent) {
-        ReplanRail sharedCounter = new ReplanRail(3);
-        agent.registerRail(new CriteriaReplanBridgeRail(new RuleBasedCriteriaVerifier(), CRITERIA, sharedCounter));
-        ProactiveConvergenceRail convergence = new ProactiveConvergenceRail(new RuleBasedCriteriaVerifier(),
-                CRITERIA, 2, ProactiveConvergenceRail.DEFAULT_COVERAGE_CRITICAL);
-        agent.registerRail(convergence);
-        agent.registerRail(new ReplanRail(3));
-        ReplanTool.registerOnto(agent);
     }
 
     private static void populateSuccess(Map<String, Object> r, AgentRun run) {

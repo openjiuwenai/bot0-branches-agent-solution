@@ -1,49 +1,97 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-
   <parent>
     <groupId>com.openjiuwen</groupId>
     <artifactId>edp-agent-java</artifactId>
     <version>0.1.0</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
-
   <artifactId>edp-agent-engine</artifactId>
   <name>edp-agent-engine</name>
   <description>Production EDPAgent engine powered by OpenJiuwen DeepAgent and agent-runtime.</description>
-
   <dependencies>
     <dependency>
       <groupId>com.openjiuwen</groupId>
       <artifactId>agent-service-app</artifactId>
       <version>${agent-runtime-java.version}</version>
     </dependency>
-
     <dependency>
       <groupId>com.openjiuwen</groupId>
       <artifactId>agent-service-adapters-agentcore-ext</artifactId>
       <version>${agent-runtime-ext-java.version}</version>
     </dependency>
-
     <dependency>
       <groupId>com.openjiuwen</groupId>
       <artifactId>agent-core-java</artifactId>
       <version>${agent-core-java.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>com.openai</groupId>
+          <artifactId>openai-java</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.pulsar</groupId>
+          <artifactId>pulsar-client</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.milvus</groupId>
+          <artifactId>milvus-sdk-java</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.xerial</groupId>
+          <artifactId>sqlite-jdbc</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-netty-shaded</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.poi</groupId>
+          <artifactId>poi-ooxml</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.pdfbox</groupId>
+          <artifactId>pdfbox</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.alibaba</groupId>
+          <artifactId>dashscope-sdk-java</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.bouncycastle</groupId>
+          <artifactId>bcprov-jdk18on</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.postgresql</groupId>
+          <artifactId>postgresql</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.pgvector</groupId>
+          <artifactId>pgvector</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.opentelemetry</groupId>
+          <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.opentelemetry</groupId>
+          <artifactId>opentelemetry-exporter-sender-jdk</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.opentelemetry</groupId>
+          <artifactId>opentelemetry-exporter-sender-grpc-managed-channel</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
-
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-web</artifactId>
     </dependency>
-
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-data-redis</artifactId>
     </dependency>
-
     <!--
       agent-core 的 RedisKVStoreProvider 通过反射创建 redis.clients.jedis.Jedis / JedisCluster，
       而 agent-core-java 发布的 POM 是不含 <dependencies> 的元数据 stub，不传递 jedis，
@@ -54,36 +102,31 @@
       <artifactId>jedis</artifactId>
       <version>5.1.5</version>
     </dependency>
-
     <!--
-      agent-core 的 ReActAgent 通过 OkHttp 调用 LLM，但 agent-core-java 发布的 POM 是不含
-      <dependencies> 的元数据 stub，不传递 okhttp 依赖，运行时 NoClassDefFoundError:
-      okhttp3/MediaType，故在此显式引入（与 agent-core 版本一致）。
+      agent-core-java 的 LLM 客户端（OpenAiCompatibleModelClient 等）通过 OkHttp 调用 LLM，
+      agent-core-java 的发布 POM 已声明 okhttp 4.12.0 为 compile 依赖，
+      此处显式引入以强化版本确定性（与 agent-core-java 内部使用的 okhttp 版本一致）。
     -->
     <dependency>
       <groupId>com.squareup.okhttp3</groupId>
       <artifactId>okhttp</artifactId>
       <version>4.12.0</version>
     </dependency>
-
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
       <scope>test</scope>
     </dependency>
-
     <dependency>
       <groupId>com.fasterxml.jackson.dataformat</groupId>
       <artifactId>jackson-dataformat-yaml</artifactId>
     </dependency>
-
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-compress</artifactId>
       <version>1.26.0</version>
     </dependency>
   </dependencies>
-
   <build>
     <plugins>
       <plugin>
@@ -99,7 +142,6 @@
         <configuration>
           <mainClass>com.openjiuwen.edp.EdpApplication</mainClass>
           <classifier>exec</classifier>
-          <includeSystemScope>true</includeSystemScope>
         </configuration>
       </plugin>
     </plugins>

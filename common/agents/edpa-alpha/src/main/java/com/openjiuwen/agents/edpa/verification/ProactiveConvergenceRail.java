@@ -165,6 +165,9 @@ public class ProactiveConvergenceRail extends AgentRail {
             s.triggerCount++;
             RootCause cause = new RootCause.PlanOrAnswerError(Set.of());
             ReplanAction action = EdpaKernel.toReplanAction(cause, buildConvergenceFeedback(ctx, coverage), Set.of());
+            // Consumption is intentionally GlobalReplan-only: stall semantics need a global
+            // re-plan. LocalReplan/AcceptPartial (unreachable with the empty-nodes input above)
+            // are silently skipped here — they are PEV-port semantics pinned by EdpaKernelTest.
             if (action instanceof ReplanAction.GlobalReplan globalReplan) {
                 String feedback = globalReplan.feedback();
                 ctx.pushSteering(feedback);

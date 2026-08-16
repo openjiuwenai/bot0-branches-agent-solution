@@ -11,13 +11,12 @@ import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
 import com.openjiuwen.service.bus.consumer.model.BusResponseProjection;
 
-import org.a2aproject.sdk.jsonrpc.common.json.JsonUtil;
-
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.StringJoiner;
 
 /**
@@ -26,6 +25,8 @@ import java.util.StringJoiner;
  * @since 2026-07-22
  */
 public final class AgentBusResponsePublisher {
+    private static final Set<String> RESERVED_FIELDS = Set.of("revision", "a2aResponse");
+
     private final BrokerForwardingProducerPort producer;
     private final String localServiceId;
 
@@ -76,7 +77,7 @@ public final class AgentBusResponsePublisher {
         }
     }
 
-    private static String encodeProjection(BusResponseProjection projection) {
+    static String encodeProjection(BusResponseProjection projection) {
         StringJoiner descriptor = new StringJoiner(";");
         if (projection.taskId() != null) {
             descriptor.add("taskId=" + projection.taskId());
@@ -92,29 +93,28 @@ public final class AgentBusResponsePublisher {
             descriptor.add("reason=" + code);
         }
         appendA2aResponse(descriptor, projection.data());
-        for (Map.Entry<String, Object> entry : projection.data().entrySet()) {
+        projection.data().entrySet().stream().filter(entry -> !RESERVED_FIELDS.contains(entry.getKey()))
+                .sorted(Map.Entry.comparingByKey()).forEach(entry -> {
             if (entry.getValue() instanceof String || entry.getValue() instanceof Number
                     || entry.getValue() instanceof Boolean) {
                 descriptor.add(entry.getKey() + "=" + entry.getValue());
             }
-        }
+        });
         return descriptor.toString();
     }
 
     private static void appendA2aResponse(StringJoiner descriptor, Map<String, Object> data) {
-        Object response = data.containsKey("task") ? data.get("task") : data.get("response");
+        Object response = data.get("a2aResponse");
         if (response == null) {
             return;
         }
-        try {
-            String json = JsonUtil.toJson(response);
-            String encoded = Base64.getUrlEncoder().withoutPadding()
-                    .encodeToString(json.getBytes(StandardCharsets.UTF_8));
-            descriptor.add("a2aResponseType=" + response.getClass().getSimpleName());
-            descriptor.add("a2aResponse=" + encoded);
-        } catch (org.a2aproject.sdk.jsonrpc.common.json.JsonProcessingException failure) {
-            throw new IllegalStateException("Failed to encode A2A response projection", failure);
+        if (!(response instanceof String json) || json.isBlank()) {
+            throw new IllegalArgumentException("a2aResponse must be a complete JSON-RPC response");
         }
+        String encoded = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(json.getBytes(StandardCharsets.UTF_8));
+        descriptor.add("a2aResponseType=JsonRpcResponse");
+        descriptor.add("a2aResponse=" + encoded);
     }
 
     private static String normalizeState(String state) {

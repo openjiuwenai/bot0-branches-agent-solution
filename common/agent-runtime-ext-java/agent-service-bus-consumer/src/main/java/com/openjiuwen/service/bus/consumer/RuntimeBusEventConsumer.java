@@ -221,14 +221,14 @@ public final class RuntimeBusEventConsumer {
             } else {
                 return BusConsumptionDecision.retry("RESERVED_TASK_REQUIRES_ID_AWARE_BRIDGE");
             }
-            return admitAndProject(envelope, recovered, existing.taskId(), "REUSED");
+            return admitAndProject(envelope, payload, recovered, existing.taskId(), "REUSED");
         }
 
         String reservedTaskId = requestedTaskId == null ? stableTaskId(envelope) : requestedTaskId;
         Admission reservation = new Admission(envelope.tenantId(), envelope.idempotencyKey(), digest, reservedTaskId,
                 sourceFamily(envelope.eventType()), envelope.correlationId(), envelope.traceId(),
                 envelope.sourceServiceId(), envelope.targetServiceId(), envelope.routeHandle(),
-                Admission.State.RESERVED);
+                bridge.requestId(payload), Admission.State.RESERVED);
         Admission reserved = admissionStore.reserve(reservation);
         if (!reserved.requestDigest().equals(digest)) {
             return rejected(envelope, "IDEMPOTENCY_KEY_CONFLICT");
@@ -236,11 +236,11 @@ public final class RuntimeBusEventConsumer {
         BusDispatchResult result = requestedTaskId == null && bridge.supportsReservedTaskId()
                 ? dispatch(envelope, payload, reserved.taskId())
                 : dispatch(envelope, payload);
-        return admitAndProject(envelope, result, reserved.taskId(), "CREATED");
+        return admitAndProject(envelope, payload, result, reserved.taskId(), "CREATED");
     }
 
-    private BusConsumptionDecision admitAndProject(AgentBusEventEnvelope envelope, BusDispatchResult result,
-            String reservedTaskId, String idempotencyResult) {
+    private BusConsumptionDecision admitAndProject(AgentBusEventEnvelope envelope, byte[] payload,
+            BusDispatchResult result, String reservedTaskId, String idempotencyResult) {
         String taskId = result.taskId();
         if (taskId == null || taskId.isBlank()) {
             if (bridge.supportsReservedTaskId()) {
@@ -252,7 +252,7 @@ public final class RuntimeBusEventConsumer {
         admissionStore.markAdmitted(envelope.tenantId(), envelope.idempotencyKey(), taskId);
         projectAccepted(envelope, taskId, idempotencyResult);
         if (result.response() != null) {
-            projectResponse(envelope, taskId, result);
+            projectResponse(envelope, taskId, result, payload);
         }
         if (result.streamReady()) {
             projectStreamReady(envelope, taskId);
@@ -269,7 +269,7 @@ public final class RuntimeBusEventConsumer {
         if (envelope.eventType().contains("SUBSCRIBE")) {
             projectStreamReady(envelope, result.taskId());
         } else {
-            projectResponse(envelope, result.taskId(), result);
+            projectResponse(envelope, result.taskId(), result, payload);
         }
         projectCurrent(envelope.tenantId(), result.taskId());
         return BusConsumptionDecision.consumed();
@@ -321,16 +321,12 @@ public final class RuntimeBusEventConsumer {
                 new ProjectionFact("ACCEPTED", eventType, 0, Map.of("idempotencyResult", idempotencyResult))));
     }
 
-    private void projectResponse(AgentBusEventEnvelope envelope, String taskId, BusDispatchResult result) {
+    private void projectResponse(AgentBusEventEnvelope envelope, String taskId, BusDispatchResult result,
+            byte[] payload) {
         String type = envelope.eventType().startsWith("A2A") ? "A2A_CALL_RESPONSE" : "INVOCATION_RESPONSE";
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("operation", envelope.eventType());
-        if (result.task() != null) {
-            data.put("task", result.task());
-        }
-        if (result.task() == null && result.response() != null) {
-            data.put("response", result.response());
-        }
+        data.put("a2aResponse", bridge.response(payload, result));
         projections.project(projection(envelope, taskId, new ProjectionFact("RESPONSE", type, 0, Map.copyOf(data))));
     }
 

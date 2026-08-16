@@ -70,8 +70,12 @@ class UserInputCaptureRailTest {
         assertThat(ref.get()).as("must find UserMessage even without SystemMessage prefix").isEqualTo("直接的用户输入");
     }
 
+    /**
+     * Same-invocation semantics: after a successful capture, later model calls
+     * in the SAME invocation must not overwrite (the query is fixed mid-conversation).
+     */
     @Test
-    void doesNotRecaptureAfterFirstSuccess() {
+    void doesNotRecaptureWithinSameInvocation() {
         AtomicReference<String> ref = new AtomicReference<>();
         UserInputCaptureRail rail = new UserInputCaptureRail(ref);
 
@@ -86,6 +90,32 @@ class UserInputCaptureRailTest {
         rail.beforeModelCall(ctx);
 
         assertThat(ref.get()).as("second beforeModelCall must NOT overwrite (captured=true)").isEqualTo("被覆盖了");
+    }
+
+    /**
+     * Cross-invocation reset (4-lens BLOCKER fix bearing test): a singleton agent serving
+     * sequential requests must re-capture each new query. Red-team scenario this locks:
+     * invoke#1 "查北京天气" → invoke#2 "写关于秋天的诗" — without the beforeInvoke reset,
+     * ExploreTool's supplier still returns the weather query and explores the WRONG
+     * context (silent cross-request pollution). mutation-RED: strip the reset body →
+     * this test fails with ref="第一次".
+     */
+    @Test
+    void beforeInvokeResetsCaptureAcrossInvocations() {
+        AtomicReference<String> ref = new AtomicReference<>();
+        UserInputCaptureRail rail = new UserInputCaptureRail(ref);
+
+        // invocation #1 captures its query
+        rail.beforeModelCall(ctxWithMessages(new ArrayList<>(List.of(new UserMessage("第一次")))));
+        assertThat(ref.get()).as("invocation #1 must capture its query").isEqualTo("第一次");
+
+        // invocation #2 starts: beforeInvoke resets, new query gets captured
+        rail.beforeInvoke(null);
+        rail.beforeModelCall(ctxWithMessages(new ArrayList<>(List.of(new UserMessage("第二次")))));
+
+        assertThat(ref.get()).as("invocation #2 must capture ITS query (not the stale first one)")
+                .isEqualTo("第二次");
+        assertThat(rail.isCaptured()).as("capture flag must be live again after reset").isTrue();
     }
 
     @Test

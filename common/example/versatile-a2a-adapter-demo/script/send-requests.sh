@@ -32,8 +32,8 @@
 #   │    │    会原样成为远端 body 的顶层字段
 #   │    │     └─ inputs           ← 远端 body.inputs 的基底，query/intent 会被
 #   │    │                           上面的 message.text 覆盖
-#   │    └─ 其它顶层字段 (agent_id / input / conversation_id / timeout /
-#   │        role_id / role_name / stream ...)
+#   │    └─ 其它顶层字段 (input / conversation_id / timeout / role_id /
+#   │        role_name / stream ...)
 #   │         默认【不会】进入远端请求！除非 application.yml 配置了
 #   │         interrupt.resume-request-template.body，用 {字段名} 占位符引用它们
 #   │
@@ -43,8 +43,13 @@
 #   │
 #   └─ params.metadata.query       (→ 拼到远端 URL 上的 query 参数)
 #
+#   另：params.metadata.agent_id     (→ 顶层字段，非 body.agent_id)
+#        当 url-template 含 {agent_id} 占位符时，用它替换；缺失则替换为空串。
+#        与 {conversation_id}（取自 contextId）一起决定远端 URL。
+#
 # 一句话: message.text 决定 query/intent；metadata.body.custom_data 决定远端
-# body 基底；metadata.headers 按白名单透传；metadata.query 进 URL。
+# body 基底；metadata.headers 按白名单透传；metadata.query 进 URL；
+# metadata.agent_id + contextId 进 url-template 占位符。
 # 完整说明见 common/example/versatile-a2a-adapter-demo/README.md 与
 # VersatileRequestExtractor.java。
 # ============================================================================
@@ -146,8 +151,8 @@ send_custom() {
       "parts": [ { "text": "$text" } ]
     },
     "metadata": {
+      "agent_id": "main_planner",
       "body": {
-        "agent_id": "main_planner",
         "conversation_id": "custom-session-001",
         "timeout": "300",
         "role_id": "1",

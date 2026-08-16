@@ -7,6 +7,7 @@ package com.openjiuwen.service.bus.consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.openjiuwen.service.app.controller.a2a.A2aJsonRpcController;
 import com.openjiuwen.service.bus.consumer.a2a.RequestHandlerBusA2aBridge;
 import com.openjiuwen.service.bus.consumer.model.AgentBusEventEnvelope;
 
@@ -21,6 +22,7 @@ import org.a2aproject.sdk.spec.TaskStatus;
 import org.a2aproject.sdk.spec.TaskStatusUpdateEvent;
 import org.a2aproject.sdk.spec.UnsupportedOperationError;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.lang.reflect.Proxy;
 import java.time.Instant;
@@ -34,6 +36,25 @@ import java.util.concurrent.atomic.AtomicReference;
  * @since 2026-07-22
  */
 class RequestHandlerBusA2aBridgeTest {
+    @Test
+    void serializesBusResponseWithTheRuntimeHttpSerializer() throws Exception {
+        Task responseTask = task("task-1");
+        RequestHandler handler = requestHandlerProxy((proxy, method, args) -> responseTask);
+        RequestHandlerBusA2aBridge bridge = new RequestHandlerBusA2aBridge(handler);
+        A2aJsonRpcController controller = new A2aJsonRpcController(handler);
+        byte[] payload = bytes("""
+                {"jsonrpc":"2.0","id":"request-1","method":"SendMessage","params":{"message":{
+                "role":"ROLE_USER","parts":[{"text":"hi"}],"messageId":"m1"}}}
+                """);
+
+        var result = bridge.handle(event("CLIENT_INVOCATION_REQUESTED"), payload);
+        var httpResponse = controller.handleJsonRpc(new String(payload, java.nio.charset.StandardCharsets.UTF_8),
+                new MockHttpServletRequest("POST", "/a2a"));
+
+        assertThat(bridge.requestId(payload)).isEqualTo("request-1");
+        assertThat(bridge.response(payload, result)).isEqualTo(httpResponse.getBody());
+    }
+
     @Test
     void mapsFeat001MethodNamesToRequestHandler() {
         AtomicReference<String> called = new AtomicReference<>();
