@@ -102,6 +102,7 @@ class ProactiveConvergenceRealLlmE2eTest {
                 .clientProvider("OpenAI").apiKey(key).apiBase(base).verifySsl(false).timeout(120000).build();
         var reqCfg = ModelRequestConfig.builder().modelName(modelName).temperature(0.3).topP(0.9).maxTokens(800)
                 .build();
+        applyThinkingMode(reqCfg);
         ToolCallingEnforcingModel model = new ToolCallingEnforcingModel(cliCfg, reqCfg);
 
         ReActAgent agent = new ReActAgent(AgentCard.builder().name("edpa-conv-" + role).build());
@@ -185,5 +186,18 @@ class ProactiveConvergenceRealLlmE2eTest {
         }
         return "苹果公司 1976 年创立于加州库比蒂诺，总部 Apple Park 园区，"
                 + "全球员工约 16.4 万人。";
+    }
+
+    /**
+     * Applies the {@code LLM_THINKING} env switch onto the request config (default
+     * {@code thinking-off} — identical to the pre-switch behavior). Mirrors the
+     * {@code EdpaCognitiveLoopRealLlmE2eTest} / unified-matrix thinking idiom.
+     *
+     * @param reqCfg the request config to decorate in place
+     */
+    static void applyThinkingMode(ModelRequestConfig reqCfg) {
+        String mode = System.getenv().getOrDefault("LLM_THINKING", "thinking-off");
+        boolean enabled = "thinking-on".equals(mode);
+        reqCfg.setExtraField("thinking", java.util.Map.of("type", enabled ? "enabled" : "disabled"));
     }
 }

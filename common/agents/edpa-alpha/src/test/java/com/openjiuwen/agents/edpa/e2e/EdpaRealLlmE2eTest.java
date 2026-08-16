@@ -130,6 +130,7 @@ class EdpaRealLlmE2eTest {
                 .apiKey(key).apiBase(base).verifySsl(false).build();
         var reqCfg = ModelRequestConfig.builder().modelName(modelName).temperature(0.3).topP(0.9).maxTokens(500)
                 .build();
+        applyThinkingMode(reqCfg);
 
         ToolCallingEnforcingModel model = new ToolCallingEnforcingModel(cliCfg, reqCfg);
 
@@ -268,5 +269,18 @@ class EdpaRealLlmE2eTest {
                 ? "[edpa-e2e] ✅ LLM called explore tool — Species E tool-driven Explore verified"
                 : "[edpa-e2e] ⚠️ LLM did not call explore tool (soft-observe: LLM behavior non-deterministic)";
         LOG.log(Level.INFO, "{0}", verdict);
+    }
+
+    /**
+     * Applies the {@code LLM_THINKING} env switch onto the request config (default
+     * {@code thinking-off} — identical to the pre-switch behavior). Mirrors the
+     * {@code EdpaCognitiveLoopRealLlmE2eTest} / unified-matrix thinking idiom.
+     *
+     * @param reqCfg the request config to decorate in place
+     */
+    static void applyThinkingMode(ModelRequestConfig reqCfg) {
+        String mode = System.getenv().getOrDefault("LLM_THINKING", "thinking-off");
+        boolean enabled = "thinking-on".equals(mode);
+        reqCfg.setExtraField("thinking", java.util.Map.of("type", enabled ? "enabled" : "disabled"));
     }
 }

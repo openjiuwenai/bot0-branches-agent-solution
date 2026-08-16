@@ -458,6 +458,7 @@ class SubAgentDispatchRealLlmE2eTest {
                 .clientProvider("OpenAI").apiKey(key).apiBase(base).verifySsl(false).timeout(120000).build();
         var reqCfg = ModelRequestConfig.builder().modelName(modelName).temperature(0.3).topP(0.9).maxTokens(maxTokens)
                 .build();
+        applyThinkingMode(reqCfg);
         return new ToolCallingEnforcingModel(cliCfg, reqCfg);
     }
 
@@ -582,5 +583,18 @@ class SubAgentDispatchRealLlmE2eTest {
         Set<String> calledNames() {
             return new HashSet<>(called);
         }
+    }
+
+    /**
+     * Applies the {@code LLM_THINKING} env switch onto the request config (default
+     * {@code thinking-off} — identical to the pre-switch behavior). Mirrors the
+     * {@code EdpaCognitiveLoopRealLlmE2eTest} / unified-matrix thinking idiom.
+     *
+     * @param reqCfg the request config to decorate in place
+     */
+    static void applyThinkingMode(ModelRequestConfig reqCfg) {
+        String mode = System.getenv().getOrDefault("LLM_THINKING", "thinking-off");
+        boolean enabled = "thinking-on".equals(mode);
+        reqCfg.setExtraField("thinking", java.util.Map.of("type", enabled ? "enabled" : "disabled"));
     }
 }

@@ -107,6 +107,9 @@ class EdpaRailsAssemblyRealLlmE2eTest {
                 .apiKey(key).apiBase(base).verifySsl(false).build();
         var reqCfg = ModelRequestConfig.builder()
                 .modelName(model).temperature(0.3).maxTokens(4000).build();
+        String thinkingMode = System.getenv().getOrDefault("LLM_THINKING", "thinking-off");
+        reqCfg.setExtraField("thinking",
+                java.util.Map.of("type", "thinking-on".equals(thinkingMode) ? "enabled" : "disabled"));
         ReActAgent agent = new ReActAgent(AgentCard.builder().name(name).build());
         agent.setLlm(new com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel(cliCfg, reqCfg));
         return agent;
