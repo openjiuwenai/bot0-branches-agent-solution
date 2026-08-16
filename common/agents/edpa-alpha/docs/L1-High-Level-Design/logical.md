@@ -6,7 +6,7 @@ TAG:
   - domain-model
   - architecture-fact
 status: active
-updated: 2026-08-08
+updated: 2026-08-15
 dependency:
   - overview.md
   - process.md

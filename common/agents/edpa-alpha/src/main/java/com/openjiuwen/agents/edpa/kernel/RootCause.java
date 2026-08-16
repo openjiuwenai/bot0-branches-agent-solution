@@ -7,10 +7,16 @@ package com.openjiuwen.agents.edpa.kernel;
 import java.util.Set;
 
 /**
- * Why a verify step failed — 3-state sealed diagnosis, produced by EDPA's rail-composed diagnosis
- * ({@link com.openjiuwen.agents.edpa.verification.ProactiveConvergenceRail} /
- * {@link com.openjiuwen.agents.edpa.verification.GroundTruthVerifier}), then mapped to a
- * {@link ReplanAction} via {@link EdpaKernel#toReplanAction}.
+ * Why a verify step failed — 3-state sealed diagnosis, mapped to a {@link ReplanAction}
+ * via {@link EdpaKernel#toReplanAction}.
+ *
+ * <p><b>Honest boundary (4-lens 2026-08-16)</b>: EDPA production has exactly ONE producer —
+ * {@link com.openjiuwen.agents.edpa.verification.ProactiveConvergenceRail} on convergence
+ * stall, and it produces only {@link PlanOrAnswerError}. {@code GroundTruthVerifier} does
+ * NOT produce RootCause (it yields {@code List<Violation>}). The {@link DeviceFailure} /
+ * {@link PerceptionUnreliable} variants are retained from the PevKernel port with zero EDPA
+ * producers today — they preserve the PEV IFF semantics for future device/perception
+ * wiring and are pinned by {@code EdpaKernelTest}.
  *
  * <p>The three states are prioritised by signal certainty (not LLM self-report):
  * <ul>

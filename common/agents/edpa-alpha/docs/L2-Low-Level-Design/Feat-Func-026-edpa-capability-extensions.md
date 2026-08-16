@@ -5,7 +5,7 @@ feature_type: functional
 feature_id: FEAT-026
 status: active
 authority: authoritative
-updated: 2026-08-08
+updated: 2026-08-15
 dependency:
   - ../features/FEAT-026-edpa-capability-extensions.md
   - README.md

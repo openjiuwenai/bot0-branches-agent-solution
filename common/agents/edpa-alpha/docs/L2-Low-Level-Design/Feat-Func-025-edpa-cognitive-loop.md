@@ -5,7 +5,7 @@ feature_type: functional
 feature_id: FEAT-025
 status: active
 authority: authoritative
-updated: 2026-08-08
+updated: 2026-08-15
 dependency:
   - ../features/FEAT-025-edpa-cognitive-loop.md
   - README.md
@@ -59,6 +59,7 @@ AgentHandler myAgentHandler(LlmConfigResolver r, EdpaProperties props,
         CriteriaVerifier verifier, Explorer explorer) {
     ReActAgent agent = ExampleReActAgentFactory.build("my-agent", ..., llm);
     EdpaRails.registerOnto(agent, props, verifier, explorer);  // 单一装配真源
+    ReactRailsObservability.install(agent);  // 必调：不装则 ForceFinishEvent 静默不 fire
     return new JiuwenCoreAgentHandler(agent);
 }
 ```
@@ -93,11 +94,14 @@ edpa:
 ### 3.1 EdpaAutoConfiguration wiring
 
 `EdpaRails.registerOnto` 显式装配（单一真源，config-gated），装配顺序：
-1. tool 模式 → UserInputCaptureRail + ExploreToolRegistrar。
-2. rail 模式 → ExploreRail。
-3. criteria 非空 → CriteriaReplanBridgeRail +（可选）ProactiveConvergenceRail。
-4. maxReplan ≥ 0 → ReplanRail + ReplanTool。
-5. 始终 → RootCauseRail（DeviceFailure 降级门）。
+1. SteeringProvisionRail → 绑定 String-invoke 路径的 steering 队列（issue-#13；
+   唯一 beforeInvoke 覆写者，靠 hook 隔离先于全部 pushSteering 消费者——agent-core
+   priority 为降序，注册先后无执行语义）。
+2. tool 模式 → UserInputCaptureRail + ExploreToolRegistrar。
+3. rail 模式 → ExploreRail。
+4. criteria 非空 → CriteriaReplanBridgeRail +（可选）ProactiveConvergenceRail。
+5. maxReplan ≥ 0 → ReplanRail + ReplanTool（同一 ReplanRail 实例共享预算）。
+6. 始终 → RootCauseRail（DeviceFailure 降级门）。
 
 ### 3.2 ProactiveConvergenceRail convergence 逻辑
 
@@ -141,7 +145,7 @@ convergence / 验证 / 探索流程见 `process.md` §3-6。
 
 ### DeterministicChecker 注入（⚠ 不能用 @Bean 自动发现）
 
-当前 autoconfig 用**空 checker** 构造 GroundTruthVerifier，不会收集 `@Bean DeterministicChecker`。宿主必须**覆盖 CriteriaVerifier bean**：
+当前 autoconfig 默认注入 `RuleBasedCriteriaVerifier`（v0.2.0 起），不会收集 `@Bean DeterministicChecker`。宿主需要确定性层时必须**覆盖 CriteriaVerifier bean**：
 
 ```java
 @Bean
@@ -194,7 +198,7 @@ public class ClaimDeductibleChecker implements DeterministicChecker {
 | 编号 | 要求 |
 |---|---|
 | R-1 | 宿主必须在 `@Bean AgentHandler` 方法里显式调用 `EdpaRails.registerOnto(agent, props, verifier, explorer)`（官方 demo pattern；agent 无需外露成 Spring bean）。autoconfig 会在启用但零命中时 WARN。 |
-| R-2 | ⚠ 当前 autoconfig 不自动发现 DeterministicChecker（用空 checker 构造 GroundTruthVerifier），需宿主手动 `new GroundTruthVerifier(List.of(myChecker))` 注入；宿主声明 own 哪些 criteria。 |
+| R-2 | ⚠ 当前 autoconfig 不自动发现 DeterministicChecker（默认 bean 为 RuleBasedCriteriaVerifier），需确定性层的宿主手动 `new GroundTruthVerifier(List.of(myChecker))` 覆盖注入；宿主声明 own 哪些 criteria。 |
 | R-3 | DataFlowObserverRail 已于 MR !77 移除；EDPA 当前不产出 OTel span，可观测性继承 agent-core-ext-react-rails 的 RailTelemetry（SteeringEvent "EXPLORE_FINDINGS" / "CONVERGENCE_STALL"）。 |
 | R-4 | criteria 列表必须非空才启用 convergence（空列表 = 不检测）。 |
 

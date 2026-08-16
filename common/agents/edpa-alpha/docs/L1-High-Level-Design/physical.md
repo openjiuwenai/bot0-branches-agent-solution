@@ -3,7 +3,7 @@ level: L1-HLD
 module: agents/edpa-alpha
 TAG: [physical-view, deployment, architecture-fact]
 status: active
-updated: 2026-08-08
+updated: 2026-08-15
 dependency: [overview.md, process.md, development.md]
 ---
 

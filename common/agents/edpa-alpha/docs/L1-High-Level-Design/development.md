@@ -3,7 +3,7 @@ level: L1-HLD
 module: agents/edpa-alpha
 TAG: [development-view, module-structure, dependency, architecture-fact]
 status: active
-updated: 2026-08-08
+updated: 2026-08-15
 dependency: [overview.md, logical.md]
 ---
 
@@ -59,7 +59,7 @@ common/agents/edpa-alpha/
 | `Explorer` | explore | 宿主（默认 LlmExplorer） | 调研 → findings |
 | `McpClient` | mcp | 宿主（默认 StdioMcpClient） | MCP 工具服务器连接 |
 | `SubAgentExecutor` | subagent | 宿主 | 子 agent 执行后端 |
-| `CriteriaVerifier` | verification（react-rails） | 宿主（默认 GroundTruthVerifier） | criteria 验证 |
+| `CriteriaVerifier` | verification（react-rails） | 宿主（默认 RuleBasedCriteriaVerifier；确定性层显式 GroundTruthVerifier） | criteria 验证 |
 
 ## 5. 测试守卫
 

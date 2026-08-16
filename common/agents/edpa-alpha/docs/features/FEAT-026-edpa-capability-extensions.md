@@ -1,10 +1,10 @@
 ---
-scope: v0.1.0
+scope: v0.1.0 → v0.2.0（装配显式化）
 module: agents/edpa-alpha
 feature_type: functional
 feature_id: FEAT-026
 status: active
-updated: 2026-08-08
+updated: 2026-08-15
 ---
 
 # EDPA 能力扩展（MCP 工具集成 + SubAgent 派发 + Explore Tool）
@@ -93,7 +93,7 @@ FEAT-026 定义 `agents/edpa-alpha` 的**外部能力扩展层**：MCP（Model C
 
 - MCP 工具适配不得泄漏 MCP SDK 类型到 agent 的公共 API（McpToolAdapter 在边界转换）。
 - SubAgent 派发必须保证父 agent 不阻塞等待子 agent（in-process 执行在 tool invoke 线程同步返回）。
-- ExploreTool 的预算约束必须被 Explorer 实现尊重（maxRounds/maxSubAgents/timeout）。
+- ExploreTool 的预算约束：自定义 Explorer 实现应消费 maxRounds；maxSubAgents/timeout 当前为 planned 字段（无生产消费者，宿主不应依赖其行为——诚实边界见 EdpaProperties javadoc）。
 - MCP subprocess 生命周期必须由宿主管理（close 释放）；EdpaAutoConfiguration 不自动管理 MCP 连接生命周期。
 
 ## 7. 关联文档

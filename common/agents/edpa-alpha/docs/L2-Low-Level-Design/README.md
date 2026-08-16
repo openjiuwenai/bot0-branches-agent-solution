@@ -3,7 +3,7 @@ level: L2-LLD
 module: agents/edpa-alpha
 status: active
 authority: authoritative
-updated: 2026-08-08
+updated: 2026-08-15
 dependency:
   - ../features/FEAT-025-edpa-cognitive-loop.md
   - ../features/FEAT-026-edpa-capability-extensions.md
@@ -26,7 +26,7 @@ dependency:
 | 编号 | 文档 | version-scope | 特性 | 边界 |
 |---|---|---|---|---|
 | Feat-Func-025 | [认知增强闭环](Feat-Func-025-edpa-cognitive-loop.md) | FEAT-025 | ReAct overlay：ProactiveConvergenceRail + GroundTruthVerifier + DeterministicChecker + ExploreRail + EdpaKernel | 不改 ReAct 本体；数值/合规零 LLM |
-| Feat-Func-025 | [能力扩展](Feat-Func-026-edpa-capability-extensions.md) | FEAT-025 | MCP stdio 集成 + SubAgent 派发 + Explore Tool | MCP 只 stdio；SubAgent in-process |
+| Feat-Func-026 | [能力扩展](Feat-Func-026-edpa-capability-extensions.md) | FEAT-026 | MCP stdio 集成 + SubAgent 派发 + Explore Tool | MCP 只 stdio；SubAgent in-process |
 
 ## 关联文档
 

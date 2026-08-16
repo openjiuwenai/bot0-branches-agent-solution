@@ -3,7 +3,7 @@ level: L1-HLD
 module: agents/edpa-alpha
 TAG: [scenarios, technical-scenario, architecture-fact]
 status: active
-updated: 2026-08-08
+updated: 2026-08-15
 dependency: [overview.md, logical.md, process.md, ../features/FEAT-025-edpa-cognitive-loop.md, ../features/FEAT-026-edpa-capability-extensions.md]
 ---
 
@@ -60,7 +60,7 @@ agent 多轮工具调用后覆盖率停滞，ProactiveConvergenceRail 检测并�
 ### 基本路径
 1. agent 输出含数值判断（如"理赔 8500 元"）。
 2. GroundTruthVerifier 逐条 criterion 匹配 checker。
-3. "理赔金额符合85%共担" → ClaimDeductibleChecker.matches()=true。
+3. "理赔金额符合85%共担" → ClaimDeductibleChecker.matches()=true（宿主侧示例实现，见 L2 §6；模块内不含该类）。
 4. check() 纯计算（10000 × 85% = 8500？是 → null 通过 / 否 → Violation）。
 
 ### 验证关注点
@@ -150,10 +150,10 @@ agent 调 ExploreTool 调研后决策。
 |---|---|
 | ProactiveConvergenceRail | convergence 检测（afterModelCall, priority=70） |
 | UserInputCaptureRail | 缓存输入（beforeModelCall） |
-| RootCauseRail | DeviceFailure 遥测（afterToolCall） |
+| RootCauseRail | DeviceFailure 遥测（onToolException + afterModelCall） |
 
 ### 基本路径
-1. EdpaAutoConfiguration 给 ReActAgent 注册已装配 rail。
+1. 宿主经 EdpaRails.registerOnto 显式装配认知 rail（autoconfig 只提供基础设施 Bean）。
 2. agent invoke 时各 rail 在各自相位被动触发。
 3. 每个 rail 独立工作，不改 ReAct 控制流。
 

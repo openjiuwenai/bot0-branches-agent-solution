@@ -6,20 +6,17 @@ package com.openjiuwen.agents.edpa.e2e;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.openjiuwen.agents.edpa.EdpaRails;
+import com.openjiuwen.agents.edpa.autoconfigure.EdpaProperties;
 import com.openjiuwen.agents.edpa.explore.ExploreBudget;
-import com.openjiuwen.agents.edpa.explore.ExploreToolRegistrar;
 import com.openjiuwen.agents.edpa.explore.Explorer;
 import com.openjiuwen.agents.edpa.explore.LlmExplorer;
 import com.openjiuwen.agents.edpa.mcp.McpClient;
 import com.openjiuwen.agents.edpa.mcp.McpTool;
 import com.openjiuwen.agents.edpa.mcp.McpToolRegistrar;
 import com.openjiuwen.agents.edpa.mcp.StdioMcpClient;
-import com.openjiuwen.agents.edpa.rail.UserInputCaptureRail;
 import com.openjiuwen.agents.edpa.util.LlmResponseExtractor;
 import com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel;
-import com.openjiuwen.agents.reactrails.replan.ReplanRail;
-import com.openjiuwen.agents.reactrails.replan.ReplanTool;
-import com.openjiuwen.agents.reactrails.selfheal.RootCauseRail;
 import com.openjiuwen.agents.reactrails.verification.CriteriaReplanBridgeRail;
 import com.openjiuwen.agents.reactrails.verification.RuleBasedCriteriaVerifier;
 import com.openjiuwen.core.foundation.llm.model_clients.DefaultModelClientFactories;
@@ -97,6 +94,13 @@ class McpInvestmentResearchE2eTest {
             - 数据采集阶段总工具调用不超过 5 次，获取到数据后立即进入撰写。
             - 不要反复确认同一信息；基于已采集数据直接撰写报告。
 
+            【终止条件 — 不可违反】
+            - 一旦你已获得 3 个以上不同维度的数据点（如营收、净利润、现金流、基本面），
+              必须立即停止一切工具调用，下一条消息直接输出完整 7 节报告正文。
+            - 工具调用累计达到 6 次即视为采集结束——即使仍有数据缺口，也必须基于已有
+              数据撰写，并在对应章节标注"数据缺失"。
+            - 持续调用工具而不输出报告 = 任务失败；有小缺口的完整报告远好于没有报告。
+
             【最终回复规则 — 极其重要，违反将导致任务失败】
             - 本系统遵循 ReAct 协议：你输出的任何【不含工具调用】的回复都会被立即当作最终结果返回，循环就此结束。
             - 因此：采集数据时务必带上工具调用；一旦你输出不含工具调用的纯文本，那就是最终报告。
@@ -106,6 +110,8 @@ class McpInvestmentResearchE2eTest {
               不要插任何过渡句，第一行就是"## 一、执行摘要"。
 
             【报告结构 — 摩根士丹利范式】
+            （七个二级标题必须逐字使用下列标题文本、按序连续输出；不得合并、不得省略、
+             不得改写标题；每个标题独占一行且以 ## 开头——标题不完整 = 报告不合格）
             ## 一、执行摘要（Executive Summary）
             包含：投资评级建议（买入/持有/卖出）、目标价、核心逻辑一句话概括。
             ## 二、市场环境概述（Market Overview）
@@ -160,16 +166,29 @@ class McpInvestmentResearchE2eTest {
         CountingMcpClient mcpClient = startAndRegisterMcp(agent);
         try {
             ExplorationHarness exploration = wireRails(agent, base, key, modelName);
+            // variables reassigned on content-empty retry (effective-final workaround below)
 
             LOG.log(Level.INFO, "[mcp-research] Starting EDPA investment research e2e...");
             Object result = agent.invoke(INVESTMENT_RESEARCH_TASK, null);
-
             String output = String.valueOf(result);
+
+            // Transient content-empty retry (matrix idiom): thinking-mode models occasionally
+            // return an answer terminal with EMPTY content (reasoning absorbed the turn —
+            // pro+thinking hit this in the 2026-08-16 matrix). One fresh retry before failing.
+            if (isBlankAnswer(result, output)) {
+                LOG.log(Level.WARNING, "[mcp-research] content-empty answer terminal — retrying once");
+                mcpClient.close();
+                agent = buildAgent(key, base, modelName);
+                mcpClient = startAndRegisterMcp(agent);
+                exploration = wireRails(agent, base, key, modelName);
+                result = agent.invoke(INVESTMENT_RESEARCH_TASK, null);
+                output = String.valueOf(result);
+            }
             int previewLen = Math.min(500, output.length());
             LOG.log(Level.INFO, "[mcp-research] output length: {0,number,#}", output.length());
             LOG.log(Level.INFO, "[mcp-research] output preview: {0}", output.substring(0, previewLen));
 
-            assertIntegrationMechanics(result, output, mcpClient, exploration.userInputRef());
+            assertIntegrationMechanics(result, output, mcpClient, exploration.seenUserInput());
             runSoftObservations(result, output, exploration.exploreCallCount(), mcpClient);
 
             long sectionsPresent = MS_SECTIONS.stream().filter(output::contains).count();
@@ -220,13 +239,8 @@ class McpInvestmentResearchE2eTest {
      * @param reqCfg the request config to mutate with the chosen extra field
      */
     private static void configureThinkingMode(ModelRequestConfig reqCfg) {
-        String tMode = System.getenv().getOrDefault("LLM_THINKING", "glm-off");
-        switch (tMode) {
-            case "qwen-off" -> reqCfg.setExtraField("enable_thinking", false);
-            case "qwen-on" -> reqCfg.setExtraField("enable_thinking", true);
-            case "thinking-on" -> reqCfg.setExtraField("thinking", Map.of("type", "enabled"));
-            default -> reqCfg.setExtraField("thinking", Map.of("type", "disabled"));
-        }
+        String tMode = System.getenv().getOrDefault("LLM_THINKING", "thinking-off");
+        ModelDialect.thinkingParams(tMode).forEach(reqCfg::setExtraField);
     }
 
     /**
@@ -269,48 +283,49 @@ class McpInvestmentResearchE2eTest {
     }
 
     /**
-     * Registers the EDPA rails (user-input capture, explorer, criteria/replan/self-heal)
-     * onto the agent and returns the mutable harness handles the test observes.
+     * Assembles the full EDPA rail stack onto the agent via
+     * {@link EdpaRails#registerOnto} (单一装配真源 — SteeringProvisionRail first + ONE
+     * shared ReplanRail instance for both the bridge and {@code __replan__} dispatch),
+     * and returns the mutable harness handles the test observes.
+     *
+     * <p>registerOnto's internal userInputRef closure is not reachable from outside,
+     * so the explorer lambda records the prompt it received into {@code seenUserInput} —
+     * the capture assertion becomes end-to-end (user query → UserInputCaptureRail →
+     * ExploreTool → LlmExplorer), strictly stronger than asserting the ref is non-null.
      *
      * @param agent      the agent to wire rails onto
      * @param base       base URL of the LLM endpoint (for the explorer HTTP fn)
      * @param key        API key for the LLM endpoint
      * @param modelName  model name for the explorer LLM call
-     * @return the exploration harness holding the user-input ref and explore-call counter
+     * @return the exploration harness holding the seen-user-input ref and explore-call counter
      */
     private ExplorationHarness wireRails(ReActAgent agent, String base, String key, String modelName) {
-        AtomicReference<String> userInputRef = new AtomicReference<>();
-        agent.registerRail(new UserInputCaptureRail(userInputRef));
-
         AtomicInteger exploreCallCount = new AtomicInteger(0);
-        Function<String, String> explorerFn = buildExplorerLlmFn(base, key, modelName,
-                System.getenv().getOrDefault("OPENJIUWEN_COMPLETIONS_PATH", "/chat/completions"), exploreCallCount);
+        AtomicReference<String> seenUserInput = new AtomicReference<>();
+        String completionsPath = System.getenv().getOrDefault("OPENJIUWEN_COMPLETIONS_PATH",
+                "/chat/completions");
+        Function<String, String> explorerFn = buildExplorerLlmFn(
+                new ExplorerHttpEndpoint(base, key, modelName, completionsPath), exploreCallCount, seenUserInput);
         Explorer explorer = new LlmExplorer(explorerFn, ExploreBudget.DEFAULT);
-        ExploreToolRegistrar.registerOnto(agent, explorer, ExploreBudget.DEFAULT, () -> userInputRef.get());
 
-        ReplanRail sharedCounter = new ReplanRail(3);
-        agent.registerRail(
-                new CriteriaReplanBridgeRail(new RuleBasedCriteriaVerifier(), RESEARCH_CRITERIA, sharedCounter));
-
-        ReplanRail pevReplanRail = new ReplanRail(3);
-        agent.registerRail(pevReplanRail);
-        ReplanTool.registerOnto(agent);
-
-        agent.registerRail(new RootCauseRail());
-        return new ExplorationHarness(userInputRef, exploreCallCount);
+        EdpaProperties props = new EdpaProperties();
+        props.setCriteria(RESEARCH_CRITERIA);
+        props.setMaxReplan(3);
+        EdpaRails.registerOnto(agent, props, new RuleBasedCriteriaVerifier(), explorer);
+        return new ExplorationHarness(seenUserInput, exploreCallCount);
     }
 
     /**
      * Hard-asserts the integration mechanics — the data-channel proof that the agent
-     * actually drove real MCP tools and captured the user query.
+     * actually drove real MCP tools and propagated the captured user query to the explorer.
      *
-     * @param result       the agent invoke result
-     * @param output       stringified result
-     * @param mcpClient    the counting MCP client
-     * @param userInputRef the captured user-input reference
+     * @param result        the agent invoke result
+     * @param output        stringified result
+     * @param mcpClient     the counting MCP client
+     * @param seenUserInput the prompt the explorer lambda received (embeds the captured user query)
      */
     private static void assertIntegrationMechanics(Object result, String output, CountingMcpClient mcpClient,
-            AtomicReference<String> userInputRef) {
+            AtomicReference<String> seenUserInput) {
         // ---- HARD assertions: integration mechanics (E2E data-channel proof) ----
         assertThat(result).as("EDPA loop must produce a non-null result").isNotNull();
         assertThat(output).as("EDPA loop must produce non-empty output (data channel ran)").isNotEmpty();
@@ -318,7 +333,12 @@ class McpInvestmentResearchE2eTest {
                 .as("LLM must dispatch >=1 real MCP tool through the thin stdio client "
                         + "(end-to-end: agent -> Tool adapter -> McpClient -> SEC EDGAR)")
                 .isGreaterThanOrEqualTo(1);
-        assertThat(userInputRef.get()).as("UserInputCaptureRail must capture the user query").isNotNull().isNotEmpty();
+        assertThat(seenUserInput.get())
+                .as("Captured user query must reach the explorer (end-to-end: UserInputCaptureRail"
+                        + " -> ExploreTool supplier -> LlmExplorer prompt; the exploration prompt embeds"
+                        + " the original task, hence the 摩根士丹利 marker)")
+                .isNotNull()
+                .contains("摩根士丹利");
     }
 
     /**
@@ -370,12 +390,14 @@ class McpInvestmentResearchE2eTest {
     }
 
     /**
-     * Mutable handles the test observes across the EDPA loop (user-input ref + explore counter).
+     * Mutable handles the test observes across the EDPA loop (seen-user-input ref + explore counter).
      *
-     * @param userInputRef    atomic reference capturing the last user query
+     * @param seenUserInput    atomic reference recording the prompt the explorer lambda received
+     *                         (embeds the user query captured by UserInputCaptureRail inside
+     *                         {@link EdpaRails#registerOnto} — the internal ref is not reachable)
      * @param exploreCallCount counter of how many times the explorer LLM was invoked
      */
-    private record ExplorationHarness(AtomicReference<String> userInputRef, AtomicInteger exploreCallCount) {
+    private record ExplorationHarness(AtomicReference<String> seenUserInput, AtomicInteger exploreCallCount) {
     }
 
     /**
@@ -458,12 +480,30 @@ class McpInvestmentResearchE2eTest {
      * @param modelName        model name to invoke
      * @param path             completions path (e.g. {@code /chat/completions})
      * @param exploreCallCount counter incremented on each explorer LLM call
+     * @param seenUserInput    records the prompt received (embeds the captured user query)
+     *                         — the end-to-end capture assertion reads this after invoke
      * @return a function mapping an explorer prompt to the LLM-generated analysis text
      */
-    private static Function<String, String> buildExplorerLlmFn(String base, String key, String modelName, String path,
-            AtomicInteger exploreCallCount) {
+    /**
+     * Explorer 直连 HTTP 端点（CodeCheck G.MET.01：六散参收敛为参数对象）。
+     *
+     * @param base API base URL
+     * @param key bearer API key
+     * @param modelName model name for the explorer LLM call
+     * @param path completions path appended to the base URL
+     */
+    private record ExplorerHttpEndpoint(String base, String key, String modelName, String path) {
+    }
+
+    private static Function<String, String> buildExplorerLlmFn(ExplorerHttpEndpoint endpoint,
+            AtomicInteger exploreCallCount, AtomicReference<String> seenUserInput) {
+        String base = endpoint.base();
+        String key = endpoint.key();
+        String modelName = endpoint.modelName();
+        String path = endpoint.path();
         return prompt -> {
             exploreCallCount.incrementAndGet();
+            seenUserInput.set(prompt);
             LOG.log(Level.INFO, "[mcp-research] Explorer LLM called (count={0,number,#})", exploreCallCount.get());
             try {
                 String escaped = prompt.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
@@ -486,5 +526,21 @@ class McpInvestmentResearchE2eTest {
                 throw new IllegalStateException("Explorer LLM call failed: " + e.getMessage(), e);
             }
         };
+    }
+
+    /**
+     * Detects the transient content-empty answer terminal (reasoning absorbed the turn,
+     * answer content is blank while the loop terminated normally).
+     *
+     * @param result the raw invoke result
+     * @param output the stringified result
+     * @return true when the answer terminal carries no usable content
+     */
+    private static boolean isBlankAnswer(Object result, String output) {
+        String text = output;
+        if (result instanceof java.util.Map<?, ?> rm && rm.get("output") != null) {
+            text = String.valueOf(rm.get("output"));
+        }
+        return text == null || text.isBlank();
     }
 }

@@ -107,8 +107,17 @@ class EdpaRailsAssemblyRealLlmE2eTest {
                 .apiKey(key).apiBase(base).verifySsl(false).build();
         var reqCfg = ModelRequestConfig.builder()
                 .modelName(model).temperature(0.3).maxTokens(4000).build();
+        applyThinkingMode(reqCfg);
         ReActAgent agent = new ReActAgent(AgentCard.builder().name(name).build());
         agent.setLlm(new com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel(cliCfg, reqCfg));
+        // iteration ceiling from the model-dialect table (SDK default 5): thinking/reasoning
+        // models produce longer turns and need more room to reach a verified forceFinish
+        // terminal (pro+thinking exhausted 5 rounds mid-replan in the 2026-08-16 matrix).
+        Object cfg = agent.getConfig();
+        if (cfg instanceof com.openjiuwen.core.singleagent.agents.ReActAgentConfig reactCfg) {
+            reactCfg.configureMaxIterations(ModelDialect.recommendedMaxIterations(
+                    System.getenv().getOrDefault("LLM_THINKING", "thinking-off")));
+        }
         return agent;
     }
 
@@ -209,5 +218,10 @@ class EdpaRailsAssemblyRealLlmE2eTest {
         List<RailEvent> events = new ArrayList<>(collectedEvents);
         LOG.log(Level.INFO, "[edpa-rails-rail-e2e] events={0}", events.size());
         assertThat(events).as("rail-mode agent must produce rail events (ExploreRail fires)").isNotEmpty();
+    }
+
+    private static void applyThinkingMode(ModelRequestConfig reqCfg) {
+        String mode = System.getenv().getOrDefault("LLM_THINKING", "thinking-off");
+        ModelDialect.thinkingParams(mode).forEach(reqCfg::setExtraField);
     }
 }

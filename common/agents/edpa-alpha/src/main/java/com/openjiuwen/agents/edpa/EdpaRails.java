@@ -30,7 +30,9 @@ import java.util.concurrent.atomic.AtomicReference;
  *       and the LLM-driven {@code __replan__} dispatch — violation = 2× replan budget.</li>
  *   <li>{@code userInputRef} closure is shared across UserInputCaptureRail and
  *       ExploreTool (tool mode).</li>
- *   <li>{@code SteeringProvisionRail} must be registered FIRST (issue-#13).</li>
+ *   <li>{@code SteeringProvisionRail} binds the steering queue on the String-invoke
+ *       path (issue-#13) — sole beforeInvoke override, runs before any consumer hook
+ *       regardless of priority (agent-core sorts descending).</li>
  *   <li>Conditional branches: tool-vs-rail mode, criteria presence, convergence enable.</li>
  * </ul>
  *
@@ -40,6 +42,10 @@ import java.util.concurrent.atomic.AtomicReference;
  * AgentHandler myAgentHandler(LlmConfigResolver r) {
  *     ReActAgent agent = ExampleReActAgentFactory.build("my-agent", ..., llm);
  *     EdpaRails.registerOnto(agent, props, verifier, explorer);
+ *     // MANDATORY observability bootstrap — EdpaRails does NOT install it.
+ *     // Skipping this leaves forceFinish functional but UNOBSERVABLE
+ *     // (no ForceFinishEvent ever fires — the e2e suite stepped on this).
+ *     ReactRailsObservability.install(agent);
  *     return new JiuwenCoreAgentHandler(agent);
  * }
  * }</pre>
@@ -53,9 +59,20 @@ public final class EdpaRails {
     /**
      * Registers the EDPA cognitive rail stack onto a ReActAgent.
      *
+     * <p><b>Honest boundary — same-JVM multi-agent (red-team finding, 2026-08-16)</b>:
+     * ResourceMgr is a process-wide registry keyed by TOOL ID, and runtime dispatch looks
+     * tools up by id (the tag on {@code addTool} is for attribution, not lookup isolation).
+     * EDPA's cognitive tools use fixed ids ({@code explore}; react-rails {@code __replan__}
+     * likewise), so TWO EDPA agents in one JVM overwrite each other's registrations
+     * (last-writer-wins) — agent A's {@code explore} dispatch may execute agent B's
+     * ExploreTool (reading B's captured user input). Single agent per JVM is safe; hosts
+     * needing multiple EDPA agents must isolate at the process level until agent-core
+     * dispatch supports tag-scoped lookup (frozen-layer cross-repo decision, deferred).
+     *
      * <p>Assembly order (bearing — do not change without 4-lens):
      * <ol>
-     *   <li>SteeringProvisionRail (priority 1) — provisions steering queue FIRST.</li>
+     *   <li>SteeringProvisionRail — binds steering queue (issue-#13). Sole beforeInvoke
+     *       override, so it precedes all consumer hooks via hook isolation.</li>
      *   <li>UserInputCaptureRail + ExploreTool (tool mode) OR ExploreRail (rail mode).</li>
      *   <li>CriteriaReplanBridgeRail (+ ProactiveConvergenceRail if enabled) — shares
      *       the same ReplanRail instance as (4).</li>
@@ -72,7 +89,8 @@ public final class EdpaRails {
     public static RegistrationSummary registerOnto(ReActAgent agent,
             com.openjiuwen.agents.edpa.autoconfigure.EdpaProperties properties,
             CriteriaVerifier criteriaVerifier, Explorer explorer) {
-        // 1. Steering provision FIRST (issue-#13: invoke(taskString, null) never binds a queue).
+        // 1. Steering provision (issue-#13: invoke(taskString, null) never binds a queue;
+        //    sole beforeInvoke override — hook isolation, not priority, orders it first).
         agent.registerRail(new SteeringProvisionRail());
 
         // 2. Explore phase — tool mode or rail mode.

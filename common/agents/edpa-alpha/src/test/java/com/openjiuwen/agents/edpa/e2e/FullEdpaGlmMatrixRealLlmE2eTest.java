@@ -6,16 +6,13 @@ package com.openjiuwen.agents.edpa.e2e;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.openjiuwen.agents.edpa.EdpaRails;
+import com.openjiuwen.agents.edpa.autoconfigure.EdpaProperties;
 import com.openjiuwen.agents.edpa.explore.ExploreBudget;
-import com.openjiuwen.agents.edpa.explore.ExploreToolRegistrar;
 import com.openjiuwen.agents.edpa.explore.Explorer;
 import com.openjiuwen.agents.edpa.explore.LlmExplorer;
-import com.openjiuwen.agents.edpa.rail.UserInputCaptureRail;
 import com.openjiuwen.agents.edpa.util.LlmResponseExtractor;
-import com.openjiuwen.agents.edpa.verification.ProactiveConvergenceRail;
 import com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel;
-import com.openjiuwen.agents.reactrails.replan.ReplanRail;
-import com.openjiuwen.agents.reactrails.replan.ReplanTool;
 import com.openjiuwen.agents.reactrails.verification.CriteriaReplanBridgeRail;
 import com.openjiuwen.agents.reactrails.verification.RuleBasedCriteriaVerifier;
 import com.openjiuwen.core.foundation.llm.model_clients.DefaultModelClientFactories;
@@ -46,7 +43,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -61,8 +57,10 @@ import java.util.logging.Logger;
  * home API, not via an aggregator.
  *
  * <p><b>Matrix</b>: 2 models × 2 thinking = 4 configs. Full EDPA stack (ExploreTool +
- * market_data stub + CriteriaReplanBridgeRail + ReplanRail + ProactiveConvergenceRail).
- * Same transient-flaky retry + tolerant-assert discipline as the openrouter matrix.
+ * market_data stub + CriteriaReplanBridgeRail + shared ReplanRail + ProactiveConvergenceRail),
+ * assembled via {@link EdpaRails#registerOnto} (单一装配真源 — same wiring graph as the
+ * production host). Same transient-flaky retry + tolerant-assert discipline as the
+ * openrouter matrix.
  *
  * <p>Env-gated opt-in: {@code OPENJIUWEN_API_KEY} / {@code OPENJIUWEN_BASE_URL} /
  * {@code EDPA_GLM_MATRIX_ENABLED=true}.
@@ -278,8 +276,9 @@ class FullEdpaGlmMatrixRealLlmE2eTest {
     }
 
     /**
-     * Builds the EDPA agent for one (model, thinking) config, registers the full rail stack,
-     * invokes the task, and folds the observable counters into an immutable outcome record.
+     * Builds the EDPA agent for one (model, thinking) config, assembles the full rail stack
+     * via {@link EdpaRails#registerOnto} (single assembly truth source), invokes the task,
+     * and folds the observable counters into an immutable outcome record.
      *
      * @param key the GLM API key
      * @param base the GLM API base URL
@@ -305,17 +304,21 @@ class FullEdpaGlmMatrixRealLlmE2eTest {
         AtomicInteger toolCalls = new AtomicInteger(0);
         registerMarketDataTool(agent, toolCalls);
 
-        AtomicReference<String> userInputRef = new AtomicReference<>();
-        agent.registerRail(new UserInputCaptureRail(userInputRef));
-
         AtomicInteger exploreCount = new AtomicInteger(0);
         String completionsPath = System.getenv().getOrDefault("OPENJIUWEN_COMPLETIONS_PATH", "/chat/completions");
         Function<String, String> explorerFn = buildExplorerFn(key, base + completionsPath, model, thinking,
                 exploreCount);
         Explorer explorer = new LlmExplorer(explorerFn, ExploreBudget.DEFAULT);
-        ExploreToolRegistrar.registerOnto(agent, explorer, ExploreBudget.DEFAULT, userInputRef::get);
 
-        registerRails(agent);
+        // 装配经 EdpaRails.registerOnto（单一装配真源）：SteeringProvisionRail 首位 +
+        // bridge 与 __replan__ dispatch 共用同一 ReplanRail 实例（共享预算计数器）。
+        // 原手动装配的双 ReplanRail 实例（预算×2 契约违规）就此消除。
+        EdpaProperties props = new EdpaProperties();
+        props.setCriteria(CRITERIA);
+        props.setMaxReplan(3);
+        props.setProactiveConvergenceEnabled(true);
+        props.setProactiveConvergenceStallWindow(2);
+        EdpaRails.registerOnto(agent, props, new RuleBasedCriteriaVerifier(), explorer);
 
         Object result = agent.invoke(TASK, null);
         String output = extractOutput(result);
@@ -333,22 +336,6 @@ class FullEdpaGlmMatrixRealLlmE2eTest {
         if (cfg instanceof ReActAgentConfig rc) {
             rc.configureMaxIterations(12);
         }
-    }
-
-    /**
-     * Registers the full EDPA decision/verification rail stack onto the agent: the shared-counter
-     * criteria-replan bridge, the proactive convergence rail, the reactive replan rail, and the replan tool.
-     *
-     * @param agent the agent to attach the rails to
-     */
-    private void registerRails(ReActAgent agent) {
-        ReplanRail sharedCounter = new ReplanRail(3);
-        agent.registerRail(new CriteriaReplanBridgeRail(new RuleBasedCriteriaVerifier(), CRITERIA, sharedCounter));
-        ProactiveConvergenceRail convergence = new ProactiveConvergenceRail(new RuleBasedCriteriaVerifier(),
-                CRITERIA, 2, ProactiveConvergenceRail.DEFAULT_COVERAGE_CRITICAL);
-        agent.registerRail(convergence);
-        agent.registerRail(new ReplanRail(3));
-        ReplanTool.registerOnto(agent);
     }
 
     /** Immutable snapshot of the observable counters captured for one config run. */
