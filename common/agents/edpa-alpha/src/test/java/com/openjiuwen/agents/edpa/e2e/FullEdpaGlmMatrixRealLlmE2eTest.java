@@ -322,7 +322,7 @@ class FullEdpaGlmMatrixRealLlmE2eTest {
 
         Object result = agent.invoke(TASK, null);
         String output = extractOutput(result);
-        Object verified = result instanceof Map<?, ?> rm ? rm.get(CriteriaReplanBridgeRail.VERIFIED_KEY) : null;
+        Object verified = result instanceof Map<?, ?> rm ? rm.get(com.openjiuwen.agents.reactrails.observability.ObservingRail.VERIFIED_KEY) : null;
         return new ConfigRunOutcome(exploreCount.get(), toolCalls.get(), verified, output);
     }
 

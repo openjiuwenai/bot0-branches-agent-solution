@@ -361,7 +361,7 @@ class FullEdpaMatrixRealLlmE2eTest {
         r.put("exploreCount", exploreCount.get());
         r.put("toolCalls", toolCalls.get());
         r.put("convergenceTrigger", -1); // 状态隔离后 invoke 不可读 (RailInvocationState per-invocation)
-        r.put("verified", result instanceof Map<?, ?> rm ? rm.get(CriteriaReplanBridgeRail.VERIFIED_KEY) : null);
+        r.put("verified", result instanceof Map<?, ?> rm ? rm.get(com.openjiuwen.agents.reactrails.observability.ObservingRail.VERIFIED_KEY) : null);
         r.put("outputLen", output.length());
         r.put("status", output.isBlank() ? "empty" : "completed");
     }
