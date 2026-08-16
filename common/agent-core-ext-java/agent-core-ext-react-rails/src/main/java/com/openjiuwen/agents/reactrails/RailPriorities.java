@@ -48,9 +48,6 @@ package com.openjiuwen.agents.reactrails;
  * @since 2026-08
  */
 public final class RailPriorities {
-    private RailPriorities() {
-    }
-
     /**
      * PreCompletionChecklistRail (80) — after model call metrics + before-model guardrails;
      * below UserInputCaptureRail(95)/ExploreRail(90) on the beforeModelCall hook in an
@@ -63,4 +60,7 @@ public final class RailPriorities {
      * within the tier is registration order (not a contract).
      */
     public static final int STAGNATION_DETECTION = 50;
+
+    private RailPriorities() {
+    }
 }
