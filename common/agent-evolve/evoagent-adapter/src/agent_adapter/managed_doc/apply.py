@@ -49,7 +49,8 @@ class ApplyStrategy(Protocol):
 
 class FileOnlyApply:
     """placeholder, not yet in use (spec D7). File writes are already atomic; no
-    further effect needed. Returns success immediately."""
+    further effect needed. Returns success immediately.
+    """
 
     async def apply(self) -> ApplyResult:
         return ApplyResult(ok=True, down_seen=None, error=None)

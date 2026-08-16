@@ -33,7 +33,8 @@ def split_frontmatter(content: str) -> tuple[str, str]:
 
 class ContentPolicyError(Exception):
     """protected section marker 校验失败（缺失/重复/交叉/嵌套）或 candidate
-    丢失 marker pair。fail-fast，不静默修复。"""
+    丢失 marker pair。fail-fast，不静默修复。
+    """
 
 
 @dataclass(frozen=True)
