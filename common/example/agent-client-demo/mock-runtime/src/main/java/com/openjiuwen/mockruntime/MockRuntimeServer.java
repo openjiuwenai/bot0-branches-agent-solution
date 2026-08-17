@@ -203,6 +203,7 @@ public final class MockRuntimeServer {
             task.state = "TASK_STATE_COMPLETED";
         } else {
             // Resume of existing task or waiting for input — state stays as-is.
+            return;
         }
         jsonRpcWrappedTaskResult(exchange, request.path("id").asText(), task.taskNode());
     }
@@ -421,8 +422,6 @@ public final class MockRuntimeServer {
         private volatile String output = "Root agent completed the request.";
         private int initialFrameCount;
         private int resumeStartIndex;
-
-        private record SourceRef(String agent, String task) {}
 
         private TaskRecord(String contextId, String scenario) {
             this.contextId = contextId;
@@ -669,6 +668,7 @@ public final class MockRuntimeServer {
                                 Map.of("text", "hello from Runtime"))));
             } else {
                 // No interrupt for other scenarios.
+                return;
             }
             ArrayNode artifacts = task.putArray("artifacts");
             String artifactId = "streaming-resubscribe".equals(scenario) || "recovery-circuit".equals(scenario)
@@ -699,5 +699,7 @@ public final class MockRuntimeServer {
         private Instant createdAt() {
             return createdAt;
         }
+
+        private record SourceRef(String agent, String task) {}
     }
 }
