@@ -37,14 +37,13 @@ class JudgePreset:
     name: str
     dimensions: tuple[str, ...]
     weights: dict[str, float]
-    helper_skills: tuple[str, ...]
     runtime: Literal["claude", "codex"]
+    helper_skills: tuple[str, ...] = ()
     scorer: str = "task_completion_gated"
     tool_allowlist: tuple[str, ...] = ("Read", "Grep")
     pass_threshold: float = 0.6
     max_concurrent: int = 6
     run_timeout: float = 300.0
-    aggregator_reserved_output_tokens: int = 2048
     extra_env: dict[str, str] = field(default_factory=dict)
 
 
@@ -82,8 +81,7 @@ _DEFAULT_DIMENSIONS = (
     "answer_faithfulness",
     "planning_rationality",
 )
-_DEFAULT_HELPER_SKILLS = ("judge_rubric_guide",)
-_DEFAULT_ALLOWLIST = ("Read", "Grep")
+_DEFAULT_ALLOWLIST = ("Read", "Grep", "Bash")
 
 
 def _register_default_presets() -> None:
@@ -95,7 +93,6 @@ def _register_default_presets() -> None:
             name="default",
             dimensions=_DEFAULT_DIMENSIONS,
             weights=_equal_weights(_DEFAULT_DIMENSIONS),
-            helper_skills=_DEFAULT_HELPER_SKILLS,
             runtime="claude",
             tool_allowlist=_DEFAULT_ALLOWLIST,
         ),
@@ -107,7 +104,6 @@ def _register_default_presets() -> None:
             name="codex_default",
             dimensions=_DEFAULT_DIMENSIONS,
             weights=_equal_weights(_DEFAULT_DIMENSIONS),
-            helper_skills=_DEFAULT_HELPER_SKILLS,
             runtime="codex",
             tool_allowlist=_DEFAULT_ALLOWLIST,
         ),
@@ -125,7 +121,6 @@ def _register_default_presets() -> None:
                 "answer_faithfulness": 0.2,
                 "planning_rationality": 0.1,
             },
-            helper_skills=_DEFAULT_HELPER_SKILLS,
             runtime="claude",
             tool_allowlist=_DEFAULT_ALLOWLIST,
         ),

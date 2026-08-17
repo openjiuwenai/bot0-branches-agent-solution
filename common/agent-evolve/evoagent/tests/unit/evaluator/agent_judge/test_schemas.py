@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import math
-
 from evo_agent.evaluator.agent_judge.schemas import (
     AggregatorOutput,
     DimensionJudgment,
@@ -11,7 +9,6 @@ from evo_agent.evaluator.agent_judge.schemas import (
     aggregator_output_validator,
     dimension_judgment_json_schema,
 )
-from evo_agent.llm.structured_output import ValidationResult
 
 
 class TestDimensionJudgment:
@@ -56,7 +53,6 @@ class TestAggregatorValidator:
     def test_valid_completed(self) -> None:
         result = aggregator_output_validator(
             {
-                "overall_score": 0.8,
                 "skill_attributions": [{"skill_name": "s", "impact": "positive"}],
                 "attribution_status": "completed",
             }
@@ -65,37 +61,33 @@ class TestAggregatorValidator:
 
     def test_valid_failed_status(self) -> None:
         result = aggregator_output_validator(
-            {"overall_score": 0.5, "attribution_status": "failed", "attribution_error": "x"}
+            {
+                "attribution_status": "failed",
+                "attribution_error": "x",
+            }
         )
         assert result.ok is True
 
-    def test_bool_score_rejected(self) -> None:
-        result = aggregator_output_validator(
-            {"overall_score": True, "attribution_status": "completed"}
-        )
-        assert isinstance(result, ValidationResult)
-        assert result.ok is False
-
-    def test_non_finite_score_rejected(self) -> None:
-        result = aggregator_output_validator(
-            {"overall_score": math.nan, "attribution_status": "completed"}
-        )
-        assert result.ok is False
-
     def test_bad_status_rejected(self) -> None:
-        result = aggregator_output_validator({"overall_score": 0.5, "attribution_status": "maybe"})
+        result = aggregator_output_validator(
+            {
+                "attribution_status": "maybe",
+            }
+        )
         assert result.ok is False
 
     def test_attributions_not_list_rejected(self) -> None:
         result = aggregator_output_validator(
-            {"overall_score": 0.5, "attribution_status": "completed", "skill_attributions": "x"}
+            {
+                "attribution_status": "completed",
+                "skill_attributions": "x",
+            }
         )
         assert result.ok is False
 
     def test_attribution_missing_skill_name_rejected(self) -> None:
         result = aggregator_output_validator(
             {
-                "overall_score": 0.5,
                 "attribution_status": "completed",
                 "skill_attributions": [{"impact": "positive"}],
             }
@@ -104,5 +96,5 @@ class TestAggregatorValidator:
 
     def test_missing_status_rejected(self) -> None:
         # attribution_status is required (not in allowed defaults)
-        result = aggregator_output_validator({"overall_score": 0.5})
+        result = aggregator_output_validator({"skill_attributions": []})
         assert result.ok is False

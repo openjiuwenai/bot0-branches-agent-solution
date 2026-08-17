@@ -15,7 +15,6 @@ from evo_agent.evaluator.evaluators.metric import MetricEvaluator
 from evo_agent.evaluator.factory import create_evaluator
 
 _MODEL_PATCH = "evo_agent.evaluator.evaluators.llm.Model"
-_AGENT_MODEL_PATCH = "openjiuwen.core.foundation.llm.Model"
 
 
 def _model_config() -> ModelRequestConfig:
@@ -322,15 +321,12 @@ class TestAgentFactory:
         cfg: dict[str, object] = {
             "type": "agent",
             "preset": "default",
-            "model_config": _model_config(),
-            "model_client_config": _client_config(),
         }
         cfg.update(overrides)
         return cfg
 
     def test_creates_agent_evaluator(self) -> None:
-        with patch(_AGENT_MODEL_PATCH):
-            evaluator = create_evaluator(self._cfg())
+        evaluator = create_evaluator(self._cfg())
         assert isinstance(evaluator, AgentEvaluator)
 
     def test_unknown_type_message_lists_agent(self) -> None:
@@ -338,71 +334,75 @@ class TestAgentFactory:
             create_evaluator({"type": "magic"})
 
     def test_missing_preset_raises(self) -> None:
-        with patch(_AGENT_MODEL_PATCH):
-            with pytest.raises(ValueError, match="preset"):
-                create_evaluator(self._cfg(preset=""))
+        with pytest.raises(ValueError, match="preset"):
+            create_evaluator(self._cfg(preset=""))
 
     def test_unknown_preset_raises(self) -> None:
-        with patch(_AGENT_MODEL_PATCH):
-            with pytest.raises(ValueError, match="Unknown judge preset"):
-                create_evaluator(self._cfg(preset="definitely_not_a_preset"))
-
-    def test_missing_model_config_raises(self) -> None:
-        cfg = self._cfg()
-        del cfg["model_config"]  # type: ignore[attr-defined]
-        with pytest.raises(ValueError, match="model_config"):
-            create_evaluator(cfg)
-
-    def test_missing_client_config_raises(self) -> None:
-        cfg = self._cfg()
-        del cfg["model_client_config"]  # type: ignore[attr-defined]
-        with pytest.raises(ValueError, match="model_client_config"):
-            create_evaluator(cfg)
-
-    def test_wrong_type_model_config_raises(self) -> None:
-        with pytest.raises(TypeError, match="model_config"):
-            create_evaluator(self._cfg(model_config="bad"))  # type: ignore[dict-item]
+        with pytest.raises(ValueError, match="Unknown judge preset"):
+            create_evaluator(self._cfg(preset="definitely_not_a_preset"))
 
     def test_unknown_runtime_raises(self) -> None:
-        with patch(_AGENT_MODEL_PATCH):
-            with pytest.raises(ValueError, match="runtime"):
-                create_evaluator(self._cfg(runtime="openclaw"))  # type: ignore[dict-item]
+        with pytest.raises(ValueError, match="runtime"):
+            create_evaluator(self._cfg(runtime="openclaw"))  # type: ignore[dict-item]
 
     def test_overrides_folded_into_preset(self) -> None:
-        with patch(_AGENT_MODEL_PATCH):
-            evaluator = create_evaluator(
-                self._cfg(
-                    tool_allowlist=["Read"],
-                    max_concurrent=3,
-                    run_timeout=42.0,
-                )
+        evaluator = create_evaluator(
+            self._cfg(
+                tool_allowlist=["Read"],
+                max_concurrent=3,
+                run_timeout=42.0,
             )
+        )
         assert isinstance(evaluator, AgentEvaluator)
         assert evaluator._preset.tool_allowlist == ("Read",)
         assert evaluator._preset.max_concurrent == 3
         assert evaluator._preset.run_timeout == 42.0
 
     def test_runtime_override(self) -> None:
-        with patch(_AGENT_MODEL_PATCH):
-            evaluator = create_evaluator(self._cfg(runtime="codex"))
+        evaluator = create_evaluator(self._cfg(runtime="codex"))
         assert isinstance(evaluator, AgentEvaluator)
         assert evaluator._preset.runtime == "codex"
 
     def test_skill_source_local_without_root_raises(self) -> None:
-        with patch(_AGENT_MODEL_PATCH):
-            with pytest.raises(ValueError, match="skill_root"):
-                create_evaluator(self._cfg(skill_source="local"))
+        with pytest.raises(ValueError, match="skill_root"):
+            create_evaluator(self._cfg(skill_source="local"))
 
     def test_skill_source_local_with_root(self, tmp_path: Path) -> None:
-        with patch(_AGENT_MODEL_PATCH):
-            evaluator = create_evaluator(self._cfg(skill_source="local", skill_root=str(tmp_path)))
+        evaluator = create_evaluator(self._cfg(skill_source="local", skill_root=str(tmp_path)))
         assert isinstance(evaluator, AgentEvaluator)
 
     def test_unknown_skill_source_raises(self) -> None:
-        with patch(_AGENT_MODEL_PATCH):
-            with pytest.raises(ValueError, match="skill_source"):
-                create_evaluator(self._cfg(skill_source="ghost"))  # type: ignore[dict-item]
+        with pytest.raises(ValueError, match="skill_source"):
+            create_evaluator(self._cfg(skill_source="ghost"))  # type: ignore[dict-item]
 
     def test_tool_allowlist_wrong_type_raises(self) -> None:
         with pytest.raises(TypeError, match="tool_allowlist"):
             create_evaluator(self._cfg(tool_allowlist="Read"))  # type: ignore[dict-item]
+
+    def test_trajectory_budget_forwarded(self) -> None:
+        evaluator = create_evaluator(self._cfg(trajectory_budget=12000))
+        assert isinstance(evaluator, AgentEvaluator)
+        assert evaluator._trajectory_budget == 12000
+
+    def test_trajectory_budget_default_uses_module_constant(self) -> None:
+        from evo_agent.evaluator.evaluators.agent import _DEFAULT_TRAJECTORY_BUDGET
+
+        evaluator = create_evaluator(self._cfg())
+        assert evaluator._trajectory_budget == _DEFAULT_TRAJECTORY_BUDGET
+
+    def test_trajectory_budget_wrong_type_raises(self) -> None:
+        with pytest.raises(TypeError, match="trajectory_budget"):
+            create_evaluator(self._cfg(trajectory_budget="big"))  # type: ignore[dict-item]
+
+    def test_trajectory_budget_bool_rejected(self) -> None:
+        # bool is a subclass of int; explicitly reject it to avoid True/False slips.
+        with pytest.raises(TypeError, match="trajectory_budget"):
+            create_evaluator(self._cfg(trajectory_budget=True))  # type: ignore[dict-item]
+
+    def test_trajectory_budget_zero_raises(self) -> None:
+        with pytest.raises(ValueError, match="trajectory_budget"):
+            create_evaluator(self._cfg(trajectory_budget=0))
+
+    def test_trajectory_budget_negative_raises(self) -> None:
+        with pytest.raises(ValueError, match="trajectory_budget"):
+            create_evaluator(self._cfg(trajectory_budget=-100))

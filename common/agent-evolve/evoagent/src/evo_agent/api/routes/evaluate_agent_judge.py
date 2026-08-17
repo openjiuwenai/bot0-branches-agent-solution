@@ -2,7 +2,8 @@
 
 与 ``/evaluate/dataset`` 同形（异步 job + SSE 回放 + keepalive），但评估体是
 :class:`AgentEvaluator`：用真实编码 Agent CLI（claude / codex）以子进程方式对一条
-轨迹做多维度评判，再由 LLM 聚合器产出总分 + 复数 skill 归因。
+轨迹做多维度评判，再由最后一个归因 Agent 子进程产出复数 skill 归因（总分由确定性
+WeightScorer 在评估器侧计算）。全链路 Agent + prompt + skill，无需每次请求传 LLM 配置。
 
 作用域 = HTTP-only，不接入优化管线（训练 rollout / 验证门禁仍用 ``LLMEvaluator``）。
 
@@ -43,29 +44,12 @@ router = APIRouter(prefix="/evaluate/agent-judge", tags=["evaluate-agent-judge"]
 # ---------------------------------------------------------------------------
 
 
-class LLMConfig(BaseModel):
-    """聚合器 LLM 配置 — 每次请求必传。
-
-    与 ``evaluate.py`` / ``evaluate_dataset.py`` 的 ``LLMConfig`` 同构；本地定义
-    以避免跨 route import。``client_provider`` 默认 ``"OpenAI"``。
-    """
-
-    model_name: str
-    api_key: str
-    api_base: str
-    client_provider: str = "OpenAI"
-    temperature: float = 0.1
-    max_tokens: int = 2048
-    verify_ssl: bool = False
-
-
 class AgentJudgeRequest(BaseModel):
     """Agent-as-judge 评估请求体。"""
 
     trajectory_path: str
     preset: str
     skill_names: list[str] = Field(min_length=1)
-    llm_config: LLMConfig
     expected_result: dict[str, Any] | None = None
     runtime: Literal["claude", "codex"] | None = None
     tool_allowlist: list[str] | None = None
@@ -75,6 +59,24 @@ class AgentJudgeRequest(BaseModel):
     run_timeout: float | None = None
     keep_on_error: bool = False
     extra_env: dict[str, str] | None = None
+    trajectory_budget: int | None = Field(
+        default=None,
+        description=(
+            "Max token budget for the compacted trajectory fed to the judge "
+            "subprocess. Default (None) uses the module default (4000). "
+            "Increase for long trajectories (many messages / verbose tool "
+            "returns); evaluation fails with ``prompt_budget_exceeded`` if "
+            "the compactor cannot fit. Must be > 0 when set."
+        ),
+        gt=0,
+    )
+    dimension_thresholds: dict[str, float] = Field(
+        description=(
+            "Per-dimension thresholds for pass/fail checking. "
+            "Mapping dimension name → threshold (0-1). Required. "
+            "is_pass = all dimensions >= their threshold."
+        ),
+    )
 
 
 class AgentJudgeSubmitResponse(BaseModel):
@@ -91,6 +93,7 @@ class AgentJudgeResultBody(BaseModel):
     is_pass: bool
     per_metric: dict[str, float]
     dimensions: dict[str, float]
+    dimension_checks: list[dict[str, Any]]
     skill_attributions: list[dict[str, Any]]
     attribution_status: str
     attribution_error: str | None
@@ -123,39 +126,11 @@ def _load_trajectory(path: Path) -> StandardTrajectory:
     return StandardTrajectory.model_validate(data)
 
 
-def _build_llm_configs(llm_config: LLMConfig) -> tuple[Any, Any]:
-    """从 LLMConfig 构建 (ModelRequestConfig, ModelClientConfig)；未知 provider → 422。"""
-    from openjiuwen.core.common.exception.errors import (
-        ValidationError as ProviderValidationError,
-    )
-    from openjiuwen.core.foundation.llm import ModelClientConfig, ModelRequestConfig
-
-    model_config = ModelRequestConfig(
-        model_name=llm_config.model_name,
-        temperature=llm_config.temperature,
-        max_tokens=llm_config.max_tokens,
-    )
-    try:
-        model_client_config = ModelClientConfig(
-            client_provider=llm_config.client_provider,
-            api_key=llm_config.api_key,
-            api_base=llm_config.api_base,
-            verify_ssl=llm_config.verify_ssl,
-        )
-    except ProviderValidationError as e:
-        raise HTTPException(status_code=422, detail=f"Invalid llm_config: {e}") from e
-    return model_config, model_client_config
-
-
-def _build_evaluator_config(
-    request: AgentJudgeRequest, model_config: Any, model_client_config: Any
-) -> dict[str, Any]:
+def _build_evaluator_config(request: AgentJudgeRequest) -> dict[str, Any]:
     """Assemble the ``create_evaluator`` config dict from the HTTP request."""
     config: dict[str, Any] = {
         "type": "agent",
         "preset": request.preset,
-        "model_config": model_config,
-        "model_client_config": model_client_config,
         "skill_source": request.skill_source,
     }
     if request.runtime is not None:
@@ -172,6 +147,10 @@ def _build_evaluator_config(
         config["keep_on_error"] = True
     if request.extra_env:
         config["extra_env"] = request.extra_env
+    if request.trajectory_budget is not None:
+        config["trajectory_budget"] = request.trajectory_budget
+    if request.dimension_thresholds is not None:
+        config["dimension_thresholds"] = request.dimension_thresholds
     return config
 
 
@@ -203,11 +182,15 @@ def _build_result(evaluated: Any) -> AgentJudgeResultBody:
     attributions = blob.get("skill_attributions", [])
     if not isinstance(attributions, list):
         attributions = []
+    dim_checks = blob.get("dimension_checks", [])
+    if not isinstance(dim_checks, list):
+        dim_checks = []
     return AgentJudgeResultBody(
         score=float(evaluated.score or 0.0),
         is_pass=bool(blob.get("is_pass", True)),
         per_metric=per_metric,
         dimensions={str(k): float(v) for k, v in dimensions.items()},
+        dimension_checks=[dict(c) for c in dim_checks if isinstance(c, dict)],
         skill_attributions=[dict(a) for a in attributions if isinstance(a, dict)],
         attribution_status=str(blob.get("attribution_status", "completed")),
         attribution_error=blob.get("attribution_error"),
@@ -225,10 +208,10 @@ def _build_result(evaluated: Any) -> AgentJudgeResultBody:
 async def submit_agent_judge(request: AgentJudgeRequest) -> AgentJudgeSubmitResponse:
     """提交一条轨迹的 agent-as-judge 评估 job。
 
-    校验轨迹 / preset / llm_config（422）→ 构建 ``AgentEvaluator``（经
+    校验轨迹 / preset（422）→ 构建 ``AgentEvaluator``（经
     ``create_evaluator``）→ 提交异步 job → 返回 ``job_id``。评估在后台跑：
-    每个 (轨迹×维度) 一次子进程 spawn（claude / codex），LLM 聚合器产出总分 +
-    复数 skill 归因。进度经 SSE 推送。
+    每个 (轨迹×维度) 一次判定子进程 spawn（claude / codex），再加一个归因 Agent
+    子进程产出复数 skill 归因（总分由确定性 scorer 算）。进度经 SSE 推送。
     """
     traj_path = Path(request.trajectory_path)
     if not traj_path.exists():
@@ -251,8 +234,7 @@ async def submit_agent_judge(request: AgentJudgeRequest) -> AgentJudgeSubmitResp
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
 
-    model_config, model_client_config = _build_llm_configs(request.llm_config)
-    evaluator_config = _build_evaluator_config(request, model_config, model_client_config)
+    evaluator_config = _build_evaluator_config(request)
     try:
         evaluator = cast(AgentEvaluator, create_evaluator(evaluator_config))
     except ValueError as e:

@@ -76,7 +76,7 @@ class TestPresetRegistry:
         assert preset.runtime == "claude"
         assert preset.dimensions == _DEFAULT_DIMS
         assert set(preset.weights) == set(_DEFAULT_DIMS)
-        assert preset.tool_allowlist == ("Read", "Grep")
+        assert preset.tool_allowlist == ("Read", "Grep", "Bash")
         assert preset.pass_threshold == 0.6
         assert preset.scorer == "task_completion_gated"
 

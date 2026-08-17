@@ -1,13 +1,19 @@
-"""Agent-as-judge schemas — per-dimension verdict + LLM aggregator output.
+"""Agent-as-judge schemas — per-dimension verdict + attribution-agent output.
 
 These pydantic models are the contract between three actors:
 
 - the judge agent subprocess (emits ``DimensionJudgment`` constrained by the
   JSON schema fed to ``claude --json-schema`` / ``codex --output-schema``);
-- the LLM aggregator (emits ``AggregatorOutput`` parsed via
-  :func:`parse_structured_output` + :func:`aggregator_output_validator`);
+- the attribution agent subprocess (emits ``skill_attributions``, parsed via
+  :func:`aggregator_output_validator`);
 - the ``AgentEvaluator`` (stamps ``dimension`` from the requested dimension
-  name, builds the ``EvaluatedCase.reason`` JSON blob).
+  name, computes ``overall_score`` evaluator-side via ``WeightScorer``,
+  builds the ``EvaluatedCase.reason`` JSON blob).
+
+``overall_score`` is produced by the evaluator-side ``WeightScorer``
+(deterministic, reproducible). The attribution agent uses the
+``attribution_calculator`` skill script for per-dimension threshold checking
+(not for the primary score) when ``dimension_thresholds`` are provided.
 
 Score fields are plain ``float`` (no pydantic range constraint): callers clamp
 to ``[0, 1]`` at consumption time so a stray ``1.05`` does not hard-fail a run.
@@ -15,7 +21,6 @@ to ``[0, 1]`` at consumption time so a stray ``1.05`` does not hard-fail a run.
 
 from __future__ import annotations
 
-import math
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -27,6 +32,7 @@ __all__ = [
     "DimensionJudgment",
     "SkillAttribution",
     "aggregator_output_validator",
+    "attribution_output_json_schema",
     "dimension_judgment_json_schema",
 ]
 
@@ -59,15 +65,17 @@ class SkillAttribution(BaseModel):
 
 
 class AggregatorOutput(BaseModel):
-    """Aggregator output: overall score + plural skill attribution.
+    """Attribution-agent output + evaluator-side overall score.
 
-    ``overall_score`` is produced by a deterministic :class:`WeightScorer`
-    (evaluator-side script), not by the LLM — the LLM only emits the attribution
-    fields. ``attribution_status="failed"`` means the aggregator LLM
-    self-reported inability (score preserved, bounded ``attribution_error``);
-    it does **not** mean an unknown skill — unknown skills raise
-    ``EvaluationError`` (fail-fast) in :class:`SkillAggregator` before this model
-    is returned.
+    ``overall_score`` is produced by the evaluator-side ``WeightScorer``
+    (deterministic, reproducible) — not by the attribution agent. The agent
+    emits ``skill_attributions`` and ``attribution_status``; the evaluator
+    fills ``overall_score`` after parsing.
+    ``attribution_status="failed"`` means the attribution agent self-reported
+    inability (score preserved, bounded ``attribution_error``); it does
+    **not** mean an unknown skill — unknown skills raise ``EvaluationError``
+    (fail-fast) in :func:`parse_attribution_output` before this model is
+    returned.
     """
 
     overall_score: float = 0.0
@@ -96,25 +104,63 @@ def dimension_judgment_json_schema() -> dict[str, Any]:
     }
 
 
-def aggregator_output_validator(data: dict[str, Any]) -> ValidationResult:
-    """Business-validation hook for :func:`parse_structured_output`.
+def attribution_output_json_schema() -> dict[str, Any]:
+    """JSON Schema constraining the attribution agent's final output.
 
-    Checks the shape the aggregator's *attribution* output must satisfy before
-    pydantic strict validation: ``attribution_status`` is a recognized enum, and
-    ``skill_attributions`` is a list of dicts each carrying a string
-    ``skill_name``. ``overall_score`` is no longer required — it is computed by a
-    deterministic :class:`WeightScorer` (evaluator-side), not emitted by the LLM;
-    if the LLM nonetheless includes it, it must be a finite number. Returning
-    ``ok=False`` drives the invocation's retry path (mirrors
-    ``_validate_evaluator_output`` in ``evaluators/llm.py``).
+    Parallel to :func:`dimension_judgment_json_schema`; written to the workdir
+    and fed to the judge runtime (``claude --json-schema`` /
+    ``codex --output-schema``) so the final attribution agent — the subprocess
+    that fuses all per-dimension verdicts into plural skill attribution — emits a
+    structured object. ``overall_score`` and ``dimension_weights`` are no
+    longer emitted by the agent (evaluator-side ``WeightScorer`` handles the
+    primary score).
     """
 
-    raw_score = data.get("overall_score")
-    if raw_score is not None:
-        if isinstance(raw_score, bool) or not isinstance(raw_score, (int, float)):
-            return ValidationResult(False, "field_type", "overall_score must be a number")
-        if not math.isfinite(raw_score):
-            return ValidationResult(False, "field_type", "overall_score must be finite")
+    return {
+        "type": "object",
+        "properties": {
+            "skill_attributions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "skill_name": {"type": "string"},
+                        "usage_status": {
+                            "type": "string",
+                            "enum": ["executed", "not_executed", "misused", "unknown"],
+                        },
+                        "impact": {
+                            "type": "string",
+                            "enum": ["positive", "negative", "neutral", "none"],
+                        },
+                        "reason": {"type": "string"},
+                    },
+                    "required": ["skill_name", "usage_status", "impact", "reason"],
+                    "additionalProperties": False,
+                },
+            },
+            "attribution_status": {"type": "string", "enum": ["completed", "failed"]},
+            "attribution_error": {"type": ["string", "null"]},
+        },
+        "required": [
+            "skill_attributions",
+            "attribution_status",
+        ],
+        "additionalProperties": False,
+    }
+
+
+def aggregator_output_validator(data: dict[str, Any]) -> ValidationResult:
+    """Business-validation hook for the attribution agent's output.
+
+    Checks the shape the attribution agent's output must satisfy before pydantic
+    strict validation: ``attribution_status`` is a recognized enum, and
+    ``skill_attributions`` is a list of dicts each carrying a string
+    ``skill_name``. Returning ``ok=False`` makes
+    :func:`parse_attribution_output` raise an ``EvaluationError`` (the
+    subprocess path is single-shot, no retry).
+    """
+
     raw_status = data.get("attribution_status")
     if not isinstance(raw_status, str) or raw_status not in {"completed", "failed"}:
         return ValidationResult(

@@ -5,10 +5,17 @@ agents (claude code, codex) that the agent-as-judge feature drives as
 **subprocesses**. v1 ships :class:`ClaudeRuntime` and :class:`CodexRuntime`;
 :openclaw is deferred (the Protocol + ``make_runtime`` already accommodate it).
 
-Each adapter spawns one bounded, non-interactive subprocess per dimension with
-``cwd`` set to the isolated workdir, parses the agent's structured final output
-into a :class:`DimensionJudgment`, and raises :class:`EvaluationError`
-(categorized) on timeout / non-zero exit / unparseable output.
+Each adapter exposes two operations:
+
+- :meth:`judge` — spawn one bounded, non-interactive subprocess per dimension
+  with ``cwd`` set to the isolated workdir, parse the agent's structured final
+  output into a :class:`DimensionJudgment`.
+- :meth:`synthesize` — the same spawn, but parse the output into a plain dict
+  (the attribution agent's fused skill-attribution object). Reuses the identical
+  command shape; only the parsing differs.
+
+Both raise :class:`EvaluationError` (categorized) on timeout / non-zero exit /
+unparseable output.
 
 CLI flag shapes are **not** verified against the installed binaries (the repo
 has zero prior subprocess usage); they are isolated in module-level constants so
@@ -24,7 +31,7 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import ValidationError
 
@@ -69,6 +76,16 @@ class JudgeAgentRuntime(Protocol):
         """Run one dimension's judgment; raise ``EvaluationError`` on failure."""
         ...
 
+    async def synthesize(self, request: RuntimeJudgeRequest) -> dict[str, Any]:
+        """Run the attribution agent and return its parsed output dict.
+
+        Same spawn as :meth:`judge` (same workdir, schema, allowlist, timeout);
+        the output is parsed as a plain dict rather than a
+        :class:`DimensionJudgment`. Raises ``EvaluationError`` on failure or
+        unparseable output.
+        """
+        ...
+
 
 def _build_env(extra_env: dict[str, str] | None) -> dict[str, str]:
     """Merge the host environment with per-runtime overrides (API keys, etc.)."""
@@ -78,8 +95,8 @@ def _build_env(extra_env: dict[str, str] | None) -> dict[str, str]:
     return env
 
 
-def _extract_judgment_dict(raw: str) -> dict[str, object] | None:
-    """Pull the ``{score, reasoning}`` object out of an agent's raw stdout.
+def _extract_judgment_dict(raw: str) -> dict[str, Any] | None:
+    """Pull the structured output object out of an agent's raw stdout.
 
     Tries, in order: a direct JSON object (with fence fallback via
     :func:`extract_json_data`), then a claude ``{"result": ...}`` envelope
@@ -211,7 +228,7 @@ async def _run_subprocess(
 
 
 class ClaudeRuntime:
-    """Drive ``claude`` (Claude Code) as the judge agent."""
+    """Drive ``claude`` (Claude Code) as the judge / attribution agent."""
 
     def __init__(
         self, *, binary: str = _CLAUDE_BINARY, extra_env: dict[str, str] | None = None
@@ -219,8 +236,8 @@ class ClaudeRuntime:
         self._binary = binary
         self._extra_env = extra_env or {}
 
-    async def judge(self, request: RuntimeJudgeRequest) -> DimensionJudgment:
-        command = [
+    def _command(self, request: RuntimeJudgeRequest) -> list[str]:
+        return [
             self._binary,
             "-p",
             "-",  # read prompt from stdin to avoid argv length limits
@@ -233,24 +250,45 @@ class ClaudeRuntime:
             "--permission-mode",
             _CLAUDE_PERMISSION_MODE,
         ]
-        stdout = await _run_subprocess(
-            command=command,
+
+    async def _run(self, request: RuntimeJudgeRequest) -> str:
+        """Spawn claude with the prompt on stdin; return its stdout text."""
+        return await _run_subprocess(
+            command=self._command(request),
             stdin_text=request.prompt,
             workdir=request.workdir,
             env=_build_env(self._extra_env),
             run_timeout=request.run_timeout,
             dimension_name=request.dimension_name,
         )
-        return _parse_dimension_judgment(stdout, request.dimension_name)
+
+    async def judge(self, request: RuntimeJudgeRequest) -> DimensionJudgment:
+        return _parse_dimension_judgment(await self._run(request), request.dimension_name)
+
+    async def synthesize(self, request: RuntimeJudgeRequest) -> dict[str, Any]:
+        stdout = await self._run(request)
+        data = _extract_judgment_dict(stdout)
+        if data is None:
+            raise EvaluationError(
+                category="agent_judge_output_error",
+                safe_message=(
+                    f"attribution agent produced no parseable output for {request.dimension_name!r}"
+                ),
+                raw_response=stdout,
+            )
+        return data
 
 
 class CodexRuntime:
-    """Drive ``codex`` (codex-cli) as the judge agent.
+    """Drive ``codex`` (codex-cli) as the judge / attribution agent.
 
     Codex writes its schema-constrained final message to the ``-o`` file; we
     read that file (falling back to stdout JSONL) rather than parsing the
     streamed event envelope, which is less stable across versions.
     """
+
+    _LAST_MESSAGE_NAME = "codex_last_message.json"
+    _ATTR_MESSAGE_NAME = "codex_attribution_message.json"
 
     def __init__(
         self, *, binary: str = _CODEX_BINARY, extra_env: dict[str, str] | None = None
@@ -258,9 +296,8 @@ class CodexRuntime:
         self._binary = binary
         self._extra_env = extra_env or {}
 
-    async def judge(self, request: RuntimeJudgeRequest) -> DimensionJudgment:
-        last_message_path = request.workdir / "codex_last_message.json"
-        command = [
+    def _command(self, request: RuntimeJudgeRequest, last_message_path: Path) -> list[str]:
+        return [
             self._binary,
             "exec",
             "--output-schema",
@@ -272,21 +309,48 @@ class CodexRuntime:
             "--json",
             request.prompt,
         ]
+
+    async def _run(self, request: RuntimeJudgeRequest, last_message_name: str) -> str:
+        """Spawn codex, then read its last-message file; return its text."""
+        last_message_path = request.workdir / last_message_name
         await _run_subprocess(
-            command=command,
+            command=self._command(request, last_message_path),
             stdin_text=None,
             workdir=request.workdir,
             env=_build_env(self._extra_env),
             run_timeout=request.run_timeout,
             dimension_name=request.dimension_name,
         )
-        raw = last_message_path.read_text(encoding="utf-8") if last_message_path.exists() else ""
+        return last_message_path.read_text(encoding="utf-8") if last_message_path.exists() else ""
+
+    async def judge(self, request: RuntimeJudgeRequest) -> DimensionJudgment:
+        raw = await self._run(request, self._LAST_MESSAGE_NAME)
         if not raw:
             raise EvaluationError(
                 category="agent_judge_output_error",
                 safe_message=f"codex produced no last-message file for {request.dimension_name!r}",
             )
         return _parse_dimension_judgment(raw, request.dimension_name)
+
+    async def synthesize(self, request: RuntimeJudgeRequest) -> dict[str, Any]:
+        raw = await self._run(request, self._ATTR_MESSAGE_NAME)
+        if not raw:
+            raise EvaluationError(
+                category="agent_judge_output_error",
+                safe_message=(
+                    f"codex produced no attribution message for {request.dimension_name!r}"
+                ),
+            )
+        data = _extract_judgment_dict(raw)
+        if data is None:
+            raise EvaluationError(
+                category="agent_judge_output_error",
+                safe_message=(
+                    f"attribution agent produced no parseable output for {request.dimension_name!r}"
+                ),
+                raw_response=raw,
+            )
+        return data
 
 
 def make_runtime(

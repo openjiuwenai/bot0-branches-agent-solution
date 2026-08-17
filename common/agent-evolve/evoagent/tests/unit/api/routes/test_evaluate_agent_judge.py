@@ -51,6 +51,9 @@ def _build_evaluated() -> EvaluatedCase:
             "parse_mode": "exact",
             "repair_operations": [],
             "dimensions": {"task_completion": 0.8, "safety": 0.9},
+            "dimension_checks": [
+                {"dimension": "safety", "score": 0.9, "threshold": 0.8, "pass": True},
+            ],
             "skill_attributions": [
                 {
                     "skill_name": "alpha_skill",
@@ -96,12 +99,7 @@ def _submit(
         "trajectory_path": traj_path,
         "preset": preset,
         "skill_names": ["alpha_skill"],
-        "llm_config": {
-            "model_name": "m",
-            "api_key": "k",
-            "api_base": "http://x",
-            "client_provider": "OpenAI",
-        },
+        "dimension_thresholds": {"task_completion": 0.5, "safety": 0.5},
     }
     body.update(overrides)
     resp = client.post("/evaluate/agent-judge", json=body)
@@ -154,6 +152,9 @@ def test_submit_poll_completed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
     assert result["attribution_status"] == "completed"
     assert result["attributed_skill"] == "alpha_skill"
     assert result["dimensions"] == {"task_completion": 0.8, "safety": 0.9}
+    assert result["dimension_checks"] == [
+        {"dimension": "safety", "score": 0.9, "threshold": 0.8, "pass": True},
+    ]
     assert result["skill_attributions"][0]["skill_name"] == "alpha_skill"
     assert result["skill_attributions"][0]["impact"] == "positive"
     # fake evaluator was actually invoked once with (case, placeholder)
@@ -256,25 +257,44 @@ def test_empty_skill_names_422(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
     assert resp.status_code == 422
 
 
-def test_unknown_client_provider_422(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    _patch_create(monkeypatch, _FakeAgentEvaluator(_build_evaluated()))
-    client = TestClient(create_app())
-    traj = _trajectory_file(tmp_path)
-    resp = _submit(
-        client,
-        traj,
-        llm_config={
-            "model_name": "m",
-            "api_key": "k",
-            "api_base": "http://x",
-            "client_provider": "UnknownProvider",
-        },
-    )
-    assert resp.status_code == 422
-    assert "UnknownProvider" in resp.text
-
-
 def test_get_job_not_found_404() -> None:
     client = TestClient(create_app())
     resp = client.get("/evaluate/agent-judge/jobs/missing")
     assert resp.status_code == 404
+
+
+def test_missing_dimension_thresholds_422(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """dimension_thresholds is required — missing → 422."""
+    _patch_create(monkeypatch, _FakeAgentEvaluator(_build_evaluated()))
+    client = TestClient(create_app())
+    traj = _trajectory_file(tmp_path)
+    body = {
+        "trajectory_path": traj,
+        "preset": "default",
+        "skill_names": ["alpha_skill"],
+    }
+    resp = client.post("/evaluate/agent-judge", json=body)
+    assert resp.status_code == 422
+    assert "dimension_thresholds" in resp.text.lower()
+
+
+# ---------------------------------------------------------------------------
+# trajectory_budget 校验
+# ---------------------------------------------------------------------------
+
+
+def test_trajectory_budget_zero_422(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _patch_create(monkeypatch, _FakeAgentEvaluator(_build_evaluated()))
+    client = TestClient(create_app())
+    traj = _trajectory_file(tmp_path)
+    resp = _submit(client, traj, trajectory_budget=0)
+    assert resp.status_code == 422
+    assert "trajectory_budget" in resp.text.lower() or "greater than 0" in resp.text.lower()
+
+
+def test_trajectory_budget_negative_422(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _patch_create(monkeypatch, _FakeAgentEvaluator(_build_evaluated()))
+    client = TestClient(create_app())
+    traj = _trajectory_file(tmp_path)
+    resp = _submit(client, traj, trajectory_budget=-100)
+    assert resp.status_code == 422

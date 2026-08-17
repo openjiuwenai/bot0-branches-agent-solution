@@ -1,7 +1,8 @@
-"""AgentEvaluator 端到端单元测试 — fake runtime + fake aggregator。
+"""AgentEvaluator 端到端单元测试 — fake runtime (judge + synthesize) + fake scorer。
 
 覆盖 evaluate() 的校验段、桥 reason JSON（含复数归因 + top-1 派生 is_pass）、
-workdir 清理、错误传播。不跑真实子进程 / LLM。
+workdir 清理、归因 Agent 在 with 块内运行、未知 skill fail-fast、错误传播。
+不跑真实子进程。
 """
 
 from __future__ import annotations
@@ -15,7 +16,6 @@ from openjiuwen.agent_evolving.dataset import Case
 
 from evo_agent.evaluator.agent_judge.presets import get_preset
 from evo_agent.evaluator.agent_judge.schemas import (
-    AggregatorOutput,
     DimensionJudgment,
     SkillAttribution,
 )
@@ -28,23 +28,57 @@ _TRAJECTORY = {
 }
 
 
+def _attr_dict(
+    *,
+    attributions: list[SkillAttribution] | None = None,
+    status: str = "completed",
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Raw dict the attribution-agent subprocess would emit (parsed by parse_attribution_output)."""
+    return {
+        "skill_attributions": [a.model_dump() for a in (attributions or [])],
+        "attribution_status": status,
+        "attribution_error": error,
+    }
+
+
 class _FakeRuntime:
-    def __init__(self, score: float = 0.8) -> None:
+    """Fake judge + attribution runtime: fixed per-dim score + a canned attribution dict."""
+
+    def __init__(
+        self,
+        score: float = 0.8,
+        *,
+        attr_dict: dict[str, Any] | None = None,
+        synthesize_exc: BaseException | None = None,
+    ) -> None:
         self._score = score
-        self.requests: list[Any] = []
+        self._attr_dict = attr_dict if attr_dict is not None else _attr_dict()
+        self._synthesize_exc = synthesize_exc
+        self.judge_requests: list[Any] = []
+        self.synthesize_request: Any | None = None
+        self.synthesize_saw_trajectory: bool | None = None
 
     async def judge(self, request: Any) -> DimensionJudgment:
-        self.requests.append(request)
+        self.judge_requests.append(request)
         return DimensionJudgment(
             dimension=request.dimension_name, score=self._score, reasoning="ok"
         )
 
+    async def synthesize(self, request: Any) -> dict[str, Any]:
+        # Runs inside the open workdir — verify the trajectory is readable here.
+        self.synthesize_request = request
+        self.synthesize_saw_trajectory = (request.workdir / "trajectory.md").exists()
+        if self._synthesize_exc is not None:
+            raise self._synthesize_exc
+        return self._attr_dict
 
-class _RecordingRuntime:
-    """Captures the workdir ``*.md`` files seen per dimension during judge()."""
 
-    def __init__(self, score: float = 0.8) -> None:
-        self._score = score
+class _RecordingRuntime(_FakeRuntime):
+    """Also captures the workdir ``*.md`` files seen per dimension during judge()."""
+
+    def __init__(self, score: float = 0.8, **kwargs: Any) -> None:
+        super().__init__(score, **kwargs)
         self.materialized: list[tuple[str, list[str]]] = []
 
     async def judge(self, request: Any) -> DimensionJudgment:
@@ -55,38 +89,31 @@ class _RecordingRuntime:
         )
 
 
-class _FakeAggregator:
-    def __init__(self, output: AggregatorOutput, *, raise_exc: BaseException | None = None) -> None:
-        self._output = output
-        self._raise = raise_exc
-        self.last_skill_names: list[str] | None = None
-        self.last_judgments: list[Any] | None = None
+class _FakeScorer:
+    """Removed — WeightScorer no longer used. Kept as placeholder for test compatibility."""
 
-    def aggregate(
-        self,
-        judgments: list[Any],
-        *,
-        skill_names: list[str],
-        weights: dict[str, float],
-        case_id: str,
-    ) -> AggregatorOutput:
-        self.last_judgments = judgments
-        self.last_skill_names = skill_names
-        if self._raise is not None:
-            raise self._raise
-        return self._output
+    pass
+
+
+_DEFAULT_THRESHOLDS = {
+    "task_completion": 0.5,
+    "trajectory_quality": 0.5,
+    "safety": 0.5,
+    "answer_faithfulness": 0.5,
+    "planning_rationality": 0.5,
+}
 
 
 def _make_evaluator(
     *,
     runtime: _FakeRuntime,
-    aggregator: _FakeAggregator,
     workdir_base: str | None = None,
+    dimension_thresholds: dict[str, float] | None = None,
 ) -> AgentEvaluator:
     return AgentEvaluator(
         preset=get_preset("default"),
         runtime=runtime,  # type: ignore[arg-type]
-        aggregator=aggregator,  # type: ignore[arg-type]
+        dimension_thresholds=dimension_thresholds or _DEFAULT_THRESHOLDS,
         workdir_base=workdir_base,
     )
 
@@ -106,145 +133,152 @@ def _case(
     return Case(inputs=inputs, label={"expected_result": None})
 
 
-def _agg(
-    *,
-    overall_score: float = 0.75,
-    attributions: list[SkillAttribution] | None = None,
-    status: str = "completed",
-    error: str | None = None,
-) -> AggregatorOutput:
-    return AggregatorOutput(
-        overall_score=overall_score,
-        skill_attributions=attributions or [],
-        attribution_status=status,  # type: ignore[arg-type]
-        attribution_error=error,
-    )
-
-
 class TestAgentEvaluatorEvaluate:
     def test_success_builds_reason_blob(self, tmp_path: Path) -> None:
-        runtime = _FakeRuntime(score=0.8)
-        aggregator = _FakeAggregator(
-            _agg(
-                overall_score=0.75,
+        runtime = _FakeRuntime(
+            score=0.8,
+            attr_dict=_attr_dict(
                 attributions=[
                     SkillAttribution(skill_name="alpha_skill", impact="positive", reason="r")
                 ],
-            )
+            ),
         )
-        ev = _make_evaluator(runtime=runtime, aggregator=aggregator, workdir_base=str(tmp_path))
+        ev = _make_evaluator(runtime=runtime, workdir_base=str(tmp_path))
         evaluated = ev.evaluate(_case(), _PLACEHOLDER)
 
-        assert evaluated.score == 0.75
-        # per_metric has all 5 preset dims at the runtime's score
+        # score = simple average of 5 dimensions all at 0.8
+        assert evaluated.score == 0.8
         dims = get_preset("default").dimensions
         assert evaluated.per_metric is not None
         assert set(evaluated.per_metric) == set(dims)
         assert all(v == 0.8 for v in evaluated.per_metric.values())
 
         blob = json.loads(evaluated.reason)
-        assert blob["is_pass"] is True  # 0.75 >= 0.6
+        # all dims 0.8 >= threshold 0.5 → all pass → is_pass=True
+        assert blob["is_pass"] is True
         assert blob["attributed_skill"] == "alpha_skill"  # top-1 decisive
         assert blob["attribution_status"] == "completed"
         assert blob["skill_attributions"][0]["skill_name"] == "alpha_skill"
         assert set(blob["dimensions"]) == set(dims)
         assert blob["repaired"] is False
-        # aggregator received the runtime's judgments + the request skill_names
-        assert aggregator.last_skill_names == ["alpha_skill"]
-        assert aggregator.last_judgments is not None and len(aggregator.last_judgments) == len(dims)
+        # 5 thresholds → 5 checks, all pass
+        assert len(blob["dimension_checks"]) == 5
+        assert all(c["pass"] for c in blob["dimension_checks"])
+        # attribution agent ran inside the open workdir (trajectory still readable)
+        assert runtime.synthesize_request is not None
+        assert runtime.synthesize_request.dimension_name == "skill_attribution"
+        assert runtime.synthesize_saw_trajectory is True
+        # its prompt inlined the per-dim verdicts + the candidate skill_names
+        assert "alpha_skill" in runtime.synthesize_request.prompt
+        assert "task_completion" in runtime.synthesize_request.prompt
 
-    def test_is_pass_below_threshold(self, tmp_path: Path) -> None:
-        runtime = _FakeRuntime(score=0.2)
-        aggregator = _FakeAggregator(_agg(overall_score=0.4))
-        ev = _make_evaluator(runtime=runtime, aggregator=aggregator, workdir_base=str(tmp_path))
+    def test_is_pass_false_when_any_dimension_below_threshold(self, tmp_path: Path) -> None:
+        # score=0.2 → all dims at 0.2, threshold=0.5 → all fail
+        runtime = _FakeRuntime(score=0.2, attr_dict=_attr_dict())
+        ev = _make_evaluator(runtime=runtime, workdir_base=str(tmp_path))
         evaluated = ev.evaluate(_case(), _PLACEHOLDER)
         blob = json.loads(evaluated.reason)
-        assert blob["is_pass"] is False  # 0.4 < 0.6
+        assert blob["is_pass"] is False  # 0.2 < 0.5 threshold
+
+    def test_dimension_checks_populated(self, tmp_path: Path) -> None:
+        thresholds = {"task_completion": 0.5, "safety": 0.8}
+        runtime = _FakeRuntime(score=0.8, attr_dict=_attr_dict())
+        ev = AgentEvaluator(
+            preset=get_preset("default"),
+            runtime=runtime,  # type: ignore[arg-type]
+            workdir_base=str(tmp_path),
+            dimension_thresholds=thresholds,
+        )
+        evaluated = ev.evaluate(_case(), _PLACEHOLDER)
+        blob = json.loads(evaluated.reason)
+        checks = blob["dimension_checks"]
+        # 2 thresholds → 2 checks
+        assert len(checks) == 2
+        # safety=0.8 >= threshold 0.8 → pass
+        safety_check = next(c for c in checks if c["dimension"] == "safety")
+        assert safety_check["pass"] is True
+        # task_completion=0.8 >= threshold 0.5 → pass
+        tc_check = next(c for c in checks if c["dimension"] == "task_completion")
+        assert tc_check["pass"] is True
 
     def test_top1_negative_is_decisive(self, tmp_path: Path) -> None:
-        runtime = _FakeRuntime(score=0.5)
-        aggregator = _FakeAggregator(
-            _agg(
-                overall_score=0.5,
+        runtime = _FakeRuntime(
+            attr_dict=_attr_dict(
                 attributions=[
                     SkillAttribution(skill_name="neutral_skill", impact="neutral"),
                     SkillAttribution(skill_name="alpha_skill", impact="negative"),
-                ],
+                ]
             )
         )
-        ev = _make_evaluator(runtime=runtime, aggregator=aggregator, workdir_base=str(tmp_path))
-        evaluated = ev.evaluate(_case(), _PLACEHOLDER)
+        ev = _make_evaluator(runtime=runtime, workdir_base=str(tmp_path))
+        evaluated = ev.evaluate(_case(skill_names=["alpha_skill", "neutral_skill"]), _PLACEHOLDER)
         blob = json.loads(evaluated.reason)
         assert blob["attributed_skill"] == "alpha_skill"  # negative beats neutral-first
 
     def test_top1_empty_when_no_attributions(self, tmp_path: Path) -> None:
-        runtime = _FakeRuntime(score=0.5)
-        aggregator = _FakeAggregator(_agg(overall_score=0.5, attributions=[]))
-        ev = _make_evaluator(runtime=runtime, aggregator=aggregator, workdir_base=str(tmp_path))
+        runtime = _FakeRuntime(attr_dict=_attr_dict(attributions=[]))
+        ev = _make_evaluator(runtime=runtime, workdir_base=str(tmp_path))
         evaluated = ev.evaluate(_case(), _PLACEHOLDER)
         blob = json.loads(evaluated.reason)
         assert blob["attributed_skill"] == ""
 
     def test_empty_trajectory_raises(self, tmp_path: Path) -> None:
-        runtime = _FakeRuntime()
-        aggregator = _FakeAggregator(_agg())
-        ev = _make_evaluator(runtime=runtime, aggregator=aggregator, workdir_base=str(tmp_path))
+        ev = _make_evaluator(runtime=_FakeRuntime(), workdir_base=str(tmp_path))
         with pytest.raises(EvaluationError, match="Trace unavailable"):
             ev.evaluate(_case(trajectory={"messages": []}), _PLACEHOLDER)
 
     def test_missing_skill_names_raises(self, tmp_path: Path) -> None:
-        runtime = _FakeRuntime()
-        aggregator = _FakeAggregator(_agg())
-        ev = _make_evaluator(runtime=runtime, aggregator=aggregator, workdir_base=str(tmp_path))
+        ev = _make_evaluator(runtime=_FakeRuntime(), workdir_base=str(tmp_path))
         with pytest.raises(EvaluationError, match="skill_names is required"):
             ev.evaluate(_case(skill_names=[]), _PLACEHOLDER)
 
     def test_missing_trajectory_raises(self, tmp_path: Path) -> None:
-        runtime = _FakeRuntime()
-        aggregator = _FakeAggregator(_agg())
-        ev = _make_evaluator(runtime=runtime, aggregator=aggregator, workdir_base=str(tmp_path))
+        ev = _make_evaluator(runtime=_FakeRuntime(), workdir_base=str(tmp_path))
         with pytest.raises(ValueError, match="trajectory"):
             ev.evaluate(_case(trajectory=None), _PLACEHOLDER)
 
     def test_rollout_error_raises(self, tmp_path: Path) -> None:
-        runtime = _FakeRuntime()
-        aggregator = _FakeAggregator(_agg())
-        ev = _make_evaluator(runtime=runtime, aggregator=aggregator, workdir_base=str(tmp_path))
+        ev = _make_evaluator(runtime=_FakeRuntime(), workdir_base=str(tmp_path))
         with pytest.raises(EvaluationError) as exc_info:
             ev.evaluate(_case(), {"error": "rollout exploded"})
         assert exc_info.value.category == "rollout_error"
 
-    def test_aggregator_error_propagates(self, tmp_path: Path) -> None:
-        runtime = _FakeRuntime(score=0.8)
-        aggregator = _FakeAggregator(
-            _agg(),
-            raise_exc=EvaluationError(category="attribution_unknown_skill", safe_message="ghost"),
+    def test_unknown_skill_attribution_raises(self, tmp_path: Path) -> None:
+        # synthesize returns an attribution for a skill NOT in skill_names → fail-fast
+        runtime = _FakeRuntime(
+            attr_dict=_attr_dict(
+                attributions=[SkillAttribution(skill_name="ghost_skill", impact="positive")]
+            )
         )
-        ev = _make_evaluator(runtime=runtime, aggregator=aggregator, workdir_base=str(tmp_path))
+        ev = _make_evaluator(runtime=runtime, workdir_base=str(tmp_path))
         with pytest.raises(EvaluationError) as exc_info:
             ev.evaluate(_case(), _PLACEHOLDER)
         assert exc_info.value.category == "attribution_unknown_skill"
 
+    def test_synthesize_error_propagates(self, tmp_path: Path) -> None:
+        runtime = _FakeRuntime(
+            synthesize_exc=EvaluationError(
+                category="agent_judge_output_error", safe_message="no parseable output"
+            )
+        )
+        ev = _make_evaluator(runtime=runtime, workdir_base=str(tmp_path))
+        with pytest.raises(EvaluationError) as exc_info:
+            ev.evaluate(_case(), _PLACEHOLDER)
+        assert exc_info.value.category == "agent_judge_output_error"
+
     def test_workdir_cleaned_after_success(self, tmp_path: Path) -> None:
-        runtime = _FakeRuntime(score=0.8)
-        aggregator = _FakeAggregator(_agg())
-        ev = _make_evaluator(runtime=runtime, aggregator=aggregator, workdir_base=str(tmp_path))
+        ev = _make_evaluator(runtime=_FakeRuntime(), workdir_base=str(tmp_path))
         ev.evaluate(_case(), _PLACEHOLDER)
-        # no leftover workdir dirs in tmp_path after a clean run
         leftovers = [p for p in tmp_path.iterdir() if p.name.startswith("evo-agent-judge-")]
         assert leftovers == []
 
     def test_per_dimension_skills_materialized(self, tmp_path: Path) -> None:
         runtime = _RecordingRuntime(score=0.8)
-        aggregator = _FakeAggregator(_agg())
         ev = _make_evaluator(
             runtime=runtime,  # type: ignore[arg-type]
-            aggregator=aggregator,
             workdir_base=str(tmp_path),
         )
         ev.evaluate(_case(), _PLACEHOLDER)
-        # preset global helper (judge_rubric_guide) + the faithfulness dim's own
-        # skill (faithfulness_checklist) are both materialized into the shared workdir
         all_md = {f for _, files in runtime.materialized for f in files}
         assert "judge_rubric_guide.md" in all_md
         assert "faithfulness_checklist.md" in all_md
@@ -276,3 +310,45 @@ class TestSelectTop1:
 
     def test_empty_returns_empty(self) -> None:
         assert _select_top1_attribution([]) == ""
+
+
+class TestAgentEvaluatorInit:
+    """trajectory_budget init handling."""
+
+    def test_default_budget_is_module_constant(self) -> None:
+        from evo_agent.evaluator.evaluators.agent import _DEFAULT_TRAJECTORY_BUDGET
+
+        ev = AgentEvaluator(
+            preset=get_preset("default"),
+            runtime=_FakeRuntime(),  # type: ignore[arg-type]
+            dimension_thresholds=_DEFAULT_THRESHOLDS,
+        )
+        assert ev._trajectory_budget == _DEFAULT_TRAJECTORY_BUDGET
+        assert ev._trajectory_budget == 4000
+
+    def test_explicit_budget_overrides_default(self) -> None:
+        ev = AgentEvaluator(
+            preset=get_preset("default"),
+            runtime=_FakeRuntime(),  # type: ignore[arg-type]
+            dimension_thresholds=_DEFAULT_THRESHOLDS,
+            trajectory_budget=12000,
+        )
+        assert ev._trajectory_budget == 12000
+
+    def test_zero_budget_raises(self) -> None:
+        with pytest.raises(ValueError, match="trajectory_budget"):
+            AgentEvaluator(
+                preset=get_preset("default"),
+                runtime=_FakeRuntime(),  # type: ignore[arg-type]
+                dimension_thresholds=_DEFAULT_THRESHOLDS,
+                trajectory_budget=0,
+            )
+
+    def test_negative_budget_raises(self) -> None:
+        with pytest.raises(ValueError, match="trajectory_budget"):
+            AgentEvaluator(
+                preset=get_preset("default"),
+                runtime=_FakeRuntime(),  # type: ignore[arg-type]
+                dimension_thresholds=_DEFAULT_THRESHOLDS,
+                trajectory_budget=-5,
+            )

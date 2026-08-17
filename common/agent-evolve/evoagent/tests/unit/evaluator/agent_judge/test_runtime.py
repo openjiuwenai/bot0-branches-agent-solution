@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from typing import Any
 
@@ -323,3 +324,76 @@ class TestMakeRuntime:
     def test_unknown_raises(self) -> None:
         with pytest.raises(ValueError, match="Unknown judge runtime"):
             make_runtime("openclaw")  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# synthesize (attribution agent) — same spawn, parsed as a plain dict
+# ---------------------------------------------------------------------------
+
+
+class TestSynthesize:
+    def test_claude_structured_output_dict(self, tmp_path: Path, _patch_create: Any) -> None:
+        schema = tmp_path / "schema.json"
+        schema.write_text('{"type":"object"}', encoding="utf-8")
+        attr = {
+            "skill_attributions": [
+                {"skill_name": "x", "usage_status": "executed", "impact": "positive", "reason": "r"}
+            ],
+            "attribution_status": "completed",
+            "attribution_error": None,
+        }
+        envelope = json.dumps(
+            {
+                "is_error": False,
+                "result": json.dumps(attr),
+                "structured_output": attr,
+                "type": "result",
+                "subtype": "success",
+            }
+        )
+        proc = _FakeProc(stdout=envelope.encode("utf-8"), returncode=0)
+        _patch_create(proc)
+        runtime = ClaudeRuntime()
+        data = asyncio.run(runtime.synthesize(_request(workdir=tmp_path, schema_path=schema)))
+        assert data == attr
+
+    def test_claude_returns_bare_dict(self, tmp_path: Path, _patch_create: Any) -> None:
+        schema = tmp_path / "s.json"
+        schema.write_text("{}", encoding="utf-8")
+        attr = {"skill_attributions": [], "attribution_status": "completed"}
+        proc = _FakeProc(stdout=json.dumps(attr).encode("utf-8"), returncode=0)
+        _patch_create(proc)
+        runtime = ClaudeRuntime()
+        data = asyncio.run(runtime.synthesize(_request(workdir=tmp_path, schema_path=schema)))
+        assert data == attr
+
+    def test_claude_unparseable_raises(self, tmp_path: Path, _patch_create: Any) -> None:
+        schema = tmp_path / "s.json"
+        schema.write_text("{}", encoding="utf-8")
+        proc = _FakeProc(stdout=b"not json", returncode=0)
+        _patch_create(proc)
+        runtime = ClaudeRuntime()
+        with pytest.raises(EvaluationError, match="no parseable output"):
+            asyncio.run(runtime.synthesize(_request(workdir=tmp_path, schema_path=schema)))
+
+    def test_codex_reads_attribution_message(self, tmp_path: Path, _patch_create: Any) -> None:
+        schema = tmp_path / "schema.json"
+        schema.write_text("{}", encoding="utf-8")
+        attr = {
+            "skill_attributions": [
+                {"skill_name": "y", "usage_status": "misused", "impact": "negative", "reason": "r"}
+            ],
+            "attribution_status": "failed",
+            "attribution_error": "unsure",
+        }
+        proc = _FakeProc(returncode=0)
+        cap = _patch_create(
+            proc, write_file=("codex_attribution_message.json", json.dumps(attr).encode("utf-8"))
+        )
+        runtime = CodexRuntime()
+        data = asyncio.run(runtime.synthesize(_request(workdir=tmp_path, schema_path=schema)))
+        assert data == attr
+        # the attribution step writes a distinct message file, not the judge's
+        assert "-o" in cap.args
+        o_idx = cap.args.index("-o")
+        assert cap.args[o_idx + 1].endswith("codex_attribution_message.json")

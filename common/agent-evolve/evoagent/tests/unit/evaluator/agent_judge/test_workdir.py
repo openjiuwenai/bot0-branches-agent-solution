@@ -73,7 +73,7 @@ class TestWorkdirManager:
 
     def test_materialize_helper_skills_missing_raises(self, tmp_path: Path) -> None:
         with WorkdirManager(base_dir=str(tmp_path)) as wd:
-            with pytest.raises(FileNotFoundError, match="helper skill not found"):
+            with pytest.raises(FileNotFoundError, match="evaluator skill not found"):
                 wd.materialize_helper_skills(("definitely_not_a_helper",))
 
     def test_materialize_helper_skills_empty_noop(self, tmp_path: Path) -> None:
@@ -89,3 +89,36 @@ class TestWorkdirManager:
             assert path.parent == wd.path
             loaded = json.loads(path.read_text(encoding="utf-8"))
             assert loaded == schema
+
+    def test_materialize_helper_skills_mounts_scripts(self, tmp_path: Path) -> None:
+        # trajectory_reader has parse_trajectory.py alongside SKILL.md
+        with WorkdirManager(base_dir=str(tmp_path)) as wd:
+            wd.materialize_helper_skills(("trajectory_reader",))
+            assert (wd.path / "trajectory_reader.md").exists()
+            assert (wd.path / "parse_trajectory.py").exists()
+            content = (wd.path / "parse_trajectory.py").read_text(encoding="utf-8")
+            assert "parse_trajectory" in content
+
+    def test_materialize_dimension_specific_skill(self, tmp_path: Path) -> None:
+        # faithfulness_checklist lives under evaluator_skills/answer_faithfulness/
+        with WorkdirManager(base_dir=str(tmp_path)) as wd:
+            wd.materialize_helper_skills(("faithfulness_checklist",))
+            content = (wd.path / "faithfulness_checklist.md").read_text(encoding="utf-8")
+            assert content.strip()
+
+
+class TestDiscoverCommonSkills:
+    def test_returns_common_skill_names(self) -> None:
+        from evo_agent.evaluator.agent_judge.workdir import discover_common_skills
+
+        names = discover_common_skills()
+        assert "judge_rubric_guide" in names
+        assert "trajectory_reader" in names
+        assert "trajectory_cleaner" in names
+        assert "trajectory_decompressor" in names
+
+    def test_sorted_order(self) -> None:
+        from evo_agent.evaluator.agent_judge.workdir import discover_common_skills
+
+        names = discover_common_skills()
+        assert names == sorted(names)
