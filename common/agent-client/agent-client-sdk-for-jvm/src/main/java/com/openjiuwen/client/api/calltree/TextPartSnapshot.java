@@ -4,11 +4,7 @@
 
 package com.openjiuwen.client.api.calltree;
 
-/**
- * 文本 Part。
- *
- * @since 2026-07-27
- */
+/** 文本 Part。 */
 public record TextPartSnapshot(String text) implements PartSnapshot {
     public TextPartSnapshot {
         text = text == null ? "" : text;

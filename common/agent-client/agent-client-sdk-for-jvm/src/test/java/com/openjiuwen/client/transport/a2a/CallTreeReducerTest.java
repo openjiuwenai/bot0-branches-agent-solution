@@ -20,9 +20,6 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
-/**
- * CallTreeReducer 单元测试。
- */
 class CallTreeReducerTest {
     @Test
     void replaysOutputAndChildEdgeWhenParentsArriveLater() {
@@ -69,6 +66,7 @@ class CallTreeReducerTest {
         if (child.artifacts().get(0).parts().get(0) instanceof TextPartSnapshot textPart) {
             assertEquals("orphan owner", textPart.text());
         }
+    }
     }
 
     @Test

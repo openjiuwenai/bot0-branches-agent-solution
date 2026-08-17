@@ -4,14 +4,10 @@
 
 package com.openjiuwen.client.runtimeverify;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.mockruntime.MockRuntimeServer;
 import com.sun.net.httpserver.HttpServer;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,9 +19,9 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * RuntimeVerificationApp 单元测试。
- */
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 class RuntimeVerificationAppTest {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
@@ -47,15 +43,9 @@ class RuntimeVerificationAppTest {
 
     @AfterEach
     void stop() {
-        if (appServer != null) {
-            appServer.stop(0);
-        }
-        if (app != null) {
-            app.close();
-        }
-        if (runtime != null) {
-            runtime.stop(0);
-        }
+        if (appServer != null) appServer.stop(0);
+        if (app != null) app.close();
+        if (runtime != null) runtime.stop(0);
     }
 
     @Test

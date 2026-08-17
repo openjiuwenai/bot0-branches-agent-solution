@@ -12,19 +12,14 @@ package com.openjiuwen.client.api.calltree;
 public record CallTreeDiagnostic(String code, String message, String artifactId) {
     /** 无效的代理事件。 */
     public static final String AGENT_EVENT_INVALID = "AGENT_EVENT_INVALID";
-
     /** 工件ID冲突。 */
     public static final String ARTIFACT_ID_CONFLICT = "ARTIFACT_ID_CONFLICT";
-
     /** 非法循环。 */
     public static final String ILLEGAL_CYCLE = "ILLEGAL_CYCLE";
-
     /** 多父节点。 */
     public static final String MULTIPLE_PARENTS = "MULTIPLE_PARENTS";
-
     /** 资源限制。 */
     public static final String RESOURCE_LIMIT = "CALL_TREE_RESOURCE_LIMIT";
-
     /** 未解决的孤儿节点。 */
     public static final String UNRESOLVED_ORPHAN = "UNRESOLVED_ORPHAN";
 }

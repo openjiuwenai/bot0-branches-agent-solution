@@ -6,11 +6,7 @@ package com.openjiuwen.client.api.calltree;
 
 import java.util.Objects;
 
-/**
- * Agent 调用实例的结构化标识。
- *
- * @since 2026-07-27
- */
+/** Agent 调用实例的结构化标识。 */
 public record NodeKey(String agentId, String taskId) {
     public NodeKey {
         Objects.requireNonNull(taskId, "taskId");

@@ -172,7 +172,6 @@ public final class DefaultAgentClient implements AgentClient {
      *
      * @param invocationRef 业务持有的调用句柄
      * @param snap 传输层快照
-     * @param callTree 调用树快照
      * @return 句柄已归正的快照
      */
     private static InvocationSnapshot withInvocationRef(String invocationRef, InvocationSnapshot snap,

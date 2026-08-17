@@ -11,11 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * 结构化 DataPart；构造时递归冻结容器，避免快照被外部修改。
- *
- * @since 2026-07-27
- */
+/** 结构化 DataPart；构造时递归冻结容器，避免快照被外部修改。 */
 public record DataPartSnapshot(Object data) implements PartSnapshot {
     public DataPartSnapshot {
         data = freeze(data);

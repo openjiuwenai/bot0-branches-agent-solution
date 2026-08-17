@@ -21,7 +21,6 @@ import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.api.InvocationRequest;
 import com.openjiuwen.client.api.InvocationSnapshot;
 import com.openjiuwen.client.api.calltree.Completeness;
-import com.openjiuwen.client.api.calltree.PartSnapshot;
 import com.openjiuwen.client.api.calltree.SpeakingPhase;
 import com.openjiuwen.client.transport.spi.CredentialProvider;
 import com.openjiuwen.client.transport.spi.TransportProvider;
@@ -44,9 +43,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * Endpoint 与 CallTree 集成测试。
- */
 class EndpointAndCallTreeTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -143,10 +139,8 @@ class EndpointAndCallTreeTest {
 
             assertNull(snapshot.outputText(), "descendant and controller output must not pollute root output");
             assertEquals(2, snapshot.callTree().root().children().size());
-            PartSnapshot part = snapshot.callTree().root().children().get(0).artifacts().get(0).parts().get(0);
-            if (part instanceof com.openjiuwen.client.api.calltree.TextPartSnapshot textPart) {
-                assertEquals("b1 says", textPart.text());
-            }
+            assertEquals("b1 says", ((com.openjiuwen.client.api.calltree.TextPartSnapshot) snapshot.callTree()
+                    .root().children().get(0).artifacts().get(0).parts().get(0)).text());
             assertEquals(SpeakingPhase.ROOT_SPEAKING, snapshot.callTree().speakingPhase());
             assertEquals("root-task", snapshot.callTree().currentSpeaker().taskId());
             assertEquals("completed", snapshot.callTree().root().state());
@@ -374,10 +368,8 @@ class EndpointAndCallTreeTest {
 
             assertEquals(4, calls.get());
             assertTrue(failure.getCause().getMessage().contains("recovery failed 3 times"));
-            Throwable cause = failure.getCause();
-            if (cause instanceof com.openjiuwen.client.api.ClassifiedError classifiedError) {
-                assertEquals("RECOVERY_RETRY_EXHAUSTED", classifiedError.code());
-            }
+            assertEquals("RECOVERY_RETRY_EXHAUSTED",
+                    ((com.openjiuwen.client.api.ClassifiedError) failure.getCause()).code());
         } finally {
             server.stop(0);
         }
@@ -526,12 +518,6 @@ class EndpointAndCallTreeTest {
 
     @FunctionalInterface
     private interface Handler {
-        /**
-     * 处理 HTTP 请求。
-     *
-     * @param exchange HTTP 交换
-     * @throws IOException 处理失败时抛出
-     */
         void handle(HttpExchange exchange) throws IOException;
     }
 }

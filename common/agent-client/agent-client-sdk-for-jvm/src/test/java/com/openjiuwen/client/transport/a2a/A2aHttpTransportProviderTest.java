@@ -261,12 +261,10 @@ class A2aHttpTransportProviderTest {
             call.accepted().toCompletableFuture().get(1, TimeUnit.SECONDS);
             ExecutionException thrown = org.junit.jupiter.api.Assertions.assertThrows(ExecutionException.class,
                     () -> call.completion().toCompletableFuture().get(2, TimeUnit.SECONDS));
-            Throwable cause = thrown.getCause();
-            if (cause instanceof ObservationTimeoutException timeout) {
-                assertEquals(call.invocationRef(), timeout.invocationRef());
-                assertEquals("task-working", timeout.diagnosticTaskRef());
-                assertEquals(TaskState.WORKING, timeout.lastKnownState());
-            }
+            ObservationTimeoutException timeout = (ObservationTimeoutException) thrown.getCause();
+            assertEquals(call.invocationRef(), timeout.invocationRef());
+            assertEquals("task-working", timeout.diagnosticTaskRef());
+            assertEquals(TaskState.WORKING, timeout.lastKnownState());
             assertEquals(1, sendMessageCalls.get());
             assertFalse(getTaskCalls.get() == 0);
 
@@ -688,8 +686,6 @@ class A2aHttpTransportProviderTest {
             sendMessageCalls.incrementAndGet();
         } else if ("GetTask".equals(method)) {
             getTaskCalls.incrementAndGet();
-        } else {
-            // 其他方法不处理
         }
         String body = "{\"jsonrpc\":\"2.0\",\"id\":\"working\",\"result\":{\"task\":{"
                 + "\"id\":\"task-working\",\"contextId\":\"runtime-timeout\","

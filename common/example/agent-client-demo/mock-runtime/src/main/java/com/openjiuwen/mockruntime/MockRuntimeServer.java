@@ -20,7 +20,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -32,11 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/**
- * Scriptable A2A Runtime used only for local agent-client verification.
- *
- * @since 2026-07-27
- */
+/** Scriptable A2A Runtime used only for local agent-client verification. */
 public final class MockRuntimeServer {
     private static final Logger LOG = Logger.getLogger(MockRuntimeServer.class.getName());
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -77,12 +72,6 @@ public final class MockRuntimeServer {
         System.setErr(log);
     }
 
-    /**
-     * 启动 HTTP 服务器。
-     *
-     * @return HttpServer 实例
-     * @throws IOException 启动失败时抛出
-     */
     public HttpServer startServer() throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
         server.setExecutor(new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
@@ -114,9 +103,8 @@ public final class MockRuntimeServer {
         server.start();
         int boundPort = server.getAddress().getPort();
         if (LOG.isLoggable(Level.INFO)) {
-            LOG.log(Level.INFO, "Mock Runtime listening on http://127.0.0.1:{0}",
-                    Integer.toString(boundPort));
-            LOG.log(Level.INFO, "A2A endpoint: http://127.0.0.1:{0}/a2a", Integer.toString(boundPort));
+            LOG.info("Mock Runtime listening on http://127.0.0.1:" + boundPort);
+            LOG.info("A2A endpoint: http://127.0.0.1:" + boundPort + "/a2a");
         }
         return server;
     }
@@ -201,14 +189,12 @@ public final class MockRuntimeServer {
             task.state = "TASK_STATE_WORKING";
         } else if (initialCreate && !waitingForInput) {
             task.state = "TASK_STATE_COMPLETED";
-        } else {
-            // 其他情况保持当前状态
         }
         jsonRpcWrappedTaskResult(exchange, request.path("id").asText(), task.taskNode());
     }
 
     private void getTask(HttpExchange exchange, JsonNode request) throws IOException {
-        String taskId = taskId(request).orElse(null);
+        String taskId = taskId(request);
         if (taskId == null) {
             jsonRpcError(exchange, request.path("id").asText(), -32602, "INVALID_PARAMS",
                     "Invalid params: params.id is required and must be a non-blank string");
@@ -227,7 +213,7 @@ public final class MockRuntimeServer {
     }
 
     private void subscribe(HttpExchange exchange, JsonNode request) throws IOException {
-        String taskId = taskId(request).orElse(null);
+        String taskId = taskId(request);
         if (taskId == null) {
             jsonRpcError(exchange, request.path("id").asText(), -32602, "INVALID_PARAMS",
                     "Invalid params: params.id is required and must be a non-blank string");
@@ -340,12 +326,12 @@ public final class MockRuntimeServer {
         return parts.isArray() && !parts.isEmpty() ? parts.get(0).path("text").asText("") : "";
     }
 
-    private static Optional<String> taskId(JsonNode request) {
+    private static String taskId(JsonNode request) {
         JsonNode id = request.path("params").path("id");
         if (!id.isTextual() || id.asText().isBlank()) {
-            return Optional.empty();
+            return null;
         }
-        return Optional.of(id.asText());
+        return id.asText();
     }
 
     private static void jsonRpcWrappedTaskResult(HttpExchange exchange, String id, JsonNode task) throws IOException {
@@ -390,11 +376,9 @@ public final class MockRuntimeServer {
     private record Frame(int id, String payload) {
         private String withRequestId(String requestId) {
             try {
-                JsonNode node = JSON.readTree(payload);
-                if (node instanceof ObjectNode objectNode) {
-                    objectNode.put("id", requestId);
-                }
-                return node.toString();
+                ObjectNode root = (ObjectNode) JSON.readTree(payload);
+                root.put("id", requestId);
+                return root.toString();
             } catch (IOException error) {
                 throw new IllegalStateException("invalid scripted frame", error);
             }
@@ -493,12 +477,8 @@ public final class MockRuntimeServer {
 
         private void multiArtifact() {
             addDelegation("agent-a", id, "agent-b", id + "-b", "multi artifact");
-            Map<String, Object> event1 = Map.of("type", "output",
-                    "source", Map.of("agentId", "agent-b", "taskId", id + "-b"));
-            addOutputWithEvent("child-artifact-1", "first", event1, false, true);
-            Map<String, Object> event2 = Map.of("type", "output",
-                    "source", Map.of("agentId", "agent-b", "taskId", id + "-b"));
-            addOutputWithEvent("child-artifact-2", "second", event2, false, true);
+            addOutputWithId("child-artifact-1", "agent-b", id + "-b", "first", false, true);
+            addOutputWithId("child-artifact-2", "agent-b", id + "-b", "second", false, true);
             addController();
         }
 
@@ -531,12 +511,8 @@ public final class MockRuntimeServer {
         private void malformed() {
             addDelegation("agent-a", id, "agent-b", id + "-b", "first parent");
             addDelegation("agent-c", id + "-c", "agent-b", id + "-b", "illegal second parent");
-            Map<String, Object> evt1 = Map.of("type", "output",
-                    "source", Map.of("agentId", "agent-b", "taskId", id + "-b"));
-            addOutputWithEvent("shared", "first owner", evt1, false, true);
-            Map<String, Object> evt2 = Map.of("type", "output",
-                    "source", Map.of("agentId", "agent-c", "taskId", id + "-c"));
-            addOutputWithEvent("shared", "conflicting owner", evt2, false, true);
+            addOutputWithId("shared", "agent-b", id + "-b", "first owner", false, true);
+            addOutputWithId("shared", "agent-c", id + "-c", "conflicting owner", false, true);
         }
 
         private void controllerReturn() {
@@ -585,13 +561,13 @@ public final class MockRuntimeServer {
         }
 
         private void addOutput(String agent, String task, String text, boolean append, boolean last) {
-            Map<String, Object> event = Map.of("type", "output",
-                    "source", Map.of("agentId", agent, "taskId", task));
-            addOutputWithEvent("output-" + task, text, event, append, last);
+            addOutputWithId("output-" + task, agent, task, text, append, last);
         }
 
-        private void addOutputWithEvent(String artifactId, String text,
-                Map<String, Object> event, boolean append, boolean last) {
+        private void addOutputWithId(String artifactId, String agent, String task,
+                String text, boolean append, boolean last) {
+            Map<String, Object> event = Map.of("type", "output",
+                    "source", Map.of("agentId", agent, "taskId", task));
             addArtifact(artifactId, List.of(Map.of("text", text)), event, append, last);
         }
 
@@ -662,15 +638,13 @@ public final class MockRuntimeServer {
             ObjectNode task = JSON.createObjectNode();
             task.put("id", id).put("contextId", contextId);
             ObjectNode statusNode = task.putObject("status").put("state", state);
-if ("TASK_STATE_INPUT_REQUIRED".equals(state) && "input-linear".equals(scenario)) {
+            if ("TASK_STATE_INPUT_REQUIRED".equals(state) && "input-linear".equals(scenario)) {
                 statusNode.putObject("message").putObject("metadata").set("_interrupt", JSON.valueToTree(
                         interrupt("user_input", "input-" + id, null, "Please provide the account suffix.", null)));
             } else if ("TASK_STATE_INPUT_REQUIRED".equals(state) && "client-tool".equals(scenario)) {
                 statusNode.putObject("message").putObject("metadata").set("_interrupt", JSON.valueToTree(
                         interrupt("client_tool", "tool-" + id, "local.echo", null,
-                        Map.of("text", "hello from Runtime"))));
-            } else {
-                // 其他状态不追加 interrupt
+                                Map.of("text", "hello from Runtime"))));
             }
             ArrayNode artifacts = task.putArray("artifacts");
             String artifactId = "streaming-resubscribe".equals(scenario) || "recovery-circuit".equals(scenario)

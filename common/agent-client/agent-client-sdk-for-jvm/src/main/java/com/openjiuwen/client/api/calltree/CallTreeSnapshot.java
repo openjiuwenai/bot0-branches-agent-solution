@@ -8,11 +8,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 
-/**
- * 一次 invocation 在某一 revision 的完整、不可变调用树视图。
- *
- * @since 2026-07-27
- */
+/** 一次 invocation 在某一 revision 的完整、不可变调用树视图。 */
 public record CallTreeSnapshot(CallTreeNode root, long revision, Completeness completeness,
         SpeakingPhase speakingPhase, NodeKey currentSpeaker, Instant observedAt,
         List<CallTreeDiagnostic> diagnostics) {
@@ -24,16 +20,7 @@ public record CallTreeSnapshot(CallTreeNode root, long revision, Completeness co
         diagnostics = diagnostics == null ? List.of() : List.copyOf(diagnostics);
     }
 
-    /**
-     * 兼容原六参数构造器。
-     *
-     * @param root 根节点
-     * @param revision 修订版本
-     * @param completeness 完整度
-     * @param speakingPhase 发言阶段
-     * @param currentSpeaker 当前发言人
-     * @param observedAt 观察时间
-     */
+    /** 兼容原六参数构造器。 */
     public CallTreeSnapshot(CallTreeNode root, long revision, Completeness completeness,
             SpeakingPhase speakingPhase, NodeKey currentSpeaker, Instant observedAt) {
         this(root, revision, completeness, speakingPhase, currentSpeaker, observedAt, List.of());

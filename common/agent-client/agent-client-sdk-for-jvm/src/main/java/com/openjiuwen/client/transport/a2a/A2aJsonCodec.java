@@ -202,12 +202,7 @@ final class A2aJsonCodec {
         return root;
     }
 
-    /**
-     * SubscribeToTask 请求。Runtime 只接受 Task id，不携带 cursor。
-     *
-     * @param taskRef 任务引用
-     * @return SubscribeToTask 请求
-     */
+    /** SubscribeToTask 请求。Runtime 只接受 Task id，不携带 cursor。 */
     ObjectNode buildSubscribe(String taskRef) {
         ObjectNode root = newRequest("SubscribeToTask");
         root.putObject("params").put("id", taskRef);
@@ -379,33 +374,31 @@ final class A2aJsonCodec {
                     parts.add(new ProtocolPart.Data(data));
                     controllerOutput |= "controller_output".equals(part.path("data").path("type").asText());
                 } else {
-                // 其他 Part 类型暂不处理
-            }
+                    continue;
+                }
             }
         }
         JsonNode agentEventNode = artifact.path("metadata").path("agentEvent");
         boolean agentEventDeclared = !agentEventNode.isMissingNode() && !agentEventNode.isNull();
         return new ProtocolArtifact(artifactId, parts, append, lastChunk,
-                parseAgentEvent(agentEventNode).orElse(null), agentEventDeclared, controllerOutput);
+                parseAgentEvent(agentEventNode), agentEventDeclared, controllerOutput);
     }
 
-    private static Optional<AgentEvent> parseAgentEvent(JsonNode node) {
+    private static AgentEvent parseAgentEvent(JsonNode node) {
         if (node == null || !node.isObject()) {
-            return Optional.empty();
+            return null;
         }
         AgentEvent event = new AgentEvent(node.path("type").asText(null),
-                parseAgentRef(node.path("source")).orElse(null),
-                parseAgentRef(node.path("target")).orElse(null),
+                parseAgentRef(node.path("source")), parseAgentRef(node.path("target")),
                 node.path("state").asText(null));
-        return event.valid() ? Optional.of(event) : Optional.empty();
+        return event.valid() ? event : null;
     }
 
-    private static Optional<AgentEvent.AgentRef> parseAgentRef(JsonNode node) {
+    private static AgentEvent.AgentRef parseAgentRef(JsonNode node) {
         if (node == null || !node.isObject()) {
-            return Optional.empty();
+            return null;
         }
-        return Optional.of(new AgentEvent.AgentRef(node.path("agentId").asText(null),
-                node.path("taskId").asText(null)));
+        return new AgentEvent.AgentRef(node.path("agentId").asText(null), node.path("taskId").asText(null));
     }
 
     /**
