@@ -1,4 +1,4 @@
-# 设备智能化运维场景（phm）
+# 设备智能化运维场景（Prognostics & Health Management）
 
 油气化工矿山钢铁行业 Agent 解决方案的业务场景之一。设备智能化运维（Prognostics & Health Management，PHM）面向设备状态监测、预测性维护、智能巡检、资产全生命周期管理等方向。
 
