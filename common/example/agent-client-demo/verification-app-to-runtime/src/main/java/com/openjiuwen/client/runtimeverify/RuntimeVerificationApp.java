@@ -51,7 +51,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/** Browser-based verification console for AgentClient -> Runtime. */
+/**
+ * Browser-based verification console for AgentClient -> Runtime.
+ *
+ * @since 2026-07-27
+ */
 public final class RuntimeVerificationApp {
     private static final Logger LOG = Logger.getLogger(RuntimeVerificationApp.class.getName());
     private static final ObjectMapper JSON = createMapper();
@@ -118,8 +122,10 @@ public final class RuntimeVerificationApp {
                 : System.getenv().getOrDefault("AGENT_RUNTIME_URL", "http://127.0.0.1:19090");
         RuntimeVerificationApp app = new RuntimeVerificationApp(port, runtime);
         app.start();
-        LOG.info("Verification UI: http://127.0.0.1:" + port);
-        LOG.info("Default Runtime: " + runtime);
+        if (LOG.isLoggable(Level.INFO)) {
+            LOG.info("Verification UI: http://127.0.0.1:{0}", port);
+            LOG.info("Default Runtime: {0}", runtime);
+        }
         Thread.currentThread().join();
     }
 
@@ -153,7 +159,7 @@ public final class RuntimeVerificationApp {
         return exchange -> {
             try {
                 delegate.handle(exchange);
-            } catch (Exception error) {
+            } catch (IOException | RuntimeException error) {
                 LOG.log(Level.SEVERE, "Unhandled error in request handler", error);
                 try {
                     json(exchange, 500, Map.of("error", rootMessage(error)));
@@ -226,7 +232,8 @@ public final class RuntimeVerificationApp {
             verifyRecoveryContract(run);
             verifyMockWireContract(run);
             run.status = isRecoveryScenario(run.request.scenario()) ? "VERIFIED" : "COMPLETED";
-        } catch (Exception error) {
+        } catch (IOException | InterruptedException | java.util.concurrent.ExecutionException
+                    | java.util.concurrent.TimeoutException error) {
             run.status = "FAILED";
             run.error = rootMessage(error);
             run.addDiagnostic(error.getClass().getSimpleName() + ": " + rootMessage(error));
@@ -425,6 +432,8 @@ public final class RuntimeVerificationApp {
             }
         } else if (tree != null) {
             throw new IllegalStateException("BLOCKING/ASYNC must not construct a call tree");
+        } else {
+            // 其他场景不做额外校验
         }
         if ("streaming-resubscribe".equals(scenario)) {
             run.addDiagnostic("verified SubscribeToTask current snapshot + future events;"
@@ -452,7 +461,7 @@ public final class RuntimeVerificationApp {
         try {
             response = http.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(3)).GET().build(),
                     HttpResponse.BodyHandlers.ofString());
-        } catch (Exception error) {
+        } catch (IOException | InterruptedException error) {
             run.addDiagnostic("wire contract check skipped: Runtime does not expose mock diagnostics");
             return;
         }
@@ -490,7 +499,7 @@ public final class RuntimeVerificationApp {
                 latest = Math.max(latest, request.path("sequence").asInt());
             }
             return latest;
-        } catch (Exception ignored) {
+        } catch (IOException | InterruptedException ignored) {
             return -1;
         }
     }
@@ -511,7 +520,7 @@ public final class RuntimeVerificationApp {
                     .timeout(Duration.ofSeconds(3)).GET().build(), HttpResponse.BodyHandlers.ofString());
             send(exchange, response.statusCode(), "application/json; charset=utf-8",
                     response.body().getBytes(StandardCharsets.UTF_8));
-        } catch (Exception error) {
+        } catch (IOException | InterruptedException error) {
             json(exchange, 502, Map.of("error", rootMessage(error), "target", url));
         }
     }

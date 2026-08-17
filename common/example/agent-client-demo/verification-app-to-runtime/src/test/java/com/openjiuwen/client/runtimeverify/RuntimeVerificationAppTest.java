@@ -23,7 +23,9 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 
-class RuntimeVerificationAppTest {
+/**
+ * RuntimeVerificationApp 单元测试。
+ */
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
 
@@ -118,7 +120,7 @@ class RuntimeVerificationAppTest {
     private JsonNode uncheckedExecute(String scenario, String mode) {
         try {
             return execute(scenario, mode);
-        } catch (Exception error) {
+        } catch (IOException | InterruptedException error) {
             throw new java.util.concurrent.CompletionException(error);
         }
     }

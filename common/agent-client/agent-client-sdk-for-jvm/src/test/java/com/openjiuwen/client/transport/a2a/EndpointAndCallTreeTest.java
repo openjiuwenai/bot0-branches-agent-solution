@@ -43,7 +43,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicInteger;
 
-class EndpointAndCallTreeTest {
+/**
+ * Endpoint 与 CallTree 集成测试。
+ */
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Test
@@ -370,8 +372,10 @@ class EndpointAndCallTreeTest {
 
             assertEquals(4, calls.get());
             assertTrue(failure.getCause().getMessage().contains("recovery failed 3 times"));
-            assertEquals("RECOVERY_RETRY_EXHAUSTED",
-                    ((com.openjiuwen.client.api.ClassifiedError) failure.getCause()).code());
+            Throwable cause = failure.getCause();
+            if (cause instanceof com.openjiuwen.client.api.ClassifiedError classifiedError) {
+                assertEquals("RECOVERY_RETRY_EXHAUSTED", classifiedError.code());
+            }
         } finally {
             server.stop(0);
         }
@@ -520,6 +524,11 @@ class EndpointAndCallTreeTest {
 
     @FunctionalInterface
     private interface Handler {
-        void handle(HttpExchange exchange) throws IOException;
+        /**
+     * 处理 HTTP 请求。
+     *
+     * @param exchange HTTP 交换
+     * @throws IOException 处理失败时抛出
+     */
     }
 }

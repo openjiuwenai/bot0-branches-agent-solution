@@ -132,7 +132,7 @@ final class CallTreeReducer implements AutoCloseable {
         if (!claimArtifact(source, artifact.artifactId())) {
             return;
         }
-        MutableNode target = createNode(event.target());
+        MutableNode target = createNode(event.target()).orElse(null);
         if (target == null || source == target || createsCycle(source, target)) {
             completeness = Completeness.DEGRADED;
             diagnose(CallTreeDiagnostic.ILLEGAL_CYCLE, "delegation would create a cycle", artifact.artifactId());
@@ -243,19 +243,19 @@ final class CallTreeReducer implements AutoCloseable {
         return Optional.empty();
     }
 
-    private MutableNode createNode(AgentEvent.AgentRef ref) {
+    private Optional<MutableNode> createNode(AgentEvent.AgentRef ref) {
         MutableNode found = existingNode(ref).orElse(null);
         if (found != null) {
-            return found;
+            return Optional.of(found);
         }
         if (nodes.size() >= MAX_NODES) {
             completeness = Completeness.DEGRADED;
             diagnose(CallTreeDiagnostic.RESOURCE_LIMIT, "call tree node limit exceeded", null);
-            return null;
+            return Optional.empty();
         }
         MutableNode created = new MutableNode(new NodeKey(ref.agentId(), ref.taskId()));
         nodes.put(created.key, created);
-        return created;
+        return Optional.of(created);
     }
 
     private void bufferEdge(AgentEvent event, ProtocolArtifact artifact) {
@@ -437,6 +437,9 @@ final class CallTreeReducer implements AutoCloseable {
                 } else {
                     truncated = true;
                 }
+            } else {
+                // 其他 Part 类型不参与截断计算
+            }
             }
         }
         return new BoundedParts(List.copyOf(result), used, truncated);

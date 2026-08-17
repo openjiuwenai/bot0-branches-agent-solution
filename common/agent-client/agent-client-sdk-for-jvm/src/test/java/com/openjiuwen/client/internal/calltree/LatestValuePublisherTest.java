@@ -17,7 +17,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
-class LatestValuePublisherTest {
+/**
+ * LatestValuePublisher 单元测试。
+ */
     @Test
     void slowSubscriberReceivesOnlyLatestSnapshotOnNextDemand() {
         LatestValuePublisher<Integer> publisher = directPublisher();

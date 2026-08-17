@@ -20,7 +20,9 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
-class CallTreeReducerTest {
+/**
+ * CallTreeReducer 单元测试。
+ */
     @Test
     void replaysOutputAndChildEdgeWhenParentsArriveLater() {
         CallTreeReducer reducer = new CallTreeReducer(InvocationMode.STREAMING);

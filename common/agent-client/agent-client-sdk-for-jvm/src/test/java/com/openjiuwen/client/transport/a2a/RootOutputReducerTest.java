@@ -11,7 +11,9 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
-class RootOutputReducerTest {
+/**
+ * RootOutputReducer 单元测试。
+ */
     @Test
     void materializesReplaceAppendAndStableArtifactOrder() {
         RootOutputReducer reducer = new RootOutputReducer();

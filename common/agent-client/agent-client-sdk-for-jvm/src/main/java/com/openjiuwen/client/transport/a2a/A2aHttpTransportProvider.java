@@ -189,12 +189,20 @@ public class A2aHttpTransportProvider
         return DEFAULT_SSE_IDLE_TIMEOUT;
     }
 
-    /** 包级测试探针：活动 invocation Channel 数。 */
+    /**
+     * 包级测试探针：活动 invocation Channel 数。
+     *
+     * @return 活动 invocation Channel 数
+     */
     int activeInvocationCount() {
         return byInvocationRef.size();
     }
 
-    /** 包级测试探针：活动 taskId Channel 数。 */
+    /**
+     * 包级测试探针：活动 taskId Channel 数。
+     *
+     * @return 活动 taskId Channel 数
+     */
     int activeTaskCount() {
         return byTaskRef.size();
     }
@@ -1428,6 +1436,8 @@ public class A2aHttpTransportProvider
             ch.rootOutput.replaceWithTaskSnapshot(frame.taskArtifacts());
         } else if (frame.artifact() != null) {
             ch.rootOutput.accept(frame.artifact());
+        } else {
+            // 无任务快照也无 artifact 时不处理
         }
     }
 

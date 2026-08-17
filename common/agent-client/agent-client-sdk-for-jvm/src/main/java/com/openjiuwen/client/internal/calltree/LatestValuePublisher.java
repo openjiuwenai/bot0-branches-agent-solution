@@ -69,6 +69,11 @@ public final class LatestValuePublisher<T extends Object> implements Flow.Publis
         subscriptions.forEach(LatestSubscription::drain);
     }
 
+    /**
+     * 返回最新值。
+     *
+     * @return 最新值 Optional
+     */
     public Optional<T> latest() {
         Versioned<T> value = latest;
         return Optional.ofNullable(value == null ? null : value.value());

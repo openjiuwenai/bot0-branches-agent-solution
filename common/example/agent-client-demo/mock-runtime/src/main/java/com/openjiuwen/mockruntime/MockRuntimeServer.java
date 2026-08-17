@@ -31,7 +31,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/** Scriptable A2A Runtime used only for local agent-client verification. */
+/**
+ * Scriptable A2A Runtime used only for local agent-client verification.
+ *
+ * @since 2026-07-27
+ */
 public final class MockRuntimeServer {
     private static final Logger LOG = Logger.getLogger(MockRuntimeServer.class.getName());
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -72,7 +76,12 @@ public final class MockRuntimeServer {
         System.setErr(log);
     }
 
-    public HttpServer startServer() throws IOException {
+    /**
+     * 启动 HTTP 服务器。
+     *
+     * @return HttpServer 实例
+     * @throws IOException 启动失败时抛出
+     */
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
         server.setExecutor(new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
                 new LinkedBlockingQueue<>(), r -> {
@@ -189,12 +198,14 @@ public final class MockRuntimeServer {
             task.state = "TASK_STATE_WORKING";
         } else if (initialCreate && !waitingForInput) {
             task.state = "TASK_STATE_COMPLETED";
+        } else {
+            // 其他情况保持当前状态
         }
         jsonRpcWrappedTaskResult(exchange, request.path("id").asText(), task.taskNode());
     }
 
     private void getTask(HttpExchange exchange, JsonNode request) throws IOException {
-        String taskId = taskId(request);
+        String taskId = taskId(request).orElse(null);
         if (taskId == null) {
             jsonRpcError(exchange, request.path("id").asText(), -32602, "INVALID_PARAMS",
                     "Invalid params: params.id is required and must be a non-blank string");
@@ -213,7 +224,7 @@ public final class MockRuntimeServer {
     }
 
     private void subscribe(HttpExchange exchange, JsonNode request) throws IOException {
-        String taskId = taskId(request);
+        String taskId = taskId(request).orElse(null);
         if (taskId == null) {
             jsonRpcError(exchange, request.path("id").asText(), -32602, "INVALID_PARAMS",
                     "Invalid params: params.id is required and must be a non-blank string");
@@ -326,12 +337,12 @@ public final class MockRuntimeServer {
         return parts.isArray() && !parts.isEmpty() ? parts.get(0).path("text").asText("") : "";
     }
 
-    private static String taskId(JsonNode request) {
+    private static Optional<String> taskId(JsonNode request) {
         JsonNode id = request.path("params").path("id");
         if (!id.isTextual() || id.asText().isBlank()) {
-            return null;
+            return Optional.empty();
         }
-        return id.asText();
+        return Optional.of(id.asText());
     }
 
     private static void jsonRpcWrappedTaskResult(HttpExchange exchange, String id, JsonNode task) throws IOException {
@@ -376,9 +387,11 @@ public final class MockRuntimeServer {
     private record Frame(int id, String payload) {
         private String withRequestId(String requestId) {
             try {
-                ObjectNode root = (ObjectNode) JSON.readTree(payload);
-                root.put("id", requestId);
-                return root.toString();
+                JsonNode node = JSON.readTree(payload);
+                if (node instanceof ObjectNode objectNode) {
+                    objectNode.put("id", requestId);
+                }
+                return node.toString();
             } catch (IOException error) {
                 throw new IllegalStateException("invalid scripted frame", error);
             }
@@ -646,13 +659,15 @@ public final class MockRuntimeServer {
             ObjectNode task = JSON.createObjectNode();
             task.put("id", id).put("contextId", contextId);
             ObjectNode statusNode = task.putObject("status").put("state", state);
-            if ("TASK_STATE_INPUT_REQUIRED".equals(state) && "input-linear".equals(scenario)) {
+if ("TASK_STATE_INPUT_REQUIRED".equals(state) && "input-linear".equals(scenario)) {
                 statusNode.putObject("message").putObject("metadata").set("_interrupt", JSON.valueToTree(
                         interrupt("user_input", "input-" + id, null, "Please provide the account suffix.", null)));
             } else if ("TASK_STATE_INPUT_REQUIRED".equals(state) && "client-tool".equals(scenario)) {
                 statusNode.putObject("message").putObject("metadata").set("_interrupt", JSON.valueToTree(
                         interrupt("client_tool", "tool-" + id, "local.echo", null,
-                                Map.of("text", "hello from Runtime"))));
+                        Map.of("text", "hello from Runtime"))));
+            } else {
+                // 其他状态不追加 interrupt
             }
             ArrayNode artifacts = task.putArray("artifacts");
             String artifactId = "streaming-resubscribe".equals(scenario) || "recovery-circuit".equals(scenario)
