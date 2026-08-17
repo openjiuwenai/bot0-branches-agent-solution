@@ -403,7 +403,8 @@ final class A2aJsonCodec {
         if (node == null || !node.isObject()) {
             return Optional.empty();
         }
-        return Optional.of(new AgentEvent.AgentRef(node.path("agentId").asText(null), node.path("taskId").asText(null)));
+        return Optional.of(new AgentEvent.AgentRef(
+                node.path("agentId").asText(null), node.path("taskId").asText(null)));
     }
 
     /**

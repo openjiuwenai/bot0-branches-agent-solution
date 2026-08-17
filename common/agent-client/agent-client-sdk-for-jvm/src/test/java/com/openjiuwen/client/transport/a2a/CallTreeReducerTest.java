@@ -20,6 +20,11 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+/**
+ * Test for CallTreeReducerTest.
+ *
+ * @since 2026-07-27
+ */
 class CallTreeReducerTest {
     @Test
     void replaysOutputAndChildEdgeWhenParentsArriveLater() {

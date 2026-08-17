@@ -77,6 +77,12 @@ public final class MockRuntimeServer {
         System.setErr(log);
     }
 
+    /**
+     * 启动 HTTP 服务器。
+     *
+     * @return 已启动的服务器
+     * @throws IOException IO 异常
+     */
     public HttpServer startServer() throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
         server.setExecutor(new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
@@ -385,7 +391,10 @@ public final class MockRuntimeServer {
     private record Frame(int id, String payload) {
         private String withRequestId(String requestId) {
             try {
-                ObjectNode root = (ObjectNode) JSON.readTree(payload);
+                JsonNode parsed = JSON.readTree(payload);
+                if (!(parsed instanceof ObjectNode root)) {
+                    throw new IllegalStateException("frame payload is not an object");
+                }
                 root.put("id", requestId);
                 return root.toString();
             } catch (IOException error) {
@@ -400,9 +409,8 @@ public final class MockRuntimeServer {
     }
 
     private static final class TaskRecord {
-        private record SourceRef(String agent, String task) {}
-
         private final String id = "task-" + UUID.randomUUID();
+        private record SourceRef(String agent, String task) {}
         private final String contextId;
         private final String scenario;
         private final Instant createdAt = Instant.now();

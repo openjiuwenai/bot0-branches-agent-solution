@@ -127,8 +127,10 @@ public final class RuntimeVerificationApp {
                 : System.getenv().getOrDefault("AGENT_RUNTIME_URL", "http://127.0.0.1:19090");
         RuntimeVerificationApp app = new RuntimeVerificationApp(port, runtime);
         app.start();
-        LOG.info("Verification UI: http://127.0.0.1:" + port);
-        LOG.info("Default Runtime: " + runtime);
+        if (LOG.isLoggable(Level.INFO)) {
+            LOG.log(Level.INFO, "Verification UI: http://127.0.0.1:" + port);
+            LOG.log(Level.INFO, "Default Runtime: " + runtime);
+        }
         Thread.currentThread().join();
     }
 
@@ -385,6 +387,8 @@ public final class RuntimeVerificationApp {
             }
         } else if (tree != null) {
             throw new IllegalStateException("BLOCKING/ASYNC must not construct a call tree");
+        } else {
+            // No constraint violation for other scenarios.
         }
         if ("streaming-resubscribe".equals(scenario)) {
             run.addDiagnostic("verified SubscribeToTask current snapshot + future events;"

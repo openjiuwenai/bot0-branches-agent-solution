@@ -17,6 +17,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * Test for LatestValuePublisherTest.
+ *
+ * @since 2026-07-27
+ */
 class LatestValuePublisherTest {
     @Test
     void slowSubscriberReceivesOnlyLatestSnapshotOnNextDemand() {

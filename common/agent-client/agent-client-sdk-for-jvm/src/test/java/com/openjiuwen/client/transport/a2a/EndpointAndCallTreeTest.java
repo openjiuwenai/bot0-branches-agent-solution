@@ -43,6 +43,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * Test for EndpointAndCallTreeTest.
+ *
+ * @since 2026-07-27
+ */
 class EndpointAndCallTreeTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -521,6 +526,7 @@ class EndpointAndCallTreeTest {
 
     @FunctionalInterface
     private interface Handler {
+        /** 处理 HTTP 请求。 */
         void handle(HttpExchange exchange) throws IOException;
     }
 }

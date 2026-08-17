@@ -26,6 +26,11 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Test for RuntimeVerificationAppTest.
+ *
+ * @since 2026-07-27
+ */
 class RuntimeVerificationAppTest {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final HttpClient HTTP = HttpClient.newHttpClient();

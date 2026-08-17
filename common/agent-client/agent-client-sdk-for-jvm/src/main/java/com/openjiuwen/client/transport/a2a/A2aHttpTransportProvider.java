@@ -201,6 +201,8 @@ public class A2aHttpTransportProvider
 
     /**
      * 包级测试探针：活动 invocation Channel 数。
+     *
+     * @return 活动 invocation Channel 数
      */
     int activeInvocationCount() {
         return byInvocationRef.size();
@@ -208,6 +210,8 @@ public class A2aHttpTransportProvider
 
     /**
      * 包级测试探针：活动 taskId Channel 数。
+     *
+     * @return 活动 taskId Channel 数
      */
     int activeTaskCount() {
         return byTaskRef.size();
@@ -1444,6 +1448,7 @@ public class A2aHttpTransportProvider
             ch.rootOutput.accept(frame.artifact());
         } else {
             // Text-only frame with no artifact/task-snapshot semantic; nothing to apply.
+            return;
         }
     }
 

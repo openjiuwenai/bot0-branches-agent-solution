@@ -15,11 +15,6 @@ import java.time.Duration;
  */
 public final class RuntimeTransportProvider extends A2aHttpTransportProvider {
     /**
-     * 使用默认配置构造 Runtime Provider。
-     *
-     * @param baseUrl Runtime 基址
-     */
-    /**
      * 构造 Runtime 直连传输提供者，使用默认 ObjectMapper 和空闲超时。
      *
      * @param baseUrl Runtime 基址
@@ -28,13 +23,6 @@ public final class RuntimeTransportProvider extends A2aHttpTransportProvider {
         super(baseUrl, new ObjectMapper(), defaultIdleTimeout(), RuntimeEndpointPolicy.INSTANCE);
     }
 
-    /**
-     * 构造 Runtime Provider。
-     *
-     * @param baseUrl Runtime 基址
-     * @param mapper JSON 编解码器
-     * @param idleTimeout SSE 读空闲超时
-     */
     /**
      * 构造 Runtime 直连传输提供者。
      *

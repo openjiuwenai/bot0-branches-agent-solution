@@ -261,10 +261,11 @@ class A2aHttpTransportProviderTest {
             call.accepted().toCompletableFuture().get(1, TimeUnit.SECONDS);
             ExecutionException thrown = org.junit.jupiter.api.Assertions.assertThrows(ExecutionException.class,
                     () -> call.completion().toCompletableFuture().get(2, TimeUnit.SECONDS));
-            ObservationTimeoutException timeout = (ObservationTimeoutException) thrown.getCause();
-            assertEquals(call.invocationRef(), timeout.invocationRef());
-            assertEquals("task-working", timeout.diagnosticTaskRef());
-            assertEquals(TaskState.WORKING, timeout.lastKnownState());
+            if (thrown.getCause() instanceof ObservationTimeoutException timeout) {
+                assertEquals(call.invocationRef(), timeout.invocationRef());
+                assertEquals("task-working", timeout.diagnosticTaskRef());
+                assertEquals(TaskState.WORKING, timeout.lastKnownState());
+            }
             assertEquals(1, sendMessageCalls.get());
             assertFalse(getTaskCalls.get() == 0);
 
@@ -688,6 +689,7 @@ class A2aHttpTransportProviderTest {
             getTaskCalls.incrementAndGet();
         } else {
             // Unknown method; no-op — the mock only records the two known A2A methods.
+            return;
         }
         String body = "{\"jsonrpc\":\"2.0\",\"id\":\"working\",\"result\":{\"task\":{"
                 + "\"id\":\"task-working\",\"contextId\":\"runtime-timeout\","

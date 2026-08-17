@@ -73,11 +73,6 @@ public final class LatestValuePublisher<T extends Object> implements Flow.Publis
     }
 
     /**
-     * 返回当前最新值。
-     *
-     * @return 最新值，可能为空
-     */
-    /**
      * 返回最新提交的值。
      *
      * @return 最新值，若从未提交过则为空

@@ -444,6 +444,8 @@ final class CallTreeReducer implements AutoCloseable {
                 } else {
                     truncated = true;
                 }
+            } else {
+                continue;
             }
         }
         return new BoundedParts(List.copyOf(result), used, truncated);
