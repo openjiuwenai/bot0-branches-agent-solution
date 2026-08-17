@@ -8,6 +8,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -56,6 +57,7 @@ public class HttpRdcRouteClient implements RdcRouteClient {
      * @param baseUrl RDC base URL (e.g. http://localhost:8092)
      * @param cacheTtlMs local route cache TTL in milliseconds (default 5000)
      */
+    @Autowired
     public HttpRdcRouteClient(
             @Value("${gateway.rdc.base-url:http://localhost:8092}") String baseUrl,
             @Value("${gateway.rdc.local-cache.ttl-ms:5000}") long cacheTtlMs) {

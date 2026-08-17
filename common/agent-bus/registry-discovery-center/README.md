@@ -62,6 +62,14 @@ mvn -DjunitParallel=false test
 
 （macOS 建议关 JUnit 类并行，减轻 `kern.sysv.shmmni` 压力；测试使用 Zonky embedded-postgres。）
 
+联机发现过滤 / 降级冒烟见配套 example（本机 PG，无 Docker）：
+
+```bash
+cd ../../example/registry-discovery-center-demo/discovery-degrade
+DEGRADE_L1_YES=1 ./run-online.sh   # 过滤 + L1(切断 agent_rdc) + L2(Gateway)
+./run-online.sh --filter-only      # 只要过滤
+```
+
 ### 4. 生产覆盖
 
 ```bash
