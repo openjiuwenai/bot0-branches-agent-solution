@@ -48,7 +48,7 @@ async function health() {
 async function run(event) {
   event.preventDefault();
   resetView();
-  $('runButton').disabled = true;
+  setRunControlsDisabled(true);
   $('runStatus').textContent = 'STARTING';
   try {
     const result = await request('/api/run', {
@@ -62,7 +62,7 @@ async function run(event) {
   } catch (error) {
     $('runStatus').textContent = 'FAILED';
     renderDiagnostics([{ at: new Date().toISOString(), message: error.message }]);
-    $('runButton').disabled = false;
+    setRunControlsDisabled(false);
   }
 }
 
@@ -72,11 +72,11 @@ async function pollRun() {
     const value = await request(`/api/runs/${encodeURIComponent(state.runId)}`);
     renderRun(value);
     if (!['QUEUED', 'RUNNING'].includes(value.status)) {
-      clearInterval(state.timer); state.timer = null; $('runButton').disabled = false;
+      clearInterval(state.timer); state.timer = null; setRunControlsDisabled(false);
       await refreshWire();
     }
   } catch (error) {
-    clearInterval(state.timer); $('runButton').disabled = false;
+    clearInterval(state.timer); setRunControlsDisabled(false);
     renderDiagnostics([{ at: new Date().toISOString(), message: error.message }]);
   }
 }
@@ -162,6 +162,15 @@ function resetView() {
   $('snapshotJson').textContent = 'Waiting for completion.';
   $('recoveryContract').textContent = '-';
   renderDiagnostics([]); renderHistory([]); $('eventCount').textContent = '0';
+}
+
+function setRunControlsDisabled(disabled) {
+  ['runButton', 'runtimeUrl', 'scenario', 'input', 'continueInput'].forEach(id => $(id).disabled = disabled);
+  if (disabled) {
+    $('mode').disabled = true;
+  } else {
+    updateScenario();
+  }
 }
 
 function activateTab(button) {

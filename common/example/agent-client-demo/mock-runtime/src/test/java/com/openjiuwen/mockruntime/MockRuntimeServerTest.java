@@ -67,6 +67,30 @@ class MockRuntimeServerTest {
     }
 
     @Test
+    void blockingRecoveryStaysWorkingUntilGetTaskObservesTerminalState() throws Exception {
+        JsonNode accepted = post("""
+                {"jsonrpc":"2.0","id":"send","method":"SendMessage","params":{
+                  "message":{"contextId":"ctx-blocking","parts":[{"text":"hello"}]},
+                  "configuration":{"returnImmediately":false},
+                  "metadata":{"attributes":{"scenario":"blocking-gettask"}}
+                }}
+                """);
+        JsonNode task = accepted.path("result").path("task");
+        String taskId = task.path("id").asText();
+        assertEquals("TASK_STATE_WORKING", task.path("status").path("state").asText());
+
+        JsonNode working = post("""
+                {"jsonrpc":"2.0","id":"get-1","method":"GetTask","params":{"id":"%s"}}
+                """.formatted(taskId));
+        JsonNode completed = post("""
+                {"jsonrpc":"2.0","id":"get-2","method":"GetTask","params":{"id":"%s"}}
+                """.formatted(taskId));
+
+        assertEquals("TASK_STATE_WORKING", working.path("result").path("status").path("state").asText());
+        assertEquals("TASK_STATE_COMPLETED", completed.path("result").path("status").path("state").asText());
+    }
+
+    @Test
     void subscribeStartsWithSnapshotAndUsesRuntimeSseFormat() throws Exception {
         String stream = postText("""
                 {"jsonrpc":"2.0","id":"stream","method":"SendStreamingMessage","params":{

@@ -79,6 +79,17 @@ class RuntimeVerificationAppTest {
     }
 
     @Test
+    void blockingAndStreamingRecoveryVerifyTheirWireMethods() throws Exception {
+        JsonNode blocking = execute("blocking-gettask", "BLOCKING");
+        assertEquals("VERIFIED", blocking.path("status").asText(), blocking.toString());
+        assertTrue(blocking.path("diagnostics").toString().contains("GetTask observed"));
+
+        JsonNode streaming = execute("streaming-resubscribe", "STREAMING");
+        assertEquals("VERIFIED", streaming.path("status").asText(), streaming.toString());
+        assertTrue(streaming.path("diagnostics").toString().contains("SubscribeToTask observed"));
+    }
+
+    @Test
     void fiveLevelTreeAndClientToolScenariosAreActuallySelected() throws Exception {
         JsonNode tree = execute("nested-5", "STREAMING");
         assertEquals("COMPLETED", tree.path("status").asText());
