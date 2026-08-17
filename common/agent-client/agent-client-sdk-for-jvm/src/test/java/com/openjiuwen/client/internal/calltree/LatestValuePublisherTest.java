@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * LatestValuePublisher 单元测试。
  */
+class LatestValuePublisherTest {
     @Test
     void slowSubscriberReceivesOnlyLatestSnapshotOnNextDemand() {
         LatestValuePublisher<Integer> publisher = directPublisher();

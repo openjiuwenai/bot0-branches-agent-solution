@@ -28,6 +28,7 @@ import java.util.List;
 /**
  * MockRuntimeServer 单元测试。
  */
+class MockRuntimeServerTest {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private HttpServer server;

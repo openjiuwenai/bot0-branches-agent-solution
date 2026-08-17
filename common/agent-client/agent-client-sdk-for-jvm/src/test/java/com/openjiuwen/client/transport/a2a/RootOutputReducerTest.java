@@ -14,6 +14,7 @@ import java.util.Map;
 /**
  * RootOutputReducer 单元测试。
  */
+class RootOutputReducerTest {
     @Test
     void materializesReplaceAppendAndStableArtifactOrder() {
         RootOutputReducer reducer = new RootOutputReducer();

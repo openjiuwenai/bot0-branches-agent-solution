@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -82,6 +83,7 @@ public final class MockRuntimeServer {
      * @return HttpServer 实例
      * @throws IOException 启动失败时抛出
      */
+    public HttpServer startServer() throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
         server.setExecutor(new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
                 new LinkedBlockingQueue<>(), r -> {
@@ -112,8 +114,9 @@ public final class MockRuntimeServer {
         server.start();
         int boundPort = server.getAddress().getPort();
         if (LOG.isLoggable(Level.INFO)) {
-            LOG.info("Mock Runtime listening on http://127.0.0.1:{0}", boundPort);
-            LOG.info("A2A endpoint: http://127.0.0.1:{0}/a2a", boundPort);
+            LOG.log(Level.INFO, "Mock Runtime listening on http://127.0.0.1:{0}",
+                    Integer.toString(boundPort));
+            LOG.log(Level.INFO, "A2A endpoint: http://127.0.0.1:{0}/a2a", Integer.toString(boundPort));
         }
         return server;
     }

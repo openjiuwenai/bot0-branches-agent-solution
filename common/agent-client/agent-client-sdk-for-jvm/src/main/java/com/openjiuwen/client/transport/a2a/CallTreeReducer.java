@@ -440,7 +440,6 @@ final class CallTreeReducer implements AutoCloseable {
             } else {
                 // 其他 Part 类型不参与截断计算
             }
-            }
         }
         return new BoundedParts(List.copyOf(result), used, truncated);
     }

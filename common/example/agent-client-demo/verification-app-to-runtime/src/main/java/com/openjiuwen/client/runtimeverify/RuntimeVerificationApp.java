@@ -29,6 +29,7 @@ import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URLDecoder;
@@ -123,8 +124,8 @@ public final class RuntimeVerificationApp {
         RuntimeVerificationApp app = new RuntimeVerificationApp(port, runtime);
         app.start();
         if (LOG.isLoggable(Level.INFO)) {
-            LOG.info("Verification UI: http://127.0.0.1:{0}", port);
-            LOG.info("Default Runtime: {0}", runtime);
+            LOG.log(Level.INFO, "Verification UI: http://127.0.0.1:{0}", Integer.toString(port));
+            LOG.log(Level.INFO, "Default Runtime: {0}", runtime);
         }
         Thread.currentThread().join();
     }
@@ -245,7 +246,7 @@ public final class RuntimeVerificationApp {
         }
     }
 
-    private AgentClient setupClient(RunRecord run) {
+    private AgentClient setupClient(RunRecord run) throws IOException, InterruptedException {
         AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
                 .endpointUrl(run.request.runtimeUrl()).build();
         toolExecutions = new AtomicInteger();
@@ -270,7 +271,9 @@ public final class RuntimeVerificationApp {
 
     private InvocationSnapshot awaitInvocationCompletion(RunRecord run, AgentClient client,
             InvocationCall call, String conversationId,
-            CompletableFuture<InvocationEvent.InputRequired> inputRequired) throws Exception {
+            CompletableFuture<InvocationEvent.InputRequired> inputRequired)
+            throws InterruptedException, java.util.concurrent.ExecutionException,
+            java.util.concurrent.TimeoutException {
         if (run.request.mode() == InvocationMode.ASYNC) {
             call.accepted().toCompletableFuture().get(5, TimeUnit.SECONDS);
             InvocationSnapshot snapshot = queryAsyncUntilSettled(client, call, run, Duration.ofSeconds(20));
@@ -309,7 +312,8 @@ public final class RuntimeVerificationApp {
     }
 
     private static InvocationSnapshot queryAsyncUntilSettled(AgentClient client, InvocationCall call,
-            RunRecord run, Duration timeout) throws Exception {
+            RunRecord run, Duration timeout) throws InterruptedException,
+            java.util.concurrent.ExecutionException, java.util.concurrent.TimeoutException {
         long deadline = System.nanoTime() + timeout.toNanos();
         while (System.nanoTime() < deadline) {
             InvocationSnapshot snapshot = client.getInvocation(call.invocationRef())
@@ -323,7 +327,8 @@ public final class RuntimeVerificationApp {
         throw new IllegalStateException("ASYNC getInvocation observation timed out after " + timeout);
     }
 
-    private boolean configureMockScenario(String runtimeUrl, String contextId, String scenario) throws Exception {
+    private boolean configureMockScenario(String runtimeUrl, String contextId, String scenario)
+            throws IOException, InterruptedException {
         URI endpoint = URI.create(runtimeUrl.endsWith("/")
                 ? runtimeUrl + "admin/scenario" : runtimeUrl + "/admin/scenario");
         String body = JSON.writeValueAsString(Map.of("contextId", contextId, "scenario", scenario));

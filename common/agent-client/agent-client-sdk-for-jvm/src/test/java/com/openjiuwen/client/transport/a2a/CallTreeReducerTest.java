@@ -23,6 +23,7 @@ import java.util.List;
 /**
  * CallTreeReducer 单元测试。
  */
+class CallTreeReducerTest {
     @Test
     void replaysOutputAndChildEdgeWhenParentsArriveLater() {
         CallTreeReducer reducer = new CallTreeReducer(InvocationMode.STREAMING);

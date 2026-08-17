@@ -26,6 +26,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * RuntimeVerificationApp 单元测试。
  */
+class RuntimeVerificationAppTest {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
 
@@ -120,7 +121,7 @@ import java.util.concurrent.CompletableFuture;
     private JsonNode uncheckedExecute(String scenario, String mode) {
         try {
             return execute(scenario, mode);
-        } catch (IOException | InterruptedException error) {
+        } catch (Exception error) {
             throw new java.util.concurrent.CompletionException(error);
         }
     }

@@ -21,6 +21,7 @@ import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.api.InvocationRequest;
 import com.openjiuwen.client.api.InvocationSnapshot;
 import com.openjiuwen.client.api.calltree.Completeness;
+import com.openjiuwen.client.api.calltree.PartSnapshot;
 import com.openjiuwen.client.api.calltree.SpeakingPhase;
 import com.openjiuwen.client.transport.spi.CredentialProvider;
 import com.openjiuwen.client.transport.spi.TransportProvider;
@@ -46,6 +47,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Endpoint 与 CallTree 集成测试。
  */
+class EndpointAndCallTreeTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Test
@@ -530,5 +532,6 @@ import java.util.concurrent.atomic.AtomicInteger;
      * @param exchange HTTP 交换
      * @throws IOException 处理失败时抛出
      */
+        void handle(HttpExchange exchange) throws IOException;
     }
 }
