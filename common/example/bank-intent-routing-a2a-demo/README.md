@@ -120,7 +120,8 @@ cd /path/to/agent-solution/common/example/bank-intent-routing-a2a-demo
 
 ### 1. 构建跨仓依赖和示例
 
-先在 `agent-runtime-java` 仓安装当前 Runtime：
+构建前请确认 `agent-core-java`、`agent-runtime-java` 和 `agent-solution` 使用相互配套的版本。
+先在 `agent-runtime-java` 仓安装当前配套 Runtime：
 
 ```bash
 cd /path/to/agent-runtime-java
