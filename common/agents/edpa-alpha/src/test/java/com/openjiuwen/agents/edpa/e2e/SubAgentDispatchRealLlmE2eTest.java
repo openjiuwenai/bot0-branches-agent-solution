@@ -383,7 +383,7 @@ class SubAgentDispatchRealLlmE2eTest {
                 // turn — pro+thinking hit this 3/3 on the sub-agent prompt in the 2026-08-16
                 // matrix; the 2026-08-17 rerun confirmed stable). One retry before failing.
                 if (text.isBlank()) {
-                    LOG.warning("[subagent-e2e] content-empty sub-agent terminal — retrying once");
+                    LOG.warning("[subagent-e2e] content-empty sub-agent terminal, retrying once");
                     res = subAgent.invoke(subGoal, null);
                     text = extractOutput(res);
                 }

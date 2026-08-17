@@ -13,7 +13,7 @@ import com.openjiuwen.agents.edpa.explore.Explorer;
 import com.openjiuwen.agents.edpa.explore.LlmExplorer;
 import com.openjiuwen.agents.edpa.util.LlmResponseExtractor;
 import com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel;
-import com.openjiuwen.agents.reactrails.verification.CriteriaReplanBridgeRail;
+import com.openjiuwen.agents.reactrails.observability.ObservingRail;
 import com.openjiuwen.agents.reactrails.verification.RuleBasedCriteriaVerifier;
 import com.openjiuwen.core.foundation.llm.model_clients.DefaultModelClientFactories;
 import com.openjiuwen.core.foundation.llm.schema.ModelClientConfig;
@@ -361,7 +361,7 @@ class FullEdpaMatrixRealLlmE2eTest {
         r.put("exploreCount", exploreCount.get());
         r.put("toolCalls", toolCalls.get());
         r.put("convergenceTrigger", -1); // 状态隔离后 invoke 不可读 (RailInvocationState per-invocation)
-        r.put("verified", result instanceof Map<?, ?> rm ? rm.get(com.openjiuwen.agents.reactrails.observability.ObservingRail.VERIFIED_KEY) : null);
+        r.put("verified", result instanceof Map<?, ?> rm ? rm.get(ObservingRail.VERIFIED_KEY) : null);
         r.put("outputLen", output.length());
         r.put("status", output.isBlank() ? "empty" : "completed");
     }

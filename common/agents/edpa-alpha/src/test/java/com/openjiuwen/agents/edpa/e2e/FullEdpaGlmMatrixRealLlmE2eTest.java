@@ -13,7 +13,7 @@ import com.openjiuwen.agents.edpa.explore.Explorer;
 import com.openjiuwen.agents.edpa.explore.LlmExplorer;
 import com.openjiuwen.agents.edpa.util.LlmResponseExtractor;
 import com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel;
-import com.openjiuwen.agents.reactrails.verification.CriteriaReplanBridgeRail;
+import com.openjiuwen.agents.reactrails.observability.ObservingRail;
 import com.openjiuwen.agents.reactrails.verification.RuleBasedCriteriaVerifier;
 import com.openjiuwen.core.foundation.llm.model_clients.DefaultModelClientFactories;
 import com.openjiuwen.core.foundation.llm.schema.ModelClientConfig;
@@ -322,7 +322,7 @@ class FullEdpaGlmMatrixRealLlmE2eTest {
 
         Object result = agent.invoke(TASK, null);
         String output = extractOutput(result);
-        Object verified = result instanceof Map<?, ?> rm ? rm.get(com.openjiuwen.agents.reactrails.observability.ObservingRail.VERIFIED_KEY) : null;
+        Object verified = result instanceof Map<?, ?> rm ? rm.get(ObservingRail.VERIFIED_KEY) : null;
         return new ConfigRunOutcome(exploreCount.get(), toolCalls.get(), verified, output);
     }
 
