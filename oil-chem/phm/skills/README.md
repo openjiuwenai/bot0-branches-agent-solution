@@ -1,12 +1,6 @@
-# 流程工业智能化场景 · Skill 资产（Skills）
+# 设备智能化运维场景 · Skill 资产（Skills）
 
-本目录沉淀 smart-process（流程工业智能化）场景的 Skill，即可被 Agent 直接调用的业务级操作单元。
-
-## 已有 Skill
-
-| 子目录 | 说明 |
-| --- | --- |
-| crude-assay-import/ | 原油评价数据导入 crude_qa 库（xls/xlsx 解析、数据入库） |
+本目录沉淀 phm（设备智能化运维）场景的 Skill，即可被 Agent 直接调用的业务级操作单元。
 
 ## 定位
 
@@ -16,7 +10,7 @@
 
 ## 目录约定
 
-- 一个 Skill 一个子目录，命名为动宾结构
+- 一个 Skill 一个子目录，命名为动宾结构（如 `inspect-xxx`、`diagnose-xxx`）
 - 子目录内包含 SKILL.md、提示词与所需资源文件
 
 ## 贡献说明

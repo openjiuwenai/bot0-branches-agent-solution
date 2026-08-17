@@ -1,26 +1,18 @@
-# skills — 油矿精品 Skill
+# workshop · Skill 资产（Skills）
 
-本目录用于存放 **油矿行业 Agent 解决方案** 的精品 Skill（面向 Agent 的可执行能力）资产。
+本目录沉淀 workshop 方向的 Skill，即可被 Agent 直接调用的业务级操作单元。
 
-## 目录定位
+## 定位
 
-`skills` 聚焦「会什么、做什么」——封装面向 Agent 的可执行能力，供 openjiuwen 等低码平台的 Agent 调用。
+- 上游依赖：methodology 方法论、mcp/ 服务与 tools/ 原子能力
+- 下游消费：Agent 编排与上层业务系统
+- 职责：以 Skill 形式封装业务操作，供 Agent 按需调用
 
 ## 目录约定
 
-每个 Skill 建议以独立子目录组织，典型结构如下：
-
-```
-<skill-name>/
-├── SKILL.md           # Skill 定义（能力说明、触发条件与使用方式）
-├── ...                # 实现脚本、参考资源等
-```
+- 一个 Skill 一个子目录，命名为动宾结构（如 `inspect-xxx`、`optimize-xxx`）
+- 子目录内包含 SKILL.md、提示词与所需资源文件
 
 ## 贡献说明
 
-新增或更新 Skill 时，请确保：
-
-1. 说明能力边界、输入输出约定与依赖
-2. 明确调用条件、参数与错误处理约定
-3. 不提交密钥、证书等敏感信息；敏感配置使用环境变量或密钥管理
-4. 遵循仓库 [贡献指南](../../../CONTRIBUTING.md) 提交 PR
+新增或修改 Skill 请遵循仓库根目录 [CONTRIBUTING.md](../../../CONTRIBUTING.md) 中的资产评审流程。

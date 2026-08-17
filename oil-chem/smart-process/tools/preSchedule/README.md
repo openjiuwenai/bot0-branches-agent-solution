@@ -32,7 +32,7 @@ generate_benders_cuts：缺口 → 割平面（上界割）
 ## 2. 目录结构
 
 ```
-mcp/crude_run_planner/
+preSchedule/
 ├── crude_run_planner.py      # 核心：Excel 读取 + CP-SAT 排程 + 罐物流仿真 + 评分 + 回填（单文件）
 ├── api_server.py             # FastAPI 服务，把排产包成 HTTP 接口（:8100）
 ├── requirements.txt          # Python 依赖
@@ -40,9 +40,10 @@ mcp/crude_run_planner/
 ├── web/                      # Next.js 前端（:3100）
 │   ├── next.config.js        #   rewrites /api/:path* → 127.0.0.1:8100
 │   └── src/app/              #   总览 / 参数输入 / Phase0 / 甘特图 / 罐网格 / 达标对比
-├── logs/                     # 运行日志与 pid（gitignore）
-└── 原油加工月计划模板_*月规划部.xlsx   # 输入模板
+└── logs/                     # 运行日志与 pid（gitignore）
 ```
+
+输入用的规划部月度计划模板（`原油加工月计划模板_*月规划部.xlsx`）未随仓库入库，需自备后放在模块根目录；格式说明见第 7 节。
 
 ---
 
@@ -75,7 +76,7 @@ mcp/crude_run_planner/
 ## 4. 安装
 
 ```bash
-cd crude_run_planner
+cd preSchedule
 
 # ① Python 环境
 python3 -m venv .venv
@@ -183,7 +184,7 @@ cd web && npm run dev -- -H 0.0.0.0
 正常。阶梯 4 档 × 多种子 × 每轮 Benders 最多 8 次迭代，单轮时限由模板 `单轮求解时限(秒)` 控制（默认 240）。前端「运行排产」弹窗可实时看日志判断进度。
 
 **结果 xlsx 找不到**
-输出落在模块根目录，`_1` 为评分最优。两种入口的命名不同：
+输出落在模块根目录，文件名形如 `原油加工月计划_预排产结果_benders_*_{序号}.xlsx`，`_1` 为评分最优；Web 界面也可在排产完成后直接下载。
 
 **`stop.sh` 停不掉**
 优先按 `logs/*.pid` 停，无 pid 文件时按进程命令行模式兜底。若 pid 文件残留了失败进程的旧 PID，删掉 `logs/*.pid` 后重试。

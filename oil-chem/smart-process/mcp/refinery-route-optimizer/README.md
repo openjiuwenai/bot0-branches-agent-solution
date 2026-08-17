@@ -1,4 +1,4 @@
-# refinery-route-optimizer MCP Server
+# 炼厂路径收率优化 MCP 服务（refinery-route-optimizer）
 
 > 炼厂加工路线优化器 —— 给定原油原料属性(PONA/密度/硫含量等),
 > 预测各装置产品收率、对比三条加工路线(柴油加氢 / 蜡油加氢裂化 / DCC)的效益并推荐最优。
@@ -140,10 +140,12 @@ python server.py --transport stdio
 
 | 环境变量 | 默认值 | 说明 |
 |---|---|---|
-| `MCP_TOKEN` | (空) | Bearer Token 鉴权码;不配则 HTTP 不鉴权(仅本地调试) |
+| `MCP_TOKEN` | (空) | Bearer Token 鉴权码;`server.py` 层面不配则 HTTP 不鉴权(仅本地调试) |
 | `MCP_DATA_DIR` | `./data` | 配置文件目录;可指向自定义路径 |
 | `PORT` / `HOST` | 7489 / 0.0.0.0 | 启动脚本读取的端口/地址 |
 
+> 注意:`start.sh` / `start.bat` 在 `MCP_TOKEN` 未设置时会注入默认值 `refinery-route-optimizer-token`,即通过脚本启动时鉴权始终开启;生产部署务必改成自己的 token。
+>
 > 命令行参数优先级高于环境变量:`python server.py --port 8000 --host 127.0.0.1`
 
 ## 目录结构
@@ -218,7 +220,6 @@ asyncio.run(main())
 
 ## 备注
 
-- 计算逻辑与慧炼主项目 `backend/app/services/` 完全一致,本目录为独立可交付副本。
 - 收率模型为线性关联式 `yield = base + P·cP + O·cO + N·cN + A·cA + density·cD + sulfur·cS`,
   系数按装置类型分三套。
 - 本服务**不依赖数据库、不依赖 LLM、不依赖外部服务**,单进程纯计算,适合容器化部署。

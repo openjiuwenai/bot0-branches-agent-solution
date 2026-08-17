@@ -1,4 +1,4 @@
-# 原油评价智能体 & 工作流 — 使用说明
+# 原油评价智能体与工作流使用说明（crudeAgent）
 
 > 本文档介绍 openjiuwen agent-studio 平台上的一组原油评价智能体与工作流，帮助导入者快速上手。
 
@@ -35,7 +35,7 @@ psql -U postgres -c "CREATE DATABASE crude_qa OWNER crude_qa;"
 
 所有表以 `(crude_name, sample_date, sample_point)` 三元组为逻辑主键。
 
-建表 SQL 见 [crude_qa_init.sql](crude_qa_init.sql)（如有），或参考 skill `crude-assay-import` 中的 `references/db_schema.md`。
+建表 SQL 与入库策略见 skill `crude-assay-import` 的 [references/db_schema.md](../../skills/crude-assay-import/references/db_schema.md)。
 
 ### 2. 模型配置
 
@@ -173,12 +173,13 @@ curl -X POST "$PLATFORM/v1/0/agent-manager/agents/import?workspace_id=$WORKSPACE
 
 ## 数据导入示例
 
-如果数据库为空，可使用 `crude-assay-import` skill 快速导入示例数据：
+如果数据库为空，可使用 [`crude-assay-import` skill](../../skills/crude-assay-import/SKILL.md) 快速导入示例数据：
 
-```
-# 在 agent-runtime 环境中执行
+```bash
+# 在 agent-runtime 环境中执行（路径相对仓库 oil-chem 目录）
 export DATABASE_URL="postgresql://crude_qa:crude_qa2026@localhost:5432/crude_qa"
-python crude_assay_import.py 示例原油评价报告.xls --import-pg
+python smart-process/skills/crude-assay-import/scripts/crude_assay_import.py \
+  smart-process/skills/crude-assay-import/assets/示例原油评价报告.xls --import-pg
 ```
 
 或通过平台「原油评价数据维护」工作流上传 Excel 导入。
@@ -224,5 +225,5 @@ text_description  (id, crude_name, sample_date, sample_point, section_num, secti
 
 | 资源 | 说明 |
 |------|------|
-| `crude-assay-import` skill | 原油评价报告解析脚本，可独立用于数据导入和格式校验 |
-| PostgreSQL `crude_qa` 数据库 | 14 张表（6 张实写 + 8 张预留），存储全部原油评价数据 |
+| [`crude-assay-import` skill](../../skills/crude-assay-import/SKILL.md) | 原油评价报告解析脚本，可独立用于数据导入和格式校验 |
+| PostgreSQL `crude_qa` 数据库 | 6 张表（结构见 skill 的 db_schema.md），存储全部原油评价数据 |
