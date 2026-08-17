@@ -23,12 +23,13 @@ import java.util.Map;
 /** Tests model prompt and intent Tool injection. */
 class IntentPromptRailTest {
     @Test
-    void restoresIntentToolAndAddsOneRequestSystemMessage() {
+    void restoresIntentToolAndMergesIntoTheExistingSystemMessage() {
         ToolCard card = ToolCard.builder().id("intent_match").name("intent_match").description("route")
                 .inputParams(Map.of()).build();
         IntentPromptRail rail = new IntentPromptRail(card, "route every request");
         ToolInfo other = ToolInfo.builder().name("other").description("other").parameters(Map.of()).build();
-        List<Object> originalMessages = new ArrayList<>(List.of(new UserMessage("hello")));
+        List<Object> originalMessages = new ArrayList<>(
+                List.of(new SystemMessage("base prompt"), new UserMessage("hello")));
         ModelCallInputs inputs = ModelCallInputs.builder().tools(new ArrayList<>(List.of(other)))
                 .messages(originalMessages).build();
         AgentCallbackContext callback = AgentCallbackContext.builder().inputs(inputs).build();
@@ -40,11 +41,12 @@ class IntentPromptRailTest {
         assertThat(inputs.getMessages()).hasSize(2);
         assertThat(inputs.getMessages().stream().filter(BaseMessage.class::isInstance).map(BaseMessage.class::cast)
                 .filter(message -> IntentPromptRail.PROMPT_NAME.equals(message.getName()))).hasSize(1);
-        assertThat(originalMessages).hasSize(1);
-        if (!(inputs.getMessages().get(1) instanceof SystemMessage prompt)) {
+        assertThat(originalMessages).hasSize(2);
+        if (!(inputs.getMessages().get(0) instanceof SystemMessage prompt)) {
             throw new AssertionError("expected intent system prompt");
         }
-        assertThat(prompt.getContentAsString()).isEqualTo("route every request");
+        assertThat(prompt.getContentAsString()).isEqualTo("base prompt\n\nroute every request");
+        assertThat(inputs.getMessages().stream().filter(SystemMessage.class::isInstance)).hasSize(1);
     }
 
     @Test
@@ -63,5 +65,20 @@ class IntentPromptRailTest {
         assertThat(inputs.getTools()).hasSize(1);
         assertThat(inputs.getTools().get(0).getDescription()).isEqualTo("existing");
         assertThat(inputs.getMessages()).containsExactly(existingPrompt);
+    }
+
+    @Test
+    void insertsOneSystemMessageAtTheBeginningWhenNoSystemMessageExists() {
+        ToolCard card = ToolCard.builder().id("intent_match").name("intent_match").description("route")
+                .inputParams(Map.of()).build();
+        IntentPromptRail rail = new IntentPromptRail(card, "route every request");
+        ModelCallInputs inputs = ModelCallInputs.builder().tools(new ArrayList<>())
+                .messages(new ArrayList<>(List.of(new UserMessage("hello")))).build();
+
+        rail.beforeModelCall(AgentCallbackContext.builder().inputs(inputs).build());
+
+        assertThat(inputs.getMessages()).hasSize(2);
+        assertThat(inputs.getMessages().get(0)).isInstanceOf(SystemMessage.class);
+        assertThat(inputs.getMessages().get(1)).isInstanceOf(UserMessage.class);
     }
 }

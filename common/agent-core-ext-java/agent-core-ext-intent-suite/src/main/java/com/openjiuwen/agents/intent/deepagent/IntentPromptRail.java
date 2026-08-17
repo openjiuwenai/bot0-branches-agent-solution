@@ -4,7 +4,6 @@
 
 package com.openjiuwen.agents.intent.deepagent;
 
-import com.openjiuwen.core.foundation.llm.schema.BaseMessage;
 import com.openjiuwen.core.foundation.llm.schema.SystemMessage;
 import com.openjiuwen.core.foundation.tool.ToolCard;
 import com.openjiuwen.core.foundation.tool.schema.ToolInfo;
@@ -19,12 +18,13 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Keeps the intent Tool visible and appends routing instructions to each model request.
+ * Keeps the intent Tool visible and merges routing instructions into the request's
+ * first system message.
  *
  * @since 0.1.0
  */
 public final class IntentPromptRail extends AgentRail {
-    /** Name used to deduplicate the request-only system message. */
+    /** Name used to identify the request-only intent prompt. */
     public static final String PROMPT_NAME = "intent-routing";
 
     /** Runs after the high-priority Tool filtering Rails. */
@@ -65,9 +65,7 @@ public final class IntentPromptRail extends AgentRail {
         List<Object> messages = inputs.getMessages() == null
                 ? new ArrayList<>()
                 : new ArrayList<>(inputs.getMessages());
-        if (!containsPrompt(messages)) {
-            messages.add(new SystemMessage(routingInstructions, PROMPT_NAME));
-        }
+        mergeRoutingPrompt(messages);
         inputs.setMessages(messages);
     }
 
@@ -84,8 +82,22 @@ public final class IntentPromptRail extends AgentRail {
         return tools.stream().anyMatch(tool -> name.equals(tool.getName()));
     }
 
-    private static boolean containsPrompt(List<Object> messages) {
-        return messages.stream().filter(BaseMessage.class::isInstance).map(BaseMessage.class::cast)
-                .anyMatch(message -> "system".equals(message.getRole()) && PROMPT_NAME.equals(message.getName()));
+    private void mergeRoutingPrompt(List<Object> messages) {
+        for (int index = 0; index < messages.size(); index++) {
+            Object value = messages.get(index);
+            if (!(value instanceof SystemMessage systemMessage)) {
+                continue;
+            }
+            if (PROMPT_NAME.equals(systemMessage.getName())) {
+                return;
+            }
+            String existing = systemMessage.getContentAsString();
+            String merged = existing == null || existing.isBlank()
+                    ? routingInstructions
+                    : existing + "\n\n" + routingInstructions;
+            messages.set(index, new SystemMessage(merged, PROMPT_NAME));
+            return;
+        }
+        messages.add(0, new SystemMessage(routingInstructions, PROMPT_NAME));
     }
 }
