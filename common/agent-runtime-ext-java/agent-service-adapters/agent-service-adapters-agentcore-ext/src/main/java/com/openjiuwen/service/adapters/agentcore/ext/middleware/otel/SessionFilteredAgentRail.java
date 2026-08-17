@@ -9,9 +9,11 @@ import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.AgentRail;
 import com.openjiuwen.extensions.tracerotel.OtelRail;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.egress.EgressContextStash;
+
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -115,9 +117,9 @@ public class SessionFilteredAgentRail extends AgentRail {
                 return;
             }
             action.run();
-        // 故障隔离：覆盖 OTel/Jackson 常见运行时异常，rail 失效不阻断 agent 执行
         } catch (IllegalStateException | IllegalArgumentException | NullPointerException
                 | ClassCastException | UnsupportedOperationException e) {
+            // 故障隔离：覆盖 OTel/Jackson 常见运行时异常，rail 失效不阻断 agent 执行
             LOGGER.warn("otel rail delegation failed: {}", e.getClass().getSimpleName());
         }
     }

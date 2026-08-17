@@ -9,7 +9,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.session.tracer.TraceAgentSpan;
 import com.openjiuwen.extensions.tracerotel.OtelAgentHandler;
 import com.openjiuwen.extensions.tracerotel.OtelTracerConfig;
+
 import io.opentelemetry.api.trace.Tracer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

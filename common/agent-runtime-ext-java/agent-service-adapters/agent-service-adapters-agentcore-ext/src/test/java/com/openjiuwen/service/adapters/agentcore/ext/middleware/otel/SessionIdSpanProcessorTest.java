@@ -85,7 +85,9 @@ class SessionIdSpanProcessorTest {
                 .addSpanProcessor(SimpleSpanProcessor.create(InMemorySpanExporter.create()))
                 .build();
         io.opentelemetry.api.trace.Span started = provider.get("t").spanBuilder("x").startSpan();
-        assertThat(started).isInstanceOf(ReadWriteSpan.class);
+        if (!(started instanceof ReadWriteSpan)) {
+            throw new AssertionError("unexpected span implementation: " + started.getClass());
+        }
         ReadWriteSpan span = (ReadWriteSpan) started;
         assertThat(span.getAttribute(AttributeKey.stringKey("session.id"))).isEqualTo("conv-2");
         span.end();

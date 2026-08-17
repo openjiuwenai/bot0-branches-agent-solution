@@ -7,7 +7,9 @@ package com.openjiuwen.service.adapters.agentcore.ext.middleware.otel;
 import com.openjiuwen.core.singleagent.BaseAgent;
 import com.openjiuwen.extensions.tracerotel.OtelRail;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
+
 import io.opentelemetry.api.trace.Span;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

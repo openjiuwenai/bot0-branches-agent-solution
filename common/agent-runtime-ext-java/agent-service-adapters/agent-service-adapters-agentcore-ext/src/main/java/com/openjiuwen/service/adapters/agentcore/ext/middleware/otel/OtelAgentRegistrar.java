@@ -6,7 +6,9 @@ package com.openjiuwen.service.adapters.agentcore.ext.middleware.otel;
 
 import com.openjiuwen.core.session.tracer.TracerHandlerRegistry;
 import com.openjiuwen.extensions.tracerotel.OtelTracerConfig;
+
 import io.opentelemetry.api.trace.Tracer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +32,9 @@ public final class OtelAgentRegistrar {
         this.config = config;
     }
 
+    /**
+     * Registers (or re-registers) the JSON handler; failures are logged, never thrown.
+     */
     public void register() {
         try {
             if (TracerHandlerRegistry.getAgentHandlers().containsKey(HANDLER_NAME)) {

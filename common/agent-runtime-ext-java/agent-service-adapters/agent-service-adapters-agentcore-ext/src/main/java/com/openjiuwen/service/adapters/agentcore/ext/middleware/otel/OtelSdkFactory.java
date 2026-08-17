@@ -5,6 +5,7 @@
 package com.openjiuwen.service.adapters.agentcore.ext.middleware.otel;
 
 import com.openjiuwen.extensions.tracerotel.OtelTracerConfig;
+
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.sdk.resources.Resource;

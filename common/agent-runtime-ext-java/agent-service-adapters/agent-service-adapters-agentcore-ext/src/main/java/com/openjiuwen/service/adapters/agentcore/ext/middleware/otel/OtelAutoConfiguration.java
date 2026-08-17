@@ -7,16 +7,18 @@ package com.openjiuwen.service.adapters.agentcore.ext.middleware.otel;
 import com.openjiuwen.extensions.tracerotel.OtelTracerConfig;
 import com.openjiuwen.extensions.tracerotel.OtelTracerSetup;
 import com.openjiuwen.service.adapters.agentcore.autoconfigure.AgentCoreAdaptersAutoConfiguration;
-import com.openjiuwen.service.adapters.agentcore.external.AgentCoreRemoteClientDecoratorFactory;
-import com.openjiuwen.service.adapters.agentcore.external.ExternalSvcAdapterRegistrar;
-import com.openjiuwen.service.adapters.agentcore.middleware.MiddlewareAdapterRegistrar;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.egress.OtelRemoteAgentCallerPostProcessor;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.egress.OtelRemoteClientDecoratorFactory;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.http.HttpRequestSpanFilter;
+import com.openjiuwen.service.adapters.agentcore.external.AgentCoreRemoteClientDecoratorFactory;
+import com.openjiuwen.service.adapters.agentcore.external.ExternalSvcAdapterRegistrar;
+import com.openjiuwen.service.adapters.agentcore.middleware.MiddlewareAdapterRegistrar;
 import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentCardRegistry;
 import com.openjiuwen.service.spec.spi.AgentHandler;
+
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.export.SpanExporter;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;

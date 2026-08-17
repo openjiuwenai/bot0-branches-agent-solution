@@ -4,9 +4,10 @@
 
 package com.openjiuwen.service.adapters.agentcore.ext.middleware.otel;
 
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
 import java.time.Duration;
 import java.util.Map;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  * Spring 配置风格的 OTel 轨迹配置（{@code openjiuwen.service.otel.*}）。所有项均可选：
@@ -46,92 +47,166 @@ public class OtelTrajectoryProperties {
 
     // ── getters ─────────────────────────────────────────────
 
+    /**
+     * 获取总开关（是否启用轨迹上报）。
+     *
+     * @return 总开关（是否启用轨迹上报）
+     */
     public boolean isEnabled() {
         return enabled;
     }
 
-
+    /**
+     * 获取OTLP 端点。
+     *
+     * @return OTLP 端点
+     */
     public String getEndpoint() {
         return endpoint;
     }
 
-
+    /**
+     * 获取导出协议。
+     *
+     * @return 导出协议
+     */
     public String getProtocol() {
         return protocol;
     }
 
-
+    /**
+     * 获取导出请求头。
+     *
+     * @return 导出请求头
+     */
     public Map<String, String> getHeaders() {
         return headers;
     }
 
-
+    /**
+     * 获取导出超时。
+     *
+     * @return 导出超时
+     */
     public Duration getTimeout() {
         return timeout;
     }
 
-
+    /**
+     * 获取service.name。
+     *
+     * @return service.name
+     */
     public String getServiceName() {
         return serviceName;
     }
 
-
+    /**
+     * 获取service.version。
+     *
+     * @return service.version
+     */
     public String getServiceVersion() {
         return serviceVersion;
     }
 
-
+    /**
+     * 获取service.instance.id。
+     *
+     * @return service.instance.id
+     */
     public String getServiceInstanceId() {
         return serviceInstanceId;
     }
 
-
+    /**
+     * 获取采样率。
+     *
+     * @return 采样率
+     */
     public Double getSampleRate() {
         return sampleRate;
     }
 
     // ── setters ─────────────────────────────────────────────
 
+    /**
+     * 设置总开关（是否启用轨迹上报）。
+     *
+     * @param enabled 总开关（是否启用轨迹上报）
+     */
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
     }
 
-
+    /**
+     * 设置OTLP 端点。
+     *
+     * @param endpoint OTLP 端点
+     */
     public void setEndpoint(String endpoint) {
         this.endpoint = endpoint;
     }
 
-
+    /**
+     * 设置导出协议。
+     *
+     * @param protocol 导出协议
+     */
     public void setProtocol(String protocol) {
         this.protocol = protocol;
     }
 
-
+    /**
+     * 设置导出请求头。
+     *
+     * @param headers 导出请求头
+     */
     public void setHeaders(Map<String, String> headers) {
         this.headers = headers;
     }
 
-
+    /**
+     * 设置导出超时。
+     *
+     * @param timeout 导出超时
+     */
     public void setTimeout(Duration timeout) {
         this.timeout = timeout;
     }
 
-
+    /**
+     * 设置service.name。
+     *
+     * @param serviceName service.name
+     */
     public void setServiceName(String serviceName) {
         this.serviceName = serviceName;
     }
 
-
+    /**
+     * 设置service.version。
+     *
+     * @param serviceVersion service.version
+     */
     public void setServiceVersion(String serviceVersion) {
         this.serviceVersion = serviceVersion;
     }
 
-
+    /**
+     * 设置service.instance.id。
+     *
+     * @param serviceInstanceId service.instance.id
+     */
     public void setServiceInstanceId(String serviceInstanceId) {
         this.serviceInstanceId = serviceInstanceId;
     }
 
-
+    /**
+     * 设置采样率。
+     *
+     * @param sampleRate 采样率
+     */
     public void setSampleRate(Double sampleRate) {
         this.sampleRate = sampleRate;
     }
