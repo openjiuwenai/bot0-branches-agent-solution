@@ -181,11 +181,7 @@ class MockRuntimeServerTest {
                     try {
                         return JSON.readTree(line.substring("data:".length()));
                     } catch (JsonProcessingException error) {
-                        try {
-                            return JSON.readTree(line.substring("data:".length()));
-                        } catch (IOException e) {
-                            throw new IllegalArgumentException(e);
-                        }
+                        throw new IllegalArgumentException(error);
                     }
                 })
                 .toList();

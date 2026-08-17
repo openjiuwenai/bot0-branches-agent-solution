@@ -264,7 +264,8 @@ public final class RuntimeVerificationApp {
     }
 
     private static InvocationSnapshot queryAsyncUntilSettled(AgentClient client, InvocationCall call,
-            RunRecord run, Duration timeout) throws Exception {
+            RunRecord run, Duration timeout) throws InterruptedException,
+            java.util.concurrent.ExecutionException, java.util.concurrent.TimeoutException {
         long deadline = System.nanoTime() + timeout.toNanos();
         while (System.nanoTime() < deadline) {
             InvocationSnapshot snapshot = client.getInvocation(call.invocationRef())
@@ -278,7 +279,8 @@ public final class RuntimeVerificationApp {
         throw new IllegalStateException("ASYNC getInvocation observation timed out after " + timeout);
     }
 
-    private boolean configureMockScenario(String runtimeUrl, String contextId, String scenario) throws Exception {
+    private boolean configureMockScenario(String runtimeUrl, String contextId, String scenario)
+            throws IOException, InterruptedException {
         URI endpoint = URI.create(runtimeUrl.endsWith("/")
                 ? runtimeUrl + "admin/scenario" : runtimeUrl + "/admin/scenario");
         String body = JSON.writeValueAsString(Map.of("contextId", contextId, "scenario", scenario));
@@ -410,7 +412,8 @@ public final class RuntimeVerificationApp {
 
     private static SnapshotResult resolveScenarioSnapshot(RunRecord run, AgentClient client,
             InvocationCall call, String conversationId,
-            CompletableFuture<InvocationEvent.InputRequired> inputRequired) throws Exception {
+            CompletableFuture<InvocationEvent.InputRequired> inputRequired) throws InterruptedException,
+            java.util.concurrent.ExecutionException, java.util.concurrent.TimeoutException {
         InvocationSnapshot snapshot;
         boolean observedIncompleteInput = false;
         if (run.request.mode() == InvocationMode.ASYNC) {

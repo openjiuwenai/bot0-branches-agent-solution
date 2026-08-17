@@ -202,7 +202,6 @@ public final class MockRuntimeServer {
             task.state = "TASK_STATE_COMPLETED";
         } else {
             // Resume of existing task or waiting for input — state stays as-is.
-            return;
         }
         jsonRpcWrappedTaskResult(exchange, request.path("id").asText(), task.taskNode());
     }
@@ -669,7 +668,6 @@ public final class MockRuntimeServer {
                                 Map.of("text", "hello from Runtime"))));
             } else {
                 // No interrupt for other scenarios.
-                return;
             }
             ArrayNode artifacts = task.putArray("artifacts");
             String artifactId = "streaming-resubscribe".equals(scenario) || "recovery-circuit".equals(scenario)

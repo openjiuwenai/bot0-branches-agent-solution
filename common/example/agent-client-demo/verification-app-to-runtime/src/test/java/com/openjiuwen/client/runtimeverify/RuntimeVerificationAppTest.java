@@ -131,7 +131,7 @@ class RuntimeVerificationAppTest {
         }
     }
 
-    private JsonNode execute(String scenario, String mode) throws Exception {
+    private JsonNode execute(String scenario, String mode) throws IOException, InterruptedException {
         String request = JSON.writeValueAsString(java.util.Map.of("runtimeUrl", runtimeUrl,
                 "scenario", scenario, "mode", mode, "input", "verify"));
         JsonNode accepted = JSON.readTree(HTTP.send(HttpRequest.newBuilder(URI.create(appUrl + "/api/run"))
@@ -154,7 +154,7 @@ class RuntimeVerificationAppTest {
         throw new AssertionError("run did not finish: " + run);
     }
 
-    private JsonNode runtimeRequests() throws Exception {
+    private JsonNode runtimeRequests() throws IOException, InterruptedException {
         return JSON.readTree(HTTP.send(HttpRequest.newBuilder(
                 URI.create(runtimeUrl + "/admin/requests?after=0")).GET().build(),
                 HttpResponse.BodyHandlers.ofString()).body());
