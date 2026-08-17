@@ -40,14 +40,14 @@ def atomic_write_bytes(path: Path, payload: bytes) -> None:
                 stream.write(payload)
                 stream.flush()
                 os.fsync(stream.fileno())
-        except BaseException:
+        except BaseException as exc:
             # If os.fdopen raised before taking ownership of the descriptor,
             # the raw fd is still open and must be closed. When fdopen
             # succeeded the `with` already closed it, and this os.close is a
             # swallowed no-op.
             with suppress(OSError):
                 os.close(descriptor)
-            raise
+            raise exc
         os.replace(temporary, path)
         temporary = None
         # Best-effort directory fsync so rename is durable on POSIX. Windows (and

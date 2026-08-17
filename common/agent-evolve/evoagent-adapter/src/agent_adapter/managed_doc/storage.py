@@ -99,7 +99,8 @@ class DocStorage:
 
     def write_file_atomic(self, content: str) -> None:
         """Atomic write: tmp file + ``os.replace``. On failure the original is
-        untouched and the tmp is cleaned (AC2.1)."""
+        untouched and the tmp is cleaned (AC2.1).
+        """
         self._meta_dir.mkdir(parents=True, exist_ok=True)
         tmp = self._tmp_path
         try:
@@ -127,7 +128,8 @@ class DocStorage:
 
     def write_meta(self, *, revision: str) -> None:
         """Persist the applied-revision bookmark (called by service only after a
-        successful apply — storage does not decide apply success)."""
+        successful apply — storage does not decide apply success).
+        """
         self._meta_dir.mkdir(parents=True, exist_ok=True)
         payload = {
             "kind": self._kind,

@@ -510,7 +510,8 @@ def test_records_returns_immutable_tuple() -> None:
 
 def test_applier_no_asyncio_run_in_source() -> None:
     """Applier 全程同步：源码不得调用 asyncio.run / asyncio.to_thread（AST 检查
-    调用点，允许 docstring 提及）。"""
+    调用点，允许 docstring 提及）。
+    """
     import ast
     import inspect
 

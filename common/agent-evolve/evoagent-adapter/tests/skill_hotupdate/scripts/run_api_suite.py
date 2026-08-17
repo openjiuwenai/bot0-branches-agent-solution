@@ -17,12 +17,10 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 # Allow running as ``python run_api_suite.py`` from this directory.
 if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
     from config import HotUpdateConfig, parse_hotupdate_args
 else:
     from .config import HotUpdateConfig, parse_hotupdate_args

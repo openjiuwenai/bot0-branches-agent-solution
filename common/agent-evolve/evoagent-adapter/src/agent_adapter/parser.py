@@ -195,7 +195,7 @@ def _extract_value_at(payload: str, start: int) -> str | None:
         quote = char
         end = payload.find(quote, start + 1)
         if end != -1:
-            return payload[start : end + 1]
+            return payload[start: end + 1]
         return None
     # Simple scalar value
     match = re.match(r"[^\s,}\]]+", payload[start:])
@@ -229,7 +229,7 @@ def _extract_balanced(payload: str, start: int, open_char: str, close_char: str)
             elif char == close_char:
                 count -= 1
                 if count == 0:
-                    return payload[start : i + 1]
+                    return payload[start: i + 1]
 
         i += 1
 

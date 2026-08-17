@@ -438,7 +438,8 @@ class TestManagedDocRequest:
     def test_both_absent_allowed(self) -> None:
         """两者都缺 → 允许：runner 对空 skills 有 eval-only/baseline 路径
         （test_empty_skills_uses_run_id_artifact_dir）；「无目标即拒绝」
-        在入口层（F3 路由 / F9 CLI）按需收口，不在叶子 dataclass 层强加。"""
+        在入口层（F3 路由 / F9 CLI）按需收口，不在叶子 dataclass 层强加。
+        """
         req = OptimizeRequest(scenario="edp_agent", agent_name="test_agent")
         assert req.skills == []
         assert req.managed_doc_kind is None
@@ -454,7 +455,8 @@ class TestManagedDocRequest:
 
     def test_managed_doc_kind_blank_treated_as_absent(self) -> None:
         """空白 managed_doc_kind 视为未提供（strip 后置 None）。
-        此时 skills 亦空 → both-absent，属 eval-only/baseline 路径，允许构造。"""
+        此时 skills 亦空 → both-absent，属 eval-only/baseline 路径，允许构造。
+        """
         req = OptimizeRequest(
             scenario="edp_agent",
             agent_name="test_agent",

@@ -146,16 +146,15 @@ class EvolveConfig(BaseSettings):
         provider = self.llm_provider.strip()
         if provider.casefold().replace("_", "") == "customsse":
             object.__setattr__(self, "llm_provider", "CustomSSE")
-            missing = [
-                name
-                for name in (
-                    "custom_sse_token",
-                    "custom_sse_user_id",
-                    "custom_sse_endpoint",
-                    "custom_sse_context_window_tokens",
-                )
-                if not getattr(self, name)
-            ]
+            missing = []
+            for name in (
+                "custom_sse_token",
+                "custom_sse_user_id",
+                "custom_sse_endpoint",
+                "custom_sse_context_window_tokens",
+            ):
+                if not getattr(self, name):
+                    missing.append(name)
             if missing:
                 raise ValueError(
                     f"CustomSSE 模式下必填字段缺失: {missing}"

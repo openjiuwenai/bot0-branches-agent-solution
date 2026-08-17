@@ -73,9 +73,9 @@ class ManagedDocE2EHarness:
             self._wait_http(f"{self._adapter_url}/health", process_name="Adapter")
             self._bootstrap_applied_revision()
             return self
-        except BaseException:
+        except BaseException as exc:
             self._stop_processes()
-            raise
+            raise exc
 
     def __exit__(
         self,
@@ -325,11 +325,11 @@ class ManagedDocE2EHarness:
                 stderr=subprocess.STDOUT,
                 text=True,
             )
-        except BaseException:
+        except BaseException as exc:
             # Popen failed before taking the stream — close it so the log
             # file handle does not leak. On success _stop_processes owns it.
             stream.close()
-            raise
+            raise exc
         self._processes.append((name, process, stream))
 
     def _wait_http(self, url: str, *, process_name: str, timeout: float = 15.0) -> None:

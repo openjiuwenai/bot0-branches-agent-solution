@@ -274,7 +274,8 @@ class TestEvolveConfig:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """EVO_MANAGED_DOC_PROTECTED_SECTIONS JSON 注入：dict[str, list[ProtectedSectionConfig]]，
-        key 为精确 doc_kind。"""
+        key 为精确 doc_kind。
+        """
         monkeypatch.setenv(
             "EVO_MANAGED_DOC_PROTECTED_SECTIONS",
             '{"agent_rule": [{"start_marker": "<a>", "end_marker": "</a>"}]}',

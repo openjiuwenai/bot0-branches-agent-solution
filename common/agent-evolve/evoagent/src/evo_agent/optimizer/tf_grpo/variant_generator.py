@@ -87,7 +87,7 @@ def split_frontmatter(content: str) -> tuple[str, str]:
     match = _FRONTMATTER_RE.match(content or "")
     if not match:
         return "", content or ""
-    return match.group(0), content[match.end() :]
+    return match.group(0), content[match.end():]
 
 
 def restore_frontmatter(original: str, generated: str, *, preserve: bool) -> str:
