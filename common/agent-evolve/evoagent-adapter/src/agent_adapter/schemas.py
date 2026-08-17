@@ -72,7 +72,10 @@ class SkillActionRequest(BaseModel):
             "list_hub_skills | get_hub_version | pull_skill | publish_skill | delete_hub_version"
         ),
     )
-    skill_name: str | None = Field(default=None, description="Required for skill_content / update_skill / publish_skill")
+    skill_name: str | None = Field(
+        default=None,
+        description="Required for skill_content / update_skill / publish_skill",
+    )
     skill_names: list[str] | None = Field(
         default=None,
         description="Required for restore_skill; skill names to restore from snapshot",

@@ -29,7 +29,8 @@ def _write_skill(tmp_path, name: str = "demo-skill") -> None:
 
 
 class TestSkillHubPackager:
-    def test_build_and_extract_roundtrip(self, tmp_path):
+    @staticmethod
+    def test_build_and_extract_roundtrip(tmp_path):
         _write_skill(tmp_path)
         skill_dir = tmp_path / "demo-skill"
         zip_bytes = build_zip(skill_dir)
@@ -42,7 +43,8 @@ class TestSkillHubPackager:
         assert extracted.name == "demo-skill"
         assert (extracted / "SKILL.md").read_text(encoding="utf-8").startswith("---")
 
-    def test_build_zip_includes_plugin_yaml(self, tmp_path):
+    @staticmethod
+    def test_build_zip_includes_plugin_yaml(tmp_path):
         _write_skill(tmp_path)
         skill_dir = tmp_path / "demo-skill"
         zip_bytes = build_zip(skill_dir)
@@ -54,7 +56,8 @@ class TestSkillHubPackager:
             assert "demo-skill/plugin.yaml" in names
             assert "demo-skill/demo-skill/SKILL.md" in names
 
-    def test_extract_root_skill_md(self, tmp_path):
+    @staticmethod
+    def test_extract_root_skill_md(tmp_path):
         _write_skill(tmp_path)
         skill_md = (tmp_path / "demo-skill" / "SKILL.md").read_text(encoding="utf-8")
         import io
@@ -69,7 +72,8 @@ class TestSkillHubPackager:
         assert extracted.name == "demo-skill"
         assert (extracted / "SKILL.md").is_file()
 
-    def test_validate_directory_name_mismatch(self, tmp_path):
+    @staticmethod
+    def test_validate_directory_name_mismatch(tmp_path):
         _write_skill(tmp_path, name="demo-skill")
         bad_dir = tmp_path / "wrong-name"
         bad_dir.mkdir()

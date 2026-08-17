@@ -42,7 +42,8 @@ class SkillHubClient:
             return {"Authorization": f"Bearer {self._token}"}
         return {"X-System-Token": self._token}
 
-    def _unwrap(self, response: httpx.Response) -> dict[str, Any]:
+    @staticmethod
+    def _unwrap(response: httpx.Response) -> dict[str, Any]:
         if response.status_code == 401:
             raise SkillHubAuthError("SkillHub authentication failed", status_code=401)
         if response.status_code == 404:

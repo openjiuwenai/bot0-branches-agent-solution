@@ -83,18 +83,20 @@ def _handle_skillhub_action(request: Request, skill_request: SkillActionRequest)
             return JSONResponse(content=data)
 
         if action == "get_hub_version":
-            assert skill_request.asset_id is not None
-            assert skill_request.version is not None
-            data = service.get_hub_version(skill_request.asset_id, skill_request.version)
+            asset_id, version = skill_request.asset_id, skill_request.version
+            if not asset_id or not version:
+                return _contract_error("INVALID_ACTION", "asset_id and version are required", 400)
+            data = service.get_hub_version(asset_id, version)
             return JSONResponse(content=data)
 
         if action == "pull_skill":
-            assert skill_request.asset_id is not None
-            assert skill_request.version is not None
+            asset_id, version = skill_request.asset_id, skill_request.version
+            if not asset_id or not version:
+                return _contract_error("INVALID_ACTION", "asset_id and version are required", 400)
             result = service.pull_skill(
                 agent_name,
-                skill_request.asset_id,
-                skill_request.version,
+                asset_id,
+                version,
                 overwrite=skill_request.overwrite,
             )
             return JSONResponse(
@@ -108,10 +110,12 @@ def _handle_skillhub_action(request: Request, skill_request: SkillActionRequest)
             )
 
         if action == "publish_skill":
-            assert skill_request.skill_name is not None
+            skill_name = skill_request.skill_name
+            if not skill_name:
+                return _contract_error("INVALID_ACTION", "skill_name is required", 400)
             result = service.publish_skill(
                 agent_name,
-                skill_request.skill_name,
+                skill_name,
                 plugin_version=skill_request.plugin_version,
                 asset_id=skill_request.asset_id,
                 version_desc=skill_request.version_desc,
@@ -132,9 +136,10 @@ def _handle_skillhub_action(request: Request, skill_request: SkillActionRequest)
             )
 
         if action == "delete_hub_version":
-            assert skill_request.asset_id is not None
-            assert skill_request.version is not None
-            result = service.delete_hub_version(skill_request.asset_id, skill_request.version)
+            asset_id, version = skill_request.asset_id, skill_request.version
+            if not asset_id or not version:
+                return _contract_error("INVALID_ACTION", "asset_id and version are required", 400)
+            result = service.delete_hub_version(asset_id, version)
             return JSONResponse(
                 content={
                     "asset_id": result.asset_id,

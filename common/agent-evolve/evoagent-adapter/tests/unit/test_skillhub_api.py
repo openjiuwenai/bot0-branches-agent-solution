@@ -54,7 +54,8 @@ def _make_app(tmp_path, *, skillhub_enabled: bool = True):
 
 
 class TestSkillHubApi:
-    def test_skillhub_disabled_returns_503(self, tmp_path):
+    @staticmethod
+    def test_skillhub_disabled_returns_503(tmp_path):
         app = _make_app(tmp_path, skillhub_enabled=False)
         client = TestClient(app)
         response = client.post(
@@ -64,8 +65,9 @@ class TestSkillHubApi:
         assert response.status_code == 503
         assert response.json()["error"]["code"] == "SKILLHUB_DISABLED"
 
+    @staticmethod
     @patch("agent_adapter.skillhub.service.SkillHubService.list_hub_skills")
-    def test_list_hub_skills(self, mock_list, tmp_path):
+    def test_list_hub_skills(mock_list, tmp_path):
         mock_list.return_value = {"items": [{"asset_id": "abc", "name": "demo-skill"}], "total": 1}
         app = _make_app(tmp_path)
         client = TestClient(app)
@@ -76,8 +78,9 @@ class TestSkillHubApi:
         assert response.status_code == 200
         assert response.json()["total"] == 1
 
+    @staticmethod
     @patch("agent_adapter.skillhub.service.SkillHubService.publish_skill")
-    def test_publish_skill(self, mock_publish, tmp_path):
+    def test_publish_skill(mock_publish, tmp_path):
         mock_publish.return_value = PublishResult(
             asset_id="asset-1",
             skill_name="demo-skill",
@@ -107,8 +110,9 @@ class TestSkillHubApi:
         assert data["version"] == "1.0.0"
         mock_publish.assert_called_once()
 
+    @staticmethod
     @patch("agent_adapter.skillhub.service.SkillHubService.pull_skill")
-    def test_pull_skill(self, mock_pull, tmp_path):
+    def test_pull_skill(mock_pull, tmp_path):
         mock_pull.return_value = PullResult(
             asset_id="asset-1",
             skill_name="demo-skill",
@@ -130,8 +134,9 @@ class TestSkillHubApi:
         assert response.status_code == 200
         assert response.json()["skill_name"] == "demo-skill"
 
+    @staticmethod
     @patch("agent_adapter.skillhub.service.SkillHubService.delete_hub_version")
-    def test_delete_hub_version(self, mock_delete, tmp_path):
+    def test_delete_hub_version(mock_delete, tmp_path):
         mock_delete.return_value = DeleteVersionResult(
             asset_id="asset-1",
             version="1.0.0",
@@ -151,7 +156,8 @@ class TestSkillHubApi:
         assert response.status_code == 200
         assert response.json()["deleted"] is True
 
-    def test_publish_skill_missing_version_when_manual(self, tmp_path):
+    @staticmethod
+    def test_publish_skill_missing_version_when_manual(tmp_path):
         app = _make_app(tmp_path)
         client = TestClient(app)
         with patch("agent_adapter.skillhub.service.SkillHubClient") as mock_client_cls:

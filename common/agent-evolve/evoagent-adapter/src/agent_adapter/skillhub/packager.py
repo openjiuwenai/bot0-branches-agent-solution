@@ -118,7 +118,7 @@ def extract_zip(zip_bytes: bytes, target_parent: Path, *, overwrite: bool = True
         for name in names:
             if not name.startswith(skill_prefix):
                 continue
-            rel = Path(name[len(skill_prefix) :])
+            rel = Path(name[len(skill_prefix):])
             if ".." in rel.parts:
                 raise SkillHubValidationError(f"Unsafe zip entry: {name}")
             out_path = target_dir / rel
