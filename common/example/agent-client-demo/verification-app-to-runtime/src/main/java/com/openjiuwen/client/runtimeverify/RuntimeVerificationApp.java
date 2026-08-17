@@ -579,6 +579,7 @@ public final class RuntimeVerificationApp {
 
     private record RunRequest(String runtimeUrl, String scenario, InvocationMode mode,
             String input, String continueInput) {
+        // Compact record — all fields are defined in the header.
     }
 
     private static final class RunRecord {

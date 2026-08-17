@@ -12,6 +12,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -111,7 +112,7 @@ class RuntimeVerificationAppTest {
     private JsonNode uncheckedExecute(String scenario, String mode) {
         try {
             return execute(scenario, mode);
-        } catch (Exception error) {
+        } catch (IOException | InterruptedException error) {
             throw new java.util.concurrent.CompletionException(error);
         }
     }

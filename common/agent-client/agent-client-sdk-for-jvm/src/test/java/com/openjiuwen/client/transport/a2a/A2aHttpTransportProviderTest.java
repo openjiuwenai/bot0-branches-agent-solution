@@ -686,6 +686,8 @@ class A2aHttpTransportProviderTest {
             sendMessageCalls.incrementAndGet();
         } else if ("GetTask".equals(method)) {
             getTaskCalls.incrementAndGet();
+        } else {
+            // Unknown method; no-op — the mock only records the two known A2A methods.
         }
         String body = "{\"jsonrpc\":\"2.0\",\"id\":\"working\",\"result\":{\"task\":{"
                 + "\"id\":\"task-working\",\"contextId\":\"runtime-timeout\","

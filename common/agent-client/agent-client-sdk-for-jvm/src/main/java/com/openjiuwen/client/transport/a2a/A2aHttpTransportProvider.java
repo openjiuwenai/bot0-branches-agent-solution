@@ -1428,6 +1428,8 @@ public class A2aHttpTransportProvider
             ch.rootOutput.replaceWithTaskSnapshot(frame.taskArtifacts());
         } else if (frame.artifact() != null) {
             ch.rootOutput.accept(frame.artifact());
+        } else {
+            // Text-only frame with no artifact/task-snapshot semantic; nothing to apply.
         }
     }
 

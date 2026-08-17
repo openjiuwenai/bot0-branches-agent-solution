@@ -387,6 +387,7 @@ public final class MockRuntimeServer {
 
     private record RequestRecord(int sequence, String receivedAt, String method,
             String authorization, Object body) {
+        // Compact record — all fields are defined in the header.
     }
 
     private static final class TaskRecord {

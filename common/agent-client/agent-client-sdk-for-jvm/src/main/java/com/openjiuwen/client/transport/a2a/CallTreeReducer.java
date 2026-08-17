@@ -437,6 +437,8 @@ final class CallTreeReducer implements AutoCloseable {
                 } else {
                     truncated = true;
                 }
+            } else {
+                // ProtocolPart sealed hierarchy is exhaustive; this branch is unreachable
             }
         }
         return new BoundedParts(List.copyOf(result), used, truncated);
