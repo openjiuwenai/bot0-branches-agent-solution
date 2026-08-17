@@ -42,6 +42,77 @@ def test_evo_case_defaults() -> None:
     c = EvoCase(case_id="case-001", queries=["q1"])
     assert c.extra_data == {}
     assert c.expected_behavior == ""
+    assert c.images == ()
+
+
+def test_evo_case_with_images() -> None:
+    """EvoCase 支持 images 字段。"""
+    from evo_agent.dataset.case import EvoCase
+
+    c = EvoCase(
+        case_id="case-gepa-001",
+        queries=["识别图片中的物体"],
+        images=["/data/img1.jpg", "/data/img2.png"],
+    )
+    assert c.images == ("/data/img1.jpg", "/data/img2.png")
+
+
+def test_parse_evo_cases_with_images() -> None:
+    """parse_evo_cases 从顶层 images 字段提取图片路径。"""
+    from evo_agent.dataset.case import parse_evo_cases
+
+    raw = [
+        {
+            "id": "case-001",
+            "inputs": [{"role": "user", "content": "识别图片"}],
+            "expected_behavior": "cat, dog",
+            "images": ["/data/img1.jpg", "/data/img2.jpg"],
+        },
+    ]
+    cases = parse_evo_cases(raw)
+    assert len(cases) == 1
+    assert cases[0].images == ("/data/img1.jpg", "/data/img2.jpg")
+
+
+def test_parse_evo_cases_with_images_in_extra_data() -> None:
+    """parse_evo_cases 从 extra_data.images 提取图片路径。"""
+    from evo_agent.dataset.case import parse_evo_cases
+
+    raw = [
+        {
+            "id": "case-001",
+            "inputs": [{"role": "user", "content": "识别图片"}],
+            "expected_behavior": "cat",
+            "extra_data": {"images": ["/data/img1.jpg"]},
+        },
+    ]
+    cases = parse_evo_cases(raw)
+    assert len(cases) == 1
+    assert cases[0].images == ("/data/img1.jpg",)
+
+
+def test_evo_case_to_case_with_images() -> None:
+    """evo_case_to_case 将 images 映射到 inputs["images"]。"""
+    from evo_agent.dataset.case import EvoCase, evo_case_to_case
+
+    evo = EvoCase(
+        case_id="case-001",
+        queries=["识别图片"],
+        images=["/data/img1.jpg"],
+        expected_behavior="cat",
+    )
+    case = evo_case_to_case(evo)
+    assert case.inputs["images"] == ["/data/img1.jpg"]
+    assert case.label["expected_result"] == "cat"
+
+
+def test_evo_case_to_case_without_images() -> None:
+    """evo_case_to_case 无 images 时不设置 inputs["images"]。"""
+    from evo_agent.dataset.case import EvoCase, evo_case_to_case
+
+    evo = EvoCase(case_id="case-001", queries=["q1"])
+    case = evo_case_to_case(evo)
+    assert "images" not in case.inputs
 
 
 # ── parse_evo_cases() ──
