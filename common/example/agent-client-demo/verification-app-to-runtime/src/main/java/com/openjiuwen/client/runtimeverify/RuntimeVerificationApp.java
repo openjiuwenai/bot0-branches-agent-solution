@@ -250,10 +250,8 @@ public final class RuntimeVerificationApp {
             subscribeTree(run, call);
             SnapshotResult result = resolveScenarioSnapshot(run, client, call, conversationId, inputRequired);
             finalizeRun(run, result.snapshot(), toolExecutions, result.observedIncompleteInput());
-        } catch (Exception error) {
-            if (error instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
+        } catch (IOException | InterruptedException | java.util.concurrent.ExecutionException
+                | java.util.concurrent.TimeoutException error) {
             run.status = "FAILED";
             run.error = rootMessage(error);
             run.addDiagnostic(error.getClass().getSimpleName() + ": " + rootMessage(error));
