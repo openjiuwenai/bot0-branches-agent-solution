@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -31,7 +32,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/** Scriptable A2A Runtime used only for local agent-client verification. */
+/**
+ * Scriptable A2A Runtime used only for local agent-client verification.
+ *
+ * @since 2026-07-27
+ */
 public final class MockRuntimeServer {
     private static final Logger LOG = Logger.getLogger(MockRuntimeServer.class.getName());
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -103,8 +108,8 @@ public final class MockRuntimeServer {
         server.start();
         int boundPort = server.getAddress().getPort();
         if (LOG.isLoggable(Level.INFO)) {
-            LOG.info("Mock Runtime listening on http://127.0.0.1:" + boundPort);
-            LOG.info("A2A endpoint: http://127.0.0.1:" + boundPort + "/a2a");
+            LOG.log(Level.INFO, "Mock Runtime listening on http://127.0.0.1:{0}", boundPort);
+            LOG.log(Level.INFO, "A2A endpoint: http://127.0.0.1:{0}/a2a", boundPort);
         }
         return server;
     }
@@ -189,17 +194,20 @@ public final class MockRuntimeServer {
             task.state = "TASK_STATE_WORKING";
         } else if (initialCreate && !waitingForInput) {
             task.state = "TASK_STATE_COMPLETED";
+        } else {
+            // Resume of existing task or waiting for input — state stays as-is.
         }
         jsonRpcWrappedTaskResult(exchange, request.path("id").asText(), task.taskNode());
     }
 
     private void getTask(HttpExchange exchange, JsonNode request) throws IOException {
-        String taskId = taskId(request);
-        if (taskId == null) {
+        Optional<String> taskIdOpt = taskId(request);
+        if (taskIdOpt.isEmpty()) {
             jsonRpcError(exchange, request.path("id").asText(), -32602, "INVALID_PARAMS",
                     "Invalid params: params.id is required and must be a non-blank string");
             return;
         }
+        String taskId = taskIdOpt.get();
         TaskRecord task = tasks.get(taskId);
         if (task == null) {
             jsonRpcError(exchange, request.path("id").asText(), -32001, "TASK_NOT_FOUND", "task not found");
@@ -213,12 +221,13 @@ public final class MockRuntimeServer {
     }
 
     private void subscribe(HttpExchange exchange, JsonNode request) throws IOException {
-        String taskId = taskId(request);
-        if (taskId == null) {
+        Optional<String> taskIdOpt = taskId(request);
+        if (taskIdOpt.isEmpty()) {
             jsonRpcError(exchange, request.path("id").asText(), -32602, "INVALID_PARAMS",
                     "Invalid params: params.id is required and must be a non-blank string");
             return;
         }
+        String taskId = taskIdOpt.get();
         TaskRecord task = tasks.get(taskId);
         if (task == null) {
             jsonRpcError(exchange, request.path("id").asText(), -32001, "TASK_NOT_FOUND", "task not found");
@@ -326,12 +335,12 @@ public final class MockRuntimeServer {
         return parts.isArray() && !parts.isEmpty() ? parts.get(0).path("text").asText("") : "";
     }
 
-    private static String taskId(JsonNode request) {
+    private static Optional<String> taskId(JsonNode request) {
         JsonNode id = request.path("params").path("id");
         if (!id.isTextual() || id.asText().isBlank()) {
-            return null;
+            return Optional.empty();
         }
-        return id.asText();
+        return Optional.of(id.asText());
     }
 
     private static void jsonRpcWrappedTaskResult(HttpExchange exchange, String id, JsonNode task) throws IOException {
@@ -391,6 +400,8 @@ public final class MockRuntimeServer {
     }
 
     private static final class TaskRecord {
+        private record SourceRef(String agent, String task) {}
+
         private final String id = "task-" + UUID.randomUUID();
         private final String contextId;
         private final String scenario;
@@ -478,8 +489,8 @@ public final class MockRuntimeServer {
 
         private void multiArtifact() {
             addDelegation("agent-a", id, "agent-b", id + "-b", "multi artifact");
-            addOutputWithId("child-artifact-1", "agent-b", id + "-b", "first", false, true);
-            addOutputWithId("child-artifact-2", "agent-b", id + "-b", "second", false, true);
+            addOutputWithId("child-artifact-1", new SourceRef("agent-b", id + "-b"), "first", false, true);
+            addOutputWithId("child-artifact-2", new SourceRef("agent-b", id + "-b"), "second", false, true);
             addController();
         }
 
@@ -512,8 +523,8 @@ public final class MockRuntimeServer {
         private void malformed() {
             addDelegation("agent-a", id, "agent-b", id + "-b", "first parent");
             addDelegation("agent-c", id + "-c", "agent-b", id + "-b", "illegal second parent");
-            addOutputWithId("shared", "agent-b", id + "-b", "first owner", false, true);
-            addOutputWithId("shared", "agent-c", id + "-c", "conflicting owner", false, true);
+            addOutputWithId("shared", new SourceRef("agent-b", id + "-b"), "first owner", false, true);
+            addOutputWithId("shared", new SourceRef("agent-c", id + "-c"), "conflicting owner", false, true);
         }
 
         private void controllerReturn() {
@@ -562,13 +573,13 @@ public final class MockRuntimeServer {
         }
 
         private void addOutput(String agent, String task, String text, boolean append, boolean last) {
-            addOutputWithId("output-" + task, agent, task, text, append, last);
+            addOutputWithId("output-" + task, new SourceRef(agent, task), text, append, last);
         }
 
-        private void addOutputWithId(String artifactId, String agent, String task,
+        private void addOutputWithId(String artifactId, SourceRef source,
                 String text, boolean append, boolean last) {
             Map<String, Object> event = Map.of("type", "output",
-                    "source", Map.of("agentId", agent, "taskId", task));
+                    "source", Map.of("agentId", source.agent, "taskId", source.task));
             addArtifact(artifactId, List.of(Map.of("text", text)), event, append, last);
         }
 
@@ -646,6 +657,8 @@ public final class MockRuntimeServer {
                 statusNode.putObject("message").putObject("metadata").set("_interrupt", JSON.valueToTree(
                         interrupt("client_tool", "tool-" + id, "local.echo", null,
                                 Map.of("text", "hello from Runtime"))));
+            } else {
+                // No interrupt for other scenarios.
             }
             ArrayNode artifacts = task.putArray("artifacts");
             String artifactId = "streaming-resubscribe".equals(scenario) || "recovery-circuit".equals(scenario)

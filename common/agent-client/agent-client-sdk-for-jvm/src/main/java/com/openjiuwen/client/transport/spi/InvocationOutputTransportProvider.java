@@ -6,7 +6,11 @@ package com.openjiuwen.client.transport.spi;
 
 import java.util.Optional;
 
-/** 可提供 rich Artifact 物化根输出的 Transport 增强 SPI。 */
+/**
+ * 可提供 rich Artifact 物化根输出的 Transport 增强 SPI。
+ *
+ * @since 2026-07-27
+ */
 public interface InvocationOutputTransportProvider extends TransportProvider {
     /**
      * 返回当前已物化的根业务输出。空 Optional 表示尚未观察到根业务 Artifact；

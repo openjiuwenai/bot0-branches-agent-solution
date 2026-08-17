@@ -124,16 +124,21 @@ final class CallTreeReducer implements AutoCloseable {
     }
 
     private void acceptDelegation(AgentEvent event, ProtocolArtifact artifact) {
-        MutableNode source = existingNode(event.source());
-        if (source == null) {
+        Optional<MutableNode> sourceOpt = existingNode(event.source());
+        if (sourceOpt.isEmpty()) {
             bufferEdge(event, artifact);
             return;
         }
+        MutableNode source = sourceOpt.get();
         if (!claimArtifact(source, artifact.artifactId())) {
             return;
         }
-        MutableNode target = createNode(event.target());
-        if (target == null || source == target || createsCycle(source, target)) {
+        Optional<MutableNode> targetOpt = createNode(event.target());
+        if (targetOpt.isEmpty()) {
+            return;
+        }
+        MutableNode target = targetOpt.get();
+        if (source == target || createsCycle(source, target)) {
             completeness = Completeness.DEGRADED;
             diagnose(CallTreeDiagnostic.ILLEGAL_CYCLE, "delegation would create a cycle", artifact.artifactId());
             return;
@@ -156,11 +161,12 @@ final class CallTreeReducer implements AutoCloseable {
     }
 
     private void acceptOutput(AgentEvent event, ProtocolArtifact artifact) {
-        MutableNode source = existingNode(event.source());
-        if (source == null) {
+        Optional<MutableNode> sourceOpt = existingNode(event.source());
+        if (sourceOpt.isEmpty()) {
             bufferSignal(event, artifact);
             return;
         }
+        MutableNode source = sourceOpt.get();
         mergeArtifact(source, artifact);
         speakingPhase = source == root ? SpeakingPhase.ROOT_SPEAKING : SpeakingPhase.DESCENDANT_SPEAKING;
         currentSpeaker = source.key;
@@ -197,11 +203,12 @@ final class CallTreeReducer implements AutoCloseable {
     }
 
     private void acceptStatus(AgentEvent event, ProtocolArtifact artifact) {
-        MutableNode source = existingNode(event.source());
-        if (source == null) {
+        Optional<MutableNode> sourceOpt = existingNode(event.source());
+        if (sourceOpt.isEmpty()) {
             bufferSignal(event, artifact);
             return;
         }
+        MutableNode source = sourceOpt.get();
         if (artifact != null && !claimArtifact(source, artifact.artifactId())) {
             return;
         }
@@ -225,11 +232,11 @@ final class CallTreeReducer implements AutoCloseable {
         return true;
     }
 
-    private MutableNode existingNode(AgentEvent.AgentRef ref) {
+    private Optional<MutableNode> existingNode(AgentEvent.AgentRef ref) {
         NodeKey key = new NodeKey(ref.agentId(), ref.taskId());
         MutableNode found = nodes.get(key);
         if (found != null) {
-            return found;
+            return Optional.of(found);
         }
         if (ref.taskId().equals(rootTaskId)) {
             nodes.remove(root.key);
@@ -238,24 +245,24 @@ final class CallTreeReducer implements AutoCloseable {
             if (currentSpeaker != null && currentSpeaker.taskId().equals(rootTaskId)) {
                 currentSpeaker = key;
             }
-            return root;
+            return Optional.of(root);
         }
-        return null;
+        return Optional.empty();
     }
 
-    private MutableNode createNode(AgentEvent.AgentRef ref) {
-        MutableNode found = existingNode(ref);
-        if (found != null) {
+    private Optional<MutableNode> createNode(AgentEvent.AgentRef ref) {
+        Optional<MutableNode> found = existingNode(ref);
+        if (found.isPresent()) {
             return found;
         }
         if (nodes.size() >= MAX_NODES) {
             completeness = Completeness.DEGRADED;
             diagnose(CallTreeDiagnostic.RESOURCE_LIMIT, "call tree node limit exceeded", null);
-            return null;
+            return Optional.empty();
         }
         MutableNode created = new MutableNode(new NodeKey(ref.agentId(), ref.taskId()));
         nodes.put(created.key, created);
-        return created;
+        return Optional.of(created);
     }
 
     private void bufferEdge(AgentEvent event, ProtocolArtifact artifact) {
@@ -437,8 +444,6 @@ final class CallTreeReducer implements AutoCloseable {
                 } else {
                     truncated = true;
                 }
-            } else {
-                // ProtocolPart sealed hierarchy is exhaustive; this branch is unreachable
             }
         }
         return new BoundedParts(List.copyOf(result), used, truncated);

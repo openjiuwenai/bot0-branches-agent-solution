@@ -202,7 +202,12 @@ final class A2aJsonCodec {
         return root;
     }
 
-    /** SubscribeToTask 请求。Runtime 只接受 Task id，不携带 cursor。 */
+    /**
+     * SubscribeToTask 请求。Runtime 只接受 Task id，不携带 cursor。
+     *
+     * @param taskRef 任务引用
+     * @return 订阅请求
+     */
     ObjectNode buildSubscribe(String taskRef) {
         ObjectNode root = newRequest("SubscribeToTask");
         root.putObject("params").put("id", taskRef);
@@ -381,24 +386,24 @@ final class A2aJsonCodec {
         JsonNode agentEventNode = artifact.path("metadata").path("agentEvent");
         boolean agentEventDeclared = !agentEventNode.isMissingNode() && !agentEventNode.isNull();
         return new ProtocolArtifact(artifactId, parts, append, lastChunk,
-                parseAgentEvent(agentEventNode), agentEventDeclared, controllerOutput);
+                parseAgentEvent(agentEventNode).orElse(null), agentEventDeclared, controllerOutput);
     }
 
-    private static AgentEvent parseAgentEvent(JsonNode node) {
+    private static Optional<AgentEvent> parseAgentEvent(JsonNode node) {
         if (node == null || !node.isObject()) {
-            return null;
+            return Optional.empty();
         }
         AgentEvent event = new AgentEvent(node.path("type").asText(null),
-                parseAgentRef(node.path("source")), parseAgentRef(node.path("target")),
+                parseAgentRef(node.path("source")).orElse(null), parseAgentRef(node.path("target")).orElse(null),
                 node.path("state").asText(null));
-        return event.valid() ? event : null;
+        return event.valid() ? Optional.of(event) : Optional.empty();
     }
 
-    private static AgentEvent.AgentRef parseAgentRef(JsonNode node) {
+    private static Optional<AgentEvent.AgentRef> parseAgentRef(JsonNode node) {
         if (node == null || !node.isObject()) {
-            return null;
+            return Optional.empty();
         }
-        return new AgentEvent.AgentRef(node.path("agentId").asText(null), node.path("taskId").asText(null));
+        return Optional.of(new AgentEvent.AgentRef(node.path("agentId").asText(null), node.path("taskId").asText(null)));
     }
 
     /**

@@ -9,6 +9,7 @@ import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.transport.spi.TransportProvider;
 
 import java.util.Map;
+import java.util.Optional;
 
 /** Runtime 直连策略：只投影已类型化的 A2A/客户端工具字段，不透传任意 attributes。 */
 final class RuntimeEndpointPolicy implements EndpointPolicy {
@@ -23,8 +24,8 @@ final class RuntimeEndpointPolicy implements EndpointPolicy {
     }
 
     @Override
-    public String credential(String supplied) {
-        return null;
+    public Optional<String> credential(String supplied) {
+        return Optional.empty();
     }
 
     @Override

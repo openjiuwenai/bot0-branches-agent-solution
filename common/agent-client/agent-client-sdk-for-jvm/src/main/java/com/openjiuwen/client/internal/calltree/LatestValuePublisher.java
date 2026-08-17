@@ -16,7 +16,11 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** 只保留最新值、遵守 demand、关闭后仍向晚订阅者回放最终值的 Publisher。 */
+/**
+ * 只保留最新值、遵守 demand、关闭后仍向晚订阅者回放最终值的 Publisher。
+ *
+ * @since 2026-07-27
+ */
 public final class LatestValuePublisher<T extends Object> implements Flow.Publisher<T>, AutoCloseable {
     private static final int MAX_DISPATCH_THREADS = 32;
     private static final Executor DISPATCHER = new ThreadPoolExecutor(0, MAX_DISPATCH_THREADS,
@@ -33,6 +37,9 @@ public final class LatestValuePublisher<T extends Object> implements Flow.Publis
     private volatile boolean closed;
     private long version;
 
+    /**
+     * 构造最新值发布者，使用默认分发器。
+     */
     public LatestValuePublisher() {
         this(DISPATCHER);
     }
@@ -50,6 +57,11 @@ public final class LatestValuePublisher<T extends Object> implements Flow.Publis
         subscription.drain();
     }
 
+    /**
+     * 提交最新值，通知所有订阅者。
+     *
+     * @param value 最新值
+     */
     public void submit(T value) {
         synchronized (this) {
             if (closed) {
@@ -60,6 +72,16 @@ public final class LatestValuePublisher<T extends Object> implements Flow.Publis
         subscriptions.forEach(LatestSubscription::drain);
     }
 
+    /**
+     * 返回当前最新值。
+     *
+     * @return 最新值，可能为空
+     */
+    /**
+     * 返回最新提交的值。
+     *
+     * @return 最新值，若从未提交过则为空
+     */
     public Optional<T> latest() {
         Versioned<T> value = latest;
         return Optional.ofNullable(value == null ? null : value.value());

@@ -83,19 +83,29 @@ public class A2aHttpTransportProvider
     private static final java.util.logging.Logger LOG =
             java.util.logging.Logger.getLogger(A2aHttpTransportProvider.class.getName());
 
-    /** SSE 读空闲超时：超过该时长没有任何字节到达即判为连接已失效，避免调用方永久悬挂。 */
+    /**
+     * SSE 读空闲超时：超过该时长没有任何字节到达即判为连接已失效，避免调用方永久悬挂。
+     */
     private static final Duration DEFAULT_SSE_IDLE_TIMEOUT = Duration.ofSeconds(120);
 
-    /** 同步请求超时。 */
+    /**
+     * 同步请求超时。
+     */
     private static final Duration UNARY_TIMEOUT = Duration.ofSeconds(60);
 
-    /** BLOCKING 从首次获得 taskId 起的最长自动观察时间。 */
+    /**
+     * BLOCKING 从首次获得 taskId 起的最长自动观察时间。
+     */
     private static final Duration DEFAULT_BLOCKING_OBSERVATION_TIMEOUT = Duration.ofMinutes(10);
 
-    /** 有效非终态快照之间的查询间隔；不限制有效 WORKING 返回次数。 */
+    /**
+     * 有效非终态快照之间的查询间隔；不限制有效 WORKING 返回次数。
+     */
     private static final Duration DEFAULT_BLOCKING_POLL_INTERVAL = Duration.ofMillis(500);
 
-    /** UNKNOWN 恢复的最大重发次数（含首次恢复尝试）。耗尽后投递进展不确定，不无限重试。 */
+    /**
+     * UNKNOWN 恢复的最大重发次数（含首次恢复尝试）。耗尽后投递进展不确定，不无限重试。
+     */
     private static final int MAX_CREATE_RECOVERY_ATTEMPTS = 3;
     private static final int MAX_OBSERVATION_RECOVERY_FAILURES = 3;
     private static final int MAX_COMPLETED_TREES = 256;
@@ -189,12 +199,16 @@ public class A2aHttpTransportProvider
         return DEFAULT_SSE_IDLE_TIMEOUT;
     }
 
-    /** 包级测试探针：活动 invocation Channel 数。 */
+    /**
+     * 包级测试探针：活动 invocation Channel 数。
+     */
     int activeInvocationCount() {
         return byInvocationRef.size();
     }
 
-    /** 包级测试探针：活动 taskId Channel 数。 */
+    /**
+     * 包级测试探针：活动 taskId Channel 数。
+     */
     int activeTaskCount() {
         return byTaskRef.size();
     }
@@ -353,7 +367,7 @@ public class A2aHttpTransportProvider
         if (withTimeout) {
             b.timeout(UNARY_TIMEOUT);
         }
-        String effectiveCredential = endpointPolicy.credential(credential);
+        String effectiveCredential = endpointPolicy.credential(credential).orElse(null);
         if (effectiveCredential != null && !effectiveCredential.isEmpty()) {
             b.header("Authorization", effectiveCredential.startsWith("Bearer ")
                     ? effectiveCredential : "Bearer " + effectiveCredential);
@@ -1438,15 +1452,7 @@ public class A2aHttpTransportProvider
             return;
         }
         applyRootOutput(ch, f);
-        if (ch.callTree != null) {
-            if (f.artifact() != null) {
-                ch.callTree.accept(f.artifact());
-            }
-            for (ProtocolArtifact artifact : f.taskArtifacts()) {
-                ch.callTree.accept(artifact);
-            }
-            ch.callTree.updateRootState(f.state());
-        }
+        emitCallTreeUpdate(ch, f);
         if (f.state() == null) {
             if (f.text() != null) {
                 submit(ch, new InvocationEvent.ContentDelta(ch.invocationRef, f.text()));
@@ -1469,28 +1475,41 @@ public class A2aHttpTransportProvider
                 submit(ch, new InvocationEvent.StatusChanged(ch.invocationRef, f.state(), true));
                 terminate(ch);
             }
-            case INPUT_REQUIRED -> {
-                submit(ch, new InvocationEvent.StatusChanged(ch.invocationRef, TaskState.INPUT_REQUIRED, false));
-                A2aJsonCodec.Interrupt it = f.interrupt();
-                // 006 §3.3：INPUT_REQUIRED 无 _interrupt / 非 client_tool → InputRequired(null)，
-                // 触发业务侧 continueInput。有 client_tool 意图时带上 ToolCall 由 SDK 自动执行。
-                if (it == null) {
-                    submit(ch, new InvocationEvent.InputRequired(ch.invocationRef, null, null));
-                } else if (it.userInput()) {
-                    submit(ch, new InvocationEvent.InputRequired(ch.invocationRef, null, it.prompt()));
-                } else if (!it.validResumeTarget()) {
-                    submit(ch, new InvocationEvent.ProtocolDiagnostic(ch.invocationRef,
-                            ErrorCodes.INPUT_RESUME_TARGET_MISSING,
-                            "client_tool interrupt requires non-blank toolCallId and toolName"));
-                    submit(ch, new InvocationEvent.InputRequired(ch.invocationRef, null, it.prompt()));
-                } else {
-                    Duration dl = (it.deadlineMs() != null) ? Duration.ofMillis(it.deadlineMs()) : null;
-                    InvocationEvent.ToolCall call = new InvocationEvent.ToolCall(
-                            it.toolCallId(), it.toolName(), it.arguments(), dl);
-                    submit(ch, new InvocationEvent.InputRequired(ch.invocationRef, call, null));
-                }
-            }
+            case INPUT_REQUIRED -> emitInputRequired(ch, f);
             default -> submit(ch, new InvocationEvent.StatusChanged(ch.invocationRef, f.state(), false));
+        }
+    }
+
+    private void emitCallTreeUpdate(Channel ch, A2aJsonCodec.Frame f) {
+        if (ch.callTree == null) {
+            return;
+        }
+        if (f.artifact() != null) {
+            ch.callTree.accept(f.artifact());
+        }
+        for (ProtocolArtifact artifact : f.taskArtifacts()) {
+            ch.callTree.accept(artifact);
+        }
+        ch.callTree.updateRootState(f.state());
+    }
+
+    private void emitInputRequired(Channel ch, A2aJsonCodec.Frame f) {
+        submit(ch, new InvocationEvent.StatusChanged(ch.invocationRef, TaskState.INPUT_REQUIRED, false));
+        A2aJsonCodec.Interrupt it = f.interrupt();
+        if (it == null) {
+            submit(ch, new InvocationEvent.InputRequired(ch.invocationRef, null, null));
+        } else if (it.userInput()) {
+            submit(ch, new InvocationEvent.InputRequired(ch.invocationRef, null, it.prompt()));
+        } else if (!it.validResumeTarget()) {
+            submit(ch, new InvocationEvent.ProtocolDiagnostic(ch.invocationRef,
+                    ErrorCodes.INPUT_RESUME_TARGET_MISSING,
+                    "client_tool interrupt requires non-blank toolCallId and toolName"));
+            submit(ch, new InvocationEvent.InputRequired(ch.invocationRef, null, it.prompt()));
+        } else {
+            Duration dl = (it.deadlineMs() != null) ? Duration.ofMillis(it.deadlineMs()) : null;
+            InvocationEvent.ToolCall call = new InvocationEvent.ToolCall(
+                    it.toolCallId(), it.toolName(), it.arguments(), dl);
+            submit(ch, new InvocationEvent.InputRequired(ch.invocationRef, call, null));
         }
     }
 
@@ -1612,7 +1631,9 @@ public class A2aHttpTransportProvider
         final String idempotencyKey;
         final InvocationMode mode;
 
-        /** 原始创建正文；UNKNOWN 恢复必须逐字节复用，否则触发网关幂等正文冲突。 */
+        /**
+         * 原始创建正文；UNKNOWN 恢复必须逐字节复用，否则触发网关幂等正文冲突。
+         */
         final String createBody;
         final String credential;
         final SubmissionPublisher<InvocationEvent> publisher;

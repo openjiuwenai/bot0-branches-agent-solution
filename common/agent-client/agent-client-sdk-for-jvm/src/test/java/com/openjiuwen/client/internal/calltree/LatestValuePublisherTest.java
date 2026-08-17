@@ -203,7 +203,7 @@ class LatestValuePublisherTest {
         }
     }
 
-    private static final class TestSubscriber<T> implements Flow.Subscriber<T> {
+    private static final class TestSubscriber<T extends Object> implements Flow.Subscriber<T> {
         private final List<T> values = new ArrayList<>();
         private final AtomicReference<Flow.Subscription> subscription = new AtomicReference<>();
         private final AtomicBoolean completed = new AtomicBoolean();

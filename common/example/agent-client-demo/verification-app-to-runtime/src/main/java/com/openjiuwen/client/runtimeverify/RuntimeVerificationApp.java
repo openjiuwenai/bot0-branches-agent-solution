@@ -44,13 +44,21 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Flow;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-/** Browser-based verification console for AgentClient -> Runtime. */
+/** Browser-based verification console for AgentClient -> Runtime.
+ *
+ * @since 2026-07-27
+ */
 public final class RuntimeVerificationApp {
+    private static final Logger LOG = Logger.getLogger(RuntimeVerificationApp.class.getName());
     private static final ObjectMapper JSON = createMapper();
     private static final List<Map<String, String>> SCENARIOS = List.of(
             scenario("single", "Single agent", "Root Agent streaming output"),
@@ -80,7 +88,15 @@ public final class RuntimeVerificationApp {
     private final int port;
     private final String defaultRuntimeUrl;
     private final Map<String, RunRecord> runs = new ConcurrentHashMap<>();
-    private final java.util.concurrent.ExecutorService workers = Executors.newCachedThreadPool();
+    private final ExecutorService workers = new ThreadPoolExecutor(0, Integer.MAX_VALUE,
+            60L, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), r -> {
+                Thread t = new Thread(r, "verification-app-http");
+                t.setDaemon(true);
+                t.setUncaughtExceptionHandler((thread, ex) -> {
+                    LOG.log(Level.WARNING, "uncaught exception in " + thread.getName(), ex);
+                });
+                return t;
+            });
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
 
     RuntimeVerificationApp(int port, String defaultRuntimeUrl) {
@@ -111,8 +127,8 @@ public final class RuntimeVerificationApp {
                 : System.getenv().getOrDefault("AGENT_RUNTIME_URL", "http://127.0.0.1:19090");
         RuntimeVerificationApp app = new RuntimeVerificationApp(port, runtime);
         app.start();
-        System.out.println("Verification UI: http://127.0.0.1:" + port);
-        System.out.println("Default Runtime: " + runtime);
+        LOG.info("Verification UI: http://127.0.0.1:" + port);
+        LOG.info("Default Runtime: " + runtime);
         Thread.currentThread().join();
     }
 
@@ -146,8 +162,8 @@ public final class RuntimeVerificationApp {
         return exchange -> {
             try {
                 delegate.handle(exchange);
-            } catch (Throwable error) {
-                error.printStackTrace(System.err);
+            } catch (IOException | RuntimeException error) {
+                LOG.log(Level.WARNING, "unhandled error in HTTP handler", error);
                 try {
                     json(exchange, 500, Map.of("error", rootMessage(error)));
                 } catch (IOException ignored) {
@@ -230,41 +246,10 @@ public final class RuntimeVerificationApp {
             run.invocationRef = call.invocationRef();
             CompletableFuture<InvocationEvent.InputRequired> inputRequired = subscribeEvents(run, call);
             subscribeTree(run, call);
-            InvocationSnapshot snapshot;
-            boolean observedIncompleteInput = false;
-            if (run.request.mode() == InvocationMode.ASYNC) {
-                call.accepted().toCompletableFuture().get(5, TimeUnit.SECONDS);
-                snapshot = queryAsyncUntilSettled(client, call, run, Duration.ofSeconds(20));
-                call.completion().toCompletableFuture().get(5, TimeUnit.SECONDS);
-                run.addDiagnostic("Business-driven getInvocation reached " + snapshot.state());
-            } else if ("blocking-gettask".equals(run.request.scenario())) {
-                snapshot = call.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
-                run.addDiagnostic("SDK automatic GetTask observation reconciled BLOCKING invocation");
-            } else if ("input-linear".equals(run.request.scenario())) {
-                inputRequired.get(10, TimeUnit.SECONDS);
-                run.addDiagnostic("continueInput issued from UI scenario");
-                InvocationCall continuation = client.continueInput(ContinueInputRequest.builder()
-                        .conversationId(conversationId).relatedInvocationRef(call.invocationRef())
-                        .input(run.request.continueInput()).build());
-                run.continuationRef = continuation.invocationRef();
-                subscribeEvents(run, continuation);
-                subscribeTree(run, continuation);
-                snapshot = continuation.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
-            } else if ("input-status-incomplete".equals(run.request.scenario())) {
-                InvocationEvent.InputRequired required = inputRequired.get(10, TimeUnit.SECONDS);
-                snapshot = client.getInvocation(call.invocationRef()).toCompletableFuture().get(5, TimeUnit.SECONDS);
-                observedIncompleteInput = required.toolCall() == null && snapshot.pendingToolCall() == null;
-                run.addDiagnostic("incomplete child input protocol observed; SDK did not invent a resume target");
-            } else {
-                snapshot = call.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
-            }
-            run.snapshot = JSON.convertValue(snapshot, Object.class);
-            run.toolExecutions = toolExecutions.get();
-            verifyRecoveryContract(run);
-            verifyMockWireContract(run);
-            run.status = observedIncompleteInput ? "OBSERVED"
-                    : isRecoveryScenario(run.request.scenario()) ? "VERIFIED" : "COMPLETED";
-        } catch (Exception error) {
+            SnapshotResult result = resolveScenarioSnapshot(run, client, call, conversationId, inputRequired);
+            finalizeRun(run, result.snapshot(), toolExecutions, result.observedIncompleteInput());
+        } catch (IOException | InterruptedException | java.util.concurrent.ExecutionException
+                | java.util.concurrent.TimeoutException error) {
             run.status = "FAILED";
             run.error = rootMessage(error);
             run.addDiagnostic(error.getClass().getSimpleName() + ": " + rootMessage(error));
@@ -405,7 +390,8 @@ public final class RuntimeVerificationApp {
             run.addDiagnostic("verified SubscribeToTask current snapshot + future events;"
                     + " no event-offset replay assumed");
         } else {
-            run.addDiagnostic("verified GetTask current-state query; BLOCKING is SDK-driven and ASYNC is business-driven");
+            run.addDiagnostic("verified GetTask current-state query;"
+                    + " BLOCKING is SDK-driven and ASYNC is business-driven");
         }
         run.addDiagnostic(tree == null ? "call tree unavailable for recovered mode"
                 : "recovered call tree completeness is " + tree.completeness());
@@ -417,6 +403,57 @@ public final class RuntimeVerificationApp {
                 || "async-gettask".equals(scenario);
     }
 
+    private static SnapshotResult resolveScenarioSnapshot(RunRecord run, AgentClient client,
+            InvocationCall call, String conversationId,
+            CompletableFuture<InvocationEvent.InputRequired> inputRequired) throws Exception {
+        InvocationSnapshot snapshot;
+        boolean observedIncompleteInput = false;
+        if (run.request.mode() == InvocationMode.ASYNC) {
+            call.accepted().toCompletableFuture().get(5, TimeUnit.SECONDS);
+            snapshot = queryAsyncUntilSettled(client, call, run, Duration.ofSeconds(20));
+            call.completion().toCompletableFuture().get(5, TimeUnit.SECONDS);
+            run.addDiagnostic("Business-driven getInvocation reached " + snapshot.state());
+        } else if ("blocking-gettask".equals(run.request.scenario())) {
+            snapshot = call.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
+            run.addDiagnostic("SDK automatic GetTask observation reconciled BLOCKING invocation");
+        } else if ("input-linear".equals(run.request.scenario())) {
+            inputRequired.get(10, TimeUnit.SECONDS);
+            run.addDiagnostic("continueInput issued from UI scenario");
+            InvocationCall continuation = client.continueInput(ContinueInputRequest.builder()
+                    .conversationId(conversationId).relatedInvocationRef(call.invocationRef())
+                    .input(run.request.continueInput()).build());
+            run.continuationRef = continuation.invocationRef();
+            subscribeEvents(run, continuation);
+            subscribeTree(run, continuation);
+            snapshot = continuation.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
+        } else if ("input-status-incomplete".equals(run.request.scenario())) {
+            InvocationEvent.InputRequired required = inputRequired.get(10, TimeUnit.SECONDS);
+            snapshot = client.getInvocation(call.invocationRef())
+                    .toCompletableFuture().get(5, TimeUnit.SECONDS);
+            observedIncompleteInput = required.toolCall() == null
+                    && snapshot.pendingToolCall() == null;
+            run.addDiagnostic("incomplete child input protocol observed;"
+                    + " SDK did not invent a resume target");
+        } else {
+            snapshot = call.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
+        }
+        return new SnapshotResult(snapshot, observedIncompleteInput);
+    }
+
+    private void finalizeRun(RunRecord run, InvocationSnapshot snapshot,
+            AtomicInteger toolExecutions, boolean observedIncompleteInput)
+            throws IOException, InterruptedException {
+        run.snapshot = JSON.convertValue(snapshot, Object.class);
+        run.toolExecutions = toolExecutions.get();
+        verifyRecoveryContract(run);
+        verifyMockWireContract(run);
+        run.status = observedIncompleteInput ? "OBSERVED"
+                : isRecoveryScenario(run.request.scenario()) ? "VERIFIED" : "COMPLETED";
+    }
+
+    private record SnapshotResult(InvocationSnapshot snapshot, boolean observedIncompleteInput) {
+    }
+
     private void verifyMockWireContract(RunRecord run) throws IOException, InterruptedException {
         if (!isRecoveryScenario(run.request.scenario())) {
             return;
@@ -426,7 +463,7 @@ public final class RuntimeVerificationApp {
         try {
             response = http.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(3)).GET().build(),
                     HttpResponse.BodyHandlers.ofString());
-        } catch (Exception error) {
+        } catch (IOException | InterruptedException error) {
             run.addDiagnostic("wire contract check skipped: Runtime does not expose mock diagnostics");
             return;
         }
@@ -464,7 +501,7 @@ public final class RuntimeVerificationApp {
                 latest = Math.max(latest, request.path("sequence").asInt());
             }
             return latest;
-        } catch (Exception ignored) {
+        } catch (IOException | InterruptedException ignored) {
             return -1;
         }
     }
@@ -485,7 +522,7 @@ public final class RuntimeVerificationApp {
                     .timeout(Duration.ofSeconds(3)).GET().build(), HttpResponse.BodyHandlers.ofString());
             send(exchange, response.statusCode(), "application/json; charset=utf-8",
                     response.body().getBytes(StandardCharsets.UTF_8));
-        } catch (Exception error) {
+        } catch (IOException | InterruptedException error) {
             json(exchange, 502, Map.of("error", rootMessage(error), "target", url));
         }
     }

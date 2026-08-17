@@ -8,12 +8,14 @@ import com.openjiuwen.client.api.EndpointType;
 import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.transport.spi.TransportProvider;
 
+import java.util.Optional;
+
 /** A2A Endpoint 间唯一允许变化的请求与恢复策略。 */
 interface EndpointPolicy {
     EndpointType type();
 
-    default String credential(String supplied) {
-        return supplied;
+    default Optional<String> credential(String supplied) {
+        return Optional.ofNullable(supplied);
     }
 
     default TransportProvider.CreateCommand createCommand(TransportProvider.CreateCommand command) {

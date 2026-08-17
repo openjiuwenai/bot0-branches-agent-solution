@@ -14,10 +14,34 @@ import java.time.Duration;
  * @since 2026-07-27
  */
 public final class GatewayTransportProvider extends A2aHttpTransportProvider {
+    /**
+     * 使用默认配置构造 Gateway Provider。
+     *
+     * @param baseUrl 网关基址
+     */
+    /**
+     * 构造 Gateway 传输提供者，使用默认 ObjectMapper 和空闲超时。
+     *
+     * @param baseUrl 网关基址
+     */
     public GatewayTransportProvider(String baseUrl) {
         super(baseUrl, new ObjectMapper(), defaultIdleTimeout(), GatewayEndpointPolicy.INSTANCE);
     }
 
+    /**
+     * 构造 Gateway Provider。
+     *
+     * @param baseUrl 网关基址
+     * @param mapper JSON 编解码器
+     * @param idleTimeout SSE 读空闲超时
+     */
+    /**
+     * 构造 Gateway 传输提供者。
+     *
+     * @param baseUrl 网关基址
+     * @param mapper JSON 编解码器
+     * @param idleTimeout SSE 读空闲超时
+     */
     public GatewayTransportProvider(String baseUrl, ObjectMapper mapper, Duration idleTimeout) {
         super(baseUrl, mapper, idleTimeout, GatewayEndpointPolicy.INSTANCE);
     }

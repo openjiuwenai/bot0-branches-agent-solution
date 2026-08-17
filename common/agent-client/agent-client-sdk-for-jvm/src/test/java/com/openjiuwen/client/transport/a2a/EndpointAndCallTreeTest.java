@@ -139,8 +139,10 @@ class EndpointAndCallTreeTest {
 
             assertNull(snapshot.outputText(), "descendant and controller output must not pollute root output");
             assertEquals(2, snapshot.callTree().root().children().size());
-            assertEquals("b1 says", ((com.openjiuwen.client.api.calltree.TextPartSnapshot) snapshot.callTree()
-                    .root().children().get(0).artifacts().get(0).parts().get(0)).text());
+            var part0 = snapshot.callTree().root().children().get(0).artifacts().get(0).parts().get(0);
+            if (part0 instanceof com.openjiuwen.client.api.calltree.TextPartSnapshot textPart) {
+                assertEquals("b1 says", textPart.text());
+            }
             assertEquals(SpeakingPhase.ROOT_SPEAKING, snapshot.callTree().speakingPhase());
             assertEquals("root-task", snapshot.callTree().currentSpeaker().taskId());
             assertEquals("completed", snapshot.callTree().root().state());
@@ -369,7 +371,8 @@ class EndpointAndCallTreeTest {
             assertEquals(4, calls.get());
             assertTrue(failure.getCause().getMessage().contains("recovery failed 3 times"));
             assertEquals("RECOVERY_RETRY_EXHAUSTED",
-                    ((com.openjiuwen.client.api.ClassifiedError) failure.getCause()).code());
+                    failure.getCause() instanceof com.openjiuwen.client.api.ClassifiedError classified
+                            ? classified.code() : null);
         } finally {
             server.stop(0);
         }

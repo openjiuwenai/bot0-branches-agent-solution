@@ -7,7 +7,11 @@ package com.openjiuwen.client.api.calltree;
 import java.util.List;
 import java.util.Objects;
 
-/** 调用树节点。 */
+/**
+ * 调用树节点。
+ *
+ * @since 2026-07-27
+ */
 public record CallTreeNode(NodeKey key, String delegationIntent, String state,
         List<ArtifactSnapshot> artifacts, List<CallTreeNode> children) {
     public CallTreeNode {

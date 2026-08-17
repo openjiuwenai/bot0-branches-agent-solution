@@ -19,16 +19,24 @@ import java.util.Set;
  * @since 2026-07-30
  */
 public final class ErrorCodes {
-    /** 缺少凭据。不可重试。 */
+    /**
+     * 缺少凭据。不可重试。
+     */
     public static final String AUTH_MISSING = "AUTH_MISSING";
 
-    /** 凭据无效。不可重试。 */
+    /**
+     * 凭据无效。不可重试。
+     */
     public static final String AUTH_INVALID = "AUTH_INVALID";
 
-    /** 越权。不可重试。 */
+    /**
+     * 越权。不可重试。
+     */
     public static final String PERMISSION_DENIED = "PERMISSION_DENIED";
 
-    /** 请求参数非法（调用方缺陷）。不可重试。 */
+    /**
+     * 请求参数非法（调用方缺陷）。不可重试。
+     */
     public static final String VALIDATION_FAILED = "VALIDATION_FAILED";
 
     /**
@@ -38,7 +46,9 @@ public final class ErrorCodes {
      */
     public static final String ROUTE_NOT_FOUND = "ROUTE_NOT_FOUND";
 
-    /** 服务端 Task 不存在（查询/续跑一个已回收或从未创建的 Task）。不可重试。 */
+    /**
+     * 服务端 Task 不存在（查询/续跑一个已回收或从未创建的 Task）。不可重试。
+     */
     public static final String TASK_NOT_FOUND = "TASK_NOT_FOUND";
 
     /**
@@ -49,46 +59,74 @@ public final class ErrorCodes {
      */
     public static final String METHOD_NOT_SUPPORTED = "VALIDATION_METHOD";
 
-    /** 同幂等键绑定了不同正文。<b>不可重试</b>。 */
+    /**
+     * 同幂等键绑定了不同正文。<b>不可重试</b>。
+     */
     public static final String IDEMPOTENCY_PAYLOAD_MISMATCH = "IDEMPOTENCY_PAYLOAD_MISMATCH";
 
-    /** 同幂等键同正文的前一次请求仍在途。<b>可重试（须用同键）</b>。 */
+    /**
+     * 同幂等键同正文的前一次请求仍在途。<b>可重试（须用同键）</b>。
+     */
     public static final String IDEMPOTENCY_IN_FLIGHT = "IDEMPOTENCY_IN_FLIGHT";
 
-    /** 被限流。可重试。 */
+    /**
+     * 被限流。可重试。
+     */
     public static final String RATE_LIMITED = "RATE_LIMITED";
 
-    /** 服务不可用。可重试。 */
+    /**
+     * 服务不可用。可重试。
+     */
     public static final String SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE";
 
-    /** 网络失败（连接/读超时/连接重置）。可重试。 */
+    /**
+     * 网络失败（连接/读超时/连接重置）。可重试。
+     */
     public static final String NETWORK_ERROR = "NETWORK_ERROR";
 
-    /** Runtime 创建连接在取得 taskId 前失败；创建不会自动重发。 */
+    /**
+     * Runtime 创建连接在取得 taskId 前失败；创建不会自动重发。
+     */
     public static final String CREATE_FAILED_NO_TASK_ID = "CREATE_FAILED_NO_TASK_ID";
 
-    /** 已知 Task 的自动恢复连续失败达到熔断阈值。 */
+    /**
+     * 已知 Task 的自动恢复连续失败达到熔断阈值。
+     */
     public static final String RECOVERY_RETRY_EXHAUSTED = "RECOVERY_RETRY_EXHAUSTED";
 
-    /** client_tool interrupt 缺少 toolCallId/toolName，SDK 禁止猜测续传目标。 */
+    /**
+     * client_tool interrupt 缺少 toolCallId/toolName，SDK 禁止猜测续传目标。
+     */
     public static final String INPUT_RESUME_TARGET_MISSING = "INPUT_RESUME_TARGET_MISSING";
 
-    /** Client 自动观察已超过约定时限；服务端 Task 可能仍在运行。不可自动重试创建。 */
+    /**
+     * Client 自动观察已超过约定时限；服务端 Task 可能仍在运行。不可自动重试创建。
+     */
     public static final String OBSERVATION_TIMEOUT = "OBSERVATION_TIMEOUT";
 
-    /** 服务端 Task 失败。不可重试（不是网络问题，不得包装为网络失败）。 */
+    /**
+     * 服务端 Task 失败。不可重试（不是网络问题，不得包装为网络失败）。
+     */
     public static final String AGENT_ERROR = "AGENT_ERROR";
 
-    /** 流在非终态下中断，进展不确定（FEAT-006 §5.1.4：中断不等于失败）。 */
+    /**
+     * 流在非终态下中断，进展不确定（FEAT-006 §5.1.4：中断不等于失败）。
+     */
     public static final String STREAM_INTERRUPTED = "STREAM_INTERRUPTED";
 
-    /** Gateway 的可选断点游标已过期；Runtime 直连模式不使用该能力。 */
+    /**
+     * Gateway 的可选断点游标已过期；Runtime 直连模式不使用该能力。
+     */
     public static final String REPLAY_CURSOR_EXPIRED = "REPLAY_CURSOR_EXPIRED";
 
-    /** Task 已终态等原因导致 SubscribeToTask 不可建立；调用方应以 GetTask 收敛。 */
+    /**
+     * Task 已终态等原因导致 SubscribeToTask 不可建立；调用方应以 GetTask 收敛。
+     */
     public static final String SUBSCRIPTION_UNAVAILABLE = "SUBSCRIPTION_UNAVAILABLE";
 
-    /** 未支持的调用模式。不可重试。 */
+    /**
+     * 未支持的调用模式。不可重试。
+     */
     public static final String UNSUPPORTED_MODE = "UNSUPPORTED_MODE";
 
     /**

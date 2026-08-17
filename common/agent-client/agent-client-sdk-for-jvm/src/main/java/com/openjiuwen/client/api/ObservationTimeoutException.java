@@ -22,6 +22,14 @@ public final class ObservationTimeoutException extends RuntimeException implemen
     private final TaskState lastKnownState;
     private final Duration observationTimeout;
 
+    /**
+     * 构造观察超时异常。
+     *
+     * @param invocationRef 调用句柄
+     * @param diagnosticTaskRef 诊断任务引用
+     * @param lastKnownState 最后已知状态
+     * @param observationTimeout 观察超时时长
+     */
     public ObservationTimeoutException(String invocationRef, String diagnosticTaskRef,
             TaskState lastKnownState, Duration observationTimeout) {
         super("automatic observation timed out after " + observationTimeout
@@ -34,18 +42,38 @@ public final class ObservationTimeoutException extends RuntimeException implemen
         this.observationTimeout = observationTimeout;
     }
 
+    /**
+     * 返回调用句柄。
+     *
+     * @return 调用句柄
+     */
     public String invocationRef() {
         return invocationRef;
     }
 
+    /**
+     * 返回诊断任务引用。
+     *
+     * @return 诊断任务引用
+     */
     public String diagnosticTaskRef() {
         return diagnosticTaskRef;
     }
 
+    /**
+     * 返回最后已知状态。
+     *
+     * @return 最后已知状态
+     */
     public TaskState lastKnownState() {
         return lastKnownState;
     }
 
+    /**
+     * 返回观察超时时长。
+     *
+     * @return 观察超时时长
+     */
     public Duration observationTimeout() {
         return observationTimeout;
     }

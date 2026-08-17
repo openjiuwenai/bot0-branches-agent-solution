@@ -67,7 +67,6 @@ class CallTreeReducerTest {
             assertEquals("orphan owner", textPart.text());
         }
     }
-    }
 
     @Test
     void truncatesOversizedArtifactOnUtf8BoundaryAndDegradesOnlyTree() {
