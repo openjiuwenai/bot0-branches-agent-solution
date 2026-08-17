@@ -1467,28 +1467,28 @@ public class A2aHttpTransportProvider
                 submit(ch, new InvocationEvent.StatusChanged(ch.invocationRef, f.state(), true));
                 terminate(ch);
             }
-            case INPUT_REQUIRED -> {
-                submit(ch, new InvocationEvent.StatusChanged(ch.invocationRef, TaskState.INPUT_REQUIRED, false));
-                A2aJsonCodec.Interrupt it = f.interrupt();
-                // 006 §3.3：INPUT_REQUIRED 无 _interrupt / 非 client_tool → InputRequired(null)，
-                // 触发业务侧 continueInput。有 client_tool 意图时带上 ToolCall 由 SDK 自动执行。
-                if (it == null) {
-                    submit(ch, new InvocationEvent.InputRequired(ch.invocationRef, null, null));
-                } else if (it.userInput()) {
-                    submit(ch, new InvocationEvent.InputRequired(ch.invocationRef, null, it.prompt()));
-                } else if (!it.validResumeTarget()) {
-                    submit(ch, new InvocationEvent.ProtocolDiagnostic(ch.invocationRef,
-                            ErrorCodes.INPUT_RESUME_TARGET_MISSING,
-                            "client_tool interrupt requires non-blank toolCallId and toolName"));
-                    submit(ch, new InvocationEvent.InputRequired(ch.invocationRef, null, it.prompt()));
-                } else {
-                    Duration dl = (it.deadlineMs() != null) ? Duration.ofMillis(it.deadlineMs()) : null;
-                    InvocationEvent.ToolCall call = new InvocationEvent.ToolCall(
-                            it.toolCallId(), it.toolName(), it.arguments(), dl);
-                    submit(ch, new InvocationEvent.InputRequired(ch.invocationRef, call, null));
-                }
-            }
+            case INPUT_REQUIRED -> emitInputRequired(ch, f);
             default -> submit(ch, new InvocationEvent.StatusChanged(ch.invocationRef, f.state(), false));
+        }
+    }
+
+    private void emitInputRequired(Channel ch, A2aJsonCodec.Frame f) {
+        submit(ch, new InvocationEvent.StatusChanged(ch.invocationRef, TaskState.INPUT_REQUIRED, false));
+        A2aJsonCodec.Interrupt it = f.interrupt();
+        if (it == null) {
+            submit(ch, new InvocationEvent.InputRequired(ch.invocationRef, null, null));
+        } else if (it.userInput()) {
+            submit(ch, new InvocationEvent.InputRequired(ch.invocationRef, null, it.prompt()));
+        } else if (!it.validResumeTarget()) {
+            submit(ch, new InvocationEvent.ProtocolDiagnostic(ch.invocationRef,
+                    ErrorCodes.INPUT_RESUME_TARGET_MISSING,
+                    "client_tool interrupt requires non-blank toolCallId and toolName"));
+            submit(ch, new InvocationEvent.InputRequired(ch.invocationRef, null, it.prompt()));
+        } else {
+            Duration dl = (it.deadlineMs() != null) ? Duration.ofMillis(it.deadlineMs()) : null;
+            InvocationEvent.ToolCall call = new InvocationEvent.ToolCall(
+                    it.toolCallId(), it.toolName(), it.arguments(), dl);
+            submit(ch, new InvocationEvent.InputRequired(ch.invocationRef, call, null));
         }
     }
 

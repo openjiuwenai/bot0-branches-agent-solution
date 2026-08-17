@@ -103,8 +103,8 @@ public final class MockRuntimeServer {
         server.start();
         int boundPort = server.getAddress().getPort();
         if (LOG.isLoggable(Level.INFO)) {
-            LOG.info("Mock Runtime listening on http://127.0.0.1:" + boundPort);
-            LOG.info("A2A endpoint: http://127.0.0.1:" + boundPort + "/a2a");
+            LOG.info("Mock Runtime listening on http://127.0.0.1:{0}", boundPort);
+            LOG.info("A2A endpoint: http://127.0.0.1:{0}/a2a", boundPort);
         }
         return server;
     }
@@ -477,8 +477,12 @@ public final class MockRuntimeServer {
 
         private void multiArtifact() {
             addDelegation("agent-a", id, "agent-b", id + "-b", "multi artifact");
-            addOutputWithId("child-artifact-1", "agent-b", id + "-b", "first", false, true);
-            addOutputWithId("child-artifact-2", "agent-b", id + "-b", "second", false, true);
+            Map<String, Object> event1 = Map.of("type", "output",
+                    "source", Map.of("agentId", "agent-b", "taskId", id + "-b"));
+            addOutputWithEvent("child-artifact-1", "first", event1, false, true);
+            Map<String, Object> event2 = Map.of("type", "output",
+                    "source", Map.of("agentId", "agent-b", "taskId", id + "-b"));
+            addOutputWithEvent("child-artifact-2", "second", event2, false, true);
             addController();
         }
 
@@ -511,8 +515,12 @@ public final class MockRuntimeServer {
         private void malformed() {
             addDelegation("agent-a", id, "agent-b", id + "-b", "first parent");
             addDelegation("agent-c", id + "-c", "agent-b", id + "-b", "illegal second parent");
-            addOutputWithId("shared", "agent-b", id + "-b", "first owner", false, true);
-            addOutputWithId("shared", "agent-c", id + "-c", "conflicting owner", false, true);
+            Map<String, Object> evt1 = Map.of("type", "output",
+                    "source", Map.of("agentId", "agent-b", "taskId", id + "-b"));
+            addOutputWithEvent("shared", "first owner", evt1, false, true);
+            Map<String, Object> evt2 = Map.of("type", "output",
+                    "source", Map.of("agentId", "agent-c", "taskId", id + "-c"));
+            addOutputWithEvent("shared", "conflicting owner", evt2, false, true);
         }
 
         private void controllerReturn() {
@@ -561,13 +569,13 @@ public final class MockRuntimeServer {
         }
 
         private void addOutput(String agent, String task, String text, boolean append, boolean last) {
-            addOutputWithId("output-" + task, agent, task, text, append, last);
-        }
-
-        private void addOutputWithId(String artifactId, String agent, String task,
-                String text, boolean append, boolean last) {
             Map<String, Object> event = Map.of("type", "output",
                     "source", Map.of("agentId", agent, "taskId", task));
+            addOutputWithEvent("output-" + task, text, event, append, last);
+        }
+
+        private void addOutputWithEvent(String artifactId, String text,
+                Map<String, Object> event, boolean append, boolean last) {
             addArtifact(artifactId, List.of(Map.of("text", text)), event, append, last);
         }
 

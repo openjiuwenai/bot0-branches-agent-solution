@@ -8,7 +8,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 
-/** 内置 Runtime 直连 A2A Provider。 */
+/**
+ * 内置 Runtime 直连 A2A Provider。
+ *
+ * @since 2026-07-27
+ */
 public final class RuntimeTransportProvider extends A2aHttpTransportProvider {
     public RuntimeTransportProvider(String baseUrl) {
         super(baseUrl, new ObjectMapper(), defaultIdleTimeout(), RuntimeEndpointPolicy.INSTANCE);

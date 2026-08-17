@@ -59,7 +59,11 @@ public interface InvocationCall extends AutoCloseable {
         return superCallTreePublisher();
     }
 
-    /** SDK 内部与兼容实现共用的空 Publisher。 */
+    /**
+     * SDK 内部与兼容实现共用的空 Publisher。
+     *
+     * @return 空 Publisher
+     */
     static Flow.Publisher<CallTreeSnapshot> superCallTreePublisher() {
         return subscriber -> subscriber.onSubscribe(new Flow.Subscription() {
             private boolean done;

@@ -4,6 +4,10 @@
 
 package com.openjiuwen.mockruntime;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,10 +18,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -62,7 +63,7 @@ class MockRuntimeServerTest {
     }
 
     @Test
-    void subscribeStartsWithSnapshotAndUsesRuntimeSseFormatWithoutCursorIds() throws Exception {
+    void subscribeStartsWithSnapshotUsesRuntimeSseFormat() throws Exception {
         String stream = postText("""
                 {"jsonrpc":"2.0","id":"stream","method":"SendStreamingMessage","params":{
                   "message":{"contextId":"ctx","parts":[{"text":"hello"}]},
@@ -176,12 +177,12 @@ class MockRuntimeServerTest {
                     try {
                         return JSON.readTree(line.substring("data:".length()));
                     } catch (JsonProcessingException error) {
-                    try {
-                        return JSON.readTree(line.substring("data:".length()));
-                    } catch (IOException e) {
-                        throw new IllegalArgumentException(e);
+                        try {
+                            return JSON.readTree(line.substring("data:".length()));
+                        } catch (IOException e) {
+                            throw new IllegalArgumentException(e);
+                        }
                     }
-                }
                 })
                 .toList();
     }

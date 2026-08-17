@@ -8,7 +8,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 
-/** 内置 Gateway A2A Provider。 */
+/**
+ * 内置 Gateway A2A Provider。
+ *
+ * @since 2026-07-27
+ */
 public final class GatewayTransportProvider extends A2aHttpTransportProvider {
     public GatewayTransportProvider(String baseUrl) {
         super(baseUrl, new ObjectMapper(), defaultIdleTimeout(), GatewayEndpointPolicy.INSTANCE);

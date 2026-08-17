@@ -124,7 +124,7 @@ final class CallTreeReducer implements AutoCloseable {
     }
 
     private void acceptDelegation(AgentEvent event, ProtocolArtifact artifact) {
-        MutableNode source = existingNode(event.source());
+        MutableNode source = existingNode(event.source()).orElse(null);
         if (source == null) {
             bufferEdge(event, artifact);
             return;
@@ -156,7 +156,7 @@ final class CallTreeReducer implements AutoCloseable {
     }
 
     private void acceptOutput(AgentEvent event, ProtocolArtifact artifact) {
-        MutableNode source = existingNode(event.source());
+        MutableNode source = existingNode(event.source()).orElse(null);
         if (source == null) {
             bufferSignal(event, artifact);
             return;
@@ -197,7 +197,7 @@ final class CallTreeReducer implements AutoCloseable {
     }
 
     private void acceptStatus(AgentEvent event, ProtocolArtifact artifact) {
-        MutableNode source = existingNode(event.source());
+        MutableNode source = existingNode(event.source()).orElse(null);
         if (source == null) {
             bufferSignal(event, artifact);
             return;
@@ -225,11 +225,11 @@ final class CallTreeReducer implements AutoCloseable {
         return true;
     }
 
-    private MutableNode existingNode(AgentEvent.AgentRef ref) {
+    private Optional<MutableNode> existingNode(AgentEvent.AgentRef ref) {
         NodeKey key = new NodeKey(ref.agentId(), ref.taskId());
         MutableNode found = nodes.get(key);
         if (found != null) {
-            return found;
+            return Optional.of(found);
         }
         if (ref.taskId().equals(rootTaskId)) {
             nodes.remove(root.key);
@@ -238,13 +238,13 @@ final class CallTreeReducer implements AutoCloseable {
             if (currentSpeaker != null && currentSpeaker.taskId().equals(rootTaskId)) {
                 currentSpeaker = key;
             }
-            return root;
+            return Optional.of(root);
         }
-        return null;
+        return Optional.empty();
     }
 
     private MutableNode createNode(AgentEvent.AgentRef ref) {
-        MutableNode found = existingNode(ref);
+        MutableNode found = existingNode(ref).orElse(null);
         if (found != null) {
             return found;
         }

@@ -73,13 +73,23 @@ public final class AgentClients {
             return this;
         }
 
-        /** 设置内置 A2A Transport 的 Endpoint 类型，默认 GATEWAY。 */
+        /**
+         * 设置内置 A2A Transport 的 Endpoint 类型，默认 GATEWAY。
+         *
+         * @param v 端点类型
+         * @return Builder
+         */
         public Builder endpointType(EndpointType v) {
             this.endpointType = Objects.requireNonNull(v, "endpointType");
             return this;
         }
 
-        /** 设置内置 A2A Transport 的服务基址；SDK 自动补齐 /a2a。 */
+        /**
+         * 设置内置 A2A Transport 的服务基址；SDK 自动补齐 /a2a。
+         *
+         * @param v 端点 URL
+         * @return Builder
+         */
         public Builder endpointUrl(String v) {
             this.endpointUrl = v;
             return this;

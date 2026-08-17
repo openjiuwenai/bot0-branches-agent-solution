@@ -202,7 +202,12 @@ final class A2aJsonCodec {
         return root;
     }
 
-    /** SubscribeToTask 请求。Runtime 只接受 Task id，不携带 cursor。 */
+    /**
+     * SubscribeToTask 请求。Runtime 只接受 Task id，不携带 cursor。
+     *
+     * @param taskRef 任务引用
+     * @return SubscribeToTask 请求
+     */
     ObjectNode buildSubscribe(String taskRef) {
         ObjectNode root = newRequest("SubscribeToTask");
         root.putObject("params").put("id", taskRef);
@@ -373,6 +378,8 @@ final class A2aJsonCodec {
                     Object data = mapper.convertValue(part.path("data"), Object.class);
                     parts.add(new ProtocolPart.Data(data));
                     controllerOutput |= "controller_output".equals(part.path("data").path("type").asText());
+                } else {
+                    // 其他 Part 类型暂不处理
                 }
             }
         }

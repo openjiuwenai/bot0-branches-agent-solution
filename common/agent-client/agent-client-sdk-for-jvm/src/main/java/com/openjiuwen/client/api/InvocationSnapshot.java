@@ -95,7 +95,11 @@ public record InvocationSnapshot(
         return Optional.ofNullable(recovery);
     }
 
-    /** @return 调用树；旧 Transport 可能为空 */
+    /**
+     * 返回调用树，旧 Transport 可能为空。
+     *
+     * @return 调用树
+     */
     public Optional<CallTreeSnapshot> maybeCallTree() {
         return Optional.ofNullable(callTree);
     }

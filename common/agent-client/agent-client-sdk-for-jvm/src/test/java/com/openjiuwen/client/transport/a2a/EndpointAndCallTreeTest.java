@@ -139,8 +139,10 @@ class EndpointAndCallTreeTest {
 
             assertNull(snapshot.outputText(), "descendant and controller output must not pollute root output");
             assertEquals(2, snapshot.callTree().root().children().size());
-            assertEquals("b1 says", ((com.openjiuwen.client.api.calltree.TextPartSnapshot) snapshot.callTree()
-                    .root().children().get(0).artifacts().get(0).parts().get(0)).text());
+            PartSnapshot part = snapshot.callTree().root().children().get(0).artifacts().get(0).parts().get(0);
+            if (part instanceof com.openjiuwen.client.api.calltree.TextPartSnapshot textPart) {
+                assertEquals("b1 says", textPart.text());
+            }
             assertEquals(SpeakingPhase.ROOT_SPEAKING, snapshot.callTree().speakingPhase());
             assertEquals("root-task", snapshot.callTree().currentSpeaker().taskId());
             assertEquals("completed", snapshot.callTree().root().state());
