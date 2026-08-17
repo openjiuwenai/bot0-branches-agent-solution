@@ -82,25 +82,7 @@ class LatestValuePublisherTest {
     @Test
     void throwingSubscriberDoesNotBlockOtherSubscribers() {
         LatestValuePublisher<Integer> publisher = directPublisher();
-        publisher.subscribe(new Flow.Subscriber<>() {
-            @Override
-            public void onSubscribe(Flow.Subscription subscription) {
-                subscription.request(1);
-            }
-
-            @Override
-            public void onNext(Integer item) {
-                throw new IllegalStateException("subscriber failure");
-            }
-
-            @Override
-            public void onError(Throwable throwable) {
-            }
-
-            @Override
-            public void onComplete() {
-            }
-        });
+        publisher.subscribe(new ThrowingOnNextSubscriber());
         TestSubscriber<Integer> healthy = new TestSubscriber<>();
         publisher.subscribe(healthy);
         healthy.request(1);
@@ -113,25 +95,7 @@ class LatestValuePublisherTest {
     @Test
     void throwingCompletionDoesNotBlockOtherSubscribers() {
         LatestValuePublisher<Integer> publisher = directPublisher();
-        publisher.subscribe(new Flow.Subscriber<>() {
-            @Override
-            public void onSubscribe(Flow.Subscription subscription) {
-                subscription.request(1);
-            }
-
-            @Override
-            public void onNext(Integer item) {
-            }
-
-            @Override
-            public void onError(Throwable throwable) {
-            }
-
-            @Override
-            public void onComplete() {
-                throw new IllegalStateException("completion failure");
-            }
-        });
+        publisher.subscribe(new ThrowingOnCompleteSubscriber());
         TestSubscriber<Integer> healthy = new TestSubscriber<>();
         publisher.subscribe(healthy);
         healthy.request(1);
@@ -196,6 +160,46 @@ class LatestValuePublisherTest {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
         while (subscriber.values.size() < count && System.nanoTime() < deadline) {
             Thread.sleep(5);
+        }
+    }
+
+    private static final class ThrowingOnNextSubscriber implements Flow.Subscriber<Integer> {
+        @Override
+        public void onSubscribe(Flow.Subscription subscription) {
+            subscription.request(1);
+        }
+
+        @Override
+        public void onNext(Integer item) {
+            throw new IllegalStateException("subscriber failure");
+        }
+
+        @Override
+        public void onError(Throwable throwable) {
+        }
+
+        @Override
+        public void onComplete() {
+        }
+    }
+
+    private static final class ThrowingOnCompleteSubscriber implements Flow.Subscriber<Integer> {
+        @Override
+        public void onSubscribe(Flow.Subscription subscription) {
+            subscription.request(1);
+        }
+
+        @Override
+        public void onNext(Integer item) {
+        }
+
+        @Override
+        public void onError(Throwable throwable) {
+        }
+
+        @Override
+        public void onComplete() {
+            throw new IllegalStateException("completion failure");
         }
     }
 
