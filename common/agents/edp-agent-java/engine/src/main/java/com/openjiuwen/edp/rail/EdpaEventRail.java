@@ -118,6 +118,7 @@ public class EdpaEventRail extends DeepAgentRail {
     private static final String TOOL_TODO_MODIFY = ToolConstants.TODO_MODIFY;
     private static final String TOOL_CALL_MCP = ToolConstants.CALL_MCP;
     private static final String TOOL_CALL_VERSATILE = ToolConstants.CALL_VERSATILE;
+    private static final String TOOL_CALL_SUBAGENT = ToolConstants.CALL_SUBAGENT;
     private static final String TOOL_ASK_USER = ToolConstants.ASK_USER;
 
     /**
@@ -551,7 +552,7 @@ public class EdpaEventRail extends DeepAgentRail {
      */
     private String cacheQueryParams(AgentCallbackContext ctx, ToolCallInputs inputs, String toolName) {
         String queryIntent = "";
-        if (TOOL_CALL_VERSATILE.equals(toolName) || TOOL_CALL_MCP.equals(toolName)) {
+        if (isA2aDelegateTool(toolName) || TOOL_CALL_MCP.equals(toolName)) {
             Map<String, Object> args = normalizeToolArgs(inputs.getToolArgs());
             queryIntent = String.valueOf(args.getOrDefault("query_intent", ""));
             if (!queryIntent.isBlank() && !"null".equals(queryIntent)) {
@@ -727,7 +728,7 @@ public class EdpaEventRail extends DeepAgentRail {
      * @param sid 会话 ID
      */
     private void emitInterruptEndForResume(AgentCallbackContext ctx, String toolName, String sid) {
-        if (!TOOL_CALL_VERSATILE.equals(toolName) || !interruptActive.getOrDefault(sid, false)) {
+        if (!isA2aDelegateTool(toolName) || !interruptActive.getOrDefault(sid, false)) {
             return;
         }
         String interruptId = interruptIdMap.remove(sid);
@@ -955,10 +956,10 @@ public class EdpaEventRail extends DeepAgentRail {
             String llmQuestion = extractAskUserQuestion(ctx);
             content = llmQuestion.isBlank() ? ScriptResolver.interruptStart(scripts) : llmQuestion;
         }
-        // a2a_delegate 中断（call_versatile）不发射 interrupt_start 事件，也不置位 interruptActive
+        // a2a_delegate 中断（call_versatile / call_subagent）不发射 interrupt_start 事件，也不置位 interruptActive
         // 避免 interruptActive 泄漏导致后续 tool_end 被误跳过和孤儿 interrupt_end。
         // 仅缓存参数和标记 A2A 续传，tool_start/tool_end 由 resume 阶段的 beforeToolCall/afterToolCall 发射。
-        if (TOOL_CALL_VERSATILE.equals(toolName)) {
+        if (isA2aDelegateTool(toolName)) {
             handleCallVersatileInterrupt(ctx, sid, toolName);
             return;
         }
@@ -1693,7 +1694,17 @@ public class EdpaEventRail extends DeepAgentRail {
     // ═══════════════════════════════════════════════════
 
     private static boolean isBusinessTool(String toolName) {
-        return TOOL_CALL_MCP.equals(toolName) || TOOL_CALL_VERSATILE.equals(toolName);
+        return TOOL_CALL_MCP.equals(toolName) || isA2aDelegateTool(toolName);
+    }
+
+    /**
+     * 判断是否为 A2A 委托类工具（call_versatile 或 call_subagent）。
+     *
+     * @param toolName 工具名称
+     * @return true 如果是 A2A 委托类工具
+     */
+    private static boolean isA2aDelegateTool(String toolName) {
+        return TOOL_CALL_VERSATILE.equals(toolName) || TOOL_CALL_SUBAGENT.equals(toolName);
     }
 
     /**
@@ -1952,7 +1963,7 @@ public class EdpaEventRail extends DeepAgentRail {
                 if (TOOL_TODO_MODIFY.equals(name)) {
                     return "正在更新任务状态...";
                 }
-                if (TOOL_CALL_VERSATILE.equals(name)) {
+                if (TOOL_CALL_VERSATILE.equals(name) || TOOL_CALL_SUBAGENT.equals(name)) {
                     return "正在调用业务服务...";
                 }
                 if (TOOL_CALL_MCP.equals(name)) {
