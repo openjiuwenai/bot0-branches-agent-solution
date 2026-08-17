@@ -526,7 +526,12 @@ class EndpointAndCallTreeTest {
 
     @FunctionalInterface
     private interface Handler {
-        /** 处理 HTTP 请求。 */
+        /**
+         * 处理 HTTP 请求。
+         *
+         * @param exchange HTTP 交换
+         * @throws IOException IO 异常
+         */
         void handle(HttpExchange exchange) throws IOException;
     }
 }

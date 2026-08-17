@@ -389,6 +389,7 @@ public final class RuntimeVerificationApp {
             throw new IllegalStateException("BLOCKING/ASYNC must not construct a call tree");
         } else {
             // No constraint violation for other scenarios.
+            return;
         }
         if ("streaming-resubscribe".equals(scenario)) {
             run.addDiagnostic("verified SubscribeToTask current snapshot + future events;"

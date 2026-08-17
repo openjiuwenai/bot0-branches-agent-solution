@@ -12,10 +12,19 @@ import java.util.Optional;
 
 /** A2A Endpoint 间唯一允许变化的请求与恢复策略。 */
 interface EndpointPolicy {
-    /** 返回端点类型。 */
+    /**
+     * 返回端点类型。
+     *
+     * @return 端点类型
+     */
     EndpointType type();
 
-    /** 返回凭据，若不需要则返回空。 */
+    /**
+     * 返回凭据，若不需要则返回空。
+     *
+     * @param supplied 调用方提供的凭据
+     * @return 凭据，可能为空
+     */
     default Optional<String> credential(String supplied) {
         return Optional.ofNullable(supplied);
     }
@@ -24,7 +33,11 @@ interface EndpointPolicy {
         return command;
     }
 
-    /** 未确认的创建请求是否可重试。 */
+    /**
+     * 未确认的创建请求是否可重试。
+     *
+     * @return 可重试返回 true
+     */
     boolean retryUnconfirmedCreate();
 
     default boolean useSubscriptionForRecovery(InvocationMode mode) {

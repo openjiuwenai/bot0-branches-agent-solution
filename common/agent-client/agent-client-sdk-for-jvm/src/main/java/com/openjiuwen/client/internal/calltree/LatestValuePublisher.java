@@ -101,7 +101,7 @@ public final class LatestValuePublisher<T extends Object> implements Flow.Publis
     private record Versioned<T>(long version, T value) {
     }
 
-    private static final class LatestSubscription<T> implements Flow.Subscription {
+    private static final class LatestSubscription<T extends Object> implements Flow.Subscription {
         private final Flow.Subscriber<? super T> subscriber;
         private final LatestValuePublisher<T> owner;
         private final Executor dispatcher;
