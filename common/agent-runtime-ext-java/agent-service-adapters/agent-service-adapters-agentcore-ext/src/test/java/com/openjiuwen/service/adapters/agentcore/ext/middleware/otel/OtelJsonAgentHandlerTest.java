@@ -8,15 +8,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.core.session.tracer.TraceAgentSpan;
 import com.openjiuwen.extensions.tracerotel.OtelTracerConfig;
+
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
-import java.util.List;
-import java.util.Map;
+
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Map;
+
+/**
+ * OtelJsonAgentHandler 正文 JSON 化的单元测试。
+ */
 class OtelJsonAgentHandlerTest {
 
     private static final AttributeKey<String> AGENT_INPUTS = AttributeKey.stringKey("openjiuwen.agent.inputs");

@@ -10,8 +10,12 @@ import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanContext;
 import io.opentelemetry.api.trace.TraceFlags;
 import io.opentelemetry.api.trace.TraceState;
+
 import org.junit.jupiter.api.Test;
 
+/**
+ * HttpContextBridge 请求级载体的单元测试。
+ */
 class HttpContextBridgeTest {
 
     private Span spanOf(String traceId) {

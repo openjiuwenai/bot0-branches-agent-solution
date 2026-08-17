@@ -7,11 +7,16 @@ package com.openjiuwen.service.adapters.agentcore.ext.middleware.otel;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.extensions.tracerotel.OtelTracerConfig;
+
 import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.data.SpanData;
+
 import org.junit.jupiter.api.Test;
 
+/**
+ * OtelSdkFactory provider 装配的单元测试。
+ */
 class OtelSdkFactoryTest {
 
     private OtelTracerConfig config() {

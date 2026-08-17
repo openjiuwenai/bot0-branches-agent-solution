@@ -10,16 +10,19 @@ import com.openjiuwen.core.session.Session;
 import com.openjiuwen.core.session.SessionContextHolder;
 import com.openjiuwen.core.session.tracer.TraceAgentSpan;
 import com.openjiuwen.extensions.tracerotel.OtelTracerConfig;
+
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.data.SpanData;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
 
 /**
  * Contract conformance test: assembles the full span tree of the data contract
@@ -59,6 +62,22 @@ class OtelContractTreeTest {
 
     @Test
     void contractTree_allSpansCarryRequiredAttributes() {
+        List<SpanData> spans = produceContractTree();
+        SpanData http = byPrefix(spans, "http.request");
+        SpanData chainSpan = byPrefix(spans, "chain.");
+        SpanData llmSpan = byPrefix(spans, "llm.");
+        SpanData toolSpan = byPrefix(spans, "tool.");
+        assertTreeShape(http, chainSpan, llmSpan, toolSpan);
+        assertChainAttributes(chainSpan);
+        assertLlmAttributes(llmSpan);
+        assertToolAttributes(toolSpan);
+        // ---- every span self-contained (contract §9.D) ----
+        for (SpanData span : spans) {
+            assertThat(span.getAttributes().get(str("session.id"))).as(span.getName()).isNotNull();
+        }
+    }
+
+    private List<SpanData> produceContractTree() {
         OtelTracerConfig config = OtelTracerConfig.builder()
                 .exporterType("otlp").exporterEndpoint("http://localhost:4317")
                 .serviceName("edp-agent").isRedactionEnabled(false).maxAttrLength(-1).build();
@@ -99,13 +118,10 @@ class OtelContractTreeTest {
         provider.forceFlush().join(5, TimeUnit.SECONDS);
         List<SpanData> spans = exporter.getFinishedSpanItems();
         provider.close();
+        return spans;
+    }
 
-        SpanData http = byPrefix(spans, "http.request");
-        SpanData chainSpan = byPrefix(spans, "chain.");
-        SpanData llmSpan = byPrefix(spans, "llm.");
-        SpanData toolSpan = byPrefix(spans, "tool.");
-
-        // ---- tree shape (contract §6.2) ----
+    private static void assertTreeShape(SpanData http, SpanData chainSpan, SpanData llmSpan, SpanData toolSpan) {
         assertThat(http.getParentSpanId()).isEqualTo("0000000000000000");
         assertThat(chainSpan.getTraceId()).isEqualTo(http.getTraceId());
         assertThat(chainSpan.getParentSpanId()).isEqualTo(http.getSpanId());
@@ -115,8 +131,9 @@ class OtelContractTreeTest {
         assertThat(llmSpan.getKind()).isEqualTo(SpanKind.CLIENT);
         assertThat(chainSpan.getKind()).isEqualTo(SpanKind.INTERNAL);
         assertThat(toolSpan.getKind()).isEqualTo(SpanKind.INTERNAL);
+    }
 
-        // ---- chain attributes (contract §7.1) ----
+    private static void assertChainAttributes(SpanData chainSpan) {
         var chainAttrs = chainSpan.getAttributes();
         assertThat(chainAttrs.get(str("gen_ai.system"))).isEqualTo("openjiuwen");
         assertThat(chainAttrs.get(str("openjiuwen.agent.invoke_type"))).isEqualTo("chain");
@@ -128,8 +145,9 @@ class OtelContractTreeTest {
         assertThat(chainAttrs.get(str("openjiuwen.child_invoke_ids"))).contains("inv-2");
         assertThat(chainAttrs.get(str("openjiuwen.trace.id"))).isEqualTo("trace-ct");
         assertThat(chainAttrs.get(str("session.id"))).isEqualTo("conv-ct");
+    }
 
-        // ---- llm attributes (contract §7.2) ----
+    private static void assertLlmAttributes(SpanData llmSpan) {
         var llmAttrs = llmSpan.getAttributes();
         assertThat(llmAttrs.get(str("gen_ai.system"))).isEqualTo("openjiuwen");
         assertThat(llmAttrs.get(str("gen_ai.operation.name"))).isEqualTo("chat");
@@ -142,8 +160,9 @@ class OtelContractTreeTest {
         assertThat(llmAttrs.get(str("openjiuwen.agent.invoke_type"))).isEqualTo("llm");
         assertThat(llmAttrs.get(str("openjiuwen.parent_invoke_id"))).isEqualTo("inv-1");
         assertThat(llmAttrs.get(str("session.id"))).isEqualTo("conv-ct");
+    }
 
-        // ---- tool attributes (contract §7.3) ----
+    private static void assertToolAttributes(SpanData toolSpan) {
         var toolAttrs = toolSpan.getAttributes();
         assertThat(toolAttrs.get(str("gen_ai.operation.name"))).isEqualTo("execute_tool");
         assertThat(toolAttrs.get(str("gen_ai.tool.name"))).isEqualTo("read_file");
@@ -151,11 +170,6 @@ class OtelContractTreeTest {
         assertThat(toolAttrs.get(str("openjiuwen.agent.inputs"))).contains("\"path\":\"/tmp/a.txt\"");
         assertThat(toolAttrs.get(str("openjiuwen.agent.outputs"))).contains("\"code\":0");
         assertThat(toolAttrs.get(str("session.id"))).isEqualTo("conv-ct");
-
-        // ---- every span self-contained (contract §9.D) ----
-        for (SpanData span : spans) {
-            assertThat(span.getAttributes().get(str("session.id"))).as(span.getName()).isNotNull();
-        }
     }
 
     private static SpanData byPrefix(List<SpanData> spans, String prefix) {

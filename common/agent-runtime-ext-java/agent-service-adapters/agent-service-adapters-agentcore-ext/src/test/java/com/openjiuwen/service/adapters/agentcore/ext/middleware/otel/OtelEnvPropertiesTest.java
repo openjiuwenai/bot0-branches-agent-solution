@@ -7,10 +7,14 @@ package com.openjiuwen.service.adapters.agentcore.ext.middleware.otel;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.util.HashMap;
-import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * OtelEnvProperties 配置解析与覆盖优先级的单元测试。
+ */
 class OtelEnvPropertiesTest {
 
     private OtelEnvProperties from(Map<String, String> env) {

@@ -10,13 +10,18 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import com.openjiuwen.core.session.Session;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.extensions.tracerotel.OtelRail;
+
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanContext;
 import io.opentelemetry.context.Context;
-import io.opentelemetry.context.Scope;
-import java.util.Map;
+
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
+
+/**
+ * SessionFilteredAgentRail 会话过滤的单元测试。
+ */
 class SessionFilteredAgentRailTest {
 
     /** Records delegated calls without touching any tracer infrastructure. */

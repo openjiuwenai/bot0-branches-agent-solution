@@ -8,16 +8,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.core.session.Session;
 import com.openjiuwen.core.session.SessionContextHolder;
+
 import io.opentelemetry.api.common.AttributeKey;
-import io.opentelemetry.context.Context;
 import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;
 import io.opentelemetry.sdk.trace.ReadWriteSpan;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
-import java.util.Map;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
+
+/**
+ * SessionIdSpanProcessor 会话标识注入的单元测试。
+ */
 class SessionIdSpanProcessorTest {
 
     @AfterEach
@@ -79,7 +84,9 @@ class SessionIdSpanProcessorTest {
                 .addSpanProcessor(processor)
                 .addSpanProcessor(SimpleSpanProcessor.create(InMemorySpanExporter.create()))
                 .build();
-        ReadWriteSpan span = (ReadWriteSpan) provider.get("t").spanBuilder("x").startSpan();
+        io.opentelemetry.api.trace.Span started = provider.get("t").spanBuilder("x").startSpan();
+        assertThat(started).isInstanceOf(ReadWriteSpan.class);
+        ReadWriteSpan span = (ReadWriteSpan) started;
         assertThat(span.getAttribute(AttributeKey.stringKey("session.id"))).isEqualTo("conv-2");
         span.end();
         provider.close();

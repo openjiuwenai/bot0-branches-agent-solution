@@ -9,13 +9,16 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 
 import com.openjiuwen.core.session.tracer.TraceAgentSpan;
 import com.openjiuwen.extensions.tracerotel.OtelTracerConfig;
+
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
-import java.util.Map;
+
 import org.junit.jupiter.api.Test;
+
+import java.util.Map;
 
 /**
  * Regression for DFX-001-P2: toJson fallback must not emit non-JSON attribute values,
@@ -30,6 +33,11 @@ class OtelJsonHandlerFallbackTest {
 
     /** A bean whose getter always throws — Jackson cannot serialize it. */
     public static final class FailingBean {
+        /**
+         * Always-failing getter.
+         *
+         * @return never returns
+         */
         public String getValue() {
             throw new IllegalStateException("intentional serialization failure");
         }
@@ -55,7 +63,7 @@ class OtelJsonHandlerFallbackTest {
         try {
             new com.fasterxml.jackson.databind.ObjectMapper().readTree(value);
             return true;
-        } catch (Exception e) {
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             return false;
         }
     }

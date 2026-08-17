@@ -7,18 +7,24 @@ package com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.http;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.HttpContextBridge;
+
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
-import java.nio.charset.StandardCharsets;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
+import java.nio.charset.StandardCharsets;
+
+/**
+ * HttpRequestSpanFilter 入口根 span 的单元测试。
+ */
 class HttpRequestSpanFilterTest {
 
     private final InMemorySpanExporter exporter = InMemorySpanExporter.create();

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.egress;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -7,6 +11,7 @@ import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentCardRegist
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCall;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCallOutcome;
+
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.StatusCode;
@@ -15,11 +20,16 @@ import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+
+/**
+ * OtelRemoteAgentCallerDecorator 出站委托 span 的单元测试。
+ */
 class OtelRemoteAgentCallerDecoratorTest {
 
     private final InMemorySpanExporter exporter = InMemorySpanExporter.create();
@@ -60,9 +70,9 @@ class OtelRemoteAgentCallerDecoratorTest {
 
         assertThat(exporter.getFinishedSpanItems()).hasSize(2);
         SpanData va = exporter.getFinishedSpanItems().stream()
-                .filter(s -> s.getName().equals("service.versatile_adapter")).findFirst().orElseThrow();
+                .filter(s -> "service.versatile_adapter".equals(s.getName())).findFirst().orElseThrow();
         SpanData chain = exporter.getFinishedSpanItems().stream()
-                .filter(s -> s.getName().equals("chain.X")).findFirst().orElseThrow();
+                .filter(s -> "chain.X".equals(s.getName())).findFirst().orElseThrow();
         assertThat(va.getKind()).isEqualTo(SpanKind.CLIENT);
         assertThat(va.getTraceId()).isEqualTo(chain.getTraceId());
         assertThat(va.getParentSpanId()).isEqualTo(chain.getSpanId());

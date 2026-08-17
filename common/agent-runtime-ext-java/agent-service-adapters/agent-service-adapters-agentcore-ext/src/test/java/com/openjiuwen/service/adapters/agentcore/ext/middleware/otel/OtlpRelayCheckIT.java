@@ -9,17 +9,20 @@ import com.openjiuwen.core.session.SessionContextHolder;
 import com.openjiuwen.core.session.tracer.TraceAgentSpan;
 import com.openjiuwen.extensions.tracerotel.OtelTracerConfig;
 import com.openjiuwen.extensions.tracerotel.OtelTracerSetup;
+
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.export.SpanExporter;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
 
 /**
  * Manual verification against the mock OTLP collector (otlp_relay.py serve on :4317).

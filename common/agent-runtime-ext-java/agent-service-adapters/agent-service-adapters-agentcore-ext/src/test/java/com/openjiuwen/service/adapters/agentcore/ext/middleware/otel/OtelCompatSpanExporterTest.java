@@ -12,8 +12,12 @@ import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
+
 import org.junit.jupiter.api.Test;
 
+/**
+ * OtelCompatSpanExporter 契约双写的单元测试。
+ */
 class OtelCompatSpanExporterTest {
 
     private static final AttributeKey<Long> OLD_INPUT = AttributeKey.longKey("gen_ai.usage.prompt_tokens");

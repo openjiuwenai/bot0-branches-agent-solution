@@ -1,7 +1,14 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.egress;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.openjiuwen.core.runner.drunner.remoteclient.RemoteClient;
+import com.openjiuwen.core.runner.drunner.remoteclient.RemoteClientConfig;
 
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.trace.SpanKind;
@@ -10,12 +17,15 @@ import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
-import com.openjiuwen.core.runner.drunner.remoteclient.RemoteClient;
-import com.openjiuwen.core.runner.drunner.remoteclient.RemoteClientConfig;
-import java.util.Iterator;
-import java.util.Map;
+
 import org.junit.jupiter.api.Test;
 
+import java.util.Iterator;
+import java.util.Map;
+
+/**
+ * OtelRemoteClientDecoratorFactory 出站装饰器的单元测试。
+ */
 class OtelRemoteClientDecoratorFactoryTest {
 
     private final InMemorySpanExporter exporter = InMemorySpanExporter.create();

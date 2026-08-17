@@ -44,75 +44,96 @@ public class OtelTrajectoryProperties {
     /** 采样率 [0.0, 1.0]；回退 OTEL_TRACES_SAMPLER_ARG，默认 1.0。 */
     private Double sampleRate;
 
+    // ── getters ─────────────────────────────────────────────
+
     public boolean isEnabled() {
         return enabled;
     }
 
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
-    }
 
     public String getEndpoint() {
         return endpoint;
     }
 
-    public void setEndpoint(String endpoint) {
-        this.endpoint = endpoint;
-    }
 
     public String getProtocol() {
         return protocol;
     }
 
-    public void setProtocol(String protocol) {
-        this.protocol = protocol;
-    }
 
     public Map<String, String> getHeaders() {
         return headers;
     }
 
-    public void setHeaders(Map<String, String> headers) {
-        this.headers = headers;
-    }
 
     public Duration getTimeout() {
         return timeout;
     }
 
-    public void setTimeout(Duration timeout) {
-        this.timeout = timeout;
-    }
 
     public String getServiceName() {
         return serviceName;
     }
 
-    public void setServiceName(String serviceName) {
-        this.serviceName = serviceName;
-    }
 
     public String getServiceVersion() {
         return serviceVersion;
     }
 
-    public void setServiceVersion(String serviceVersion) {
-        this.serviceVersion = serviceVersion;
-    }
 
     public String getServiceInstanceId() {
         return serviceInstanceId;
     }
 
-    public void setServiceInstanceId(String serviceInstanceId) {
-        this.serviceInstanceId = serviceInstanceId;
-    }
 
     public Double getSampleRate() {
         return sampleRate;
     }
 
+    // ── setters ─────────────────────────────────────────────
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+
+    public void setEndpoint(String endpoint) {
+        this.endpoint = endpoint;
+    }
+
+
+    public void setProtocol(String protocol) {
+        this.protocol = protocol;
+    }
+
+
+    public void setHeaders(Map<String, String> headers) {
+        this.headers = headers;
+    }
+
+
+    public void setTimeout(Duration timeout) {
+        this.timeout = timeout;
+    }
+
+
+    public void setServiceName(String serviceName) {
+        this.serviceName = serviceName;
+    }
+
+
+    public void setServiceVersion(String serviceVersion) {
+        this.serviceVersion = serviceVersion;
+    }
+
+
+    public void setServiceInstanceId(String serviceInstanceId) {
+        this.serviceInstanceId = serviceInstanceId;
+    }
+
+
     public void setSampleRate(Double sampleRate) {
         this.sampleRate = sampleRate;
     }
+
 }

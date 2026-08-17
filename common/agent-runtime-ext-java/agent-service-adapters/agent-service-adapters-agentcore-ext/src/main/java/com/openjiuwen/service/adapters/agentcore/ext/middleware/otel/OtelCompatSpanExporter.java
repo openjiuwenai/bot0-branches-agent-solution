@@ -19,10 +19,10 @@ import io.opentelemetry.sdk.trace.export.SpanExporter;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * SpanExporter wrapper that dual-writes contract-required attribute aliases before
@@ -52,11 +52,8 @@ public final class OtelCompatSpanExporter implements SpanExporter {
 
     @Override
     public CompletableResultCode export(Collection<SpanData> spans) {
-        List<SpanData> rewritten = new ArrayList<>(spans.size());
-        for (SpanData span : spans) {
-            rewritten.add(new CompatSpanData(span));
-        }
-        return delegate.export(rewritten);
+        // 每个 span 包装为契约兼容视图后委托导出（stream 管道，避免逐条显式拷贝）
+        return delegate.export(spans.stream().map(CompatSpanData::new).collect(Collectors.toList()));
     }
 
     @Override

@@ -8,8 +8,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 import io.opentelemetry.api.trace.Span;
+
 import org.junit.jupiter.api.Test;
 
+/**
+ * OtelRailBinding 按请求绑定的单元测试。
+ */
 class OtelRailBindingTest {
 
     @Test

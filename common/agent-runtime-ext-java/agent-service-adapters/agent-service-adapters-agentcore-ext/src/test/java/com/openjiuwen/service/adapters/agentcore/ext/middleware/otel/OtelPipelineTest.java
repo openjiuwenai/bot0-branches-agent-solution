@@ -10,15 +10,18 @@ import com.openjiuwen.core.session.Session;
 import com.openjiuwen.core.session.SessionContextHolder;
 import com.openjiuwen.core.session.tracer.TraceAgentSpan;
 import com.openjiuwen.extensions.tracerotel.OtelTracerConfig;
+
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.data.SpanData;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
 
 /**
  * End-to-end pipeline test: factory-built provider + JSON handler + session holder bound,
@@ -53,6 +56,18 @@ class OtelPipelineTest {
 
     @Test
     void fullPipeline_producesContractCompliantSpans() {
+        List<SpanData> spans = producePipelineSpans();
+        assertThat(spans).hasSize(2);
+        SpanData llmSpan = spans.stream().filter(s -> s.getName().startsWith("llm.")).findFirst().orElseThrow();
+        SpanData chainSpan = spans.stream().filter(s -> s.getName().startsWith("chain.")).findFirst().orElseThrow();
+
+        // tree: llm hangs under chain, same trace
+        assertThat(llmSpan.getParentSpanId()).isEqualTo(chainSpan.getSpanId());
+        assertThat(llmSpan.getTraceId()).isEqualTo(chainSpan.getTraceId());
+        assertContractAttributes(chainSpan, llmSpan);
+    }
+
+    private List<SpanData> producePipelineSpans() {
         OtelTracerConfig config = OtelTracerConfig.builder()
                 .exporterType("otlp")
                 .exporterEndpoint("http://localhost:4317")
@@ -80,14 +95,10 @@ class OtelPipelineTest {
         provider.forceFlush().join(5, TimeUnit.SECONDS);
         List<SpanData> spans = exporter.getFinishedSpanItems();
         provider.close();
-        assertThat(spans).hasSize(2);
-        SpanData llmSpan = spans.stream().filter(s -> s.getName().startsWith("llm.")).findFirst().orElseThrow();
-        SpanData chainSpan = spans.stream().filter(s -> s.getName().startsWith("chain.")).findFirst().orElseThrow();
+        return spans;
+    }
 
-        // tree: llm hangs under chain, same trace
-        assertThat(llmSpan.getParentSpanId()).isEqualTo(chainSpan.getSpanId());
-        assertThat(llmSpan.getTraceId()).isEqualTo(chainSpan.getTraceId());
-
+    private static void assertContractAttributes(SpanData chainSpan, SpanData llmSpan) {
         // session.id on every span
         assertThat(chainSpan.getAttributes().get(AttributeKey.stringKey("session.id"))).isEqualTo("conv-it");
         assertThat(llmSpan.getAttributes().get(AttributeKey.stringKey("session.id"))).isEqualTo("conv-it");

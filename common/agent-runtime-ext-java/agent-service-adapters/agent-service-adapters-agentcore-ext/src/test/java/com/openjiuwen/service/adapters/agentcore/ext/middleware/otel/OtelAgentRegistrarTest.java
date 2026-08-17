@@ -9,12 +9,17 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 
 import com.openjiuwen.core.session.tracer.TracerHandlerRegistry;
 import com.openjiuwen.extensions.tracerotel.OtelTracerConfig;
+
 import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+/**
+ * OtelAgentRegistrar handler 注册的单元测试。
+ */
 class OtelAgentRegistrarTest {
 
     @AfterEach
