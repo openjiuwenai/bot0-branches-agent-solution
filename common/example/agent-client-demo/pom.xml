@@ -44,6 +44,8 @@
         <module>../../agent-client/agent-client-sdk-for-jvm</module>
         <module>mock-gateway</module>
         <module>verification-app</module>
+        <module>mock-runtime</module>
+        <module>verification-app-to-runtime</module>
     </modules>
 
     <properties>
@@ -67,6 +69,11 @@
             <dependency>
                 <groupId>com.openjiuwen</groupId>
                 <artifactId>mock-gateway</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.openjiuwen</groupId>
+                <artifactId>mock-runtime</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

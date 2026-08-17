@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Client / Runtime Verification</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Agent Client Runtime Verification</h1>
+      <p id="connectionText">Checking Mock Runtime</p>
+    </div>
+    <div class="runtime-state"><span id="healthDot"></span><strong id="healthText">UNKNOWN</strong></div>
+  </header>
+
+  <main class="workspace">
+    <aside class="control-pane">
+      <form id="runForm">
+        <label>Runtime URL<input id="runtimeUrl" name="runtimeUrl" autocomplete="url"></label>
+        <div class="field-row">
+          <label>Mode<select id="mode"><option>STREAMING</option><option>BLOCKING</option><option>ASYNC</option></select></label>
+          <label>Scenario<select id="scenario"></select></label>
+        </div>
+        <p class="scenario-copy" id="scenarioCopy"></p>
+        <label>Input<textarea id="input" rows="4">Verify AgentClient direct Runtime mode.</textarea></label>
+        <label id="continueWrap" hidden>Continuation input<input id="continueInput" value="4241"></label>
+        <button id="runButton" type="submit"><span class="play">▶</span> Run verification</button>
+      </form>
+      <section class="run-meta">
+        <div><span>Status</span><strong id="runStatus">IDLE</strong></div>
+        <div><span>Invocation</span><code id="invocationRef">-</code></div>
+        <div><span>Recovery</span><strong id="recoveryContract">-</strong></div>
+        <div><span>Tool executions</span><strong id="toolExecutions">0</strong></div>
+      </section>
+      <section>
+        <div class="section-title"><h2>Tree State</h2><span id="treeRevision">rev -</span></div>
+        <dl class="tree-summary">
+          <div><dt>Completeness</dt><dd id="completeness">-</dd></div>
+          <div><dt>Speaking</dt><dd id="speakingPhase">-</dd></div>
+          <div><dt>Current speaker</dt><dd id="currentSpeaker">-</dd></div>
+        </dl>
+      </section>
+    </aside>
+
+    <section class="main-pane">
+      <nav class="tabs" aria-label="Verification views">
+        <button class="tab active" data-view="tree">Call Tree</button>
+        <button class="tab" data-view="events">SDK Events <span id="eventCount">0</span></button>
+        <button class="tab" data-view="snapshot">Final Snapshot</button>
+        <button class="tab" data-view="wire">Runtime Wire <span id="wireCount">0</span></button>
+      </nav>
+      <div class="view active" id="view-tree">
+        <div id="treeCanvas" class="tree-canvas empty-state">Run a scenario to inspect the observed topology.</div>
+      </div>
+      <div class="view" id="view-events">
+        <div id="eventList" class="timeline empty-state">No SDK events yet.</div>
+      </div>
+      <div class="view" id="view-snapshot"><pre id="snapshotJson">No final snapshot yet.</pre></div>
+      <div class="view" id="view-wire">
+        <div class="wire-toolbar"><span>Requests observed by Mock Runtime</span><button id="refreshWire" type="button">Refresh</button></div>
+        <div id="wireList" class="wire-list empty-state">No A2A requests yet.</div>
+      </div>
+    </section>
+
+    <aside class="diagnostic-pane">
+      <div class="section-title"><h2>Diagnostics</h2><span>local</span></div>
+      <div id="diagnostics" class="diagnostics empty-state">Lifecycle and recovery diagnostics appear here.</div>
+      <div class="section-title history-title"><h2>Tree Revisions</h2><span id="historyCount">0</span></div>
+      <div id="treeHistory" class="revision-list empty-state">No revisions.</div>
+    </aside>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

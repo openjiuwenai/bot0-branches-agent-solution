@@ -4,6 +4,8 @@
 
 package com.openjiuwen.client.api;
 
+import com.openjiuwen.client.api.calltree.CallTreeSnapshot;
+
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow;
 
@@ -48,7 +50,44 @@ public interface InvocationCall extends AutoCloseable {
     Flow.Publisher<InvocationEvent> events();
 
     /**
-     * 在调用到达终态时完成，携带最终快照。
+     * 订阅调用树最新值。旧 Transport 或不支持过程树的调用返回一个立即完成的 Publisher；
+     * SDK 内置 Transport 会在订阅后立即发布当前快照。
+     *
+     * @return 调用树快照流
+     */
+    default Flow.Publisher<CallTreeSnapshot> callTree() {
+        return superCallTreePublisher();
+    }
+
+    /**
+     * SDK 内部与兼容实现共用的空 Publisher。
+     *
+     * @return 空调用树发布者
+     */
+    static Flow.Publisher<CallTreeSnapshot> superCallTreePublisher() {
+        return subscriber -> subscriber.onSubscribe(new Flow.Subscription() {
+            private boolean done;
+
+            @Override
+            public void request(long n) {
+                if (!done) {
+                    done = true;
+                    subscriber.onComplete();
+                }
+            }
+
+            @Override
+            public void cancel() {
+                done = true;
+            }
+        });
+    }
+
+    /**
+     * 在调用到达终态时正常完成，携带最终快照。自动观察超时或调用方
+     * 关闭观察时异常完成；这两种情况都不表示服务端 Task 已失败或取消。
+     * 需要业务用户输入时，当前句柄可在 {@code INPUT_REQUIRED} 等待点结算，后续由
+     * {@link AgentClient#continueInput(ContinueInputRequest)} 返回的新句柄继续观察。
      *
      * @return 终态快照 future
      */
