@@ -112,6 +112,17 @@
       <artifactId>okhttp</artifactId>
       <version>4.12.0</version>
     </dependency>
+    <!-- milvus 链路把 okio 拉到 3.6.0，与 otlp okhttp sender 所需的 3.16+ API 冲突，显式 pin -->
+    <dependency>
+      <groupId>com.squareup.okio</groupId>
+      <artifactId>okio-jvm</artifactId>
+      <version>3.16.4</version>
+    </dependency>
+    <dependency>
+      <groupId>com.squareup.okio</groupId>
+      <artifactId>okio</artifactId>
+      <version>3.16.4</version>
+    </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
