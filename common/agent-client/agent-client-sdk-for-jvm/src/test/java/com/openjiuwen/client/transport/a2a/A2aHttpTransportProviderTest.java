@@ -240,7 +240,7 @@ class A2aHttpTransportProviderTest {
     }
 
     @Test
-    void runtimeBlockingObservationTimeoutCompletesExceptionallyAndCanBeQueriedLater() throws Exception {
+    void runtimeBlockingTimeoutCompletesExceptionallyAndCanBeQueried() throws Exception {
         AtomicInteger sendMessageCalls = new AtomicInteger();
         AtomicInteger getTaskCalls = new AtomicInteger();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -549,13 +549,26 @@ class A2aHttpTransportProviderTest {
     private static Flow.Subscriber<InvocationEvent> collectingSubscriber(List<InvocationEvent> events,
             CountDownLatch diagnosed) {
         return new Flow.Subscriber<>() {
-            @Override public void onSubscribe(Flow.Subscription subscription) { subscription.request(Long.MAX_VALUE); }
-            @Override public void onNext(InvocationEvent item) {
-                events.add(item);
-                if (item instanceof InvocationEvent.ProtocolDiagnostic) diagnosed.countDown();
+            @Override
+            public void onSubscribe(Flow.Subscription subscription) {
+                subscription.request(Long.MAX_VALUE);
             }
-            @Override public void onError(Throwable throwable) { }
-            @Override public void onComplete() { }
+
+            @Override
+            public void onNext(InvocationEvent item) {
+                events.add(item);
+                if (item instanceof InvocationEvent.ProtocolDiagnostic) {
+                    diagnosed.countDown();
+                }
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+            }
+
+            @Override
+            public void onComplete() {
+            }
         };
     }
 

@@ -353,9 +353,10 @@ public class A2aHttpTransportProvider
         if (withTimeout) {
             b.timeout(UNARY_TIMEOUT);
         }
-        credential = endpointPolicy.credential(credential);
-        if (credential != null && !credential.isEmpty()) {
-            b.header("Authorization", credential.startsWith("Bearer ") ? credential : "Bearer " + credential);
+        String effectiveCredential = endpointPolicy.credential(credential);
+        if (effectiveCredential != null && !effectiveCredential.isEmpty()) {
+            b.header("Authorization", effectiveCredential.startsWith("Bearer ")
+                    ? effectiveCredential : "Bearer " + effectiveCredential);
         }
         return b;
     }

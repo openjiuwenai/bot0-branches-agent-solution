@@ -402,7 +402,8 @@ public final class RuntimeVerificationApp {
             throw new IllegalStateException("BLOCKING/ASYNC must not construct a call tree");
         }
         if ("streaming-resubscribe".equals(scenario)) {
-            run.addDiagnostic("verified SubscribeToTask current snapshot + future events; no event-offset replay assumed");
+            run.addDiagnostic("verified SubscribeToTask current snapshot + future events;"
+                    + " no event-offset replay assumed");
         } else {
             run.addDiagnostic("verified GetTask current-state query; BLOCKING is SDK-driven and ASYNC is business-driven");
         }

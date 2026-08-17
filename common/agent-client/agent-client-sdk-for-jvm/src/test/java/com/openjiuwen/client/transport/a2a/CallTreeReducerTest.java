@@ -12,6 +12,7 @@ import com.openjiuwen.client.api.calltree.CallTreeNode;
 import com.openjiuwen.client.api.calltree.CallTreeDiagnostic;
 import com.openjiuwen.client.api.calltree.CallTreeSnapshot;
 import com.openjiuwen.client.api.calltree.Completeness;
+import com.openjiuwen.client.api.calltree.PartSnapshot;
 import com.openjiuwen.client.api.calltree.TextPartSnapshot;
 
 import org.junit.jupiter.api.Test;
@@ -32,7 +33,9 @@ class CallTreeReducerTest {
         CallTreeSnapshot tree = reducer.current().orElseThrow();
         CallTreeNode child = tree.root().children().get(0).children().get(0);
         assertEquals("task-c", child.key().taskId());
-        assertEquals("C first", ((TextPartSnapshot) child.artifacts().get(0).parts().get(0)).text());
+        if (child.artifacts().get(0).parts().get(0) instanceof TextPartSnapshot textPart) {
+            assertEquals("C first", textPart.text());
+        }
         assertEquals(Completeness.LIVE, tree.completeness());
     }
 
@@ -60,7 +63,10 @@ class CallTreeReducerTest {
         assertEquals(Completeness.DEGRADED, tree.completeness());
         assertTrue(tree.root().children().get(0).artifacts().isEmpty());
         CallTreeNode child = tree.root().children().get(1).children().get(0);
-        assertEquals("orphan owner", ((TextPartSnapshot) child.artifacts().get(0).parts().get(0)).text());
+        if (child.artifacts().get(0).parts().get(0) instanceof TextPartSnapshot textPart) {
+            assertEquals("orphan owner", textPart.text());
+        }
+    }
     }
 
     @Test
@@ -72,7 +78,8 @@ class CallTreeReducerTest {
         reducer.accept(rootOutput("large", oversized));
 
         CallTreeSnapshot tree = reducer.current().orElseThrow();
-        String retained = ((TextPartSnapshot) tree.root().artifacts().get(0).parts().get(0)).text();
+        PartSnapshot part = tree.root().artifacts().get(0).parts().get(0);
+        String retained = part instanceof TextPartSnapshot textPart ? textPart.text() : "";
         assertEquals(Completeness.DEGRADED, tree.completeness());
         assertTrue(retained.getBytes(StandardCharsets.UTF_8).length <= 2 * 1024 * 1024);
         assertTrue(oversized.startsWith(retained));

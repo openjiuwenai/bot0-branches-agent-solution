@@ -274,39 +274,39 @@ final class A2aJsonCodec {
         if (result == null || result.isNull()) {
             return Optional.empty();
         }
-        // agent-runtime-java 的 result 用成员名区分事件类型（对齐 documents/zh/2.开发指南/对话接口输入与输出.md）：
-        //   流式：result.statusUpdate / result.artifactUpdate
-        //   非流式：result.task（完整 Task 对象，status 位于 task.status）
-        //   即时消息：result.message
-        // 兼容回退：旧 mock 形态用 result.kind 字段（status-update / artifact-update）。
         String legacyKind = result.path("kind").asText("");
 
         if (result.has("artifactUpdate") || "artifact-update".equals(legacyKind)) {
-            JsonNode update = result.has("artifactUpdate") ? result.path("artifactUpdate") : result;
-            JsonNode art = result.has("artifactUpdate")
-                    ? update.path("artifact")
-                    : result.path("artifact");
-            ProtocolArtifact protocolArtifact = parseArtifact(art,
-                    update.path("append").asBoolean(false), update.path("lastChunk").asBoolean(false));
-            String text = !protocolArtifact.agentEventDeclared() && !protocolArtifact.controllerOutput()
-                    ? collectArtifactText(art).orElse(null) : null;
-            String taskId = result.has("artifactUpdate")
-                    ? result.path("artifactUpdate").path("taskId").asText(null)
-                    : firstText(result, "id", "taskId").orElse(null);
-            String contextId = result.has("artifactUpdate")
-                    ? result.path("artifactUpdate").path("contextId").asText(null)
-                    : result.path("contextId").asText(null);
-            return Optional.of(new Frame(taskId, contextId, null, null, text, null, null,
-                    protocolArtifact, List.of(), false));
+            return parseArtifactUpdate(result);
         }
 
-        // status 节点定位：流式在 result.statusUpdate.status；非流式在 result.task.status；
-        // 旧 mock 兼容在 result.status。
+        return parseStatusResult(result);
+    }
+
+    private Optional<Frame> parseArtifactUpdate(JsonNode result) {
+        JsonNode update = result.has("artifactUpdate") ? result.path("artifactUpdate") : result;
+        JsonNode art = result.has("artifactUpdate")
+                ? update.path("artifact")
+                : result.path("artifact");
+        ProtocolArtifact protocolArtifact = parseArtifact(art,
+                update.path("append").asBoolean(false), update.path("lastChunk").asBoolean(false));
+        String text = !protocolArtifact.agentEventDeclared() && !protocolArtifact.controllerOutput()
+                ? collectArtifactText(art).orElse(null) : null;
+        String taskId = result.has("artifactUpdate")
+                ? result.path("artifactUpdate").path("taskId").asText(null)
+                : firstText(result, "id", "taskId").orElse(null);
+        String contextId = result.has("artifactUpdate")
+                ? result.path("artifactUpdate").path("contextId").asText(null)
+                : result.path("contextId").asText(null);
+        return Optional.of(new Frame(taskId, contextId, null, null, text, null, null,
+                protocolArtifact, List.of(), false));
+    }
+
+    private Optional<Frame> parseStatusResult(JsonNode result) {
         JsonNode statusUpdate = result.path("statusUpdate");
         JsonNode wrappedTask = result.path("task");
         boolean isStatusUpdate = !statusUpdate.isMissingNode() && !statusUpdate.isNull();
         boolean isWrappedTask = !wrappedTask.isMissingNode() && !wrappedTask.isNull();
-        // Runtime GetTask 的成功响应会把 Task 直接放在 result 下；SendMessage 则可能使用 result.task。
         boolean isDirectTask = !isStatusUpdate && !isWrappedTask
                 && result.hasNonNull("id") && result.path("status").isObject();
         boolean isTask = isWrappedTask || isDirectTask;
@@ -324,7 +324,6 @@ final class A2aJsonCodec {
             taskId = taskNode.path("id").asText(null);
             contextId = taskNode.path("contextId").asText(null);
         } else {
-            // 旧 mock 兼容：result 直接含 status / id / taskId / contextId。
             status = result.path("status");
             taskId = firstText(result, "id", "taskId").orElse(null);
             contextId = result.path("contextId").asText(null);
@@ -333,16 +332,12 @@ final class A2aJsonCodec {
         String stateStr = status.path("state").asText(null);
         TaskState state = mapState(stateStr).orElse(null);
         String text = collectMessageText(status.path("message")).orElse(null);
-        // 完整 Task 的最终业务结果位于 artifacts，而不是 status.message。后者主要承载
-        // INPUT_REQUIRED 提示或状态说明。BUS unary 响应和流式 TERMINAL 投影都会返回完整 Task；
-        // COMPLETED 时优先读取 artifacts，才能与 runtime HTTP 入口的 Task 语义保持一致。
         if (isTask && state == TaskState.COMPLETED) {
             text = collectTaskArtifactText(taskNode).orElse(text);
         }
         Interrupt interrupt = parseInterrupt(result, status).orElse(null);
         String errorCode = result.path("metadata").path("errorCode").asText(null);
         if (errorCode == null && isTask) {
-            // 非流式 task 形态的错误码可能在 task.metadata。
             errorCode = taskNode.path("metadata").path("errorCode").asText(null);
         }
         List<ProtocolArtifact> taskArtifacts = isTask ? parseTaskArtifacts(taskNode) : List.of();

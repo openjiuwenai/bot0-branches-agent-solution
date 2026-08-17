@@ -5,6 +5,7 @@
 package com.openjiuwen.client.internal.calltree;
 
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -16,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /** 只保留最新值、遵守 demand、关闭后仍向晚订阅者回放最终值的 Publisher。 */
-public final class LatestValuePublisher<T> implements Flow.Publisher<T>, AutoCloseable {
+public final class LatestValuePublisher<T extends Object> implements Flow.Publisher<T>, AutoCloseable {
     private static final int MAX_DISPATCH_THREADS = 32;
     private static final Executor DISPATCHER = new ThreadPoolExecutor(0, MAX_DISPATCH_THREADS,
             30L, TimeUnit.SECONDS, new SynchronousQueue<>(), runnable -> {
@@ -59,9 +60,9 @@ public final class LatestValuePublisher<T> implements Flow.Publisher<T>, AutoClo
         subscriptions.forEach(LatestSubscription::drain);
     }
 
-    public T latest() {
+    public Optional<T> latest() {
         Versioned<T> value = latest;
-        return value == null ? null : value.value();
+        return Optional.ofNullable(value == null ? null : value.value());
     }
 
     private Versioned<T> versioned() {
@@ -158,7 +159,9 @@ public final class LatestValuePublisher<T> implements Flow.Publisher<T>, AutoClo
                         demand--;
                         deliveredVersion = value.version();
                         next = value.value();
-                    } else if (owner.closed && (value == null || deliveredVersion >= value.version())) {
+                    }
+                    if (next == null && owner.closed && (value == null
+                            || deliveredVersion >= value.version())) {
                         completed = true;
                         completeNow = true;
                     }
@@ -166,7 +169,8 @@ public final class LatestValuePublisher<T> implements Flow.Publisher<T>, AutoClo
                 if (next != null) {
                     try {
                         subscriber.onNext(next);
-                    } catch (RuntimeException failure) {
+                    } catch (IllegalStateException | IllegalArgumentException | NullPointerException
+                            | UnsupportedOperationException failure) {
                         cancel();
                         drainWork.addAndGet(-missed);
                         return;
@@ -175,7 +179,8 @@ public final class LatestValuePublisher<T> implements Flow.Publisher<T>, AutoClo
                     owner.remove(this);
                     try {
                         subscriber.onComplete();
-                    } catch (RuntimeException ignored) {
+                    } catch (IllegalStateException | IllegalArgumentException
+                            | UnsupportedOperationException ignored) {
                         // Subscriber callbacks are isolated; one broken consumer must not block others.
                     }
                     drainWork.addAndGet(-missed);

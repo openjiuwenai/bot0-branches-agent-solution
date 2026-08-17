@@ -4,22 +4,25 @@
 
 package com.openjiuwen.mockruntime;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import com.sun.net.httpserver.HttpServer;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MockRuntimeServerTest {
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -172,9 +175,13 @@ class MockRuntimeServerTest {
                 .map(line -> {
                     try {
                         return JSON.readTree(line.substring("data:".length()));
-                    } catch (Exception error) {
-                        throw new IllegalArgumentException(error);
+                    } catch (JsonProcessingException error) {
+                    try {
+                        return JSON.readTree(line.substring("data:".length()));
+                    } catch (IOException e) {
+                        throw new IllegalArgumentException(e);
                     }
+                }
                 })
                 .toList();
     }

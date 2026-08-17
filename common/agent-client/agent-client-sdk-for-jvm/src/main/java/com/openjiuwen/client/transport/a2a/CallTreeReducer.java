@@ -34,8 +34,8 @@ final class CallTreeReducer implements AutoCloseable {
     private static final int MAX_NODES = 256;
     private static final int MAX_ORPHAN_EDGES = 512;
     private static final int MAX_ORPHAN_SIGNALS = 512;
-    private static final long MAX_TREE_BYTES = 8L * 1024 * 1024;
-    private static final long MAX_ARTIFACT_BYTES = 2L * 1024 * 1024;
+    private static final long MAX_TREE_BYTES = 8L * 1024L * 1024L;
+    private static final long MAX_ARTIFACT_BYTES = 2L * 1024L * 1024L;
     private static final int MAX_DIAGNOSTICS = 64;
 
     private final InvocationMode mode;
@@ -311,11 +311,11 @@ final class CallTreeReducer implements AutoCloseable {
     }
 
     private static long protocolBytes(List<ProtocolPart> parts) {
-        long bytes = 0;
+        long bytes = 0L;
         for (ProtocolPart part : parts) {
             long next = part instanceof ProtocolPart.Text text
                     ? utf8Bytes(text.text())
-                    : part instanceof ProtocolPart.Data data ? estimateBytes(data.data()) : 0;
+                    : part instanceof ProtocolPart.Data data ? estimateBytes(data.data()) : 0L;
             bytes = saturatedAdd(bytes, next);
         }
         return bytes;
@@ -383,7 +383,7 @@ final class CallTreeReducer implements AutoCloseable {
     }
 
     synchronized Optional<CallTreeSnapshot> current() {
-        return Optional.ofNullable(publisher.latest());
+        return publisher.latest();
     }
 
     Flow.Publisher<CallTreeSnapshot> publisher() {
@@ -418,7 +418,7 @@ final class CallTreeReducer implements AutoCloseable {
 
     private static BoundedParts boundedParts(List<ProtocolPart> parts, long available) {
         List<PartSnapshot> result = new ArrayList<>();
-        long used = 0;
+        long used = 0L;
         boolean truncated = false;
         for (ProtocolPart part : parts) {
             if (part instanceof ProtocolPart.Text text) {
@@ -465,7 +465,7 @@ final class CallTreeReducer implements AutoCloseable {
             return utf8Bytes(chars.toString());
         }
         if (value instanceof Map<?, ?> map) {
-            long size = 2;
+            long size = 2L;
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 size = saturatedAdd(size, utf8Bytes(String.valueOf(entry.getKey())));
                 size = saturatedAdd(size, estimateBytes(entry.getValue()));
@@ -473,21 +473,21 @@ final class CallTreeReducer implements AutoCloseable {
             return size;
         }
         if (value instanceof Collection<?> collection) {
-            long size = 2;
+            long size = 2L;
             for (Object item : collection) {
                 size = saturatedAdd(size, estimateBytes(item));
             }
             return size;
         }
         if (value instanceof Iterable<?> iterable) {
-            long size = 2;
+            long size = 2L;
             for (Object item : iterable) {
                 size = saturatedAdd(size, estimateBytes(item));
             }
             return size;
         }
         if (value.getClass().isArray()) {
-            long size = 2;
+            long size = 2L;
             for (int i = 0; i < Array.getLength(value); i++) {
                 size = saturatedAdd(size, estimateBytes(Array.get(value, i)));
             }

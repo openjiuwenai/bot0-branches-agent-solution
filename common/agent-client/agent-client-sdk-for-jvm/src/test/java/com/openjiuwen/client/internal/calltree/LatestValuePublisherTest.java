@@ -123,7 +123,7 @@ class LatestValuePublisherTest {
                 try {
                     release.await(2, TimeUnit.SECONDS);
                 } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
+                    return;
                 }
             }
 

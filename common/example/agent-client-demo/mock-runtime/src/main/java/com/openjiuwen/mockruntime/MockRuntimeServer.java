@@ -24,10 +24,16 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /** Scriptable A2A Runtime used only for local agent-client verification. */
 public final class MockRuntimeServer {
+    private static final Logger LOG = Logger.getLogger(MockRuntimeServer.class.getName());
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final List<String> SCENARIOS = List.of(
             "single", "nested-5", "parallel-interleave", "multi-artifact", "output-before-edge",
@@ -68,11 +74,16 @@ public final class MockRuntimeServer {
 
     public HttpServer startServer() throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
-        server.setExecutor(Executors.newCachedThreadPool(r -> {
-            Thread thread = new Thread(r, "mock-runtime-http");
-            thread.setDaemon(true);
-            return thread;
-        }));
+        server.setExecutor(new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
+                new LinkedBlockingQueue<>(), r -> {
+                    Thread thread = Executors.defaultThreadFactory().newThread(r);
+                    thread.setName("mock-runtime-http");
+                    thread.setDaemon(true);
+                    thread.setUncaughtExceptionHandler((t, ex) -> {
+                        LOG.log(Level.WARNING, "uncaught exception in mock-runtime thread " + t.getName(), ex);
+                    });
+                    return thread;
+                }));
         server.createContext("/a2a", this::handleA2a);
         server.createContext("/admin/health", exchange -> json(exchange, 200, Map.of(
                 "status", "UP", "service", "mock-runtime", "port", port,
@@ -91,8 +102,10 @@ public final class MockRuntimeServer {
         });
         server.start();
         int boundPort = server.getAddress().getPort();
-        System.out.println("Mock Runtime listening on http://127.0.0.1:" + boundPort);
-        System.out.println("A2A endpoint: http://127.0.0.1:" + boundPort + "/a2a");
+        if (LOG.isLoggable(Level.INFO)) {
+            LOG.info("Mock Runtime listening on http://127.0.0.1:" + boundPort);
+            LOG.info("A2A endpoint: http://127.0.0.1:" + boundPort + "/a2a");
+        }
         return server;
     }
 
@@ -107,7 +120,7 @@ public final class MockRuntimeServer {
         JsonNode request;
         try {
             request = JSON.readTree(raw);
-        } catch (Exception error) {
+        } catch (IOException error) {
             jsonRpcError(exchange, null, -32700, "PARSE_ERROR", error.getMessage());
             return;
         }
@@ -135,7 +148,7 @@ public final class MockRuntimeServer {
                 return;
             }
             task.completeAfterResume(text(message));
-            sse(exchange, task, task.resumeStartIndex, false, false, request.path("id").asText());
+            sse(exchange, task, task.resumeStartIndex, false, request.path("id").asText());
             return;
         }
         String scenario = scenario(request);
@@ -146,9 +159,9 @@ public final class MockRuntimeServer {
         TaskRecord task = TaskRecord.create(message.path("contextId").asText("context"), scenario);
         tasks.put(task.id, task);
         if ("streaming-resubscribe".equals(scenario) || "recovery-circuit".equals(scenario)) {
-            sse(exchange, task, 0, false, true, request.path("id").asText());
+            sse(exchange, task, 0, true, request.path("id").asText());
         } else {
-            sse(exchange, task, 0, false, false, request.path("id").asText());
+            sse(exchange, task, 0, false, request.path("id").asText());
         }
     }
 
@@ -225,14 +238,14 @@ public final class MockRuntimeServer {
     }
 
     private void sse(HttpExchange exchange, TaskRecord task, int startIndex,
-            boolean subscription, boolean disconnect, String requestId) throws IOException {
+            boolean disconnect, String requestId) throws IOException {
         List<Frame> selected = new ArrayList<>();
         int end = disconnect ? Math.min(task.initialFrameCount, task.frames.size()) : task.frames.size();
         for (int index = Math.max(0, startIndex); index < end; index++) {
             selected.add(task.frames.get(index));
         }
         byte[] bytes = sseBody(selected.stream().map(frame -> frame.withRequestId(requestId)).toList());
-        writeSse(exchange, bytes, subscription);
+        writeSse(exchange, bytes, false);
     }
 
     private void sseSubscription(HttpExchange exchange, TaskRecord task, String requestId) throws IOException {

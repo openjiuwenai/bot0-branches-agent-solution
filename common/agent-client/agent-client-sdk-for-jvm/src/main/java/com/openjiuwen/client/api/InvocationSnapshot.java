@@ -56,7 +56,19 @@ public record InvocationSnapshot(
                 outputText, errorCode, message, null, null);
     }
 
-    /** 保留原九参数构造器，兼容已有源码与编译产物。 */
+    /**
+     * 保留原九参数构造器，兼容已有源码与编译产物。
+     *
+     * @param invocationRef 调用句柄
+     * @param state 任务状态
+     * @param terminal 是否终态
+     * @param diagnosticTaskRef 诊断任务引用
+     * @param pendingToolCall 待处理工具调用
+     * @param outputText 输出文本
+     * @param errorCode 错误码
+     * @param message 消息文本
+     * @param recovery 恢复线索
+     */
     public InvocationSnapshot(String invocationRef, TaskState state, boolean terminal,
                               String diagnosticTaskRef, InvocationEvent.ToolCall pendingToolCall,
                               String outputText, String errorCode, String message, Recovery recovery) {

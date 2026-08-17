@@ -11,6 +11,8 @@ import java.time.Duration;
  *
  * <p>该异常只表示本地自动观察停止，不表示 Runtime Task 失败或被取消。调用方可使用
  * {@link #diagnosticTaskRef()} 记录诊断信息，并在需要时通过原 invocationRef 再次查询。
+ *
+ * @since 2026-07-27
  */
 public final class ObservationTimeoutException extends RuntimeException implements ClassifiedError {
     private static final long serialVersionUID = 1L;

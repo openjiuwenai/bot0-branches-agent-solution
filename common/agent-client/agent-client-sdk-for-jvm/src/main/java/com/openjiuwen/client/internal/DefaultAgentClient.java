@@ -63,6 +63,7 @@ import java.util.concurrent.TimeUnit;
  */
 public final class DefaultAgentClient implements AgentClient {
     private static final int MAX_RETAINED_TERMINAL_INVOCATIONS = 256;
+
     private final TransportProvider transport;
     private final LocalToolRegistry registry;
     private final ClientStateStore store;
