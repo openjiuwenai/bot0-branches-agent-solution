@@ -1,0 +1,52 @@
+# .workflow/touchstone-gate.yml
+# Touchstone 确定性门禁 —— contract_check（契约/SEC-001 密钥/危险构造）+ Java 栈规则
+# （Spring DI/事务、equals、空 catch、日志）
+#
+# 设计：pipeline pass/fail = 门禁结论。block_candidate 级发现 → exit 1 → pipeline 红 → 分支保护拦 MR。
+# 评审报告输出到 pipeline 日志（人看）。LLM 评审为 Phase 2（需 GitCode API 适配层，另开）。
+# 注：gitleaks 外挂扫描暂不配置（后续按需再加；touchstone 的 SEC-001 内置密钥扫描不受影响）。
+#
+# ⚠️ 调试期模式（当前）：门禁步骤 continue-on-error: true——只报告、不阻断合入。
+# touchstone 使能处于调试校准阶段，不得影响他人正常合入。校准达标后删除该行
+# 即转正式门禁（转正前先观察误报率）。
+name: Touchstone 确定性门禁
+
+on:
+  # GitCode MR 触发（GitCode Pipeline 也认 pull_request；若仅认 merge_request 请改）
+  # 目标分支 common（本仓共享基座；oil-chem/electric/transportation 变体自 common 同步）
+  pull_request:
+    branches: [common]
+  push:
+    branches: [common]
+
+jobs:
+  touchstone-gate:
+    name: touchstone-gate
+    runs-on: ubuntu-latest
+    steps:
+      # ── 1. 检出代码（需完整历史供 diff 计算）──
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+          # 若 GitCode Pipeline 不认 actions/checkout@v2，换成本仓自带或 gitcode/checkout@v1
+
+      # ── 2. Python 环境（gitcode_check.py 是 Python；ubuntu-latest 自带 python3）──
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.11'
+
+      # ── 3. 安装 touchstone（从 GitHub 公仓拉，pip 装带 Java 规则的实现）──
+      - name: Install touchstone
+        run: pip install git+https://github.com/AKDI-SE/touchstone.git@v0.2.7
+          # 若 pipeline runner 无公网（私仓常见），改 vendor 方案：
+          #   1. 把 touchstone 源码拷进本仓（如 tools/touchstone/）
+          #   2. 此步换 pip install ./tools/touchstone
+
+      # ── 4. 确定性门禁：契约核对 + Java 栈规则 + SEC-001 内置密钥扫描 ──
+      - name: Touchstone gate (contract + Java stack rules)
+        continue-on-error: true    # 调试期：只报告不阻断（见顶部注释）；校准后删此行转正
+        run: python -m touchstone.gitcode_check --base origin/common
+          # exit 0 = PASS（无 block 级发现）；exit 1 = FAILURE（有 block_candidate）
+
