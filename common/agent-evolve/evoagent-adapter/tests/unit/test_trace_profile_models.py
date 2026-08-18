@@ -124,3 +124,26 @@ class TestTraceProfile:
         assert tp.root_span_name == ""
         assert tp.request_summary_attr == ""
         assert tp.response_summary_span_prefix == "ai.streamText"
+
+
+class TestServiceLanguage:
+    """service_language 字段：Python/Java EDPAgent 按 telemetry.sdk.language 消歧。"""
+
+    def test_default_empty(self):
+        tp = TraceProfile(name="x", service_name="svc")
+        assert tp.service_language == ""
+
+    def test_set_language(self):
+        tp = TraceProfile(
+            name="edp_agent_java", service_name="edp-agent", service_language="java"
+        )
+        assert tp.service_language == "java"
+
+    def test_yaml_loads_service_language(self):
+        import yaml as _yaml
+
+        data = _yaml.safe_load(
+            "profiles:\n  p:\n    service_name: svc\n    service_language: python\n"
+        )
+        tp = TraceProfile(name="p", **data["profiles"]["p"])
+        assert tp.service_language == "python"

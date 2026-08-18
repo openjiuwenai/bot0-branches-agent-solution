@@ -117,3 +117,55 @@ class TestLoadProfiles:
             assert reg.get_by_profile_name("anything") is None
         finally:
             yaml_path.unlink(missing_ok=True)
+
+
+class TestLanguageRouting:
+    """service.name 撞名时按 telemetry.sdk.language 消歧（Python/Java EDPAgent 区分）。"""
+
+    @staticmethod
+    def _collision_registry() -> ProfileRegistry:
+        # 两个 profile 共用 service.name "edp_agent"，靠 service_language 区分
+        py = TraceProfile(
+            name="edp_agent", service_name="edp_agent", service_language="python"
+        )
+        ja = TraceProfile(
+            name="edp_agent_java", service_name="edp_agent", service_language="java"
+        )
+        return ProfileRegistry({"edp_agent": py, "edp_agent_java": ja})
+
+    def test_language_tiebreaker_picks_correct_profile(self):
+        reg = self._collision_registry()
+        py = reg.get_by_profile_name("edp_agent")
+        ja = reg.get_by_profile_name("edp_agent_java")
+        assert reg.get_by_service_name("edp_agent", language="python") is py
+        assert reg.get_by_service_name("edp_agent", language="java") is ja
+
+    def test_language_mismatch_returns_none(self):
+        reg = self._collision_registry()
+        assert reg.get_by_service_name("edp_agent", language="rust") is None
+
+    def test_no_language_with_collision_is_ambiguous(self):
+        reg = self._collision_registry()
+        # 撞名且未给 language → 不猜，返回 None
+        assert reg.get_by_service_name("edp_agent") is None
+
+    def test_no_language_single_candidate_still_ok(self):
+        py = TraceProfile(name="edp_agent", service_name="edp_agent")
+        reg = ProfileRegistry({"edp_agent": py})
+        assert reg.get_by_service_name("edp_agent") is py
+
+    def test_language_agnostic_fallback(self):
+        # 一个语言专属 + 一个语言无关，同 service.name；span 语言未匹配前者 → 回退后者
+        py = TraceProfile(name="py", service_name="svc", service_language="python")
+        gen = TraceProfile(name="gen", service_name="svc", service_language="")
+        reg = ProfileRegistry({"py": py, "gen": gen})
+        assert reg.get_by_service_name("svc", language="python") is py
+        assert reg.get_by_service_name("svc", language="java") is gen
+
+    def test_distinct_service_names_unaffected(self):
+        # service.name 不撞时无需 language 也能路由（向后兼容）
+        a = TraceProfile(name="a", service_name="svc-a", service_language="python")
+        b = TraceProfile(name="b", service_name="svc-b", service_language="java")
+        reg = ProfileRegistry({"a": a, "b": b})
+        assert reg.get_by_service_name("svc-a") is a
+        assert reg.get_by_service_name("svc-b") is b

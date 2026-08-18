@@ -49,7 +49,10 @@ def filter_spans_by_service(
     result: list[dict[str, Any]] = []
     for span in spans:
         service_name = span.get("service_name", "")
-        profile = registry.get_by_service_name(service_name)
+        # telemetry.sdk.language（扁平化后在 resource_attributes）做 Python/Java 消歧；
+        # 缺省（无 resource_attributes / 无该键）→ language=None，走 service.name 单候选回退。
+        language = (span.get("resource_attributes") or {}).get("telemetry.sdk.language")
+        profile = registry.get_by_service_name(service_name, language=language or None)
         if profile is None:
             if layer == "query":
                 result.append(span)

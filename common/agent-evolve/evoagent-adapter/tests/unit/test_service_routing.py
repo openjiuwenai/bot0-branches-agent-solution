@@ -120,3 +120,56 @@ class TestMixedAgents:
         assert len(result) == 3
         names = {s["name"] for s in result}
         assert names == {"llm.gpt-4", "ai.streamText", "tool.search"}
+
+
+class TestLanguageRouting:
+    """Python/Java EDPAgent 撞 service.name 时，靠 telemetry.sdk.language 自动分流。"""
+
+    @staticmethod
+    def _reg() -> ProfileRegistry:
+        py = TraceProfile(
+            name="edp_agent",
+            service_name="edp-agent",
+            service_language="python",
+            ingest_filter=SpanFilter(include_prefixes=["llm.", "tool."]),
+            query_filter=SpanFilter(include_prefixes=["llm.", "tool."]),
+        )
+        ja = TraceProfile(
+            name="edp_agent_java",
+            service_name="edp-agent",
+            service_language="java",
+            ingest_filter=SpanFilter(include_prefixes=["llm.", "tool."]),
+            query_filter=SpanFilter(include_prefixes=["llm.", "tool."]),
+        )
+        return ProfileRegistry({"edp_agent": py, "edp_agent_java": ja})
+
+    def test_ingest_splits_by_language(self):
+        reg = self._reg()
+        spans = [
+            {"name": "llm.py-span", "service_name": "edp-agent",
+             "resource_attributes": {"telemetry.sdk.language": "python"}},
+            {"name": "llm.java-span", "service_name": "edp-agent",
+             "resource_attributes": {"telemetry.sdk.language": "java"}},
+            {"name": "llm.rust-span", "service_name": "edp-agent",
+             "resource_attributes": {"telemetry.sdk.language": "rust"}},
+        ]
+        result = filter_spans_by_service(spans, reg, "ingest")
+        # rust 不匹配任何 profile → ingest 跳过；python/java 各自命中
+        assert {s["name"] for s in result} == {"llm.py-span", "llm.java-span"}
+
+    def test_query_keeps_unmatched_language(self):
+        reg = self._reg()
+        spans = [
+            {"name": "llm.rust-span", "service_name": "edp-agent",
+             "resource_attributes": {"telemetry.sdk.language": "rust"}},
+        ]
+        result = filter_spans_by_service(spans, reg, "query")
+        # rust 无匹配 profile → query 层兜底保留
+        assert len(result) == 1
+
+    def test_no_resource_attrs_falls_back_single_candidate(self):
+        # service.name 不撞时，无 resource_attributes 也能路由（向后兼容）
+        reg = _make_registry()  # edp(EDPAgent) / opencode — 不撞名
+        spans = [{"name": "llm.gpt-4", "service_name": "EDPAgent"}]
+        result = filter_spans_by_service(spans, reg, "ingest")
+        assert len(result) == 1

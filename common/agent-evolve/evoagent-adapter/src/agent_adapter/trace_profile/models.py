@@ -52,6 +52,9 @@ class TraceProfile(BaseModel):
     """
     name: str
     service_name: str
+    # service_language: telemetry.sdk.language 判别值（python/java/...）；空串=不按语言区分。
+    # 多 profile 共用同一 service.name 时，按此字段做 tiebreaker 路由，避免 Python/Java 互串。
+    service_language: str = ""
     ingest_filter: SpanFilter = SpanFilter()
     query_filter: SpanFilter = SpanFilter()
     llm_span_prefix: str = ""
