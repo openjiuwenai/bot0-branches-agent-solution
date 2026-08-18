@@ -20,19 +20,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.LongSupplier;
 
 /**
  * Internal HTTP client for the FEAT-015/016 registry discovery API.
+ *
+ * <p>When RDC is briefly unavailable, returns cached routes within the configured
+ * local cache TTL (default one probe period, 5s — Feat-Func-016 L2 §4.5).
  *
  * @since 2026-08-04
  */
 public final class RuntimeRdcClient {
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(3);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration DEFAULT_LOCAL_CACHE_TTL = Duration.ofSeconds(5);
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final URI baseUri;
+    private final RuntimeRdcLocalRouteCache cache;
 
     /**
      * Creates the registry client.
@@ -40,13 +46,31 @@ public final class RuntimeRdcClient {
      * @param baseUri registry discovery center base URI
      */
     public RuntimeRdcClient(URI baseUri) {
-        this(HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build(), new ObjectMapper(), baseUri);
+        this(baseUri, DEFAULT_LOCAL_CACHE_TTL);
+    }
+
+    /**
+     * Creates the registry client with a local route cache TTL.
+     *
+     * @param baseUri registry discovery center base URI
+     * @param localCacheTtl cache TTL for degraded RDC calls
+     */
+    public RuntimeRdcClient(URI baseUri, Duration localCacheTtl) {
+        this(HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build(),
+                new ObjectMapper(), baseUri, localCacheTtl, System::currentTimeMillis);
     }
 
     RuntimeRdcClient(HttpClient httpClient, ObjectMapper objectMapper, URI baseUri) {
+        this(httpClient, objectMapper, baseUri, DEFAULT_LOCAL_CACHE_TTL, System::currentTimeMillis);
+    }
+
+    RuntimeRdcClient(HttpClient httpClient, ObjectMapper objectMapper, URI baseUri,
+                     Duration localCacheTtl, LongSupplier clock) {
         this.httpClient = Objects.requireNonNull(httpClient, "httpClient is required");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper is required");
         this.baseUri = normalizeBaseUri(baseUri);
+        this.cache = new RuntimeRdcLocalRouteCache(
+                localCacheTtl != null ? localCacheTtl : DEFAULT_LOCAL_CACHE_TTL, clock);
     }
 
     /**
@@ -60,15 +84,22 @@ public final class RuntimeRdcClient {
         URI uri = endpoint("/api/registry/instances/" + encode(tenantId) + "/" + encode(agentId));
         HttpRequest request = HttpRequest.newBuilder(uri).header("Accept", "application/json")
                 .timeout(REQUEST_TIMEOUT).GET().build();
-        JsonNode response = execute(request, "RDC instance query failed for agentId=" + agentId);
-        if (!response.isArray()) {
-            throw new RouteDiscoveryException("RDC instance query returned a non-array response");
+        try {
+            JsonNode response = execute(request, "RDC instance query failed for agentId=" + agentId);
+            List<RouteCandidate> candidates = parseCandidates(response);
+            cache.putSearch(tenantId, agentId, candidates);
+            return candidates;
+        } catch (RouteDiscoveryException ex) {
+            if (isUnavailable(ex)) {
+                List<RouteCandidate> cached = cache.getSearch(tenantId, agentId);
+                if (!cached.isEmpty()) {
+                    return cached;
+                }
+                throw new RouteDiscoveryException(
+                        "RDC instance query unavailable and no cached route for agentId=" + agentId);
+            }
+            throw ex;
         }
-        List<RouteCandidate> candidates = new ArrayList<>(response.size());
-        for (JsonNode item : response) {
-            candidates.add(new RouteCandidate(requiredText(item, "serviceId"), requiredText(item, "routeHandle")));
-        }
-        return List.copyOf(candidates);
     }
 
     /**
@@ -90,25 +121,62 @@ public final class RuntimeRdcClient {
                 .header("Content-Type", "application/json").header("Accept", "application/json")
                 .timeout(REQUEST_TIMEOUT).POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build();
-        JsonNode response = execute(request, "RDC route-handle resolve failed");
-        return new ResolvedRoute(requiredText(response, "endpointUrl"),
-                optionalText(response, "instanceId").orElse(null), optionalText(response, "routeKey").orElse(null),
-                optionalText(response, "contractVersion").orElse(null));
+        try {
+            JsonNode response = execute(request, "RDC route-handle resolve failed");
+            ResolvedRoute route = new ResolvedRoute(requiredText(response, "endpointUrl"),
+                    optionalText(response, "instanceId").orElse(null),
+                    optionalText(response, "routeKey").orElse(null),
+                    optionalText(response, "contractVersion").orElse(null));
+            cache.putResolve(tenantId, routeHandle, route);
+            return route;
+        } catch (RouteDiscoveryException ex) {
+            if (isUnavailable(ex)) {
+                return cache.getResolve(tenantId, routeHandle)
+                        .orElseThrow(() -> new RouteDiscoveryException(
+                                "RDC resolve unavailable and no cached endpoint for routeHandle="
+                                        + routeHandle));
+            }
+            throw ex;
+        }
+    }
+
+    private List<RouteCandidate> parseCandidates(JsonNode response) {
+        if (!response.isArray()) {
+            throw new RouteDiscoveryException("RDC instance query returned a non-array response");
+        }
+        List<RouteCandidate> candidates = new ArrayList<>(response.size());
+        for (JsonNode item : response) {
+            candidates.add(new RouteCandidate(requiredText(item, "serviceId"),
+                    requiredText(item, "routeHandle")));
+        }
+        return List.copyOf(candidates);
     }
 
     private JsonNode execute(HttpRequest request, String failureMessage) {
         try {
             HttpResponse<String> response = httpClient.send(request,
                     HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new RouteDiscoveryException(failureMessage + ": HTTP " + response.statusCode());
+            int status = response.statusCode();
+            if (status == 503 || status == 502 || status == 504) {
+                throw new RouteDiscoveryException(failureMessage + ": HTTP " + status);
+            }
+            if (status < 200 || status >= 300) {
+                throw new RouteDiscoveryException(failureMessage + ": HTTP " + status);
             }
             return objectMapper.readTree(response.body());
-        } catch (InterruptedException failure) {
-            throw new RouteDiscoveryException(failureMessage, failure);
-        } catch (IOException failure) {
+        } catch (InterruptedException | IOException failure) {
             throw new RouteDiscoveryException(failureMessage, failure);
         }
+    }
+
+    private static boolean isUnavailable(RouteDiscoveryException ex) {
+        if (ex.getCause() instanceof IOException) {
+            return true;
+        }
+        String message = ex.getMessage();
+        return message != null && (message.contains("HTTP 503")
+                || message.contains("HTTP 502")
+                || message.contains("HTTP 504"));
     }
 
     private URI endpoint(String path) {
@@ -139,7 +207,10 @@ public final class RuntimeRdcClient {
             return Optional.empty();
         }
         String value = node.get(field).asText();
-        return value.isBlank() ? Optional.empty() : Optional.of(value);
+        if (value.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(value);
     }
 
     private static String require(String value, String name) {

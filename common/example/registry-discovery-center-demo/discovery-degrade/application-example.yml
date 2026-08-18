@@ -1,0 +1,54 @@
+# Local / 联机验收用 RDC 配置（勿当生产模板）
+#
+# 与模块内 application.yml 的差异：关闭 deployment-discovery，允许
+# POST /api/registry/register 灌数（联机 smoke 依赖 push 注册）。
+#
+# 启动示例：
+#   cd common/agent-bus/registry-discovery-center
+#   SPRING_DATASOURCE_URL=jdbc:postgresql://127.0.0.1:5432/agent_rdc \
+#   SPRING_DATASOURCE_USERNAME=agent_rdc SPRING_DATASOURCE_PASSWORD=agent_rdc \
+#   mvn spring-boot:run \
+#     -Dspring-boot.run.arguments=--spring.config.additional-location=optional:file:../../example/registry-discovery-center-demo/discovery-degrade/application-example.yml
+#
+# 或打包后：
+#   java -jar target/agent-rdc-0.1.0.jar \
+#     --spring.config.additional-location=optional:file:.../application-example.yml
+
+spring:
+  application:
+    name: registry-discovery-center
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://127.0.0.1:5432/agent_rdc}
+    username: ${SPRING_DATASOURCE_USERNAME:agent_rdc}
+    password: ${SPRING_DATASOURCE_PASSWORD:agent_rdc}
+    driver-class-name: org.postgresql.Driver
+    # L1 smoke: fail fast when CONNECT revoked (default 30s would outlive cache TTL)
+    hikari:
+      connection-timeout: 2000
+      validation-timeout: 1000
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: ${SERVER_PORT:8092}
+
+rdc:
+  pull-registration:
+    enabled: false
+  deployment-discovery:
+    enabled: false
+  registry:
+    security:
+      caller-allowlist: {}
+    card-fetch:
+      mutual-tls: false
+      verify-signatures: false
+      target-cidrs: []
+
+agent-bus:
+  registry:
+    mvp:
+      local-cache:
+        # Keep warm past L1 block + Hikari fail-fast window
+        ttl-ms: 120000

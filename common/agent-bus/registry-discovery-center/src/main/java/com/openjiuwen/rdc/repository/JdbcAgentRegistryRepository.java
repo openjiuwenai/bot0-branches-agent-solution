@@ -64,9 +64,9 @@ import javax.sql.DataSource;
  *       per instance, not per agentId.</li>
  *   <li><b>listByAgentId</b> — REQ-2026-006 replaces
  *       {@code searchByAgentId}. {@code SELECT ... WHERE tenant_id AND
- *       agent_id AND status IN ('ONLINE','DEGRADED') ORDER BY weight DESC,
- *       last_heartbeat DESC}. Returns {@code List<RegistryRow>} (empty list
- *       = agent_not_found).</li>
+ *       agent_id AND status IN ('ONLINE','DEGRADED') AND last_heartbeat within
+ *       15s ORDER BY weight DESC, last_heartbeat DESC}. Returns
+ *       {@code List<RegistryRow>} (empty list = agent_not_found).</li>
  *   <li><b>findEndpoint</b> — {@code SELECT endpoint_url, route_key,
  *       contract_version WHERE tenant_id AND agent_id AND service_id};
  *       REQ-2026-006: {@code service_id} added — the codec decodes
@@ -91,6 +91,15 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     private static final String TABLE = "agent_registry_mvp";
     private static final String REGISTRATION_TABLE = "agent_card_registration";
     private static final String SOURCE_REF_TABLE = "agent_card_source_ref";
+
+    /**
+     * FEAT-016 discovery SQL filter: ONLINE/DEGRADED only + 15s heartbeat visibility
+     * window. Lease filtering on list is intentionally not included in this port.
+     */
+    private static final String DISCOVERY_VISIBILITY_FILTER =
+            " AND status IN ('ONLINE','DEGRADED')"
+                    + " AND last_heartbeat >= NOW() - INTERVAL '15 seconds'";
+
 
     private static final String UPSERT_SQL = "INSERT INTO " + TABLE + " ("
             + "tenant_id, agent_id, service_id, instance_id, agent_name, framework_type, "
@@ -898,7 +907,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                     + "route_key, contract_version, capability_version, "
                     + "weight, region, max_concurrency, status, capabilities FROM " + TABLE
                     + " WHERE tenant_id = :tenantId AND agent_id = :agentId"
-                    + " AND status IN ('ONLINE','DEGRADED','DRAINING')"
+                    + DISCOVERY_VISIBILITY_FILTER
                     + " AND (CAST(:contractVersion AS varchar) IS NULL OR contract_version = :contractVersion)"
                     + " ORDER BY weight DESC, last_heartbeat DESC";
             MapSqlParameterSource params = new MapSqlParameterSource()
@@ -927,7 +936,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                     + "route_key, contract_version, capability_version, "
                     + "weight, region, max_concurrency, status, capabilities FROM " + TABLE
                     + " WHERE tenant_id = :tenantId AND service_id = :serviceId"
-                    + " AND status IN ('ONLINE','DEGRADED','DRAINING')"
+                    + DISCOVERY_VISIBILITY_FILTER
                     + " AND (CAST(:contractVersion AS varchar) IS NULL OR contract_version = :contractVersion)"
                     + " ORDER BY weight DESC, last_heartbeat DESC";
             MapSqlParameterSource params = new MapSqlParameterSource()
@@ -956,7 +965,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                     + "route_key, contract_version, capability_version, "
                     + "weight, region, max_concurrency, status, capabilities FROM " + TABLE
                     + " WHERE tenant_id = :tenantId AND capabilities @> ARRAY[:capability]::varchar[]"
-                    + " AND status IN ('ONLINE','DEGRADED','DRAINING')"
+                    + DISCOVERY_VISIBILITY_FILTER
                     + " AND (CAST(:contractVersion AS varchar) IS NULL OR contract_version = :contractVersion)"
                     + " ORDER BY weight DESC, last_heartbeat DESC";
             MapSqlParameterSource params = new MapSqlParameterSource()

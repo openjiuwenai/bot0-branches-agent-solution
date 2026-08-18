@@ -111,7 +111,7 @@ public class BusConsumerAutoConfiguration {
     @Bean
     @ConditionalOnBean(value = AgentBusRequestSubmitter.class, name = "responseConsumer")
     RuntimeRdcClient runtimeRdcClient(BusConsumerProperties properties) {
-        return new RuntimeRdcClient(properties.getRegistryBaseUrl());
+        return new RuntimeRdcClient(properties.getRegistryBaseUrl(), properties.getLocalCacheTtl());
     }
 
     @Bean(destroyMethod = "shutdownNow")

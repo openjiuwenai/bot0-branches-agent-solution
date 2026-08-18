@@ -11,6 +11,7 @@ import com.openjiuwen.rdc.model.RegistryUnavailableException;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.transaction.CannotCreateTransactionException;
 
 /**
  * RegistryPersistenceGuardTest coverage.
@@ -27,6 +28,22 @@ class RegistryPersistenceGuardTest {
                 .satisfies(ex -> {
                     if (ex instanceof RegistryUnavailableException unavailable) {
                         assertThat(unavailable.failure().failureCode()).isEqualTo("REGISTRY_UNAVAILABLE");
+                    }
+                });
+    }
+
+    @Test
+    void cannot_create_transaction_maps_to_registry_unavailable() {
+        assertThatThrownBy(() -> RegistryPersistenceGuard.execute("trace-2", () -> {
+            throw new CannotCreateTransactionException(
+                    "Could not open JDBC Connection for transaction",
+                    new RuntimeException("permission denied for database \"agent_rdc\""));
+        }))
+                .isInstanceOf(RegistryUnavailableException.class)
+                .satisfies(ex -> {
+                    if (ex instanceof RegistryUnavailableException unavailable) {
+                        assertThat(unavailable.failure().failureCode()).isEqualTo("REGISTRY_UNAVAILABLE");
+                        assertThat(unavailable.getMessage()).contains("permission denied");
                     }
                 });
     }

@@ -47,7 +47,7 @@ class HttpRdcRouteClientTest {
         mockRdc.start();
         String root = mockRdc.url("/").toString();
         String baseUrl = root.endsWith("/") ? root.substring(0, root.length() - 1) : root;
-        return new HttpRdcRouteClient(baseUrl);
+        return new HttpRdcRouteClient(baseUrl, 5_000L, System::currentTimeMillis);
     }
 
     /**
@@ -112,6 +112,57 @@ class HttpRdcRouteClientTest {
         mockRdc.enqueue(new MockResponse().setResponseCode(404));
         Throwable thrown = catchThrowable(() -> client.resolveRouteHandle("v2:gone", "t"));
         assertThat(thrown).isInstanceOf(RouteResolutionException.class);
+    }
+
+    @Test
+    void searchUsesCachedRouteWhenRdcReturns503() throws InterruptedException {
+        mockRdc.enqueue(new MockResponse()
+                .setBody("[{\"routeHandle\":\"h-cache\",\"serviceId\":\"svc-1\"}]")
+                .addHeader("Content-Type", "application/json"));
+        assertThat(client.searchInstancesByAgentId("tenant-1", "agent-9"))
+                .extracting(AgentCardRoute::routeHandle)
+                .containsExactly("h-cache");
+        mockRdc.takeRequest();
+
+        mockRdc.enqueue(new MockResponse().setResponseCode(503));
+        assertThat(client.searchInstancesByAgentId("tenant-1", "agent-9"))
+                .extracting(AgentCardRoute::routeHandle)
+                .containsExactly("h-cache");
+    }
+
+    @Test
+    void searchReturnsEmptyWhenRdc503AndNoCache() {
+        mockRdc.enqueue(new MockResponse().setResponseCode(503));
+        assertThat(client.searchInstancesByAgentId("t", "a")).isEmpty();
+    }
+
+    @Test
+    void resolveUsesCachedEndpointWhenRdcReturns503() throws Exception {
+        mockRdc.enqueue(new MockResponse()
+                .setBody("{\"endpointUrl\":\"http://runtime-1:8000\"}")
+                .addHeader("Content-Type", "application/json"));
+        assertThat(client.resolveRouteHandle("v2:abc", "tenant-1").endpointUrl())
+                .isEqualTo("http://runtime-1:8000");
+        mockRdc.takeRequest();
+
+        mockRdc.enqueue(new MockResponse().setResponseCode(503));
+        assertThat(client.resolveRouteHandle("v2:abc", "tenant-1").endpointUrl())
+                .isEqualTo("http://runtime-1:8000");
+    }
+
+    @Test
+    void cachedRouteExpiresAfterTtl() throws InterruptedException {
+        HttpRdcRouteClient shortTtlClient = new HttpRdcRouteClient(
+                mockRdc.url("/").toString().replaceAll("/$", ""), 50L, () -> System.currentTimeMillis());
+        mockRdc.enqueue(new MockResponse()
+                .setBody("[{\"routeHandle\":\"h-expire\"}]")
+                .addHeader("Content-Type", "application/json"));
+        assertThat(shortTtlClient.searchInstancesByAgentId("tenant-1", "agent-9")).hasSize(1);
+        mockRdc.takeRequest();
+
+        Thread.sleep(60L);
+        mockRdc.enqueue(new MockResponse().setResponseCode(503));
+        assertThat(shortTtlClient.searchInstancesByAgentId("tenant-1", "agent-9")).isEmpty();
     }
 
     @Test

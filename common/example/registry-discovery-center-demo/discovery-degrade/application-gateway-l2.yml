@@ -1,0 +1,15 @@
+# Gateway DIRECT config for L2 degrade smoke (fake RDC + fake runtime).
+server:
+  port: ${GATEWAY_PORT:8080}
+
+gateway:
+  path-mode: direct
+  rdc:
+    base-url: ${GATEWAY_RDC_BASE_URL:http://127.0.0.1:18092}
+    local-cache:
+      ttl-ms: 30000
+  default-agent-id: smoke-agent
+  test-credential:
+    token: mock-token
+    principalId: test-principal
+    tenantId: tenant-1
