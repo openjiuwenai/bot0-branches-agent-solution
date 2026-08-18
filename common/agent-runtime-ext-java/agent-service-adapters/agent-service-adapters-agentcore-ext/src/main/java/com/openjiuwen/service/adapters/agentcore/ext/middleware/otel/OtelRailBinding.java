@@ -73,6 +73,11 @@ public final class OtelRailBinding implements AutoCloseable {
         return new OtelRailBinding(lockAgent, target, rail);
     }
 
+    /**
+     * Returns whether this binding holds a live rail registration.
+     *
+     * @return true when the rail was bound
+     */
     public boolean isEnabled() {
         return rail != null;
     }

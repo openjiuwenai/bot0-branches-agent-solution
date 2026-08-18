@@ -27,7 +27,6 @@ import java.util.Map;
  * OtelRemoteClientDecoratorFactory 出站装饰器的单元测试。
  */
 class OtelRemoteClientDecoratorFactoryTest {
-
     private final InMemorySpanExporter exporter = InMemorySpanExporter.create();
 
     private OtelRemoteClientDecoratorFactory factory() {

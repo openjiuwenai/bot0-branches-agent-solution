@@ -24,6 +24,8 @@ public final class OtelRuntimeSupport {
 
     /**
      * Called by the auto-configuration at startup.
+     *
+     * @param httpContextBridge bridge carrying the http root span per conversation
      */
     public static void activate(HttpContextBridge httpContextBridge) {
         bridge = httpContextBridge;

@@ -31,7 +31,6 @@ import java.util.concurrent.CompletableFuture;
  * OtelRemoteAgentCallerDecorator 出站委托 span 的单元测试。
  */
 class OtelRemoteAgentCallerDecoratorTest {
-
     private final InMemorySpanExporter exporter = InMemorySpanExporter.create();
     private final SdkTracerProvider provider = SdkTracerProvider.builder()
             .addSpanProcessor(SimpleSpanProcessor.create(exporter))
