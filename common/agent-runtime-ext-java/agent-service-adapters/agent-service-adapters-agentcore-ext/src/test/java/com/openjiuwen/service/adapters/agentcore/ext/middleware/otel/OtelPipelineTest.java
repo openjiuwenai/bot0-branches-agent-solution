@@ -28,7 +28,6 @@ import java.util.concurrent.TimeUnit;
  * asserting the assembled span tree carries every contract-critical attribute.
  */
 class OtelPipelineTest {
-
     private final InMemorySpanExporter exporter = InMemorySpanExporter.create();
 
     @AfterEach

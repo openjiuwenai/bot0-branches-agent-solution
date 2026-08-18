@@ -17,35 +17,50 @@ import java.util.Map;
  */
 @ConfigurationProperties(prefix = "openjiuwen.service.otel")
 public class OtelTrajectoryProperties {
-
-    /** 总开关；装配条件直接消费此属性（@ConditionalOnProperty），默认 false。 */
+    /**
+     * 总开关；装配条件直接消费此属性（@ConditionalOnProperty），默认 false。
+     */
     private boolean enabled;
 
-    /** OTLP 端点；回退 OTEL_EXPORTER_OTLP_ENDPOINT，再按 protocol 取默认。 */
+    /**
+     * OTLP 端点；回退 OTEL_EXPORTER_OTLP_ENDPOINT，再按 protocol 取默认。
+     */
     private String endpoint;
 
-    /** 导出协议：grpc / http；回退 OTEL_EXPORTER_OTLP_PROTOCOL，默认 grpc。 */
+    /**
+     * 导出协议：grpc / http；回退 OTEL_EXPORTER_OTLP_PROTOCOL，默认 grpc。
+     */
     private String protocol;
 
-    /** 导出请求头；yaml map 形态，设置后整体替代 OTEL_EXPORTER_OTLP_HEADERS。 */
+    /**
+     * 导出请求头；yaml map 形态，设置后整体替代 OTEL_EXPORTER_OTLP_HEADERS。
+     */
     private Map<String, String> headers;
 
-    /** 导出超时（Spring Duration 风格，如 30s / 500ms）；回退 OTEL_EXPORTER_OTLP_TIMEOUT（毫秒）。 */
+    /**
+     * 导出超时（Spring Duration 风格，如 30s / 500ms）；回退 OTEL_EXPORTER_OTLP_TIMEOUT（毫秒）。
+     */
     private Duration timeout;
 
-    /** service.name；回退 OTEL_SERVICE_NAME，默认 edp-agent。 */
+    /**
+     * service.name；回退 OTEL_SERVICE_NAME，默认 edp-agent。
+     */
     private String serviceName;
 
-    /** service.version；回退 OTEL_SERVICE_VERSION。 */
+    /**
+     * service.version；回退 OTEL_SERVICE_VERSION。
+     */
     private String serviceVersion;
 
-    /** service.instance.id；回退 OTEL_SERVICE_INSTANCE_ID。 */
+    /**
+     * service.instance.id；回退 OTEL_SERVICE_INSTANCE_ID。
+     */
     private String serviceInstanceId;
 
-    /** 采样率 [0.0, 1.0]；回退 OTEL_TRACES_SAMPLER_ARG，默认 1.0。 */
+    /**
+     * 采样率 [0.0, 1.0]；回退 OTEL_TRACES_SAMPLER_ARG，默认 1.0。
+     */
     private Double sampleRate;
-
-    // ── getters ─────────────────────────────────────────────
 
     /**
      * 获取总开关（是否启用轨迹上报）。
@@ -128,70 +143,15 @@ public class OtelTrajectoryProperties {
         return sampleRate;
     }
 
-    // ── setters ─────────────────────────────────────────────
-
     /**
-     * 设置总开关（是否启用轨迹上报）。
+     * 设置采样率。
      *
-     * @param enabled 总开关（是否启用轨迹上报）
+     * @param sampleRate 采样率
      */
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
+    public void setSampleRate(Double sampleRate) {
+        this.sampleRate = sampleRate;
     }
 
-    /**
-     * 设置OTLP 端点。
-     *
-     * @param endpoint OTLP 端点
-     */
-    public void setEndpoint(String endpoint) {
-        this.endpoint = endpoint;
-    }
-
-    /**
-     * 设置导出协议。
-     *
-     * @param protocol 导出协议
-     */
-    public void setProtocol(String protocol) {
-        this.protocol = protocol;
-    }
-
-    /**
-     * 设置导出请求头。
-     *
-     * @param headers 导出请求头
-     */
-    public void setHeaders(Map<String, String> headers) {
-        this.headers = headers;
-    }
-
-    /**
-     * 设置导出超时。
-     *
-     * @param timeout 导出超时
-     */
-    public void setTimeout(Duration timeout) {
-        this.timeout = timeout;
-    }
-
-    /**
-     * 设置service.name。
-     *
-     * @param serviceName service.name
-     */
-    public void setServiceName(String serviceName) {
-        this.serviceName = serviceName;
-    }
-
-    /**
-     * 设置service.version。
-     *
-     * @param serviceVersion service.version
-     */
-    public void setServiceVersion(String serviceVersion) {
-        this.serviceVersion = serviceVersion;
-    }
 
     /**
      * 设置service.instance.id。
@@ -202,13 +162,73 @@ public class OtelTrajectoryProperties {
         this.serviceInstanceId = serviceInstanceId;
     }
 
+
     /**
-     * 设置采样率。
+     * 设置service.version。
      *
-     * @param sampleRate 采样率
+     * @param serviceVersion service.version
      */
-    public void setSampleRate(Double sampleRate) {
-        this.sampleRate = sampleRate;
+    public void setServiceVersion(String serviceVersion) {
+        this.serviceVersion = serviceVersion;
     }
 
+
+    /**
+     * 设置service.name。
+     *
+     * @param serviceName service.name
+     */
+    public void setServiceName(String serviceName) {
+        this.serviceName = serviceName;
+    }
+
+
+    /**
+     * 设置导出超时。
+     *
+     * @param timeout 导出超时
+     */
+    public void setTimeout(Duration timeout) {
+        this.timeout = timeout;
+    }
+
+
+    /**
+     * 设置导出请求头。
+     *
+     * @param headers 导出请求头
+     */
+    public void setHeaders(Map<String, String> headers) {
+        this.headers = headers;
+    }
+
+
+    /**
+     * 设置导出协议。
+     *
+     * @param protocol 导出协议
+     */
+    public void setProtocol(String protocol) {
+        this.protocol = protocol;
+    }
+
+
+    /**
+     * 设置OTLP 端点。
+     *
+     * @param endpoint OTLP 端点
+     */
+    public void setEndpoint(String endpoint) {
+        this.endpoint = endpoint;
+    }
+
+
+    /**
+     * 设置总开关（是否启用轨迹上报）。
+     *
+     * @param enabled 总开关（是否启用轨迹上报）
+     */
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
 }

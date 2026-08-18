@@ -30,7 +30,6 @@ import java.util.concurrent.TimeUnit;
  * per span type.
  */
 class OtelContractTreeTest {
-
     private final InMemorySpanExporter exporter = InMemorySpanExporter.create();
 
     @AfterEach

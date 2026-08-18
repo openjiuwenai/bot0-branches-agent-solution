@@ -30,7 +30,6 @@ import java.util.concurrent.TimeUnit;
  * mvn test -Dtest=OtlpRelayCheckIT
  */
 class OtlpRelayCheckIT {
-
     @AfterEach
     void clearHolder() {
         SessionContextHolder.setCurrentSession(null);

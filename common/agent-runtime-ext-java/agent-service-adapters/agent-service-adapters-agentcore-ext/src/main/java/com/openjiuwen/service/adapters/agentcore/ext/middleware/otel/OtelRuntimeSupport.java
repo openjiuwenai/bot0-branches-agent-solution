@@ -16,20 +16,23 @@ import java.util.Optional;
  * @since 2026-08-07
  */
 public final class OtelRuntimeSupport {
-
     private static volatile HttpContextBridge bridge;
     private static volatile boolean enabled;
 
     private OtelRuntimeSupport() {
     }
 
-    /** Called by the auto-configuration at startup. */
+    /**
+     * Called by the auto-configuration at startup.
+     */
     public static void activate(HttpContextBridge httpContextBridge) {
         bridge = httpContextBridge;
         enabled = true;
     }
 
-    /** For tests / shutdown: deactivate and drop the bridge. */
+    /**
+     * For tests / shutdown: deactivate and drop the bridge.
+     */
     public static void deactivate() {
         enabled = false;
         bridge = null;

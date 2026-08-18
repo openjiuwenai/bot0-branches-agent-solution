@@ -19,7 +19,6 @@ import org.junit.jupiter.api.Test;
  * OtelCompatSpanExporter 契约双写的单元测试。
  */
 class OtelCompatSpanExporterTest {
-
     private static final AttributeKey<Long> OLD_INPUT = AttributeKey.longKey("gen_ai.usage.prompt_tokens");
     private static final AttributeKey<Long> OLD_OUTPUT = AttributeKey.longKey("gen_ai.usage.completion_tokens");
     private static final AttributeKey<Long> NEW_INPUT = AttributeKey.longKey("gen_ai.usage.input_tokens");

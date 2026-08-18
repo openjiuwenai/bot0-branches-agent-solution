@@ -20,7 +20,6 @@ import com.openjiuwen.service.spec.spi.QueryStreamObserver;
  * @since 2026-08-07
  */
 public class OtelJiuwenCoreAgentHandler extends JiuwenCoreAgentHandler {
-
     public OtelJiuwenCoreAgentHandler(Object agent, MiddlewareAdapterRegistrar middlewareAdapterRegistrar,
                                       ExternalSvcAdapterRegistrar externalSvcAdapterRegistrar) {
         super(agent, middlewareAdapterRegistrar, externalSvcAdapterRegistrar);

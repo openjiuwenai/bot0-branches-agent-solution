@@ -17,7 +17,6 @@ import org.junit.jupiter.api.Test;
  * HttpContextBridge 请求级载体的单元测试。
  */
 class HttpContextBridgeTest {
-
     private Span spanOf(String traceId) {
         return Span.wrap(SpanContext.create(traceId, "bbbbbbbbbbbbbbbb",
                 TraceFlags.getSampled(), TraceState.getDefault()));

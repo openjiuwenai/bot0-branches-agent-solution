@@ -24,7 +24,6 @@ import java.util.Map;
  * OtelJsonAgentHandler 正文 JSON 化的单元测试。
  */
 class OtelJsonAgentHandlerTest {
-
     private static final AttributeKey<String> AGENT_INPUTS = AttributeKey.stringKey("openjiuwen.agent.inputs");
     private static final AttributeKey<String> AGENT_OUTPUTS = AttributeKey.stringKey("openjiuwen.agent.outputs");
 

@@ -17,7 +17,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * @since 2026-08-07
  */
 public final class HttpContextBridge {
-
     private final Map<String, Entry> entries = new ConcurrentHashMap<>();
 
     /**
@@ -49,7 +48,9 @@ public final class HttpContextBridge {
         entries.remove(conversationId);
     }
 
-    /** Bridge entry: holds the http root span so the loop thread can bridge and write to it. */
+    /**
+     * Bridge entry: holds the http root span so the loop thread can bridge and write to it.
+     */
     public static final class Entry {
         private final Span span;
         private volatile String engineTraceId;

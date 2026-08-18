@@ -20,7 +20,6 @@ import org.slf4j.LoggerFactory;
  * @since 2026-08-07
  */
 public final class OtelAgentRegistrar {
-
     private static final Logger LOGGER = LoggerFactory.getLogger(OtelAgentRegistrar.class);
     private static final String HANDLER_NAME = "otel_agent";
 

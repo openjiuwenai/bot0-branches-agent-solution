@@ -47,7 +47,6 @@ import java.util.Optional;
  * @since 2026-08-07
  */
 public class HttpRequestSpanFilter extends OncePerRequestFilter {
-
     private static final Logger LOGGER = LoggerFactory.getLogger(HttpRequestSpanFilter.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -150,7 +149,9 @@ public class HttpRequestSpanFilter extends OncePerRequestFilter {
         }
     }
 
-    /** Request wrapper that caches the body once and replays it to downstream consumers. */
+    /**
+     * Request wrapper that caches the body once and replays it to downstream consumers.
+     */
     private static final class CachedBodyRequest extends HttpServletRequestWrapper {
         private final byte[] body;
 

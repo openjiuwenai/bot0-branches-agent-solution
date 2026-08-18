@@ -28,7 +28,6 @@ import java.util.function.Function;
  * @since 2026-08-07
  */
 public final class OtelEnvProperties {
-
     static final String ENV_ENDPOINT = "OTEL_EXPORTER_OTLP_ENDPOINT";
     static final String ENV_PROTOCOL = "OTEL_EXPORTER_OTLP_PROTOCOL";
     static final String ENV_HEADERS = "OTEL_EXPORTER_OTLP_HEADERS";

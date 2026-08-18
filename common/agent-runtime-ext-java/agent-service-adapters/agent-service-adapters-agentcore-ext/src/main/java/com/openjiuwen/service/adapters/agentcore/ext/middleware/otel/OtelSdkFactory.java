@@ -25,7 +25,6 @@ import java.util.concurrent.TimeUnit;
  * @since 2026-08-07
  */
 public final class OtelSdkFactory {
-
     private OtelSdkFactory() {
     }
 

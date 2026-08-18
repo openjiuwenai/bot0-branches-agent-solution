@@ -32,7 +32,6 @@ import java.util.regex.Pattern;
  * @since 2026-08-07
  */
 public class SessionFilteredAgentRail extends AgentRail {
-
     private static final Logger LOGGER = LoggerFactory.getLogger(SessionFilteredAgentRail.class);
     private static final Set<String> WARNED_SESSIONS = ConcurrentHashMap.newKeySet();
 

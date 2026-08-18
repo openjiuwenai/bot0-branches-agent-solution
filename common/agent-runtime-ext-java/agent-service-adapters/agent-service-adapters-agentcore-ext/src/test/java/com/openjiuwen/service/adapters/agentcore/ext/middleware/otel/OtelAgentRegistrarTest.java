@@ -21,7 +21,6 @@ import org.junit.jupiter.api.Test;
  * OtelAgentRegistrar handler 注册的单元测试。
  */
 class OtelAgentRegistrarTest {
-
     @AfterEach
     void cleanup() {
         TracerHandlerRegistry.unregisterHandler("otel_agent");

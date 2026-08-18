@@ -27,7 +27,6 @@ import java.util.Optional;
  * @since 2026-08-07
  */
 public class OtelJsonAgentHandler extends OtelAgentHandler {
-
     private static final Logger LOGGER = LoggerFactory.getLogger(OtelJsonAgentHandler.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 

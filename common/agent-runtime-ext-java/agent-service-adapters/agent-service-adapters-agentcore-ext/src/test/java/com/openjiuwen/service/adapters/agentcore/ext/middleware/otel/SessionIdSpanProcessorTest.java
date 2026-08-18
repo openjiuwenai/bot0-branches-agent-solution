@@ -24,7 +24,6 @@ import java.util.Map;
  * SessionIdSpanProcessor 会话标识注入的单元测试。
  */
 class SessionIdSpanProcessorTest {
-
     @AfterEach
     void clearHolder() {
         SessionContextHolder.setCurrentSession(null);

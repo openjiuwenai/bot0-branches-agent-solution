@@ -18,7 +18,6 @@ import org.junit.jupiter.api.Test;
  * OtelSdkFactory provider 装配的单元测试。
  */
 class OtelSdkFactoryTest {
-
     private OtelTracerConfig config() {
         return OtelTracerConfig.builder()
                 .exporterType("otlp")

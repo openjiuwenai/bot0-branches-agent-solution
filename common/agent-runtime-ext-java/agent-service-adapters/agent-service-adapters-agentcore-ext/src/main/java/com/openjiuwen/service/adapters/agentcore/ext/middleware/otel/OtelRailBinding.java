@@ -22,7 +22,6 @@ import org.slf4j.LoggerFactory;
  * @since 2026-08-07
  */
 public final class OtelRailBinding implements AutoCloseable {
-
     private static final Logger LOGGER = LoggerFactory.getLogger(OtelRailBinding.class);
 
     private final Object lockAgent;

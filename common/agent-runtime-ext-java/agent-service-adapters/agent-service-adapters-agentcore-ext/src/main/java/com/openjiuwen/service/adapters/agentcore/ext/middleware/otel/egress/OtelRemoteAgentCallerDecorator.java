@@ -43,11 +43,12 @@ import java.util.concurrent.CompletableFuture;
  * @since 2026-08-17
  */
 public class OtelRemoteAgentCallerDecorator implements RemoteAgentCaller {
-
     private static final Logger LOGGER = LoggerFactory.getLogger(OtelRemoteAgentCallerDecorator.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    /** Remote-agent name identifying the versatile service (EDPAgent remote-agents config). */
+    /**
+     * Remote-agent name identifying the versatile service (EDPAgent remote-agents config).
+     */
     private static final String VERSATILE_AGENT_NAME = "versatile-agent";
 
     private final RemoteAgentCaller delegate;

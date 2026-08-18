@@ -16,7 +16,6 @@ import java.util.Map;
  * OtelEnvProperties 配置解析与覆盖优先级的单元测试。
  */
 class OtelEnvPropertiesTest {
-
     private OtelEnvProperties from(Map<String, String> env) {
         return new OtelEnvProperties(env::get);
     }

@@ -23,7 +23,6 @@ import java.util.Map;
  * SessionFilteredAgentRail 会话过滤的单元测试。
  */
 class SessionFilteredAgentRailTest {
-
     /** Records delegated calls without touching any tracer infrastructure. */
     private static final class RecordingRail extends OtelRail {
         private int beforeInvokeCount;

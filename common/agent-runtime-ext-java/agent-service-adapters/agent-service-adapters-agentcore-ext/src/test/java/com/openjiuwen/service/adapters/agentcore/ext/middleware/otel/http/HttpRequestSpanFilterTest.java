@@ -26,7 +26,6 @@ import java.nio.charset.StandardCharsets;
  * HttpRequestSpanFilter 入口根 span 的单元测试。
  */
 class HttpRequestSpanFilterTest {
-
     private final InMemorySpanExporter exporter = InMemorySpanExporter.create();
     private final HttpContextBridge bridge = new HttpContextBridge();
 

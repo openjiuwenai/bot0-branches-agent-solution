@@ -15,7 +15,6 @@ import org.junit.jupiter.api.Test;
  * OtelRailBinding 按请求绑定的单元测试。
  */
 class OtelRailBindingTest {
-
     @Test
     void bind_nullConversationId_returnsDisabledNoop() {
         OtelRailBinding binding = OtelRailBinding.bind(new Object(), null, null);

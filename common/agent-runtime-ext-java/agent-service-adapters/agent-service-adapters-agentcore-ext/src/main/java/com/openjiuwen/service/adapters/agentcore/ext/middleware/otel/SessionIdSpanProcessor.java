@@ -21,7 +21,6 @@ import io.opentelemetry.sdk.trace.SpanProcessor;
  * @since 2026-08-07
  */
 public final class SessionIdSpanProcessor implements SpanProcessor {
-
     private static final AttributeKey<String> SESSION_ID = AttributeKey.stringKey("session.id");
 
     @Override

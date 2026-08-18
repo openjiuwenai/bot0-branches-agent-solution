@@ -50,7 +50,6 @@ import java.util.Map;
 @AutoConfigureBefore(AgentCoreAdaptersAutoConfiguration.class)
 @EnableConfigurationProperties(OtelTrajectoryProperties.class)
 public class OtelAutoConfiguration {
-
     private static final Logger LOGGER = LoggerFactory.getLogger(OtelAutoConfiguration.class);
 
     @Bean
@@ -151,7 +150,9 @@ public class OtelAutoConfiguration {
         return new OtelJiuwenCoreAgentHandler(agentId, middlewareAdapterRegistrar, externalSvcAdapterRegistrar);
     }
 
-    /** Holds the provider so shutdown flushes the batch queue before closing. */
+    /**
+     * Holds the provider so shutdown flushes the batch queue before closing.
+     */
     public static final class OtelProviderHolder implements AutoCloseable {
         private final SdkTracerProvider provider;
 

@@ -25,7 +25,6 @@ import java.util.Map;
  * and serialization failure must never propagate to the agent execution path.
  */
 class OtelJsonHandlerFallbackTest {
-
     private static final AttributeKey<String> AGENT_INPUTS = AttributeKey.stringKey("openjiuwen.agent.inputs");
     private static final AttributeKey<String> AGENT_OUTPUTS = AttributeKey.stringKey("openjiuwen.agent.outputs");
 
