@@ -21,6 +21,15 @@ import java.util.stream.Stream;
 class SseBridgeTest {
     private final SseBridge bridge = new SseBridge();
 
+    /** Obtain the Logback logger backing {@link SseBridge}, guarded by an instanceof check. */
+    private static ch.qos.logback.classic.Logger logbackLogger() {
+        org.slf4j.Logger base = org.slf4j.LoggerFactory.getLogger(SseBridge.class);
+        if (base instanceof ch.qos.logback.classic.Logger logback) {
+            return logback;
+        }
+        throw new IllegalStateException("SLF4J binding is not Logback");
+    }
+
     @Test
     void writesJsonrpcEventPerFrame() throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -64,7 +73,7 @@ class SseBridgeTest {
         // S8-4 forward: client SSE disconnects (broken pipe / Ctrl+C) → SseBridge must (1) propagate
         // the IOException, (2) release the runtime frame stream (try-with-resources close = forward
         // bridge release, AC-CFG-6), and (3) log the release so disconnect propagation is observable.
-        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(SseBridge.class);
+        var logger = logbackLogger();
         var appender = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
         appender.start();
         logger.addAppender(appender);
@@ -74,10 +83,13 @@ class SseBridgeTest {
             AtomicBoolean closed = new AtomicBoolean();
             Stream<String> frames = Stream.of("frame-1", "frame-2").onClose(() -> closed.set(true));
             var brokenClient = new java.io.OutputStream() {
-                @Override public void write(int b) throws IOException {
+                @Override
+                public void write(int b) throws IOException {
                     throw new IOException("broken pipe (client gone)");
                 }
-                @Override public void write(byte[] b, int off, int len) throws IOException {
+
+                @Override
+                public void write(byte[] b, int off, int len) throws IOException {
                     throw new IOException("broken pipe (client gone)");
                 }
             };
@@ -103,7 +115,7 @@ class SseBridgeTest {
         // e.g. the HttpClient read got Connection-reset when the runtime died). SseBridge must rethrow
         // the IOException (so the controller aborts G4 / closes the client SSE) AND log the reverse
         // bridge release so runtime→client disconnect propagation is observable.
-        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(SseBridge.class);
+        var logger = logbackLogger();
         var appender = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
         appender.start();
         logger.addAppender(appender);
@@ -112,9 +124,9 @@ class SseBridgeTest {
         try {
             AtomicBoolean closed = new AtomicBoolean();
             // a runtime stream whose iterator throws UncheckedIOException (runtime read failure)
-            Stream<String> frames = Stream.<String>generate(
-                    () -> { throw new java.io.UncheckedIOException(new IOException("runtime Connection reset")); })
-                    .onClose(() -> closed.set(true));
+            Stream<String> frames = Stream.<String>generate(() -> {
+                throw new java.io.UncheckedIOException(new IOException("runtime Connection reset"));
+            }).onClose(() -> closed.set(true));
             IOException thrown = null;
             try {
                 bridge.writeSse(new ByteArrayOutputStream(), frames);
@@ -135,7 +147,7 @@ class SseBridgeTest {
     // and the Spring AsyncRequestNotUsableException (client abort during async SSE flush) ---
 
     private ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> captureLogs() {
-        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(SseBridge.class);
+        var logger = logbackLogger();
         var appender = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
         appender.start();
         logger.addAppender(appender);
@@ -144,25 +156,35 @@ class SseBridgeTest {
     }
 
     private void releaseLogs(ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender) {
-        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(SseBridge.class);
+        var logger = logbackLogger();
         logger.detachAppender(appender);
         logger.setLevel(ch.qos.logback.classic.Level.INFO);
     }
 
     private static java.io.OutputStream brokenClient() {
         return new java.io.OutputStream() {
-            @Override public void write(int b) throws IOException { throw new IOException("client gone"); }
-            @Override public void write(byte[] b, int off, int len) throws IOException { throw new IOException("client gone"); }
+            @Override
+            public void write(int b) throws IOException {
+                throw new IOException("client gone");
+            }
+
+            @Override
+            public void write(byte[] b, int off, int len) throws IOException {
+                throw new IOException("client gone");
+            }
         };
     }
 
     private static java.io.OutputStream asyncAbortClient() {
         return new java.io.OutputStream() {
-            @Override public void write(int b) throws IOException {
+            @Override
+            public void write(int b) throws IOException {
                 throw new org.springframework.web.context.request.async.AsyncRequestNotUsableException(
                         "client abort", new IOException("Connection reset"));
             }
-            @Override public void write(byte[] b, int off, int len) throws IOException {
+
+            @Override
+            public void write(byte[] b, int off, int len) throws IOException {
                 throw new org.springframework.web.context.request.async.AsyncRequestNotUsableException(
                         "client abort", new IOException("Connection reset"));
             }
@@ -179,7 +201,9 @@ class SseBridgeTest {
                     bridge.writeSse(brokenClient(), java.util.List.of("f1", "f2").iterator(), null));
             assertThat(thrown).isInstanceOf(IOException.class).hasMessageContaining("client gone");
             assertThat(appender.list).anyMatch(e -> e.getFormattedMessage().contains("SSE client disconnected"));
-        } finally { releaseLogs(appender); }
+        } finally {
+            releaseLogs(appender);
+        }
     }
 
     @Test
@@ -193,7 +217,9 @@ class SseBridgeTest {
                     bridge.writeSse(asyncAbortClient(), java.util.List.of("f1").iterator(), null));
             assertThat(thrown).isNull();
             assertThat(appender.list).anyMatch(e -> e.getFormattedMessage().contains("SSE client disconnected"));
-        } finally { releaseLogs(appender); }
+        } finally {
+            releaseLogs(appender);
+        }
     }
 
     @Test
@@ -204,7 +230,9 @@ class SseBridgeTest {
             Throwable thrown = catchThrowable(() -> bridge.writeSse(brokenClient(), "f1"));
             assertThat(thrown).isInstanceOf(IOException.class).hasMessageContaining("client gone");
             assertThat(appender.list).anyMatch(e -> e.getFormattedMessage().contains("SSE client disconnected"));
-        } finally { releaseLogs(appender); }
+        } finally {
+            releaseLogs(appender);
+        }
     }
 
     @Test
@@ -212,9 +240,12 @@ class SseBridgeTest {
         // The 2-arg overload (forwardSubscribe). AsyncRequestNotUsableException -> log + return (not rethrow).
         var appender = captureLogs();
         try {
-            Throwable thrown = catchThrowable(() -> bridge.writeSse(asyncAbortClient(), java.util.stream.Stream.of("f1")));
+            Throwable thrown = catchThrowable(() ->
+                    bridge.writeSse(asyncAbortClient(), java.util.stream.Stream.of("f1")));
             assertThat(thrown).isNull();
             assertThat(appender.list).anyMatch(e -> e.getFormattedMessage().contains("SSE client disconnected"));
-        } finally { releaseLogs(appender); }
+        } finally {
+            releaseLogs(appender);
+        }
     }
 }

@@ -35,6 +35,21 @@ class ParamValidatorTest {
     private static final String STREAMING =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendStreamingMessage\","
                     + "\"params\":{\"message\":{\"messageId\":\"m3\",\"parts\":[{\"text\":\"hi\"}]}}}";
+    // --- T1: S6/S8 whitelist + params.id (v0830) ---
+    private static final String GET_TASK =
+            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"GetTask\","
+                    + "\"params\":{\"id\":\"task-123\"}}";
+    private static final String SUBSCRIBE =
+            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SubscribeToTask\","
+                    + "\"params\":{\"id\":\"task-123\"}}";
+    private static final String GET_TASK_MISSING_ID =
+            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"GetTask\",\"params\":{}}";
+    private static final String GET_TASK_TASK_ID_PATH =
+            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"GetTask\","
+                    + "\"params\":{\"taskId\":\"task-123\"}}";
+    private static final String CANCEL_TASK =
+            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"CancelTask\","
+                    + "\"params\":{\"taskId\":\"task-123\"}}";
 
     private final ParamValidator validator = new ParamValidator();
 
@@ -195,23 +210,6 @@ class ParamValidatorTest {
         assertThat(ge.code()).isEqualTo("PAYLOAD_TOO_LARGE");
         assertThat(ge.httpStatus().value()).isEqualTo(413);
     }
-
-    // --- T1: S6/S8 whitelist + params.id (v0830) ---
-
-    private static final String GET_TASK =
-            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"GetTask\","
-                    + "\"params\":{\"id\":\"task-123\"}}";
-    private static final String SUBSCRIBE =
-            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SubscribeToTask\","
-                    + "\"params\":{\"id\":\"task-123\"}}";
-    private static final String GET_TASK_MISSING_ID =
-            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"GetTask\",\"params\":{}}";
-    private static final String GET_TASK_TASK_ID_PATH =
-            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"GetTask\","
-                    + "\"params\":{\"taskId\":\"task-123\"}}";
-    private static final String CANCEL_TASK =
-            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"CancelTask\","
-                    + "\"params\":{\"taskId\":\"task-123\"}}";
 
     @Test
     void getTaskWithParamsIdIsAccepted() {

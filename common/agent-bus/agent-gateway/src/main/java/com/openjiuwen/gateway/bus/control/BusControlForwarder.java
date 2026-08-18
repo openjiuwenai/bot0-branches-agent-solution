@@ -12,6 +12,7 @@ import com.openjiuwen.gateway.governance.GovernanceException;
 
 import org.springframework.http.HttpStatus;
 
+import java.io.IOException;
 import java.util.UUID;
 
 /**
@@ -21,7 +22,8 @@ import java.util.UUID;
  * @since 2026-07-24
  */
 public class BusControlForwarder {
-    private static final ObjectMapper mapper = new ObjectMapper();
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     private final EnvelopeBuilder envelopeBuilder;
     private final PayloadStore payloadStore;
     private final ForwardingOutboxPort outboxPort;
@@ -163,14 +165,16 @@ public class BusControlForwarder {
      */
     private static String injectTenantIntoBody(String rawBody, String tenantId) {
         try {
-            var root = mapper.readTree(rawBody);
+            var root = MAPPER.readTree(rawBody);
             if (root.isObject()) {
-                var params = (com.fasterxml.jackson.databind.node.ObjectNode) root.path("params");
-                params.put("tenant", tenantId);
-                return mapper.writeValueAsString(root);
+                var params = root.path("params");
+                if (params instanceof com.fasterxml.jackson.databind.node.ObjectNode objectParams) {
+                    objectParams.put("tenant", tenantId);
+                    return MAPPER.writeValueAsString(root);
+                }
             }
             return rawBody;
-        } catch (Exception ex) {
+        } catch (IOException ex) {
             // parse failure — return raw body (envelope tenantId still authoritative)
             return rawBody;
         }

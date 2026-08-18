@@ -80,7 +80,7 @@ class RouterTest {
                 new AgentCardRoute("b", "svc-b", 1));
         int countA = 0;
         for (int i = 0; i < 1000; i++) {
-            if (Router.selectByWeight(candidates).routeHandle().equals("a")) {
+            if ("a".equals(Router.selectByWeight(candidates).routeHandle())) {
                 countA++;
             }
         }
@@ -96,7 +96,7 @@ class RouterTest {
                 new AgentCardRoute("light", "svc-light", 1));
         int countHeavy = 0;
         for (int i = 0; i < 1000; i++) {
-            if (Router.selectByWeight(candidates).routeHandle().equals("heavy")) {
+            if ("heavy".equals(Router.selectByWeight(candidates).routeHandle())) {
                 countHeavy++;
             }
         }
@@ -216,8 +216,9 @@ class RouterTest {
     void stickyMissReturnsContinuationFailed() {
         Throwable thrown = catchThrowable(() -> router.routeResume(resumeCtx("ghost")));
         assertThat(thrown).isInstanceOf(MethodResultException.class);
-        MethodResultException mre = (MethodResultException) thrown;
-        assertThat(mre.errorCode()).isEqualTo(ErrorCodes.CONTINUATION_FAILED);
+        if (thrown instanceof MethodResultException mre) {
+            assertThat(mre.errorCode()).isEqualTo(ErrorCodes.CONTINUATION_FAILED);
+        }
     }
 
     @Test

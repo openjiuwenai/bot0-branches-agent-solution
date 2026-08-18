@@ -220,7 +220,9 @@ class BusForwarderTest {
         forwarder.setSingleResponseWindowMillis(50L); // keep the old (bus-forward) poll fast while RED
         Throwable thrown = catchThrowable(() -> forwarder.forwardQuery(queryCtx("ghost")));
         assertThat(thrown).isInstanceOf(MethodResultException.class);
-        assertThat(((MethodResultException) thrown).errorCode()).isEqualTo(ErrorCodes.CONTINUATION_FAILED);
+        if (thrown instanceof MethodResultException mre) {
+            assertThat(mre.errorCode()).isEqualTo(ErrorCodes.CONTINUATION_FAILED);
+        }
         assertThat(outbox.enqueued()).isEmpty(); // sticky checked before enqueue — nothing forwarded
     }
 
@@ -246,7 +248,9 @@ class BusForwarderTest {
         Throwable thrown = catchThrowable(() ->
                 forwarder.forwardSubscribe(queryCtx("ghost"), null, new com.openjiuwen.gateway.sse.SseBridge()));
         assertThat(thrown).isInstanceOf(MethodResultException.class);
-        assertThat(((MethodResultException) thrown).errorCode()).isEqualTo(ErrorCodes.CONTINUATION_FAILED);
+        if (thrown instanceof MethodResultException mre) {
+            assertThat(mre.errorCode()).isEqualTo(ErrorCodes.CONTINUATION_FAILED);
+        }
         assertThat(outbox.enqueued()).isEmpty();
     }
 }

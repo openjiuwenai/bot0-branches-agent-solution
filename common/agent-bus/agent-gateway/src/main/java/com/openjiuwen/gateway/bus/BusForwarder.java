@@ -13,6 +13,7 @@ import com.openjiuwen.gateway.bus.wait.FiveStateFolder;
 import com.openjiuwen.gateway.bus.wait.G4BusWiring;
 import com.openjiuwen.gateway.bus.wait.WaitWindow;
 import com.openjiuwen.gateway.direct.AgentRuntimeClient;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.gateway.governance.ErrorCodes;
 import com.openjiuwen.gateway.governance.GovernanceContext;
@@ -58,6 +59,9 @@ import java.util.stream.Stream;
  */
 public class BusForwarder {
     private static final Logger log = LoggerFactory.getLogger(BusForwarder.class);
+
+    /** Shared mapper for JSON-RPC error serialization (A1). */
+    private static final ObjectMapper ERROR_MAPPER = new ObjectMapper();
 
     private final RdcRouteClient rdc;
     private final BusControlForwarder control;
@@ -171,7 +175,8 @@ public class BusForwarder {
         int maxPolls = 100;
         for (int i = 0; i < maxPolls; i++) {
             if (System.currentTimeMillis() - start > singleResponseWindowMillis) {
-                log.info("forwardQuery corrId={} TIMEOUT (single-response-window {}ms)", correlationId, singleResponseWindowMillis);
+                log.info("forwardQuery corrId={} TIMEOUT (single-response-window {}ms)",
+                        correlationId, singleResponseWindowMillis);
                 return ResponseEntity.ok().body(
                         statusBody(InvocationResponseStatus.FAILED, null, "Query timeout"));
             }
@@ -243,33 +248,7 @@ public class BusForwarder {
             }
             var event = proj.get();
             if (event.eventType() == AgentBusEventType.INVOCATION_STREAM_READY) {
-                String streamRef = event.streamRef();
-                String taskId = event.taskId() != null ? event.taskId() : ctx.taskId();
-                log.info("forwardSubscribe corrId={} STREAM_READY taskId={} streamRef present={}",
-                        correlationId, taskId, streamRef != null);
-                if (streamRef == null || streamRef.isBlank()) {
-                    return Optional.of(statusBody(InvocationResponseStatus.FAILED, taskId,
-                            "STREAM_NOT_AVAILABLE"));
-                }
-                ResolvedRoute resolved;
-                try {
-                    resolved = rdc.resolveRouteHandle(owner.routeHandle(), ctx.tenantId());
-                } catch (RouteResolutionException ex) {
-                    return Optional.of(statusBody(InvocationResponseStatus.FAILED, taskId,
-                            "Cannot resolve route for SSE bridge"));
-                }
-                response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE);
-                response.setCharacterEncoding("UTF-8");
-                try {
-                    OutputStream out = response.getOutputStream();
-                    Stream<String> frames = agentRuntimeClient.openStreamByRef(
-                            resolved.endpointUrl(), streamRef, taskId, ctx.tenantId());
-                    sseBridge.writeSse(out, frames);
-                    return Optional.empty();
-                } catch (IOException ex) {
-                    log.info("forwardSubscribe corrId={} SSE stream closed after disconnect", correlationId);
-                    return Optional.empty();
-                }
+                return bridgeSubscribeStream(ctx, event, response, sseBridge, owner, correlationId);
             }
             InvocationResponseStatus folded = FiveStateFolder.fold(event.eventType());
             if (FiveStateFolder.isTerminal(folded) || folded == InvocationResponseStatus.REJECTED
@@ -279,6 +258,49 @@ public class BusForwarder {
         }
         return Optional.of(statusBody(InvocationResponseStatus.FAILED, null,
                 "Subscribe exhausted poll budget"));
+    }
+
+    /**
+     * Bridges the runtime SSE stream to the client once STREAM_READY is observed.
+     *
+     * @param ctx governance context (tenantId, taskId)
+     * @param event STREAM_READY projection (carries streamRef/taskId)
+     * @param response servlet response for SSE output
+     * @param sseBridge SSE bridge
+     * @param owner sticky owner (routeHandle resolved to the runtime endpoint)
+     * @param correlationId correlation id for logging
+     * @return empty if SSE written; a non-empty FAILED body if the stream cannot be opened
+     */
+    private Optional<String> bridgeSubscribeStream(GovernanceContext ctx, ProjectionFeed.ProjectionEvent event,
+                                                   HttpServletResponse response, SseBridge sseBridge,
+                                                   StickyIndex.Owner owner, String correlationId) {
+        String streamRef = event.streamRef();
+        String taskId = event.taskId() != null ? event.taskId() : ctx.taskId();
+        log.info("forwardSubscribe corrId={} STREAM_READY taskId={} streamRef present={}",
+                correlationId, taskId, streamRef != null);
+        if (streamRef == null || streamRef.isBlank()) {
+            return Optional.of(statusBody(InvocationResponseStatus.FAILED, taskId,
+                    "STREAM_NOT_AVAILABLE"));
+        }
+        ResolvedRoute resolved;
+        try {
+            resolved = rdc.resolveRouteHandle(owner.routeHandle(), ctx.tenantId());
+        } catch (RouteResolutionException ex) {
+            return Optional.of(statusBody(InvocationResponseStatus.FAILED, taskId,
+                    "Cannot resolve route for SSE bridge"));
+        }
+        response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE);
+        response.setCharacterEncoding("UTF-8");
+        try {
+            OutputStream out = response.getOutputStream();
+            Stream<String> frames = agentRuntimeClient.openStreamByRef(
+                    resolved.endpointUrl(), streamRef, taskId, ctx.tenantId());
+            sseBridge.writeSse(out, frames);
+            return Optional.empty();
+        } catch (IOException ex) {
+            log.info("forwardSubscribe corrId={} SSE stream closed after disconnect", correlationId);
+            return Optional.empty();
+        }
     }
 
     /**
@@ -325,34 +347,55 @@ public class BusForwarder {
                 continue;
             }
             var event = proj.get();
-            // P-13: bind taskId -> chosen routeHandle on the first taskId-bearing projection (mirrors
-            // DIRECT Router.routeCreate, which writes sticky from the response taskId). The BUS
-            // "response" arrives as projections; any taskId-bearing projection (ACCEPTED /
-            // INPUT_REQUIRED / RESPONSE / TERMINAL) binds the owner so a later resume re-routes to it.
-            if (event.taskId() != null && !event.taskId().isBlank()) {
-                stickyIndex.put(event.taskId(), chosen.routeHandle(), chosen.targetServiceId());
-            }
-            InvocationResponseStatus folded = FiveStateFolder.fold(event.eventType());
-            if (folded == InvocationResponseStatus.ACCEPTED_WITH_TASK) {
-                window.onProjection(folded, event.taskId(), System.currentTimeMillis());
-            } else if (FiveStateFolder.isTerminal(folded)
-                    || folded == InvocationResponseStatus.INPUT_REQUIRED) {
-                // terminal or wait-for-input: surface to the client and end the blocking call
-                String taskId = event.taskId() != null ? event.taskId() : window.taskId();
-                String body = statusBody(folded, taskId, event.body());
-                log.info("forwardSync corrId={} folded={} taskId={} bodyPresent={}",
-                        correlationId, folded, taskId, event.body() != null);
-                g4w.onFold(folded, ctx.tenantId(), ctx.messageId(), body);
-                return ResponseEntity.ok().body(body);
-            } else {
-                // non-terminal non-accept (e.g. STREAM_READY): keep polling
-                continue;
+            Optional<String> folded = foldSyncProjection(ctx, g4w, window, chosen, correlationId, event);
+            if (folded.isPresent()) {
+                return ResponseEntity.ok().body(folded.get());
             }
         }
         String unknownBody = statusBody(InvocationResponseStatus.UNKNOWN, null, null);
         log.info("forwardSync corrId={} UNKNOWN (no projection matched within accept+response window)", correlationId);
         g4w.onFold(InvocationResponseStatus.UNKNOWN, ctx.tenantId(), ctx.messageId(), unknownBody);
         return ResponseEntity.ok().body(unknownBody);
+    }
+
+    /**
+     * Folds a single sync-create projection: binds sticky (P-13), tracks accept, and returns a
+     * terminal/input-required body to surface to the client, or empty to keep polling.
+     *
+     * @param ctx governance context (tenant/message for folding)
+     * @param g4w G4 wiring (fold callbacks)
+     * @param window accept/response timeout window (accept tracked here)
+     * @param chosen chosen agent route (P-13: bound to taskId on the first taskId-bearing projection)
+     * @param correlationId correlation id for logging
+     * @param event the polled projection event
+     * @return the folded body to return, or empty to continue polling
+     */
+    private Optional<String> foldSyncProjection(GovernanceContext ctx, G4BusWiring g4w, WaitWindow window,
+                                                 AgentCardRoute chosen, String correlationId,
+                                                 ProjectionFeed.ProjectionEvent event) {
+        // P-13: bind taskId -> chosen routeHandle on the first taskId-bearing projection (mirrors
+        // DIRECT Router.routeCreate, which writes sticky from the response taskId). The BUS
+        // "response" arrives as projections; any taskId-bearing projection (ACCEPTED /
+        // INPUT_REQUIRED / RESPONSE / TERMINAL) binds the owner so a later resume re-routes to it.
+        if (event.taskId() != null && !event.taskId().isBlank()) {
+            stickyIndex.put(event.taskId(), chosen.routeHandle(), chosen.targetServiceId());
+        }
+        InvocationResponseStatus folded = FiveStateFolder.fold(event.eventType());
+        if (folded == InvocationResponseStatus.ACCEPTED_WITH_TASK) {
+            window.onProjection(folded, event.taskId(), System.currentTimeMillis());
+            return Optional.empty();
+        }
+        if (FiveStateFolder.isTerminal(folded) || folded == InvocationResponseStatus.INPUT_REQUIRED) {
+            // terminal or wait-for-input: surface to the client and end the blocking call
+            String taskId = event.taskId() != null ? event.taskId() : window.taskId();
+            String body = statusBody(folded, taskId, event.body());
+            log.info("forwardSync corrId={} folded={} taskId={} bodyPresent={}",
+                    correlationId, folded, taskId, event.body() != null);
+            g4w.onFold(folded, ctx.tenantId(), ctx.messageId(), body);
+            return Optional.of(body);
+        }
+        // non-terminal non-accept (e.g. STREAM_READY): keep polling
+        return Optional.empty();
     }
 
     /**
@@ -777,9 +820,6 @@ public class BusForwarder {
         return sb.toString();
     }
 
-    /** Shared mapper for JSON-RPC error serialization (A1). */
-    private static final ObjectMapper ERROR_MAPPER = new ObjectMapper();
-
     /**
      * Serialize a {@link JsonRpcError} envelope for a method-result error.
      *
@@ -791,7 +831,7 @@ public class BusForwarder {
     private static String jsonError(ErrorCodes ec, String message, String requestId) {
         try {
             return ERROR_MAPPER.writeValueAsString(JsonRpcError.of(requestId, ec, message));
-        } catch (Exception ex) {
+        } catch (JsonProcessingException ex) {
             // Fallback: minimal manual envelope
             return "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":" + ec.numericCode()
                     + ",\"message\":\"" + message + "\",\"data\":{\"code\":\""

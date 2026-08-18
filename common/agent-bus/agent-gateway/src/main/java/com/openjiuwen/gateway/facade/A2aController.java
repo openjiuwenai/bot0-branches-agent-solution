@@ -18,9 +18,9 @@ import com.openjiuwen.gateway.routing.Router;
 import com.openjiuwen.gateway.sse.SseBridge;
 
 import jakarta.servlet.http.HttpServletResponse;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -114,24 +114,9 @@ public class A2aController {
             paramValidator.validate(jsonRpcBody, context);
             context.setPrincipalId(principal.principalId());
             context.setTenantId(tenantId);
-            if (context.taskId() == null) {
-                IdempotencyRule.Decision idem = idempotencyRule.check(tenantId, context.messageId(),
-                        context.idempotencyFingerprint());
-                IdempotencyRule.Outcome outcome = idem.outcome();
-                if (outcome == IdempotencyRule.Outcome.REPLAY) {
-                    return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(idem.result());
-                }
-                if (outcome == IdempotencyRule.Outcome.CONFLICT) {
-                    throw new GovernanceException(HttpStatus.CONFLICT,
-                            "IDEMPOTENCY_PAYLOAD_MISMATCH",
-                            "Create idempotency key conflict: payload differs from the first attempt");
-                }
-                if (outcome == IdempotencyRule.Outcome.IN_FLIGHT_DUPLICATE) {
-                    throw new GovernanceException(HttpStatus.CONFLICT,
-                            "IDEMPOTENCY_IN_FLIGHT",
-                            "A create with this idempotency key is already in progress");
-                }
-                // NEW / SKIP: proceed to later stages
+            Optional<ResponseEntity<String>> replay = resolveCreateIdempotency(tenantId, context);
+            if (replay.isPresent()) {
+                return replay.get();
             }
         } catch (GovernanceException ex) {
             ex.setTraceId(context.traceId());
@@ -150,28 +135,76 @@ public class A2aController {
         }
         // v0830 S8: SubscribeToTask re-subscription (read-only, no G4 idempotency)
         if ("SubscribeToTask".equals(context.method())) {
-            if (pathSelector.isBus() && busForwarder.isPresent()) {
-                Optional<String> errorBody = busForwarder.get().forwardSubscribe(context, response, sseBridge);
-                if (errorBody.isEmpty()) {
-                    return null; // SSE committed
-                }
-                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(errorBody.get());
-            }
-            // Direct: sticky lookup → runtime SubscribeToTask SSE
-            Stream<String> frames = router.routeSubscribe(context);
-            try {
-                sseBridge.writeSse(response.getOutputStream(), frames);
-            } catch (IOException ex) {
-                // SSE disconnected (client/runtime) — response committed; log + close, no rethrow
-                // (no G4 to abort — SubscribeToTask is read-only). SseBridge logged the bridge release.
-                LOG.info("SubscribeToTask SSE closed after disconnect");
-            }
-            return null; // SSE committed
+            return handleSubscribeToTask(context, response);
         }
         if (context.taskId() == null) {
             return forwardCreate(context, response);
         }
         return forwardResume(context, response);
+    }
+
+    /**
+     * Resolve create idempotency (G4): returns the replay response when the create is a safe
+     * replay, throws a CONFLICT governance error on payload mismatch or an in-flight duplicate,
+     * or returns empty to proceed to the create stages.
+     *
+     * @param tenantId resolved tenant
+     * @param context governance context (carries messageId + fingerprint)
+     * @return the replay response, or empty to proceed
+     */
+    private Optional<ResponseEntity<String>> resolveCreateIdempotency(String tenantId,
+                                                                      GovernanceContext context) {
+        if (context.taskId() != null) {
+            return Optional.empty();
+        }
+        IdempotencyRule.Decision idem = idempotencyRule.check(tenantId, context.messageId(),
+                context.idempotencyFingerprint());
+        IdempotencyRule.Outcome outcome = idem.outcome();
+        if (outcome == IdempotencyRule.Outcome.REPLAY) {
+            return Optional.of(ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(idem.result()));
+        }
+        if (outcome == IdempotencyRule.Outcome.CONFLICT) {
+            throw new GovernanceException(HttpStatus.CONFLICT,
+                    "IDEMPOTENCY_PAYLOAD_MISMATCH",
+                    "Create idempotency key conflict: payload differs from the first attempt");
+        }
+        if (outcome == IdempotencyRule.Outcome.IN_FLIGHT_DUPLICATE) {
+            throw new GovernanceException(HttpStatus.CONFLICT,
+                    "IDEMPOTENCY_IN_FLIGHT",
+                    "A create with this idempotency key is already in progress");
+        }
+        // NEW / SKIP: proceed to later stages
+        return Optional.empty();
+    }
+
+    /**
+     * Handle a SubscribeToTask re-subscription (v0830 S8, read-only, no G4 idempotency). Writes
+     * the SSE stream directly and returns {@code null} once committed (Spring MVC contract).
+     *
+     * @param context governance context (taskId bound)
+     * @param response servlet response (used to write the SSE stream)
+     * @return sync response body, or {@code null} once an SSE stream has been written
+     * @throws IOException if writing the SSE stream to the client fails (disconnect)
+     */
+    private Object handleSubscribeToTask(GovernanceContext context, HttpServletResponse response)
+            throws IOException {
+        if (pathSelector.isBus() && busForwarder.isPresent()) {
+            Optional<String> errorBody = busForwarder.get().forwardSubscribe(context, response, sseBridge);
+            if (errorBody.isEmpty()) {
+                return null; // SSE committed
+            }
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(errorBody.get());
+        }
+        // Direct: sticky lookup → runtime SubscribeToTask SSE
+        Stream<String> frames = router.routeSubscribe(context);
+        try {
+            sseBridge.writeSse(response.getOutputStream(), frames);
+        } catch (IOException ex) {
+            // SSE disconnected (client/runtime) — response committed; log + close, no rethrow
+            // (no G4 to abort — SubscribeToTask is read-only). SseBridge logged the bridge release.
+            LOG.info("SubscribeToTask SSE closed after disconnect");
+        }
+        return null; // SSE committed
     }
 
     /**

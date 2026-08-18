@@ -4,8 +4,13 @@
 
 package com.openjiuwen.gateway.governance;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -14,17 +19,12 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
 /**
  * Tests for {@link GovernanceErrorHandler} error-surface split (A1):
  * governance errors → non-2xx + flat {@link GatewayError};
  * method-result errors → 200 + {@link JsonRpcError} envelope.
  */
 class GovernanceErrorHandlerTest {
-
     private final GovernanceErrorHandler handler = new GovernanceErrorHandler();
     private final ObjectMapper mapper = new ObjectMapper();
     private StringWriter capturedString;

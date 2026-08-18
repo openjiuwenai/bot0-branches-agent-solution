@@ -98,12 +98,15 @@ public class GatewayBusConfiguration {
      * @param control I-04 outbound forwarder
      * @param projectionFeed inbound projection poll port
      * @param g4 idempotency rule (G4)
+     * @param agentRuntimeClient runtime client for SSE bridge after STREAM_READY
+     * @param defaultAgentResolver default logical agent resolver (used when ctx carries no agentId)
+     * @param stickyIndex taskId -> routeHandle index; written on the first taskId-bearing projection
+     *                    so a BUS-created task resumes to its owning runtime
      * @param sourceServiceId gateway service identity for envelope audit
      * @param acceptWindowMillis accept-phase timeout
      * @param responseWindowMillis response-phase timeout after accept
-     * @param agentRuntimeClient runtime client for SSE bridge after STREAM_READY
-     * @param defaultAgentResolver default logical agent resolver (used when ctx carries no agentId)
      * @param streamFirstFrameDeadlineMillis deadline to read the first SSE frame
+     * @param singleResponseWindowMillis single-response window timeout for QUERY/SUBSCRIBE
      * @return the bus forwarder
      */
     @Bean

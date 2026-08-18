@@ -4,16 +4,15 @@
 
 package com.openjiuwen.gateway.governance;
 
-import org.junit.jupiter.api.Test;
-
 import static org.assertj.core.api.Assertions.assertThat;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * Tests for {@link ErrorCodes} stable-code constants, numeric mapping, and
  * retryable semantics (A1, FEAT-011 §8.5.3).
  */
 class ErrorCodesTest {
-
     @Test
     void projection_timeout_unknown_is_retryable() {
         assertThat(ErrorCodes.PROJECTION_TIMEOUT_UNKNOWN.retryable()).isTrue();
