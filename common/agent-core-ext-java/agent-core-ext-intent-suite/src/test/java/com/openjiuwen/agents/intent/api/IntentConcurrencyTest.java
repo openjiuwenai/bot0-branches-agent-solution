@@ -83,7 +83,6 @@ class IntentConcurrencyTest {
                 throw new AssertionError(timeoutMessage);
             }
         } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
             throw new AssertionError("concurrent test interrupted", exception);
         }
     }
