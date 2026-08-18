@@ -312,7 +312,7 @@ class A2aControllerWebMvcTest {
                 .andExpect(result -> assertThat(result.getResponse().getContentAsString())
                         .doesNotContain("routeHandle", "http://rt:8000"));
         // authoritative tenant injected into the forwarded body
-        assertThat(runtime.lastBody()).contains("\"tenantId\":\"tenant-1\"");
+        assertThat(runtime.lastBody()).contains("\"tenant\":\"tenant-1\"");
         // sticky bound; no routeHandle leaked to the client response
         assertThat(sticky.find("task-9")).contains("h1");
     }
@@ -394,7 +394,7 @@ class A2aControllerWebMvcTest {
 
     @Test
     void resumeReachesStickyOwnerWithoutSearch() throws Exception {
-        sticky.put("task-1", "h1");
+        sticky.put("task-1", "h1", "svc-rt");
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
                         .contentType(MediaType.APPLICATION_JSON).content(RESUME_BODY))
                 .andExpect(status().isOk())
@@ -405,19 +405,20 @@ class A2aControllerWebMvcTest {
     }
 
     @Test
-    void stickyMissReturnsResumeOwnerUnknown() throws Exception {
-        // sticky cleared in @BeforeEach -> task-1 has no owner
+    void stickyMissReturnsContinuationFailed() throws Exception {
+        // sticky cleared in @BeforeEach -> task-1 has no owner -> CONTINUATION_FAILED (200 + JSON-RPC error)
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
                         .contentType(MediaType.APPLICATION_JSON).content(RESUME_BODY))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("RESUME_OWNER_UNKNOWN"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.error.code").value(-32051))
+                .andExpect(jsonPath("$.error.data.code").value("CONTINUATION_FAILED"));
     }
 
     // --- S4 continueInput (same wire as S3; reuses the sticky path) ---
 
     @Test
     void continueInputReachesOriginalOwner() throws Exception {
-        sticky.put("task-ci", "h1");
+        sticky.put("task-ci", "h1", "svc-rt");
         runtime.setResponse(
                 "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"result\":{\"id\":\"task-ci\",\"status\":\"working\"}}");
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
@@ -429,7 +430,7 @@ class A2aControllerWebMvcTest {
 
     @Test
     void continueInputTerminalStateIsPassedThroughNotNewCreate() throws Exception {
-        sticky.put("task-ci", "h1");
+        sticky.put("task-ci", "h1", "svc-rt");
         runtime.setResponse("{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"error\":{\"code\":-32004,\"message\":\"terminal\"}}");
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
                         .contentType(MediaType.APPLICATION_JSON).content(CONTINUE_INPUT_BODY))

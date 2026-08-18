@@ -149,7 +149,8 @@ public class HttpRdcRouteClient implements RdcRouteClient {
             String handle = node.path("routeHandle").asText(null);
             if (handle != null && !handle.isBlank()) {
                 String serviceId = node.path("serviceId").asText(null);
-                out.add(new AgentCardRoute(handle, serviceId));
+                int weight = node.path("weight").asInt(1);
+                out.add(new AgentCardRoute(handle, serviceId, weight));
             }
         }
         return out;

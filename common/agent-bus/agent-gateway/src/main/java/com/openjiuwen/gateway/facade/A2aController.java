@@ -18,6 +18,8 @@ import com.openjiuwen.gateway.routing.Router;
 import com.openjiuwen.gateway.sse.SseBridge;
 
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -45,6 +47,8 @@ import java.util.stream.Stream;
  */
 @RestController
 public class A2aController {
+    private static final Logger LOG = LoggerFactory.getLogger(A2aController.class);
+
     private final AuthRule authRule;
     private final TenantResolver tenantResolver;
     private final ParamValidator paramValidator;
@@ -137,6 +141,33 @@ public class A2aController {
 
         auditor.auditPassed(context);
 
+        // v0830 S6: GetTask query (read-only, no G4 idempotency)
+        if ("GetTask".equals(context.method())) {
+            if (pathSelector.isBus() && busForwarder.isPresent()) {
+                return busForwarder.get().forwardQuery(context);
+            }
+            return router.routeGet(context);
+        }
+        // v0830 S8: SubscribeToTask re-subscription (read-only, no G4 idempotency)
+        if ("SubscribeToTask".equals(context.method())) {
+            if (pathSelector.isBus() && busForwarder.isPresent()) {
+                Optional<String> errorBody = busForwarder.get().forwardSubscribe(context, response, sseBridge);
+                if (errorBody.isEmpty()) {
+                    return null; // SSE committed
+                }
+                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(errorBody.get());
+            }
+            // Direct: sticky lookup → runtime SubscribeToTask SSE
+            Stream<String> frames = router.routeSubscribe(context);
+            try {
+                sseBridge.writeSse(response.getOutputStream(), frames);
+            } catch (IOException ex) {
+                // SSE disconnected (client/runtime) — response committed; log + close, no rethrow
+                // (no G4 to abort — SubscribeToTask is read-only). SseBridge logged the bridge release.
+                LOG.info("SubscribeToTask SSE closed after disconnect");
+            }
+            return null; // SSE committed
+        }
         if (context.taskId() == null) {
             return forwardCreate(context, response);
         }
@@ -198,12 +229,18 @@ public class A2aController {
             response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE);
             response.setCharacterEncoding("UTF-8");
             firstFrame = sseBridge.writeSse(response.getOutputStream(), frames);
-        } catch (GovernanceException | IOException ex) {
+        } catch (GovernanceException ex) {
             idempotencyRule.abort(context.tenantId(), context.messageId());
-            if (ex instanceof GovernanceException ge) {
-                ge.setTraceId(context.traceId());
-            }
+            ex.setTraceId(context.traceId());
             throw ex;
+        } catch (IOException ex) {
+            // SSE disconnected (client Ctrl+C or runtime Connection-reset) — response is already
+            // committed (text/event-stream), so rethrowing only produces a noisy Tomcat ERROR +
+            // "no converter" WARN. Abort G4 (the create failed), log, and let Spring close the
+            // response. SseBridge already logged the direction-specific bridge release.
+            idempotencyRule.abort(context.tenantId(), context.messageId());
+            LOG.info("SSE stream closed after disconnect");
+            return null;
         }
         String replayResult = firstFrame != null ? firstFrame
                 : "{\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"completed\"}}";

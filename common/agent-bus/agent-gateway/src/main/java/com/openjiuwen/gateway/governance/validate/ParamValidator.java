@@ -46,9 +46,12 @@ import java.util.TreeMap;
 @Component
 public class ParamValidator {
     /**
-     * 730 method whitelist (L2 §3.5.1).
+     * v0830 method whitelist (L2 §3.5.1 + §8 S6/S8). GetTask/SubscribeToTask
+     * added for S6 (Tier-1) and S8 (Tier-2). CancelTask is NOT whitelisted
+     * (S7 not implemented → rejected with VALIDATION_METHOD).
      */
-    private static final Set<String> WHITELIST = Set.of("SendMessage", "SendStreamingMessage");
+    private static final Set<String> WHITELIST = Set.of(
+            "SendMessage", "SendStreamingMessage", "GetTask", "SubscribeToTask");
 
     /**
      * Inline payload byte limit (whole A2A body, UTF-8). Aligned with
@@ -84,9 +87,25 @@ public class ParamValidator {
         }
         ctx.setMethod(method);
 
-        JsonNode message = validateMessage(root);
-        classifyCreateOrResume(root, message, ctx);
-        populateMessageFields(message, ctx);
+        if ("GetTask".equals(method) || "SubscribeToTask".equals(method)) {
+            // S6/S8: validate params.id (NOT params.message.taskId); no message/parts
+            String taskId = text(root.path("params"), "id").orElse(null);
+            if (taskId == null || taskId.isBlank()) {
+                throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_TASK_ID",
+                        "params.id is required for " + method);
+            }
+            ctx.setTaskId(taskId);
+            // GetTask optional historyLength (透传到 runtime)
+            JsonNode hlNode = root.path("params").path("historyLength");
+            if (hlNode.isInt()) {
+                ctx.setHistoryLength(hlNode.asInt());
+            }
+        } else {
+            // S2/S3/S4: create or resume via SendMessage/SendStreamingMessage
+            JsonNode message = validateMessage(root);
+            classifyCreateOrResume(root, message, ctx);
+            populateMessageFields(message, ctx);
+        }
         ctx.setIdempotencyFingerprint(fingerprintOf(root));
     }
 

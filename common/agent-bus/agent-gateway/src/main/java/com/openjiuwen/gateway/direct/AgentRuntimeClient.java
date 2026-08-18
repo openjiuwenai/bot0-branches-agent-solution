@@ -56,4 +56,18 @@ public interface AgentRuntimeClient {
      * @return lazy stream of SSE data payloads
      */
     Stream<String> openStreamByRef(String endpointUrl, String streamRef, String taskId, String tenantId);
+
+    /**
+     * Forward a {@code GetTask} query to the resolved runtime endpoint and return
+     * the runtime's JSON-RPC response body (forwarded opaquely). The gateway builds
+     * the GetTask request body with {@code params.id} + {@code params.tenant} (v0830
+     * S6 — FEAT-011 L2 §8.1). Read-only: no Task creation, no Agent execution.
+     *
+     * @param endpointUrl resolved runtime endpoint (base of {@code POST /a2a})
+     * @param taskId runtime Task id (from G3 {@code params.id})
+     * @param tenantId authoritative tenant (G2)
+     * @param historyLength optional history length (may be null)
+     * @return runtime's JSON-RPC response body (Task snapshot or error -32001)
+     */
+    String getTask(String endpointUrl, String taskId, String tenantId, Integer historyLength);
 }

@@ -103,7 +103,6 @@ public class GatewayBusConfiguration {
      * @param responseWindowMillis response-phase timeout after accept
      * @param agentRuntimeClient runtime client for SSE bridge after STREAM_READY
      * @param defaultAgentResolver default logical agent resolver (used when ctx carries no agentId)
-     * @param stickyIndex taskId→routeHandle sticky index (written on first taskId-bearing projection, read on resume)
      * @param streamFirstFrameDeadlineMillis deadline to read the first SSE frame
      * @return the bus forwarder
      */
@@ -116,10 +115,12 @@ public class GatewayBusConfiguration {
             @Value("${agent-bus.gateway-service-id:gateway}") String sourceServiceId,
             @Value("${gateway.bus.accept-window-ms:30000}") long acceptWindowMillis,
             @Value("${gateway.bus.response-window-ms:60000}") long responseWindowMillis,
-            @Value("${gateway.bus.stream-first-frame-deadline-ms:10000}") long streamFirstFrameDeadlineMillis) {
+            @Value("${gateway.bus.stream-first-frame-deadline-ms:10000}") long streamFirstFrameDeadlineMillis,
+            @Value("${gateway.bus.single-response-window-ms:30000}") long singleResponseWindowMillis) {
         BusForwarder forwarder = new BusForwarder(rdc, control, projectionFeed, g4, sourceServiceId,
                 acceptWindowMillis, responseWindowMillis, agentRuntimeClient, defaultAgentResolver, stickyIndex);
         forwarder.setStreamFirstFrameDeadlineMillis(streamFirstFrameDeadlineMillis);
+        forwarder.setSingleResponseWindowMillis(singleResponseWindowMillis);
         return forwarder;
     }
 }

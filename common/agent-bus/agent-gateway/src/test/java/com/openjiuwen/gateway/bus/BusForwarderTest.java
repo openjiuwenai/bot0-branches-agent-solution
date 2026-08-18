@@ -13,8 +13,10 @@ import com.openjiuwen.gateway.bus.control.EnvelopeBuilder;
 import com.openjiuwen.gateway.bus.control.FakeForwardingOutboxPort;
 import com.openjiuwen.gateway.bus.control.FakeProjectionFeed;
 import com.openjiuwen.gateway.bus.control.InMemoryPayloadStore;
+import com.openjiuwen.gateway.governance.ErrorCodes;
 import com.openjiuwen.gateway.governance.GovernanceContext;
 import com.openjiuwen.gateway.governance.GovernanceException;
+import com.openjiuwen.gateway.governance.MethodResultException;
 import com.openjiuwen.gateway.governance.idempotency.IdempotencyRule;
 import com.openjiuwen.gateway.routing.AgentCardRoute;
 import com.openjiuwen.gateway.routing.DefaultAgentResolver;
@@ -198,5 +200,53 @@ class BusForwarderTest {
         var resp = forwarder.forwardSync(ctx("agent-1", "m-ir-sticky"));
         assertThat(resp.getBody()).contains("INPUT_REQUIRED").contains("ti-1");
         assertThat(sticky.find("ti-1")).contains("h1");
+    }
+
+    private GovernanceContext queryCtx(String taskId) {
+        GovernanceContext c = new GovernanceContext();
+        c.setTenantId("T1");
+        c.setTaskId(taskId);
+        c.setTraceId("trace-1");
+        c.setRawBody("{\"jsonrpc\":\"2.0\",\"method\":\"GetTask\",\"params\":{\"id\":\"" + taskId + "\"}}");
+        return c;
+    }
+
+    @Test
+    void forwardQueryStickyMissReturnsContinuationFailed() {
+        // S6-2 (BUS): a GetTask for a taskId with no sticky owner → CONTINUATION_FAILED, mirroring
+        // DIRECT routeGet. Must NOT fall back to default-agent RDC + bus-forward to a random runtime
+        // (which returns FAILED/TASK_NOT_FOUND and is multi-runtime-incorrect).
+        rdc.setCandidates(List.of(new AgentCardRoute("h-default", "svc-default")));
+        forwarder.setSingleResponseWindowMillis(50L); // keep the old (bus-forward) poll fast while RED
+        Throwable thrown = catchThrowable(() -> forwarder.forwardQuery(queryCtx("ghost")));
+        assertThat(thrown).isInstanceOf(MethodResultException.class);
+        assertThat(((MethodResultException) thrown).errorCode()).isEqualTo(ErrorCodes.CONTINUATION_FAILED);
+        assertThat(outbox.enqueued()).isEmpty(); // sticky checked before enqueue — nothing forwarded
+    }
+
+    @Test
+    void forwardQueryStickyHitForwardsToOwnerRuntime() {
+        // S6-1 (BUS): a GetTask for a known taskId routes the query to the STICKY OWNER runtime
+        // (routeHandle + targetServiceId bound at create), not a default-agent runtime picked from RDC.
+        sticky.put("task-7", "h-owner", "svc-owner");
+        rdc.setCandidates(List.of(new AgentCardRoute("h-default", "svc-default"))); // old path would pick this
+        feed.inject(AgentBusEventType.INVOCATION_RESPONSE, null, null);
+        forwarder.forwardQuery(queryCtx("task-7"));
+        assertThat(outbox.enqueued()).hasSize(1);
+        assertThat(outbox.enqueued().get(0).targetServiceId()).isEqualTo("svc-owner");
+    }
+
+    @Test
+    void forwardSubscribeStickyMissReturnsContinuationFailed() {
+        // S8-3 (BUS): a SubscribeToTask for a taskId with no sticky owner → CONTINUATION_FAILED,
+        // mirroring DIRECT routeSubscribe + forwardQuery. Must NOT default-agent-bus-forward to a
+        // random runtime (which times out → STREAM_NOT_AVAILABLE, multi-runtime-incorrect).
+        rdc.setCandidates(List.of(new AgentCardRoute("h-default", "svc-default")));
+        forwarder.setSingleResponseWindowMillis(50L);
+        Throwable thrown = catchThrowable(() ->
+                forwarder.forwardSubscribe(queryCtx("ghost"), null, new com.openjiuwen.gateway.sse.SseBridge()));
+        assertThat(thrown).isInstanceOf(MethodResultException.class);
+        assertThat(((MethodResultException) thrown).errorCode()).isEqualTo(ErrorCodes.CONTINUATION_FAILED);
+        assertThat(outbox.enqueued()).isEmpty();
     }
 }
