@@ -23,6 +23,8 @@ import org.springframework.context.event.EventListener;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -88,11 +90,23 @@ public final class RuntimeIntentCatalogCoordinator implements InitializingBean {
             if (event.snapshot().version() <= remoteCatalogVersion) {
                 return;
             }
-            try {
+            FutureTask<Void> refresh = new FutureTask<>(() -> {
                 replaceRemoteSnapshot(event.snapshot());
-            } catch (RuntimeException exception) {
-                log.error("Failed to refresh intent catalog from remote Agent Card version={}",
+                return null;
+            });
+            refresh.run();
+            try {
+                refresh.get();
+            } catch (InterruptedException exception) {
+                log.error("Interrupted while refreshing intent catalog from remote Agent Card version={}",
                         event.snapshot().version(), exception);
+            } catch (ExecutionException exception) {
+                Throwable cause = exception.getCause() != null ? exception.getCause() : exception;
+                if (cause instanceof Error error) {
+                    throw error;
+                }
+                log.error("Failed to refresh intent catalog from remote Agent Card version={}",
+                        event.snapshot().version(), cause);
             }
         } finally {
             updateLock.unlock();

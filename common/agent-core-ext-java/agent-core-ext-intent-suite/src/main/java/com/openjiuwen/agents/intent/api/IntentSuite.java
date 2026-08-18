@@ -27,6 +27,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -92,11 +94,17 @@ public final class IntentSuite {
                 snapshot.initializedIntents().fallback() != null, context.routingSemantic().length());
 
         Optional<IntentDefinition> matched;
+        FutureTask<Optional<IntentDefinition>> matching = new FutureTask<>(() -> matcher.match(context));
+        matching.run();
         try {
-            matched = Optional.ofNullable(matcher.match(context))
+            matched = Optional.ofNullable(matching.get())
                     .orElseThrow(() -> new IntentMatchException("matcher result must not be null"));
-        } catch (RuntimeException exception) {
-            log.info("Intent matching failed catalogVersion={} reason={}", snapshot.version(), exception.getMessage());
+        } catch (InterruptedException exception) {
+            log.info("Intent matching interrupted catalogVersion={}", snapshot.version(), exception);
+            return failed(null, "意图匹配失败");
+        } catch (ExecutionException exception) {
+            Throwable cause = executionCause(exception);
+            log.info("Intent matching failed catalogVersion={} reason={}", snapshot.version(), cause.getMessage());
             return failed(null, "意图匹配失败");
         }
         if (!isValidMatch(matched, snapshot.initializedIntents())) {
@@ -151,8 +159,10 @@ public final class IntentSuite {
 
     private IntentDecision applyResultFunction(IntentDecisionStatus status, IntentDefinition selected,
             IntentExecutionContext context) {
+        FutureTask<IntentAction> generation = new FutureTask<>(() -> selected.resultFunction().apply(context));
+        generation.run();
         try {
-            IntentAction action = selected.resultFunction().apply(context);
+            IntentAction action = generation.get();
             if (!isValidAction(action)) {
                 log.info("Intent result function returned invalid action intentId={}", selected.id());
                 return failed(selected.id(), "意图动作无效");
@@ -160,10 +170,22 @@ public final class IntentSuite {
             log.info("Intent result function completed intentId={} actionType={}", selected.id(),
                     action.getClass().getSimpleName());
             return new IntentDecision(status, selected.id(), action, null);
-        } catch (RuntimeException exception) {
-            log.info("Intent result function failed intentId={} reason={}", selected.id(), exception.getMessage());
+        } catch (InterruptedException exception) {
+            log.info("Intent result function interrupted intentId={}", selected.id(), exception);
+            return failed(selected.id(), "意图结果函数执行失败");
+        } catch (ExecutionException exception) {
+            Throwable cause = executionCause(exception);
+            log.info("Intent result function failed intentId={} reason={}", selected.id(), cause.getMessage());
             return failed(selected.id(), "意图结果函数执行失败");
         }
+    }
+
+    private static Throwable executionCause(ExecutionException exception) {
+        Throwable cause = exception.getCause() != null ? exception.getCause() : exception;
+        if (cause instanceof Error error) {
+            throw error;
+        }
+        return cause;
     }
 
     private static boolean isValidMatch(Optional<IntentDefinition> matched, InitializedIntents intents) {
