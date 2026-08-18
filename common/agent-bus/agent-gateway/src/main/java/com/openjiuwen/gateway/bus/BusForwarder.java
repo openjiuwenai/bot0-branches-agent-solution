@@ -843,18 +843,26 @@ public class BusForwarder {
     private record StreamReadyOutcome(ProjectionFeed.ProjectionEvent streamReadyEvent, String earlyReturnBody) {
     }
 
-    /** Bundles the streaming request context carried through the bridge/drain helpers. */
+    /**
+     * Bundles the streaming request context carried through the bridge/drain helpers.
+     */
     private record StreamingCtx(GovernanceContext ctx, HttpServletResponse response, SseBridge sseBridge,
-                                G4BusWiring g4w, String correlationId) {
+            G4BusWiring g4w, String correlationId) {
     }
 
-    /** Bundles the SubscribeToTask bridge context (response/SSE/owner/correlation) carried into bridgeSubscribeStream. */
+    /**
+     * Bundles the SubscribeToTask bridge context (response/SSE/owner/correlation) carried into
+     * bridgeSubscribeStream.
+     */
     private record SubscribeBridgeCtx(GovernanceContext ctx, HttpServletResponse response, SseBridge sseBridge,
-                                      StickyIndex.Owner owner, String correlationId) {
+            StickyIndex.Owner owner, String correlationId) {
     }
 
-    /** Bundles the sync-create fold context (G4/window/chosen/correlation) carried into foldSyncProjection. */
+    /**
+     * Bundles the sync-create fold context (G4/window/chosen/correlation) carried into
+     * foldSyncProjection.
+     */
     private record SyncFoldCtx(GovernanceContext ctx, G4BusWiring g4w, WaitWindow window,
-                               AgentCardRoute chosen, String correlationId) {
+            AgentCardRoute chosen, String correlationId) {
     }
 }

@@ -23,6 +23,9 @@ class SseBridgeTest {
 
     /**
      * Obtain the Logback logger backing {@link SseBridge}, guarded by an instanceof check.
+     *
+     * @return the backing Logback logger
+     * @throws IllegalStateException if the SLF4J binding is not Logback
      */
     private static ch.qos.logback.classic.Logger logbackLogger() {
         org.slf4j.Logger base = org.slf4j.LoggerFactory.getLogger(SseBridge.class);
