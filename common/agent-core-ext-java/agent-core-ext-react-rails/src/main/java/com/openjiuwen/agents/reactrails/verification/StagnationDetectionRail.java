@@ -49,9 +49,11 @@ import java.util.Objects;
  * <p><b>Escalation</b>: after {@link #MAX_STAGNATIONS} total triggers, the rail
  * calls {@code ctx.requestForceFinish(degraded)} — honest terminal, stops the loop.
  *
- * <p><b>Priority</b>: MEDIUM (50) — fires after VotingCriticVerifierRail (100)
- * and before CriteriaReplanBridgeRail (0). This lets the critic's data inform
- * the stagnation analysis, while the bridge rail still has final say on forceFinish.
+ * <p><b>Priority</b>: {@link com.openjiuwen.agents.reactrails.RailPriorities#STAGNATION_DETECTION}
+ * (50) — same tier as CriteriaReplanBridgeRail / ReplanRail / CriteriaVerificationRail (all
+ * default 50). Same-tier relative order is registration order (stable sort) — NOT a
+ * contract; do not rely on this rail firing before/after any same-tier rail. See the
+ * {@link com.openjiuwen.agents.reactrails.RailPriorities} coordination table.
  *
  * <p><b>Phase override communication</b>:
  * When stagnation is detected, this rail calls
@@ -108,9 +110,9 @@ public class StagnationDetectionRail extends AgentRail {
     public static final String OUTPUT_KEY = "output";
 
     /**
-     * Priority: 50 — medium, between voting critic (100) and bridge rail (0).
+     * Priority from the single-source table (see class Javadoc for the tier semantics).
      */
-    private static final int PRIORITY = 50;
+    private static final int PRIORITY = com.openjiuwen.agents.reactrails.RailPriorities.STAGNATION_DETECTION;
 
     private final PromptInjectionState injectionState;
     private final String stateKey = RailInvocationState.newKey(StagnationDetectionRail.class);

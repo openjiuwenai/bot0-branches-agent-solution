@@ -31,8 +31,10 @@ import java.util.Map;
  * <ol>
  *   <li>{@code agent.getAbilityManager().add(card)} — so {@code listToolInfo()} surfaces
  *       {@code __replan__} to the LLM (visibility).</li>
- *   <li>{@code Runner.resourceMgr().addTool(tool, null)} — so {@code executeSingleToolCall}
- *       can resolve and invoke the executable (dispatch).</li>
+ *   <li>{@code Runner.resourceMgr().addTool(tool, agentId)} — so {@code executeSingleToolCall}
+ *       can resolve and invoke the executable (dispatch). The agent-scoped tag is for
+ *       attribution; ResourceMgr stores by tool id (process-wide), so same-id tools
+ *       across agents overwrite (last-writer-wins).</li>
  * </ol>
  * <b>id==name invariant</b>: {@code executeSingleToolCall} resolves the executable key as
  * {@code card.getId()} (fallback {@code card.getName()}); {@code ResourceMgr.addTool} stores it
@@ -114,9 +116,10 @@ public class ReplanTool extends Tool {
         ReplanTool tool = new ReplanTool();
         // 1. LLM visibility: listToolInfo() walks AbilityManager.tools (ToolCard values)
         agent.getAbilityManager().add(tool.getCard());
-        // 2. Dispatch: executeSingleToolCall resolves the executable via Runner.resourceMgr()
+        // 2. Dispatch: executeSingleToolCall resolves the executable via Runner.resourceMgr().
+        // agent-scoped tag (attribution only — ResourceMgr dispatch is id-based)
         ResourceMgr resourceMgr = Runner.resourceMgr();
-        resourceMgr.addTool(tool, null);
+        resourceMgr.addTool(tool, agent.getCard().getId());
         return tool;
     }
 

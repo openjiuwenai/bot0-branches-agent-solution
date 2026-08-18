@@ -59,11 +59,12 @@ import java.util.Set;
  */
 public class PreCompletionChecklistRail extends AgentRail {
     /**
-     * Priority: 80 — fires after VotingCriticVerifierRail (100) and before
-     * StagnationDetectionRail (50) in afterModelCall. Same priority applies to
-     * beforeModelCall (no other rail uses it today).
+     * Priority from the single-source table (see {@link com.openjiuwen.agents.reactrails.RailPriorities}).
+     * On beforeModelCall of an EDPA-assembled agent this rail fires AFTER
+     * UserInputCaptureRail(95) and ExploreRail(90) — the "no other rail" claim was
+     * stale (4-lens); cross-module rails share the hook.
      */
-    private static final int PRIORITY = 80;
+    private static final int PRIORITY = com.openjiuwen.agents.reactrails.RailPriorities.PRE_COMPLETION_CHECKLIST;
 
     private static final int OUTPUT_HASH_WINDOW = 5;
 

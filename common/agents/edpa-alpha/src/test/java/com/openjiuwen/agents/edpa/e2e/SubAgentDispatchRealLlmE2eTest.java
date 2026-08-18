@@ -378,6 +378,15 @@ class SubAgentDispatchRealLlmE2eTest {
             try {
                 Object res = subAgent.invoke(subGoal, null);
                 String text = extractOutput(res);
+                // Transient content-empty retry (McpInvestment idiom): thinking-mode models
+                // can return an answer terminal with EMPTY content (reasoning absorbed the
+                // turn — pro+thinking hit this 3/3 on the sub-agent prompt in the 2026-08-16
+                // matrix; the 2026-08-17 rerun confirmed stable). One retry before failing.
+                if (text.isBlank()) {
+                    LOG.warning("[subagent-e2e] content-empty sub-agent terminal, retrying once");
+                    res = subAgent.invoke(subGoal, null);
+                    text = extractOutput(res);
+                }
                 subResultLen.set(text.length());
                 if (subResultOverflow != null && text.length() > 200) {
                     subResultOverflow.set(1);

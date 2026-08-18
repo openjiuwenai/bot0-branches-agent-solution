@@ -378,7 +378,7 @@ class McpInvestmentResearchE2eTest {
      * @param resultMap the agent result map
      */
     private static void logCriteriaVerifyResult(Map<?, ?> resultMap) {
-        Object verified = resultMap.get(CriteriaReplanBridgeRail.VERIFIED_KEY);
+        Object verified = resultMap.get(com.openjiuwen.agents.reactrails.observability.ObservingRail.VERIFIED_KEY);
         if (Boolean.TRUE.equals(verified)) {
             LOG.log(Level.INFO, "[mcp-research] ✅ Criteria verify PASS — MS report structure complete");
             return;

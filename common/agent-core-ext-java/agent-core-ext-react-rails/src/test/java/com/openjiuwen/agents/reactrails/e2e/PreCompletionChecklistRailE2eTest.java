@@ -67,7 +67,8 @@ class PreCompletionChecklistRailE2eTest {
         DefaultModelClientFactories.ensureRegistered();
 
         // Build a SystemPromptInjectingModel (PLAN/BUILD mode requires it)
-        var cliCfg = ModelClientConfig.builder().clientId("checklist-e2e-" + System.nanoTime()).clientProvider("OpenAI")
+        var cliCfg = ModelClientConfig.builder().clientId("checklist-e2e-" + System.nanoTime())
+                .clientProvider("OpenAI").timeout(180_000)
                 .apiKey(System.getenv("OPENJIUWEN_API_KEY")).apiBase(System.getenv("OPENJIUWEN_BASE_URL"))
                 .verifySsl(false).build();
         var reqCfg = ModelRequestConfig.builder()
@@ -113,7 +114,8 @@ class PreCompletionChecklistRailE2eTest {
         org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(), "skip");
         DefaultModelClientFactories.ensureRegistered();
 
-        var cliCfg = ModelClientConfig.builder().clientId("checklist-e2e-" + System.nanoTime()).clientProvider("OpenAI")
+        var cliCfg = ModelClientConfig.builder().clientId("checklist-e2e-" + System.nanoTime())
+                .clientProvider("OpenAI").timeout(180_000)
                 .apiKey(System.getenv("OPENJIUWEN_API_KEY")).apiBase(System.getenv("OPENJIUWEN_BASE_URL"))
                 .verifySsl(false).build();
         var reqCfg = ModelRequestConfig.builder()
