@@ -4,6 +4,7 @@
 
 package com.openjiuwen.example.fe016.client;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -22,6 +23,7 @@ import java.util.Base64;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * FEAT-016 AgentDemo — 命令行客户端。
@@ -68,7 +70,7 @@ public final class InstanceRouteQueryClientMain {
         if (baseUrl == null || baseUrl.isBlank()) {
             baseUrl = "http://127.0.0.1:18090";
         }
-        log.info("FEAT-016 AgentDemo 客户端启动，目标: {}", baseUrl);
+        log.info("FEAT-016 AgentDemo client started, target: {}", baseUrl);
         new InstanceRouteQueryClientMain(baseUrl).run();
     }
 
@@ -77,13 +79,13 @@ public final class InstanceRouteQueryClientMain {
         JsonNode firstHandle = listInstances(TENANT_A, AGENT_001);
 
         // 2) 用服务端下发的 routeHandle 去 resolve —— 验证 opaque 句柄往返，拿到真实 endpointUrl
-        String endpointUrl = resolveValid(firstHandle.asText(), TENANT_A);
+        Optional<String> endpointUrl = resolveValid(firstHandle.asText(), TENANT_A);
 
         // 3) A2A 调用目标 Agent —— 真正的 AgentDemo 链路：用解析得到的 endpointUrl 发
         //    JSON-RPC SendStreamingMessage，回环命中本进程的 Fe016StubAgentHandler，
         //    验证 mock LLM 回显。这才是「客户端经注册中心路由后用 A2A 调用目标 Agent」。
-        if (endpointUrl != null) {
-            a2aCallAgent(endpointUrl, "hello from FEAT-016 AgentDemo");
+        if (endpointUrl.isPresent()) {
+            a2aCallAgent(endpointUrl.get(), "hello from FEAT-016 AgentDemo");
         }
 
         // 4) 畸形 route-handle（缺少 v2: 前缀）—— 设计文档§7 要求 HTTP 400
@@ -98,33 +100,33 @@ public final class InstanceRouteQueryClientMain {
         // 7) 错误码命名复现 —— 解析一条 entry 不存在的合法句柄，观察 error code
         resolveEntryNotFound();
 
-        log.info("FEAT-016 AgentDemo 客户端结束。发现的 Bug 见上方 [BUG] 标记。");
+        log.info("FEAT-016 AgentDemo client finished. See [BUG] markers above.");
     }
 
     private JsonNode listInstances(String tenantId, String agentId) throws Exception {
         String url = baseUrl + "/api/registry/instances/" + tenantId + "/" + agentId;
         HttpResponse<String> resp = send(url, "GET", null);
-        log.info("GET {} → HTTP {}", url, resp.statusCode());
+        log.info("GET {} -> HTTP {}", url, resp.statusCode());
         JsonNode body = MAPPER.readTree(resp.body());
-        log.info("响应: {}", MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(body));
+        log.info("Response: {}", MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(body));
         if (resp.statusCode() == 200 && body.isArray() && !body.isEmpty()) {
             JsonNode handle = body.get(0).get("routeHandle");
             if (handle != null) {
-                log.info("[OK] 第一个实例的 opaque routeHandle: {}", handle.asText());
+                log.info("[OK] first instance opaque routeHandle: {}", handle.asText());
                 return handle;
             }
         }
         if (body.isArray() && body.isEmpty()) {
-            log.info("[OK] 反枚举: agent={} 无实例 → 200 + 空列表（不区分不存在与无权限）", agentId);
+            log.info("[OK] anti-enumeration: agent={} no instances -> 200 + empty list", agentId);
         }
         return MAPPER.nullNode();
     }
 
-    private String resolveValid(String routeHandle, String tenantId) throws Exception {
+    private Optional<String> resolveValid(String routeHandle, String tenantId) throws Exception {
         String body = resolveBody(routeHandle, tenantId);
         HttpResponse<String> resp = postResolve(body);
-        log.info("POST /route-handle/resolve (valid, tenant={}) → HTTP {}", tenantId, resp.statusCode());
-        log.info("响应: {}", pretty(resp.body()));
+        log.info("POST /route-handle/resolve (valid, tenant={}) -> HTTP {}", tenantId, resp.statusCode());
+        log.info("Response: {}", pretty(resp.body()));
         if (resp.statusCode() == 200) {
             JsonNode r = MAPPER.readTree(resp.body());
             String endpoint = r.path("endpointUrl").asText();
@@ -133,9 +135,9 @@ public final class InstanceRouteQueryClientMain {
                     endpoint,
                     r.path("routeKey").asText(),
                     r.path("contractVersion").asText());
-            return endpoint;
+            return Optional.of(endpoint);
         }
-        return null;
+        return Optional.empty();
     }
 
     /**
@@ -144,6 +146,10 @@ public final class InstanceRouteQueryClientMain {
      * <p>这是「真 AgentDemo」的客户端收尾链路：注册中心路由解析 → 拿到真实 endpoint
      * → 用 A2A 协议调用目标 Agent。SSE 帧格式 {@code data:{...}}，从中抽取 Agent 的
      * mock 回显文本，验证整条 A2A 往返。
+     *
+     * @param endpointUrl the target agent endpoint URL
+     * @param userQuery   the user query text to send
+     * @throws Exception if the A2A call or SSE parsing fails
      */
     private void a2aCallAgent(String endpointUrl, String userQuery) throws Exception {
         String a2aUrl = endpointUrl.endsWith("/a2a") ? endpointUrl : endpointUrl + "/a2a";
@@ -169,7 +175,7 @@ public final class InstanceRouteQueryClientMain {
                 .build();
         log.info("A2A POST {} (SendStreamingMessage, query=\"{}\")", a2aUrl, userQuery);
         HttpResponse<String> resp = client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        log.info("A2A 响应 HTTP {}", resp.statusCode());
+        log.info("A2A response HTTP {}", resp.statusCode());
         StringBuilder collected = new StringBuilder();
         for (String line : resp.body().split("\n", -1)) {
             if (!line.startsWith("data:")) {
@@ -183,11 +189,12 @@ public final class InstanceRouteQueryClientMain {
             log.info("  SSE data: {}", json);
         }
         String reply = collected.toString();
-        log.info("[OK] 目标 Agent mock 回复: {}", reply);
+        log.info("[OK] target agent mock reply: {}", reply);
         if (reply.contains(Fe016StubAgentHandler.MOCK_REPLY_PREFIX)) {
-            log.info("[OK] A2A 链路验证通过：客户端经注册中心路由解析 → A2A 调用 → 命中 Fe016StubAgentHandler");
+            log.info("[OK] A2A link verified: client -> registry route resolution -> A2A call"
+                    + " -> Fe016StubAgentHandler");
         } else {
-            log.warn("[WARN] 未在 SSE 响应中检测到 mock 前缀 {}，A2A 往返可能异常",
+            log.warn("[WARN] mock prefix {} not detected in SSE response, A2A round-trip may be abnormal",
                     Fe016StubAgentHandler.MOCK_REPLY_PREFIX);
         }
     }
@@ -197,7 +204,7 @@ public final class InstanceRouteQueryClientMain {
             JsonNode root = MAPPER.readTree(json);
             JsonNode result = root.path("result");
             collectTextIn(result, out);
-        } catch (Exception ignored) {
+        } catch (JsonProcessingException ignored) {
             // 非 JSON 帧或解析失败：跳过，不影响其他帧
         }
     }
@@ -221,52 +228,54 @@ public final class InstanceRouteQueryClientMain {
     private void resolveMalformed() throws Exception {
         String body = resolveBody("not-a-valid-handle", TENANT_A);
         HttpResponse<String> resp = postResolve(body);
-        log.info("POST /route-handle/resolve (malformed, 缺少 v2: 前缀) → HTTP {}", resp.statusCode());
-        log.info("响应: {}", pretty(resp.body()));
-        System.out.println("============================================================");
-        System.out.println("[BUG #1] MALFORMED_ROUTE_HANDLE → HTTP 状态码错误");
-        System.out.println("  期望（设计文档§7）: HTTP 400, error code: malformed_handle");
-        System.out.println("  实际: HTTP " + resp.statusCode()
-                + ", error code: " + errorField(resp.body()));
-        System.out.println("  位置: RegistryApiExceptionHandler.mapFailureStatus()");
-        System.out.println("        case \"ENTRY_NOT_FOUND\", \"MALFORMED_ROUTE_HANDLE\" -> HttpStatus.NOT_FOUND;");
-        System.out.println("  原因: MALFORMED_ROUTE_HANDLE 被并入 ENTRY_NOT_FOUND 分支，映射到 404 而非 400");
-        System.out.println("============================================================");
+        log.info("POST /route-handle/resolve (malformed, missing v2: prefix) -> HTTP {}", resp.statusCode());
+        log.info("Response: {}", pretty(resp.body()));
+        log.info("============================================================");
+        log.info("[BUG #1] MALFORMED_ROUTE_HANDLE -> HTTP status code mismatch");
+        log.info("  expected (design doc section 7): HTTP 400, error code: malformed_handle");
+        log.info("  actual: HTTP {}, error code: {}", resp.statusCode(), errorField(resp.body()));
+        log.info("  location: RegistryApiExceptionHandler.mapFailureStatus()");
+        log.info("        case \"ENTRY_NOT_FOUND\", \"MALFORMED_ROUTE_HANDLE\" -> HttpStatus.NOT_FOUND;");
+        log.info("  cause: MALFORMED_ROUTE_HANDLE merged into ENTRY_NOT_FOUND branch,"
+                + " mapped to 404 instead of 400");
+        log.info("============================================================");
     }
 
     private void resolveCrossTenant() throws Exception {
-        String handle = buildRouteHandle(TENANT_A, AGENT_001, SERVICE_001, INSTANCE_1, ROUTE_KEY, CONTRACT_VER);
+        String handle = buildRouteHandle(new RouteHandleParts(
+                TENANT_A, AGENT_001, SERVICE_001, INSTANCE_1, ROUTE_KEY, CONTRACT_VER));
         String body = resolveBody(handle, TENANT_B);
         HttpResponse<String> resp = postResolve(body);
-        log.info("POST /route-handle/resolve (cross-tenant: handle=tenant-A, body=tenant-B) → HTTP {}",
+        log.info("POST /route-handle/resolve (cross-tenant: handle=tenant-A, body=tenant-B) -> HTTP {}",
                 resp.statusCode());
-        log.info("响应: {}", pretty(resp.body()));
-        System.out.println("============================================================");
-        System.out.println("[BUG #2] TENANT_SCOPE_DENIED → HTTP 状态码错误");
-        System.out.println("  期望（设计文档§7）: HTTP 400, error code: tenant_isolation_violation");
-        System.out.println("  实际: HTTP " + resp.statusCode()
-                + ", error code: " + errorField(resp.body()));
-        System.out.println("  位置: RegistryApiExceptionHandler.mapFailureStatus()");
-        System.out.println("        case \"CALLER_NOT_AUTHORIZED\", \"TENANT_SCOPE_DENIED\" -> HttpStatus.FORBIDDEN;");
-        System.out.println("  原因: TENANT_SCOPE_DENIED 被并入 CALLER_NOT_AUTHORIZED 分支，映射到 403 而非 400");
-        System.out.println("============================================================");
+        log.info("Response: {}", pretty(resp.body()));
+        log.info("============================================================");
+        log.info("[BUG #2] TENANT_SCOPE_DENIED -> HTTP status code mismatch");
+        log.info("  expected (design doc section 7): HTTP 400, error code: tenant_isolation_violation");
+        log.info("  actual: HTTP {}, error code: {}", resp.statusCode(), errorField(resp.body()));
+        log.info("  location: RegistryApiExceptionHandler.mapFailureStatus()");
+        log.info("        case \"CALLER_NOT_AUTHORIZED\", \"TENANT_SCOPE_DENIED\" -> HttpStatus.FORBIDDEN;");
+        log.info("  cause: TENANT_SCOPE_DENIED merged into CALLER_NOT_AUTHORIZED branch,"
+                + " mapped to 403 instead of 400");
+        log.info("============================================================");
     }
 
     private void resolveEntryNotFound() throws Exception {
         // 合法格式但指向不存在的 instance —— 设计文档§7 要求 HTTP 404 entry_not_found
-        String handle = buildRouteHandle(TENANT_A, AGENT_001, SERVICE_001, "10.0.0.99:8090",
-                ROUTE_KEY, CONTRACT_VER);
+        String handle = buildRouteHandle(new RouteHandleParts(
+                TENANT_A, AGENT_001, SERVICE_001, "10.0.0.99:8090", ROUTE_KEY, CONTRACT_VER));
         String body = resolveBody(handle, TENANT_A);
         HttpResponse<String> resp = postResolve(body);
-        log.info("POST /route-handle/resolve (entry not found) → HTTP {}", resp.statusCode());
-        log.info("响应: {}", pretty(resp.body()));
+        log.info("POST /route-handle/resolve (entry not found) -> HTTP {}", resp.statusCode());
+        log.info("Response: {}", pretty(resp.body()));
         String code = errorField(resp.body());
-        System.out.println("------------------------------------------------------------");
-        System.out.println("[观察] entry 不存在: HTTP " + resp.statusCode() + ", error code: " + code);
-        System.out.println("  设计文档§7 期望: HTTP 404, error code: entry_not_found");
-        System.out.println("  注: HTTP 404 状态码正确；error code 仍为大写 ENTRY_NOT_FOUND，");
-        System.out.println("      与 malformed_handle / tenant_isolation_violation 的小写命名约定不一致");
-        System.out.println("------------------------------------------------------------");
+        log.info("------------------------------------------------------------");
+        log.info("[obs] entry not found: HTTP {}, error code: {}", resp.statusCode(), code);
+        log.info("  design doc section 7 expected: HTTP 404, error code: entry_not_found");
+        log.info("  note: HTTP 404 status is correct; error code is still uppercase"
+                + " ENTRY_NOT_FOUND, inconsistent with lowercase convention of"
+                + " malformed_handle / tenant_isolation_violation");
+        log.info("------------------------------------------------------------");
     }
 
     private HttpResponse<String> postResolve(String jsonBody) throws Exception {
@@ -294,16 +303,18 @@ public final class InstanceRouteQueryClientMain {
         return MAPPER.writeValueAsString(node);
     }
 
-    private static String buildRouteHandle(String tenantId, String agentId, String serviceId,
-                                           String instanceId, String routeKey, String contractVersion)
-            throws Exception {
+    private record RouteHandleParts(String tenantId, String agentId, String serviceId,
+                                    String instanceId, String routeKey, String contractVersion) {
+    }
+
+    private static String buildRouteHandle(RouteHandleParts parts) throws JsonProcessingException {
         ObjectNode node = MAPPER.createObjectNode();
-        node.put("tenantId", tenantId);
-        node.put("agentId", agentId);
-        node.put("serviceId", serviceId);
-        node.put("instanceId", instanceId);
-        node.put("routeKey", routeKey);
-        node.put("contractVersion", contractVersion);
+        node.put("tenantId", parts.tenantId());
+        node.put("agentId", parts.agentId());
+        node.put("serviceId", parts.serviceId());
+        node.put("instanceId", parts.instanceId());
+        node.put("routeKey", parts.routeKey());
+        node.put("contractVersion", parts.contractVersion());
         byte[] json = MAPPER.writeValueAsBytes(node);
         return "v2:" + Base64.getEncoder().encodeToString(json);
     }
@@ -315,7 +326,7 @@ public final class InstanceRouteQueryClientMain {
                 return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(parsed);
             }
             return json;
-        } catch (Exception ex) {
+        } catch (JsonProcessingException ex) {
             return json;
         }
     }
@@ -334,7 +345,7 @@ public final class InstanceRouteQueryClientMain {
                 copy.put(e.getKey(), e.getValue().asText());
             }
             return copy.toString();
-        } catch (Exception ex) {
+        } catch (JsonProcessingException ex) {
             return json;
         }
     }

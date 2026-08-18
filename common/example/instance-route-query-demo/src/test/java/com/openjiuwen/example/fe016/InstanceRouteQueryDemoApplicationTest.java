@@ -4,6 +4,8 @@
 
 package com.openjiuwen.example.fe016;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.rdc.controller.InstanceRouteController;
 import com.openjiuwen.rdc.controller.RegistryApiExceptionHandler;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
@@ -12,8 +14,6 @@ import com.openjiuwen.rdc.service.AgentDiscoveryService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 仿照 {@code VersatileA2AAdapterDemoApplicationTest}：验证 FEAT-016 AgentDemo
@@ -24,7 +24,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest
 class InstanceRouteQueryDemoApplicationTest {
-
     @Autowired
     private AgentRegistryRepository agentRegistryRepository;
 

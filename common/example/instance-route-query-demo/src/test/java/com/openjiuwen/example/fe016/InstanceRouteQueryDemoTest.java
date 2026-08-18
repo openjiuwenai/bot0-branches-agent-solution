@@ -4,6 +4,14 @@
 
 package com.openjiuwen.example.fe016;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.controller.InstanceRouteController;
 import com.openjiuwen.rdc.controller.RegistryApiExceptionHandler;
@@ -18,24 +26,14 @@ import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository.EndpointEntry;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository.RegistryRow;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository.ResolveRow;
-import com.openjiuwen.rdc.security.CallerAuthorizationPolicy;
 import com.openjiuwen.rdc.service.AgentDiscoveryService;
 import com.openjiuwen.rdc.service.PgMvpDiscoveryServiceImpl;
 import com.openjiuwen.rdc.tenant.ThreadLocalTenantContext;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
-
-import org.springframework.http.ResponseEntity;
-
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
@@ -45,10 +43,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
 
 /**
  * FEAT-016 运行时实例路由查询 — AgentDemo 测试入口。
@@ -66,13 +67,14 @@ import static org.mockito.Mockito.when;
  *   <li>不透明性：用反射验证 {@link AgentCardDto} 不暴露物理路由字段。</li>
  * </ul>
  *
- * <p>所有测试均通过（green），发现的 Bug 通过 {@code System.out} 输出 [BUG] 标记。
+ * <p>所有测试均通过（green），发现的 Bug 通过 SLF4J 日志输出 [BUG] 标记。
  *
  * @since 0.1.0 (2026)
  */
 @Tag("fe016")
 @DisplayName("FEAT-016 运行时实例路由查询 — Bug发现测试")
 class InstanceRouteQueryDemoTest {
+    private static final Logger log = LoggerFactory.getLogger(InstanceRouteQueryDemoTest.class);
 
     private static final String TENANT_A = "tenant-A";
     private static final String TENANT_B = "tenant-B";
@@ -84,21 +86,24 @@ class InstanceRouteQueryDemoTest {
     private static final String CAPABILITY_VER = "1.2.0";
     private static final String ENDPOINT_URL = "http://10.0.0.1:8090";
 
-    private static String buildRouteHandle(String tenantId, String agentId, String serviceId,
-                                           String instanceId, String routeKey, String contractVersion) {
+    private record RouteHandleParts(String tenantId, String agentId, String serviceId,
+                                    String instanceId, String routeKey, String contractVersion) {
+    }
+
+    private static String buildRouteHandle(RouteHandleParts parts) {
         try {
             ObjectMapper mapper = new ObjectMapper();
             ObjectNode node = mapper.createObjectNode();
-            node.put("tenantId", tenantId);
-            node.put("agentId", agentId);
-            node.put("serviceId", serviceId);
-            node.put("instanceId", instanceId);
-            node.put("routeKey", routeKey);
-            node.put("contractVersion", contractVersion);
+            node.put("tenantId", parts.tenantId());
+            node.put("agentId", parts.agentId());
+            node.put("serviceId", parts.serviceId());
+            node.put("instanceId", parts.instanceId());
+            node.put("routeKey", parts.routeKey());
+            node.put("contractVersion", parts.contractVersion());
             byte[] json = mapper.writeValueAsBytes(node);
             return "v2:" + Base64.getEncoder().encodeToString(json);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to build route handle", e);
         }
     }
 
@@ -140,7 +145,6 @@ class InstanceRouteQueryDemoTest {
     @Nested
     @DisplayName("异常处理器HTTP状态码映射（设计文档§7）")
     class FailureCodeToHttpStatusMapping {
-
         @Test
         @DisplayName("BUG#1: MALFORMED_ROUTE_HANDLE 应返回HTTP 400 但实际返回HTTP 404")
         void malformedRouteHandle_shouldReturn400_butReturns404() {
@@ -148,21 +152,22 @@ class InstanceRouteQueryDemoTest {
                     new MalformedRouteHandleException("route handle missing v2: prefix", "trace-001");
             int actualStatus = invokeHandlerStatus(ex);
             Map<String, Object> body = invokeHandler(ex);
-            String actualCode = (String) body.get("error");
+            Object errorObj = body.get("error");
+            String actualCode = errorObj instanceof String ? (String) errorObj : null;
 
             assertThat(actualStatus).isEqualTo(404);
 
-            System.out.println("============================================================");
-            System.out.println("[BUG #1] MALFORMED_ROUTE_HANDLE → HTTP 状态码错误");
-            System.out.println("  期望（设计文档§7 + Javadoc）: HTTP 400, error code: malformed_handle");
-            System.out.println("  实际: HTTP " + actualStatus + ", error code: " + actualCode);
-            System.out.println("  位置: RegistryApiExceptionHandler.mapFailureStatus() 第86行");
-            System.out.println("  代码: case \"ENTRY_NOT_FOUND\", \"MALFORMED_ROUTE_HANDLE\" -> HttpStatus.NOT_FOUND;");
-            System.out.println("  原因: MALFORMED_ROUTE_HANDLE 与 ENTRY_NOT_FOUND 合并为同一 case，");
-            System.out.println("        被映射到 NOT_FOUND(404) 而非 BAD_REQUEST(400)");
-            System.out.println("  影响: 客户端收到 404 可能误认为资源不存在，而非请求格式错误，");
-            System.out.println("        导致重试策略错误（应修正请求而非放弃）");
-            System.out.println("============================================================");
+            log.info("============================================================");
+            log.info("[BUG #1] MALFORMED_ROUTE_HANDLE -> HTTP status code mismatch");
+            log.info("  expected (design doc section 7 + Javadoc): HTTP 400, error code: malformed_handle");
+            log.info("  actual: HTTP {}, error code: {}", actualStatus, actualCode);
+            log.info("  location: RegistryApiExceptionHandler.mapFailureStatus() line 86");
+            log.info("  code: case \"ENTRY_NOT_FOUND\", \"MALFORMED_ROUTE_HANDLE\" -> HttpStatus.NOT_FOUND;");
+            log.info("  cause: MALFORMED_ROUTE_HANDLE merged with ENTRY_NOT_FOUND into the same case,");
+            log.info("        mapped to NOT_FOUND(404) instead of BAD_REQUEST(400)");
+            log.info("  impact: client receiving 404 may assume resource not found instead of bad request,");
+            log.info("        leading to wrong retry strategy (should fix request, not give up)");
+            log.info("============================================================");
         }
 
         @Test
@@ -172,21 +177,24 @@ class InstanceRouteQueryDemoTest {
                     new TenantIsolationViolationException(TENANT_A, TENANT_B, "trace-002");
             int actualStatus = invokeHandlerStatus(ex);
             Map<String, Object> body = invokeHandler(ex);
-            String actualCode = (String) body.get("error");
+            Object errorObj = body.get("error");
+            String actualCode = errorObj instanceof String ? (String) errorObj : null;
 
             assertThat(actualStatus).isEqualTo(403);
 
-            System.out.println("============================================================");
-            System.out.println("[BUG #2] TENANT_SCOPE_DENIED → HTTP 状态码错误");
-            System.out.println("  期望（设计文档§7 + Javadoc）: HTTP 400, error code: tenant_isolation_violation");
-            System.out.println("  实际: HTTP " + actualStatus + ", error code: " + actualCode);
-            System.out.println("  位置: RegistryApiExceptionHandler.mapFailureStatus() 第85行");
-            System.out.println("  代码: case \"CALLER_NOT_AUTHORIZED\", \"TENANT_SCOPE_DENIED\" -> HttpStatus.FORBIDDEN;");
-            System.out.println("  原因: TENANT_SCOPE_DENIED 与 CALLER_NOT_AUTHORIZED 合并为同一 case，");
-            System.out.println("        被映射到 FORBIDDEN(403) 而非 BAD_REQUEST(400)");
-            System.out.println("  影响: 403 暗示权限不足，但租户隔离违规是请求参数错误（请求了错误租户），");
-            System.out.println("        客户端无法通过重试修正，应返回 400 提示请求本身有问题");
-            System.out.println("============================================================");
+            log.info("============================================================");
+            log.info("[BUG #2] TENANT_SCOPE_DENIED -> HTTP status code mismatch");
+            log.info("  expected (design doc section 7 + Javadoc): HTTP 400,"
+                    + " error code: tenant_isolation_violation");
+            log.info("  actual: HTTP {}, error code: {}", actualStatus, actualCode);
+            log.info("  location: RegistryApiExceptionHandler.mapFailureStatus() line 85");
+            log.info("  code: case \"CALLER_NOT_AUTHORIZED\", \"TENANT_SCOPE_DENIED\" -> HttpStatus.FORBIDDEN;");
+            log.info("  cause: TENANT_SCOPE_DENIED merged with CALLER_NOT_AUTHORIZED into the same case,");
+            log.info("        mapped to FORBIDDEN(403) instead of BAD_REQUEST(400)");
+            log.info("  impact: 403 implies insufficient permissions, but tenant isolation violation"
+                    + " is a request parameter error (wrong tenant requested),");
+            log.info("        client cannot fix by retrying, should return 400 to indicate request issue");
+            log.info("============================================================");
         }
 
         @Test
@@ -196,19 +204,19 @@ class InstanceRouteQueryDemoTest {
                     new EntryNotFoundException("entry not found: tenant=tenant-A", "trace-003");
             int actualStatus = invokeHandlerStatus(ex);
             Map<String, Object> body = invokeHandler(ex);
-            String actualCode = (String) body.get("error");
+            Object errorObj = body.get("error");
+            String actualCode = errorObj instanceof String ? (String) errorObj : null;
 
             assertThat(actualStatus).isEqualTo(404);
             assertThat(actualCode).isEqualTo("ENTRY_NOT_FOUND");
 
-            System.out.println("[OK] ENTRY_NOT_FOUND → HTTP 404（符合设计文档§7）");
+            log.info("[OK] ENTRY_NOT_FOUND -> HTTP 404 (matches design doc section 7)");
         }
     }
 
     @Nested
     @DisplayName("错误码命名一致性（设计文档§7）")
     class FailureCodeNamingConsistency {
-
         @Test
         @DisplayName("BUG#3: TenantIsolationViolationException failureCode 应为 tenant_isolation_violation")
         void tenantIsolation_failureCodeMismatch() {
@@ -218,16 +226,17 @@ class InstanceRouteQueryDemoTest {
 
             assertThat(failureCode).isEqualTo("TENANT_SCOPE_DENIED");
 
-            System.out.println("============================================================");
-            System.out.println("[BUG #3] 错误码命名不一致 — TenantIsolationViolationException");
-            System.out.println("  期望（设计文档§7）: tenant_isolation_violation");
-            System.out.println("  实际: " + failureCode);
-            System.out.println("  位置: TenantIsolationViolationException 构造函数 第28行");
-            System.out.println("  代码: super(RegistryFailure.of(\"TENANT_SCOPE_DENIED\", ...));");
-            System.out.println("  同时 PgMvpDiscoveryServiceImpl / RouteHandleCodec 的 Javadoc");
-            System.out.println("  均写明 HTTP 400 tenant_isolation_violation，与实际代码矛盾");
-            System.out.println("  影响: 前端 / 网关按 error code 做分支时无法匹配，需额外适配");
-            System.out.println("============================================================");
+            log.info("============================================================");
+            log.info("[BUG #3] failure code naming inconsistency - TenantIsolationViolationException");
+            log.info("  expected (design doc section 7): tenant_isolation_violation");
+            log.info("  actual: {}", failureCode);
+            log.info("  location: TenantIsolationViolationException constructor line 28");
+            log.info("  code: super(RegistryFailure.of(\"TENANT_SCOPE_DENIED\", ...));");
+            log.info("  also PgMvpDiscoveryServiceImpl / RouteHandleCodec Javadoc");
+            log.info("  both state HTTP 400 tenant_isolation_violation, contradicting actual code");
+            log.info("  impact: frontend / gateway branching by error code cannot match,"
+                    + " needs extra adaptation");
+            log.info("============================================================");
         }
 
         @Test
@@ -239,29 +248,30 @@ class InstanceRouteQueryDemoTest {
 
             assertThat(failureCode).isEqualTo("MALFORMED_ROUTE_HANDLE");
 
-            System.out.println("============================================================");
-            System.out.println("[BUG #4] 错误码命名不一致 — MalformedRouteHandleException");
-            System.out.println("  期望（设计文档§7）: malformed_handle");
-            System.out.println("  实际: " + failureCode);
-            System.out.println("  位置: MalformedRouteHandleException 构造函数 第15行");
-            System.out.println("  代码: super(RegistryFailure.of(\"MALFORMED_ROUTE_HANDLE\", ...));");
-            System.out.println("  同时 PgMvpDiscoveryServiceImpl / RouteHandleCodec 的 Javadoc");
-            System.out.println("  均写明 HTTP 400 malformed_handle，与实际代码矛盾");
-            System.out.println("  影响: 前端 / 网关按 error code 做分支时无法匹配，需额外适配");
-            System.out.println("============================================================");
+            log.info("============================================================");
+            log.info("[BUG #4] failure code naming inconsistency - MalformedRouteHandleException");
+            log.info("  expected (design doc section 7): malformed_handle");
+            log.info("  actual: {}", failureCode);
+            log.info("  location: MalformedRouteHandleException constructor line 15");
+            log.info("  code: super(RegistryFailure.of(\"MALFORMED_ROUTE_HANDLE\", ...));");
+            log.info("  also PgMvpDiscoveryServiceImpl / RouteHandleCodec Javadoc");
+            log.info("  both state HTTP 400 malformed_handle, contradicting actual code");
+            log.info("  impact: frontend / gateway branching by error code cannot match,"
+                    + " needs extra adaptation");
+            log.info("============================================================");
         }
     }
 
     @Nested
     @DisplayName("路由句柄解析（service层）")
     class RouteHandleResolution {
-
         @Test
         @DisplayName("合法路由句柄解析返回完整RouteResolution")
         void validRouteHandle_resolvesToRouteResolution() {
             AgentRegistryRepository repo = mock(AgentRegistryRepository.class);
             AgentDiscoveryService discovery = buildDiscovery(repo);
-            String handle = buildRouteHandle(TENANT_A, AGENT_1, SERVICE_1, INSTANCE_1, ROUTE_KEY, CONTRACT_VER);
+            String handle = buildRouteHandle(new RouteHandleParts(
+                    TENANT_A, AGENT_1, SERVICE_1, INSTANCE_1, ROUTE_KEY, CONTRACT_VER));
 
             when(repo.findForResolve(TENANT_A, AGENT_1, SERVICE_1, INSTANCE_1))
                     .thenReturn(Optional.of(buildActiveResolveRow()));
@@ -274,13 +284,15 @@ class InstanceRouteQueryDemoTest {
             assertThat(resolution.contractVersion()).isEqualTo(CONTRACT_VER);
             assertThat(resolution.capabilityVersion()).isEqualTo(CAPABILITY_VER);
 
-            System.out.println("[OK] 合法路由句柄解析成功");
-            System.out.println("  routeHandle: " + handle);
-            System.out.println("  → RouteResolution{instanceId=" + resolution.instanceId()
-                    + ", endpointUrl=" + resolution.endpointUrl()
-                    + ", routeKey=" + resolution.routeKey()
-                    + ", contractVersion=" + resolution.contractVersion()
-                    + ", capabilityVersion=" + resolution.capabilityVersion() + "}");
+            log.info("[OK] valid route handle resolved successfully");
+            log.info("  routeHandle: {}", handle);
+            log.info("  -> RouteResolution{instanceId={}, endpointUrl={}, routeKey={},"
+                    + " contractVersion={}, capabilityVersion={}",
+                    resolution.instanceId(),
+                    resolution.endpointUrl(),
+                    resolution.routeKey(),
+                    resolution.contractVersion(),
+                    resolution.capabilityVersion());
         }
 
         @Test
@@ -288,13 +300,14 @@ class InstanceRouteQueryDemoTest {
         void crossTenantResolve_throwsTenantIsolationViolation() {
             AgentRegistryRepository repo = mock(AgentRegistryRepository.class);
             AgentDiscoveryService discovery = buildDiscovery(repo);
-            String handle = buildRouteHandle(TENANT_A, AGENT_1, SERVICE_1, INSTANCE_1, ROUTE_KEY, CONTRACT_VER);
+            String handle = buildRouteHandle(new RouteHandleParts(
+                    TENANT_A, AGENT_1, SERVICE_1, INSTANCE_1, ROUTE_KEY, CONTRACT_VER));
 
             assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, TENANT_B))
                     .isInstanceOf(TenantIsolationViolationException.class);
 
-            System.out.println("[OK] 跨租户解析被拒绝: handle 内 tenant=" + TENANT_A
-                    + ", 调用方 tenant=" + TENANT_B + " → TenantIsolationViolationException");
+            log.info("[OK] cross-tenant resolve rejected: handle tenant={}, caller tenant={}"
+                    + " -> TenantIsolationViolationException", TENANT_A, TENANT_B);
         }
 
         @Test
@@ -306,7 +319,8 @@ class InstanceRouteQueryDemoTest {
             assertThatThrownBy(() -> discovery.resolveRouteHandle("not-a-valid-handle", TENANT_A))
                     .isInstanceOf(MalformedRouteHandleException.class);
 
-            System.out.println("[OK] 畸形路由句柄被拒绝: 缺少 v2: 前缀 → MalformedRouteHandleException");
+            log.info("[OK] malformed route handle rejected: missing v2: prefix"
+                    + " -> MalformedRouteHandleException");
         }
 
         @Test
@@ -316,13 +330,14 @@ class InstanceRouteQueryDemoTest {
             AgentDiscoveryService discovery = buildDiscovery(repo);
 
             String badJson = Base64.getEncoder().encodeToString(
-                    "{\"tenantId\":\"tenant-A\",\"agentId\":\"agent-001\"}".getBytes());
+                    "{\"tenantId\":\"tenant-A\",\"agentId\":\"agent-001\"}".getBytes(StandardCharsets.UTF_8));
             String badHandle = "v2:" + badJson;
 
             assertThatThrownBy(() -> discovery.resolveRouteHandle(badHandle, TENANT_A))
                     .isInstanceOf(MalformedRouteHandleException.class);
 
-            System.out.println("[OK] 畸形路由句柄被拒绝: JSON 缺少 serviceId/instanceId/routeKey/contractVersion 字段");
+            log.info("[OK] malformed route handle rejected: JSON missing"
+                    + " serviceId/instanceId/routeKey/contractVersion fields");
         }
 
         @Test
@@ -330,7 +345,8 @@ class InstanceRouteQueryDemoTest {
         void entryNotFound_throwsEntryNotFoundException() {
             AgentRegistryRepository repo = mock(AgentRegistryRepository.class);
             AgentDiscoveryService discovery = buildDiscovery(repo);
-            String handle = buildRouteHandle(TENANT_A, AGENT_1, SERVICE_1, INSTANCE_1, ROUTE_KEY, CONTRACT_VER);
+            String handle = buildRouteHandle(new RouteHandleParts(
+                    TENANT_A, AGENT_1, SERVICE_1, INSTANCE_1, ROUTE_KEY, CONTRACT_VER));
 
             when(repo.findForResolve(TENANT_A, AGENT_1, SERVICE_1, INSTANCE_1))
                     .thenReturn(Optional.empty());
@@ -340,7 +356,8 @@ class InstanceRouteQueryDemoTest {
             assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, TENANT_A))
                     .isInstanceOf(EntryNotFoundException.class);
 
-            System.out.println("[OK] entry不存在被拒绝: findForResolve + findEndpoint 均返回 empty → EntryNotFoundException");
+            log.info("[OK] entry not found rejected: findForResolve + findEndpoint both empty"
+                    + " -> EntryNotFoundException");
         }
 
         @Test
@@ -350,19 +367,19 @@ class InstanceRouteQueryDemoTest {
             AgentDiscoveryService discovery = buildDiscovery(repo);
 
             String oldHandle = "v1:" + Base64.getEncoder().encodeToString(
-                    "{\"tenantId\":\"tenant-A\",\"agentId\":\"a1\",\"serviceId\":\"s1\"}".getBytes());
+                    "{\"tenantId\":\"tenant-A\",\"agentId\":\"a1\",\"serviceId\":\"s1\"}"
+                            .getBytes(StandardCharsets.UTF_8));
 
             assertThatThrownBy(() -> discovery.resolveRouteHandle(oldHandle, TENANT_A))
                     .isInstanceOf(MalformedRouteHandleException.class);
 
-            System.out.println("[OK] 旧版 v1: 前缀句柄被拒绝（FEAT-016 baseline-breaking）");
+            log.info("[OK] legacy v1: prefix handle rejected (FEAT-016 baseline-breaking)");
         }
     }
 
     @Nested
     @DisplayName("实例路由查询（controller层）")
     class InstanceRouteQuery {
-
         @Test
         @DisplayName("实例路由查询返回ONLINE实例列表，每个实例携带opaque routeHandle")
         void listInstances_returnsOnlineInstancesWithOpaqueHandle() {
@@ -387,10 +404,10 @@ class InstanceRouteQueryDemoTest {
             assertThat(card.getAgentName()).isEqualTo("demo-agent");
             assertThat(card.getFrameworkType()).isEqualTo(FrameworkType.JIUWEN);
 
-            System.out.println("[OK] 实例路由查询返回 " + results.size() + " 个 ONLINE 实例");
-            System.out.println("  routeHandle: " + card.getRouteHandle());
-            System.out.println("  serviceId: " + card.getServiceId());
-            System.out.println("  health: " + card.getHealth());
+            log.info("[OK] instance route query returned {} ONLINE instance(s)", results.size());
+            log.info("  routeHandle: {}", card.getRouteHandle());
+            log.info("  serviceId: {}", card.getServiceId());
+            log.info("  health: {}", card.getHealth());
         }
 
         @Test
@@ -407,8 +424,8 @@ class InstanceRouteQueryDemoTest {
 
             assertThat(results).isEmpty();
 
-            System.out.println("[OK] 反枚举验证: 无实例返回空 List（HTTP 200），");
-            System.out.println("     不区分「目标不存在」与「无权限访问」");
+            log.info("[OK] anti-enumeration: no instances returns empty List (HTTP 200),");
+            log.info("     no distinction between 'target not found' and 'no permission'");
         }
 
         @Test
@@ -418,7 +435,8 @@ class InstanceRouteQueryDemoTest {
             AgentDiscoveryService discovery = buildDiscovery(repo);
             InstanceRouteController controller = new InstanceRouteController(discovery, repo);
 
-            String handle = buildRouteHandle(TENANT_A, AGENT_1, SERVICE_1, INSTANCE_1, ROUTE_KEY, CONTRACT_VER);
+            String handle = buildRouteHandle(new RouteHandleParts(
+                    TENANT_A, AGENT_1, SERVICE_1, INSTANCE_1, ROUTE_KEY, CONTRACT_VER));
             when(repo.findForResolve(TENANT_A, AGENT_1, SERVICE_1, INSTANCE_1))
                     .thenReturn(Optional.of(buildActiveResolveRow()));
 
@@ -429,16 +447,15 @@ class InstanceRouteQueryDemoTest {
             assertThat(resolution.endpointUrl()).isEqualTo(ENDPOINT_URL);
             assertThat(resolution.routeKey()).isEqualTo(ROUTE_KEY);
 
-            System.out.println("[OK] resolve端到端: controller → service → repository → RouteResolution");
-            System.out.println("  endpointUrl: " + resolution.endpointUrl());
-            System.out.println("  routeKey: " + resolution.routeKey());
+            log.info("[OK] resolve end-to-end: controller -> service -> repository -> RouteResolution");
+            log.info("  endpointUrl: {}", resolution.endpointUrl());
+            log.info("  routeKey: {}", resolution.routeKey());
         }
     }
 
     @Nested
     @DisplayName("AgentCardDto不透明性验证（HD3-006）")
     class AgentCardDtoOpacity {
-
         @Test
         @DisplayName("AgentCardDto不暴露endpointUrl/routeKey/instanceId")
         void agentCardDto_doesNotExposePhysicalRoutingFields() {
@@ -454,9 +471,9 @@ class InstanceRouteQueryDemoTest {
                     "getWeight", "getRegion", "getMaxConcurrency",
                     "getAgentName", "getFrameworkType");
 
-            System.out.println("[OK] AgentCardDto 不透明性验证通过（HD3-006）");
-            System.out.println("  不暴露: getEndpointUrl, getRouteKey, getInstanceId");
-            System.out.println("  暴露: " + getterNames);
+            log.info("[OK] AgentCardDto opacity verification passed (HD3-006)");
+            log.info("  not exposed: getEndpointUrl, getRouteKey, getInstanceId");
+            log.info("  exposed: {}", getterNames);
         }
 
         @Test
@@ -473,20 +490,20 @@ class InstanceRouteQueryDemoTest {
                     "weight", "region", "maxConcurrency",
                     "agentName", "frameworkType");
 
-            System.out.println("[OK] AgentCardDto.Builder 不支持 endpointUrl/routeKey/instanceId 字段");
+            log.info("[OK] AgentCardDto.Builder does not support endpointUrl/routeKey/instanceId fields");
         }
     }
 
     @Nested
     @DisplayName("RouteResolution转发层完整性（FEAT-016 v2: 6字段）")
     class RouteResolutionForwarding {
-
         @Test
         @DisplayName("RouteResolution包含instanceId（FEAT-016新增）")
         void routeResolution_containsInstanceId() {
             AgentRegistryRepository repo = mock(AgentRegistryRepository.class);
             AgentDiscoveryService discovery = buildDiscovery(repo);
-            String handle = buildRouteHandle(TENANT_A, AGENT_1, SERVICE_1, INSTANCE_1, ROUTE_KEY, CONTRACT_VER);
+            String handle = buildRouteHandle(new RouteHandleParts(
+                    TENANT_A, AGENT_1, SERVICE_1, INSTANCE_1, ROUTE_KEY, CONTRACT_VER));
 
             when(repo.findForResolve(TENANT_A, AGENT_1, SERVICE_1, INSTANCE_1))
                     .thenReturn(Optional.of(buildActiveResolveRow()));
@@ -498,9 +515,9 @@ class InstanceRouteQueryDemoTest {
             assertThat(resolution.routeKey()).isNotBlank();
             assertThat(resolution.contractVersion()).isNotBlank();
 
-            System.out.println("[OK] RouteResolution 包含 FEAT-016 新增 instanceId 字段");
-            System.out.println("  instanceId: " + resolution.instanceId());
-            System.out.println("  endpointUrl: " + resolution.endpointUrl());
+            log.info("[OK] RouteResolution contains FEAT-016 new instanceId field");
+            log.info("  instanceId: {}", resolution.instanceId());
+            log.info("  endpointUrl: {}", resolution.endpointUrl());
         }
 
         @Test
@@ -508,7 +525,8 @@ class InstanceRouteQueryDemoTest {
         void routeResolution_fallsBackToFindEndpoint() {
             AgentRegistryRepository repo = mock(AgentRegistryRepository.class);
             AgentDiscoveryService discovery = buildDiscovery(repo);
-            String handle = buildRouteHandle(TENANT_A, AGENT_1, SERVICE_1, INSTANCE_1, ROUTE_KEY, CONTRACT_VER);
+            String handle = buildRouteHandle(new RouteHandleParts(
+                    TENANT_A, AGENT_1, SERVICE_1, INSTANCE_1, ROUTE_KEY, CONTRACT_VER));
 
             when(repo.findForResolve(TENANT_A, AGENT_1, SERVICE_1, INSTANCE_1))
                     .thenReturn(Optional.empty());
@@ -521,8 +539,10 @@ class InstanceRouteQueryDemoTest {
             assertThat(resolution.routeKey()).isEqualTo(ROUTE_KEY);
             assertThat(resolution.contractVersion()).isEqualTo(CONTRACT_VER);
 
-            System.out.println("[OK] RouteResolution 回退路径: findForResolve 为空 → findEndpoint → RouteResolution");
-            System.out.println("  注意: 回退路径的 capabilityVersion 为 null（EndpointEntry 不携带该字段）");
+            log.info("[OK] RouteResolution fallback: findForResolve empty -> findEndpoint"
+                    + " -> RouteResolution");
+            log.info("  note: fallback path capabilityVersion is null"
+                    + " (EndpointEntry does not carry this field)");
         }
     }
 }

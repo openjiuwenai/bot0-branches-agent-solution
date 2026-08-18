@@ -26,7 +26,7 @@ import java.util.Map;
  * @since 0.1.0 (2026)
  */
 public final class Fe016StubAgentHandler implements AgentHandler {
-
+    /** Mock reply prefix used to identify stub agent responses in A2A round-trip verification. */
     public static final String MOCK_REPLY_PREFIX = "[mock-llm] ";
 
     @Override

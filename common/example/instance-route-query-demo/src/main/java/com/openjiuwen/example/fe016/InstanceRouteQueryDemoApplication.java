@@ -41,7 +41,6 @@ import org.springframework.context.annotation.Bean;
  */
 @SpringBootApplication
 public class InstanceRouteQueryDemoApplication {
-
     public static void main(String[] args) {
         SpringApplication.run(InstanceRouteQueryDemoApplication.class, args);
     }
@@ -53,32 +52,63 @@ public class InstanceRouteQueryDemoApplication {
      * 检测到本 Bean 后自动在 {@code /a2a} 暴露 A2A JSON-RPC 端点。注册中心 seed
      * 数据中实例 #1 的 {@code endpointUrl} 指向本进程（{@code http://127.0.0.1:18090}），
      * 客户端 resolve 得到该 URL 后用 A2A 协议回环调用本 Agent。
+     *
+     * @return the stub agent handler bean
      */
     @Bean
     public AgentHandler fe016AgentHandler() {
         return new Fe016StubAgentHandler();
     }
 
+    /**
+     * 内存版 AgentRegistryRepository Bean，预置多租户种子数据，无需 PostgreSQL。
+     *
+     * @return the in-memory agent registry repository bean
+     */
     @Bean
     public AgentRegistryRepository agentRegistryRepository() {
         return new InMemoryAgentRegistryRepository();
     }
 
+    /**
+     * ThreadLocal 租户上下文 Bean。
+     *
+     * @return the tenant context bean
+     */
     @Bean
     public TenantContext tenantContext() {
         return new ThreadLocalTenantContext();
     }
 
+    /**
+     * SimpleMeterRegistry Bean，用于 demo 指标收集。
+     *
+     * @return the meter registry bean
+     */
     @Bean
     public MeterRegistry meterRegistry() {
         return new SimpleMeterRegistry();
     }
 
+    /**
+     * 注册中心可观测性配置 Bean。
+     *
+     * @param meterRegistry the meter registry
+     * @return the registry observability config bean
+     */
     @Bean
     public RegistryObservabilityConfig registryObservabilityConfig(MeterRegistry meterRegistry) {
         return new RegistryObservabilityConfig(meterRegistry);
     }
 
+    /**
+     * AgentDiscoveryService Bean，基于 PgMvpDiscoveryServiceImpl。
+     *
+     * @param repository    the agent registry repository
+     * @param tenantContext the tenant context
+     * @param observability the registry observability config
+     * @return the agent discovery service bean
+     */
     @Bean
     public AgentDiscoveryService agentDiscoveryService(
             AgentRegistryRepository repository,
@@ -88,6 +118,13 @@ public class InstanceRouteQueryDemoApplication {
         return new PgMvpDiscoveryServiceImpl(repository, tenantContext, observability, null);
     }
 
+    /**
+     * InstanceRouteController Bean，提供实例路由查询与 route-handle 解析端点。
+     *
+     * @param discovery  the agent discovery service
+     * @param repository  the agent registry repository
+     * @return the instance route controller bean
+     */
     @Bean
     public InstanceRouteController instanceRouteController(
             AgentDiscoveryService discovery,
@@ -95,6 +132,11 @@ public class InstanceRouteQueryDemoApplication {
         return new InstanceRouteController(discovery, repository);
     }
 
+    /**
+     * RegistryApiExceptionHandler Bean，处理注册中心异常到 HTTP 状态码的映射。
+     *
+     * @return the registry api exception handler bean
+     */
     @Bean
     public RegistryApiExceptionHandler registryApiExceptionHandler() {
         return new RegistryApiExceptionHandler();
