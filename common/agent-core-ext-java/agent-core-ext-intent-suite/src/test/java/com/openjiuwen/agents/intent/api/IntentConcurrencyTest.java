@@ -22,11 +22,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Tests that concurrent full replacements never leak partial catalogs into calls. */
 class IntentConcurrencyTest {
@@ -35,50 +35,68 @@ class IntentConcurrencyTest {
 
     @Test
     void concurrentReplacementAndResolutionObserveOnlyCompleteVersions() throws Exception {
+        CountDownLatch resolversEnteredMatcher = new CountDownLatch(RESOLVER_THREADS);
+        CountDownLatch replacementsCompleted = new CountDownLatch(1);
         IntentResultFunction echoSnapshot = context -> new ReturnAction(Map.of("version",
                 context.catalogSnapshot().version(), "intentId", context.selectedIntent().orElseThrow().id()));
-        IntentMatcher firstCandidate = context -> Optional
-                .of(context.catalogSnapshot().initializedIntents().matchableIntents().get(0));
+        IntentMatcher firstCandidate = context -> {
+            resolversEnteredMatcher.countDown();
+            awaitOrFail(replacementsCompleted, "catalog replacements did not complete");
+            return Optional.of(context.catalogSnapshot().initializedIntents().matchableIntents().get(0));
+        };
         IntentSuite suite = IntentSuite.builder(IntentSuiteConfig.defaults())
                 .initializer(new DefaultIntentInitializer()).matcher(firstCandidate).build();
         assertThat(suite.replaceCatalog(versionedCatalog(1, echoSnapshot))).isEqualTo(1L);
 
-        AtomicBoolean replacing = new AtomicBoolean(true);
         ExecutorService executor = Executors.newFixedThreadPool(RESOLVER_THREADS + 1);
         try {
-            Future<?> replacer = executor.submit(() -> {
-                for (int version = 2; version <= REPLACEMENTS; version++) {
-                    assertThat(suite.replaceCatalog(versionedCatalog(version, echoSnapshot))).isEqualTo(version);
-                }
-                replacing.set(false);
-            });
-            List<Future<List<IntentDecision>>> resolvers = new ArrayList<>();
+            List<Future<IntentDecision>> resolvers = new ArrayList<>();
             for (int thread = 0; thread < RESOLVER_THREADS; thread++) {
-                resolvers.add(executor.submit(() -> {
-                    List<IntentDecision> decisions = new ArrayList<>();
-                    while (replacing.get()) {
-                        decisions.add(suite.resolve(Map.of("semantic", "route"), Map.of()));
-                    }
-                    return decisions;
-                }));
+                resolvers.add(executor.submit(() -> suite.resolve(Map.of("semantic", "route"), Map.of())));
             }
-            replacer.get(10, TimeUnit.SECONDS);
-            for (Future<List<IntentDecision>> resolver : resolvers) {
-                for (IntentDecision decision : resolver.get(10, TimeUnit.SECONDS)) {
-                    assertThat(decision.status()).isEqualTo(IntentDecisionStatus.MATCHED);
-                    if (!(decision.action() instanceof ReturnAction returned)
-                            || !(returned.result() instanceof Map<?, ?> observed)) {
-                        throw new AssertionError("expected the snapshot echo result");
+            Future<?> replacer = executor.submit(() -> {
+                try {
+                    awaitOrFail(resolversEnteredMatcher, "resolvers did not enter matcher");
+                    for (int version = 2; version <= REPLACEMENTS; version++) {
+                        assertThat(suite.replaceCatalog(versionedCatalog(version, echoSnapshot))).isEqualTo(version);
                     }
-                    // One call must pair the catalog version with exactly that version's intent.
-                    assertThat(observed.get("intentId")).isEqualTo("intent-" + observed.get("version"));
-                    assertThat(decision.intentId()).isEqualTo(observed.get("intentId"));
+                } finally {
+                    replacementsCompleted.countDown();
                 }
+            });
+            replacer.get(10, TimeUnit.SECONDS);
+            for (Future<IntentDecision> resolver : resolvers) {
+                assertDecision(resolver.get(10, TimeUnit.SECONDS), 1L);
             }
+            assertThat(suite.snapshot().version()).isEqualTo(REPLACEMENTS);
+            assertDecision(suite.resolve(Map.of("semantic", "route"), Map.of()), REPLACEMENTS);
         } finally {
+            replacementsCompleted.countDown();
             executor.shutdownNow();
             assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
         }
+    }
+
+    private static void awaitOrFail(CountDownLatch latch, String timeoutMessage) {
+        try {
+            if (!latch.await(10, TimeUnit.SECONDS)) {
+                throw new AssertionError(timeoutMessage);
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("concurrent test interrupted", exception);
+        }
+    }
+
+    private static void assertDecision(IntentDecision decision, long expectedVersion) {
+        assertThat(decision.status()).isEqualTo(IntentDecisionStatus.MATCHED);
+        assertThat(decision.intentId()).isEqualTo("intent-" + expectedVersion);
+        if (!(decision.action() instanceof ReturnAction returned)
+                || !(returned.result() instanceof Map<?, ?> observed)) {
+            throw new AssertionError("expected the snapshot echo result");
+        }
+        assertThat(observed.get("version")).isEqualTo(expectedVersion);
+        assertThat(observed.get("intentId")).isEqualTo("intent-" + expectedVersion);
     }
 
     private static IntentCatalogInput versionedCatalog(int version, IntentResultFunction resultFunction) {
