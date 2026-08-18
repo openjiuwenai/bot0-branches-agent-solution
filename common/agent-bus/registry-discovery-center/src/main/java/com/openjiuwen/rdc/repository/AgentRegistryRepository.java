@@ -39,8 +39,8 @@ import java.util.Optional;
  *       now takes {@code instanceId} — health-probe results are scoped per
  *       concrete instance.</li>
  *   <li>{@link #listByAgentId(String, String, String)} now takes a nullable
- *       {@code contractVersion} filter; DRAINING is now included in the
- *       status filter (was excluded in REQ-2026-006).</li>
+ *       {@code contractVersion} filter; discovery excludes DRAINING/OFFLINE and
+ *       applies the 15s heartbeat visibility window.</li>
  *   <li>Added {@link #listByServiceId(String, String, String)} — query by
  *       logical service identifier.</li>
  *   <li>Added {@link #listByCapability(String, String, String)} — query by
@@ -214,10 +214,10 @@ public interface AgentRegistryRepository {
     }
 
     /**
-     * List all ONLINE/DEGRADED/DRAINING instances for the given
-     * {@code (tenantId, agentId)} pair. FEAT-016: DRAINING is now included
-     * (was excluded in REQ-2026-006). Added nullable {@code contractVersion}
-     * filter.
+     * List all ONLINE/DEGRADED instances for the given
+     * {@code (tenantId, agentId)} pair. DRAINING/OFFLINE are excluded by the
+     * discovery SQL filter (Feat-Func-016 L2 §4.4). Added nullable
+     * {@code contractVersion} filter.
      *
      * <p>Sort order: {@code weight DESC, last_heartbeat DESC} — matches the
      * discovery service's DTO ordering so the caller (Orchestrator) sees the
@@ -232,15 +232,15 @@ public interface AgentRegistryRepository {
      *                        {@code AND contract_version = :contractVersion}
      *
      * @return immutable list of {@link RegistryRow}, one per matching
-     *         instance; empty list if no ONLINE/DEGRADED/DRAINING entry
+     *         instance; empty list if no ONLINE/DEGRADED entry
      *         matches (never {@code null})
      */
     List<RegistryRow> listByAgentId(String tenantId, String agentId, String contractVersion);
 
     /**
-     * List all ONLINE/DEGRADED/DRAINING instances for the given
+     * List all ONLINE/DEGRADED instances for the given
      * {@code (tenantId, serviceId)} pair. FEAT-016 new — query by logical
-     * service identifier.
+     * service identifier. DRAINING/OFFLINE excluded by discovery SQL.
      *
      * <p>Sort order: {@code weight DESC, last_heartbeat DESC} (shared with
      * {@link #listByAgentId}).
@@ -255,9 +255,9 @@ public interface AgentRegistryRepository {
     List<RegistryRow> listByServiceId(String tenantId, String serviceId, String contractVersion);
 
     /**
-     * List all ONLINE/DEGRADED/DRAINING instances that declare the given
+     * List all ONLINE/DEGRADED instances that declare the given
      * {@code capability} in their {@code capabilities} array column. FEAT-016
-     * new — exact-match array-contains query.
+     * new — exact-match array-contains query. DRAINING/OFFLINE excluded.
      *
      * <p>Sort order: {@code weight DESC, last_heartbeat DESC} (shared with
      * {@link #listByAgentId}).

@@ -276,9 +276,105 @@ class PgMvpDiscoveryServiceImplTest {
                 .isInstanceOf(RegistryUnavailableException.class);
     }
 
+    // ---- Level-1: DB down → RDC process-local cache -----------------------
+
+    @Test
+    void search_uses_cached_routes_when_db_unavailable() {
+        ToggleFailRepository repo = new ToggleFailRepository();
+        java.util.concurrent.atomic.AtomicLong clock = new java.util.concurrent.atomic.AtomicLong(1_000L);
+        PgMvpDiscoveryServiceImpl cachedDiscovery = new PgMvpDiscoveryServiceImpl(
+                repo, tenantContext, observability, null,
+                java.time.Duration.ofMillis(5_000), clock::get);
+
+        List<AgentCardDto> warm = cachedDiscovery.searchInstancesByAgentId("tenant-A", "agent-001");
+        assertThat(warm).hasSize(1);
+
+        repo.fail = true;
+        List<AgentCardDto> degraded = cachedDiscovery.searchInstancesByAgentId("tenant-A", "agent-001");
+        assertThat(degraded).hasSize(1);
+        assertThat(degraded.get(0).getRouteHandle()).isEqualTo(warm.get(0).getRouteHandle());
+    }
+
+    @Test
+    void search_db_unavailable_without_cache_raises_registry_unavailable() {
+        ToggleFailRepository repo = new ToggleFailRepository();
+        repo.fail = true;
+        PgMvpDiscoveryServiceImpl cachedDiscovery = new PgMvpDiscoveryServiceImpl(
+                repo, tenantContext, observability, null);
+
+        assertThatThrownBy(() -> cachedDiscovery.searchInstancesByAgentId("tenant-A", "agent-001"))
+                .isInstanceOf(RegistryUnavailableException.class);
+    }
+
+    @Test
+    void search_cached_routes_expire_after_ttl() {
+        ToggleFailRepository repo = new ToggleFailRepository();
+        java.util.concurrent.atomic.AtomicLong clock = new java.util.concurrent.atomic.AtomicLong(1_000L);
+        PgMvpDiscoveryServiceImpl cachedDiscovery = new PgMvpDiscoveryServiceImpl(
+                repo, tenantContext, observability, null,
+                java.time.Duration.ofMillis(5_000), clock::get);
+
+        assertThat(cachedDiscovery.searchInstancesByAgentId("tenant-A", "agent-001")).hasSize(1);
+        repo.fail = true;
+        clock.set(1_000L + 5_001L);
+
+        assertThatThrownBy(() -> cachedDiscovery.searchInstancesByAgentId("tenant-A", "agent-001"))
+                .isInstanceOf(RegistryUnavailableException.class);
+    }
+
+    @Test
+    void resolve_uses_cached_endpoint_when_db_unavailable() {
+        ToggleFailRepository repo = new ToggleFailRepository();
+        java.util.concurrent.atomic.AtomicLong clock = new java.util.concurrent.atomic.AtomicLong(1_000L);
+        PgMvpDiscoveryServiceImpl cachedDiscovery = new PgMvpDiscoveryServiceImpl(
+                repo, tenantContext, observability, null,
+                java.time.Duration.ofMillis(5_000), clock::get);
+
+        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(
+                "tenant-A", "agent-001", "test-host-8080", "test-host-8080",
+                "rk://svc/default", "1.0.0"));
+        RouteResolution warm = cachedDiscovery.resolveRouteHandle(handle, "tenant-A");
+        assertThat(warm.endpointUrl()).isEqualTo("https://agent.example/agent");
+
+        repo.fail = true;
+        RouteResolution degraded = cachedDiscovery.resolveRouteHandle(handle, "tenant-A");
+        assertThat(degraded.endpointUrl()).isEqualTo(warm.endpointUrl());
+        assertThat(degraded.instanceId()).isEqualTo(warm.instanceId());
+    }
+
     // ---- Fakes -----------------------------------------------------------
 
-    private static final class FakeRepository extends AgentRegistryRepositoryStub {
+    /** FakeRepository that can flip to DataAccessException (DB down). */
+    private static final class ToggleFailRepository extends FakeRepository {
+        boolean fail;
+
+        @Override
+        public List<RegistryRow> listByAgentId(String tenantId, String agentId, String contractVersion) {
+            if (fail) {
+                throw new DataAccessResourceFailureException("database unavailable");
+            }
+            return super.listByAgentId(tenantId, agentId, contractVersion);
+        }
+
+        @Override
+        public java.util.Optional<ResolveRow> findForResolve(
+                String tenantId, String agentId, String serviceId, String instanceId) {
+            if (fail) {
+                throw new DataAccessResourceFailureException("database unavailable");
+            }
+            return super.findForResolve(tenantId, agentId, serviceId, instanceId);
+        }
+
+        @Override
+        public Optional<EndpointEntry> findEndpoint(
+                String tenantId, String agentId, String serviceId, String instanceId) {
+            if (fail) {
+                throw new DataAccessResourceFailureException("database unavailable");
+            }
+            return super.findEndpoint(tenantId, agentId, serviceId, instanceId);
+        }
+    }
+    private static class FakeRepository extends AgentRegistryRepositoryStub {
         @Override
         public void upsert(com.openjiuwen.rdc.model.AgentRegistryEntry card, String a2aAgentCardJson) {
         }
@@ -304,8 +400,7 @@ class PgMvpDiscoveryServiceImplTest {
                 return List.of(sampleRow("test-host-8080", "agent-001", "财务助手", "ONLINE"));
             }
             if ("agent-002".equals(agentId)) {
-                // DRAINING — real SQL filter (status IN ONLINE,DEGRADED) excludes this.
-                // Fake mimics the SQL behavior by returning empty.
+                // DRAINING — discovery SQL excludes DRAINING/OFFLINE; fake returns empty.
                 return List.of();
             }
             return List.of();

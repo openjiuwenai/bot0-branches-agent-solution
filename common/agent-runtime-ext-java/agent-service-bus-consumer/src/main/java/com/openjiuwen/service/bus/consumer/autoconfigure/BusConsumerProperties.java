@@ -20,6 +20,7 @@ public class BusConsumerProperties {
 
     private boolean enabled;
     private URI registryBaseUrl = DEFAULT_REGISTRY_BASE_URL;
+    private Duration localCacheTtl = Duration.ofSeconds(5);
     private Tuning tuning = new Tuning();
 
     public boolean isEnabled() {
@@ -36,6 +37,14 @@ public class BusConsumerProperties {
 
     public void setRegistryBaseUrl(URI value) {
         this.registryBaseUrl = value;
+    }
+
+    public Duration getLocalCacheTtl() {
+        return localCacheTtl;
+    }
+
+    public void setLocalCacheTtl(Duration localCacheTtl) {
+        this.localCacheTtl = localCacheTtl;
     }
 
     public Tuning getTuning() {

@@ -7,6 +7,8 @@ package com.openjiuwen.service.adapters.agentcore.ext.agentfw;
 import com.openjiuwen.service.adapters.agentcore.agentfw.JiuwenCoreAgentHandler;
 import com.openjiuwen.service.adapters.agentcore.ext.external.ClientToolRail;
 import com.openjiuwen.service.adapters.agentcore.ext.external.RemoteA2aToolInstaller;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.OtelRailBinding;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.OtelRuntimeSupport;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub.SkillHubManager;
 import com.openjiuwen.service.adapters.agentcore.external.ExternalSvcAdapterRegistrar;
 import com.openjiuwen.service.adapters.agentcore.middleware.MiddlewareAdapterRegistrar;
@@ -95,17 +97,36 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     @Override
     public void streamQuery(ServeRequest request, QueryStreamObserver observer) {
         installBeforeRun();
+        OtelRailBinding otelBinding = bindOtel(request);
         try (var binding = ClientToolRail.bind(getAgent(), request)) {
             super.streamQuery(request, observer);
+        } finally {
+            closeOtelQuietly(otelBinding);
         }
     }
 
     @Override
     public QueryResponse query(ServeRequest request) {
         installBeforeRun();
+        OtelRailBinding otelBinding = bindOtel(request);
         try (var binding = ClientToolRail.bind(getAgent(), request)) {
             return super.query(request);
+        } finally {
+            closeOtelQuietly(otelBinding);
         }
+    }
+
+    private void closeOtelQuietly(OtelRailBinding otelBinding) {
+        try {
+            otelBinding.close();
+        } catch (IllegalStateException | IllegalArgumentException | UnsupportedOperationException ex) {
+            log.warn("OTel binding close failed reason={}", ex.getMessage());
+        }
+    }
+
+    private OtelRailBinding bindOtel(ServeRequest request) {
+        // 同模块 middleware/otel：未启用时 OtelRuntimeSupport 内部返回 no-op 绑定
+        return OtelRuntimeSupport.bindRequest(getAgent(), request.getConversationId());
     }
 
     private void installBeforeRun() {
