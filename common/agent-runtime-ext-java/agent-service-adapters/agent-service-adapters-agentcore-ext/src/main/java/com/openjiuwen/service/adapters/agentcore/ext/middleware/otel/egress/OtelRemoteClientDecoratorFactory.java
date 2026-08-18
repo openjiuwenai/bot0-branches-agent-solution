@@ -35,7 +35,6 @@ import java.util.Optional;
  * @since 2026-08-10
  */
 public class OtelRemoteClientDecoratorFactory implements AgentCoreRemoteClientDecoratorFactory {
-
     private static final Logger LOGGER = LoggerFactory.getLogger(OtelRemoteClientDecoratorFactory.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 

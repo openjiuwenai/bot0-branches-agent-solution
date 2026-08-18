@@ -19,7 +19,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * @since 2026-08-17
  */
 public final class EgressContextStash {
-
     private static final Map<String, Context> BY_SESSION = new ConcurrentHashMap<>();
 
     private EgressContextStash() {

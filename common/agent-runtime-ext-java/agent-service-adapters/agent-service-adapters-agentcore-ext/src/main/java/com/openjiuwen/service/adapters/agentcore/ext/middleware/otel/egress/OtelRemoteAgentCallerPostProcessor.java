@@ -22,7 +22,6 @@ import org.springframework.core.Ordered;
  * @since 2026-08-17
  */
 public class OtelRemoteAgentCallerPostProcessor implements BeanPostProcessor, Ordered {
-
     private final Tracer tracer;
     private final ObjectProvider<A2ARemoteAgentCardRegistry> registryProvider;
 
