@@ -104,7 +104,7 @@ public final class BankTools {
      * @return wealth recommendation Tool
      */
     public static Tool wealthRecommendation() {
-        return tool(WEALTH_RECOMMEND, "根据金额、期限和风险偏好推荐理财产品",
+        return tool(WEALTH_RECOMMEND, "根据金额、期限和产品风险等级推荐理财产品",
                 schema(Map.of("query", stringProperty("完整理财推荐需求")), List.of("query")),
                 inputs -> audited(WEALTH_RECOMMEND,
                         Map.of("handledBy", "wealth-advisor-agent", "status", "COMPLETED", "recommendations",
