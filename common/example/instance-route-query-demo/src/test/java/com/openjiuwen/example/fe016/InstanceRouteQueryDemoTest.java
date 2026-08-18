@@ -32,6 +32,14 @@ import com.openjiuwen.rdc.tenant.ThreadLocalTenantContext;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
+
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -42,14 +50,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.http.ResponseEntity;
 
 /**
  * FEAT-016 运行时实例路由查询 — AgentDemo 测试入口。
