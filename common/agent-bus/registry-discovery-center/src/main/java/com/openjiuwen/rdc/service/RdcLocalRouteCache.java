@@ -47,6 +47,12 @@ final class RdcLocalRouteCache {
     /**
      * Returns cached search hits, or an empty list when missing/expired.
      * Empty is never cached, so empty always means cache miss.
+     *
+     * @param dimension discovery dimension (for example agentId)
+     * @param tenantId trusted tenant scope
+     * @param value dimension lookup value
+     * @param contractVersion optional contract version filter; may be null
+     * @return cached routes, or an empty list on miss/expiry
      */
     List<AgentCardDto> getSearch(String dimension, String tenantId, String value,
                                  String contractVersion) {
@@ -90,7 +96,11 @@ final class RdcLocalRouteCache {
     }
 
     private interface TimedEntry {
-        /** Epoch millis when this entry was written. */
+        /**
+         * Epoch millis when this entry was written.
+         *
+         * @return cache write time in epoch millis
+         */
         long cachedAtMs();
     }
 

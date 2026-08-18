@@ -38,6 +38,10 @@ final class LocalRdcRouteCache {
     /**
      * Returns cached search hits, or an empty list when missing/expired.
      * Empty is never cached, so empty always means cache miss.
+     *
+     * @param tenantId trusted tenant scope
+     * @param agentId target agent identifier
+     * @return cached routes, or an empty list on miss/expiry
      */
     List<AgentCardRoute> getSearch(String tenantId, String agentId) {
         return getFresh(searchByAgent.get(searchKey(tenantId, agentId)))
@@ -78,7 +82,11 @@ final class LocalRdcRouteCache {
     }
 
     private interface TimedEntry {
-        /** Epoch millis when this entry was written. */
+        /**
+         * Epoch millis when this entry was written.
+         *
+         * @return cache write time in epoch millis
+         */
         long cachedAtMs();
     }
 

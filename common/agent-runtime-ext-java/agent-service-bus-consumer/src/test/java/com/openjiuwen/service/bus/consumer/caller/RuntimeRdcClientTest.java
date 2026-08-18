@@ -153,7 +153,14 @@ class RuntimeRdcClientTest {
                 .hasMessageContaining("no cached route");
     }
 
-    /** Stub JSON reply for in-process HttpServer used by this test class only. */
+    /**
+     * Stub JSON reply for in-process HttpServer used by this test class only.
+     *
+     * @param exchange HTTP exchange to write to
+     * @param httpStatus response status code
+     * @param jsonBody response body as JSON text
+     * @throws IOException when the response cannot be written
+     */
     private static void writeRegistryJson(HttpExchange exchange, int httpStatus, String jsonBody)
             throws IOException {
         byte[] payload = jsonBody == null
