@@ -35,6 +35,7 @@ class ParamValidatorTest {
     private static final String STREAMING =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendStreamingMessage\","
                     + "\"params\":{\"message\":{\"messageId\":\"m3\",\"parts\":[{\"text\":\"hi\"}]}}}";
+
     // --- T1: S6/S8 whitelist + params.id (v0830) ---
     private static final String GET_TASK =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"GetTask\","

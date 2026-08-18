@@ -21,7 +21,9 @@ import java.util.stream.Stream;
 class SseBridgeTest {
     private final SseBridge bridge = new SseBridge();
 
-    /** Obtain the Logback logger backing {@link SseBridge}, guarded by an instanceof check. */
+    /**
+     * Obtain the Logback logger backing {@link SseBridge}, guarded by an instanceof check.
+     */
     private static ch.qos.logback.classic.Logger logbackLogger() {
         org.slf4j.Logger base = org.slf4j.LoggerFactory.getLogger(SseBridge.class);
         if (base instanceof ch.qos.logback.classic.Logger logback) {

@@ -135,7 +135,8 @@ public class A2aController {
         }
         // v0830 S8: SubscribeToTask re-subscription (read-only, no G4 idempotency)
         if ("SubscribeToTask".equals(context.method())) {
-            return handleSubscribeToTask(context, response);
+            // SSE-committed → empty Optional → return null (Spring MVC: null = response self-handled)
+            return handleSubscribeToTask(context, response).orElse(null);
         }
         if (context.taskId() == null) {
             return forwardCreate(context, response);
@@ -179,21 +180,26 @@ public class A2aController {
 
     /**
      * Handle a SubscribeToTask re-subscription (v0830 S8, read-only, no G4 idempotency). Writes
-     * the SSE stream directly and returns {@code null} once committed (Spring MVC contract).
+     * the SSE stream directly and returns an empty {@link Optional} once committed (Spring MVC
+     * contract: the caller returns {@code null} for a self-handled, committed response).
      *
      * @param context governance context (taskId bound)
      * @param response servlet response (used to write the SSE stream)
-     * @return sync response body, or {@code null} once an SSE stream has been written
+     * @return the sync JSON response when the BUS path surfaces an error body, or empty once an
+     *         SSE stream has been written to the committed response
      * @throws IOException if writing the SSE stream to the client fails (disconnect)
      */
-    private Object handleSubscribeToTask(GovernanceContext context, HttpServletResponse response)
+    private Optional<ResponseEntity<String>> handleSubscribeToTask(GovernanceContext context,
+                                                                    HttpServletResponse response)
             throws IOException {
         if (pathSelector.isBus() && busForwarder.isPresent()) {
             Optional<String> errorBody = busForwarder.get().forwardSubscribe(context, response, sseBridge);
-            if (errorBody.isEmpty()) {
-                return null; // SSE committed
+            if (errorBody.isPresent()) {
+                return Optional.of(ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON)
+                        .body(errorBody.get()));
             }
-            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(errorBody.get());
+            // SSE committed — empty signals the caller to return null (Spring MVC contract)
+            return Optional.empty();
         }
         // Direct: sticky lookup → runtime SubscribeToTask SSE
         Stream<String> frames = router.routeSubscribe(context);
@@ -204,7 +210,8 @@ public class A2aController {
             // (no G4 to abort — SubscribeToTask is read-only). SseBridge logged the bridge release.
             LOG.info("SubscribeToTask SSE closed after disconnect");
         }
-        return null; // SSE committed
+        // SSE committed — empty signals the caller to return null (Spring MVC contract)
+        return Optional.empty();
     }
 
     /**

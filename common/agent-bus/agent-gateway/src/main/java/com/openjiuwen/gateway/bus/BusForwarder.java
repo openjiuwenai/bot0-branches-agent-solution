@@ -248,7 +248,8 @@ public class BusForwarder {
             }
             var event = proj.get();
             if (event.eventType() == AgentBusEventType.INVOCATION_STREAM_READY) {
-                return bridgeSubscribeStream(ctx, event, response, sseBridge, owner, correlationId);
+                var sctx = new SubscribeBridgeCtx(ctx, response, sseBridge, owner, correlationId);
+                return bridgeSubscribeStream(sctx, event);
             }
             InvocationResponseStatus folded = FiveStateFolder.fold(event.eventType());
             if (FiveStateFolder.isTerminal(folded) || folded == InvocationResponseStatus.REJECTED
@@ -263,17 +264,16 @@ public class BusForwarder {
     /**
      * Bridges the runtime SSE stream to the client once STREAM_READY is observed.
      *
-     * @param ctx governance context (tenantId, taskId)
+     * @param sctx subscribe bridge context (governance, response, SSE bridge, owner, correlation id)
      * @param event STREAM_READY projection (carries streamRef/taskId)
-     * @param response servlet response for SSE output
-     * @param sseBridge SSE bridge
-     * @param owner sticky owner (routeHandle resolved to the runtime endpoint)
-     * @param correlationId correlation id for logging
      * @return empty if SSE written; a non-empty FAILED body if the stream cannot be opened
      */
-    private Optional<String> bridgeSubscribeStream(GovernanceContext ctx, ProjectionFeed.ProjectionEvent event,
-                                                   HttpServletResponse response, SseBridge sseBridge,
-                                                   StickyIndex.Owner owner, String correlationId) {
+    private Optional<String> bridgeSubscribeStream(SubscribeBridgeCtx sctx, ProjectionFeed.ProjectionEvent event) {
+        GovernanceContext ctx = sctx.ctx();
+        HttpServletResponse response = sctx.response();
+        SseBridge sseBridge = sctx.sseBridge();
+        StickyIndex.Owner owner = sctx.owner();
+        String correlationId = sctx.correlationId();
         String streamRef = event.streamRef();
         String taskId = event.taskId() != null ? event.taskId() : ctx.taskId();
         log.info("forwardSubscribe corrId={} STREAM_READY taskId={} streamRef present={}",
@@ -347,7 +347,8 @@ public class BusForwarder {
                 continue;
             }
             var event = proj.get();
-            Optional<String> folded = foldSyncProjection(ctx, g4w, window, chosen, correlationId, event);
+            var fctx = new SyncFoldCtx(ctx, g4w, window, chosen, correlationId);
+            Optional<String> folded = foldSyncProjection(fctx, event);
             if (folded.isPresent()) {
                 return ResponseEntity.ok().body(folded.get());
             }
@@ -362,17 +363,16 @@ public class BusForwarder {
      * Folds a single sync-create projection: binds sticky (P-13), tracks accept, and returns a
      * terminal/input-required body to surface to the client, or empty to keep polling.
      *
-     * @param ctx governance context (tenant/message for folding)
-     * @param g4w G4 wiring (fold callbacks)
-     * @param window accept/response timeout window (accept tracked here)
-     * @param chosen chosen agent route (P-13: bound to taskId on the first taskId-bearing projection)
-     * @param correlationId correlation id for logging
+     * @param fctx sync fold context (governance, G4 wiring, window, chosen route, correlation id)
      * @param event the polled projection event
      * @return the folded body to return, or empty to continue polling
      */
-    private Optional<String> foldSyncProjection(GovernanceContext ctx, G4BusWiring g4w, WaitWindow window,
-                                                 AgentCardRoute chosen, String correlationId,
-                                                 ProjectionFeed.ProjectionEvent event) {
+    private Optional<String> foldSyncProjection(SyncFoldCtx fctx, ProjectionFeed.ProjectionEvent event) {
+        GovernanceContext ctx = fctx.ctx();
+        G4BusWiring g4w = fctx.g4w();
+        WaitWindow window = fctx.window();
+        AgentCardRoute chosen = fctx.chosen();
+        String correlationId = fctx.correlationId();
         // P-13: bind taskId -> chosen routeHandle on the first taskId-bearing projection (mirrors
         // DIRECT Router.routeCreate, which writes sticky from the response taskId). The BUS
         // "response" arrives as projections; any taskId-bearing projection (ACCEPTED /
@@ -846,5 +846,15 @@ public class BusForwarder {
     /** Bundles the streaming request context carried through the bridge/drain helpers. */
     private record StreamingCtx(GovernanceContext ctx, HttpServletResponse response, SseBridge sseBridge,
                                 G4BusWiring g4w, String correlationId) {
+    }
+
+    /** Bundles the SubscribeToTask bridge context (response/SSE/owner/correlation) carried into bridgeSubscribeStream. */
+    private record SubscribeBridgeCtx(GovernanceContext ctx, HttpServletResponse response, SseBridge sseBridge,
+                                      StickyIndex.Owner owner, String correlationId) {
+    }
+
+    /** Bundles the sync-create fold context (G4/window/chosen/correlation) carried into foldSyncProjection. */
+    private record SyncFoldCtx(GovernanceContext ctx, G4BusWiring g4w, WaitWindow window,
+                               AgentCardRoute chosen, String correlationId) {
     }
 }
