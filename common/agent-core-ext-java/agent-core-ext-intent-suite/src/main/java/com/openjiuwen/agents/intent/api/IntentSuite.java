@@ -94,11 +94,12 @@ public final class IntentSuite {
                 snapshot.initializedIntents().fallback() != null, context.routingSemantic().length());
 
         Optional<IntentDefinition> matched;
-        FutureTask<Optional<IntentDefinition>> matching = new FutureTask<>(() -> matcher.match(context));
+        FutureTask<Optional<IntentDefinition>> matching = new FutureTask<>(
+                () -> Optional.ofNullable(matcher.match(context))
+                        .orElseThrow(() -> new IntentMatchException("matcher result must not be null")));
         matching.run();
         try {
-            matched = Optional.ofNullable(matching.get())
-                    .orElseThrow(() -> new IntentMatchException("matcher result must not be null"));
+            matched = matching.get();
         } catch (InterruptedException exception) {
             log.info("Intent matching interrupted catalogVersion={}", snapshot.version(), exception);
             return failed(null, "意图匹配失败");
