@@ -1,0 +1,141 @@
+profiles:
+  edp_agent:
+    service_name: "EDPAgent"
+    ingest_filter:
+      include_prefixes: ["llm.", "tool.", "http.request", "chain.EDPAgent"]
+      exclude_prefixes: []
+    query_filter:
+      include_prefixes: []
+      exclude_prefixes: []
+    llm_span_prefix: "llm."
+    tool_span_prefix: "tool."
+    root_span_name: "http.request"
+    prompt_extraction:
+      attr: "gen_ai.prompt"
+      sub_key: "messages"
+      format: "python_repr"
+    response_extraction:
+      fields:
+        - attr: "gen_ai.completion"
+          sub_key: "outputs"
+          format: "python_repr"
+      combine_as: "assistant_message"
+    tool_args_extraction:
+      attr: "gen_ai.completion"
+      sub_key: "outputs"
+      format: "python_repr"
+    tool_result_extraction:
+      attr: "gen_ai.completion"
+      sub_key: "outputs"
+      format: "python_repr"
+    request_summary_attr: "openjiuwen.http.request_body"
+    response_summary_span_prefix: "chain."
+    response_summary_attr: "openjiuwen.agent.outputs"
+
+  opencode:
+    service_name: "opencode"
+    ingest_filter:
+      include_prefixes: ["ai.streamText", "ai.toolCall", "Tool.execute"]
+      exclude_prefixes:
+        - "sql."
+        - "Session"
+        - "http.server"
+        - "Config."
+        - "ConfigPaths."
+        - "ConfigHttpApi."
+        - "Snapshot."
+        - "MessageV2."
+        - "Plugin.trigger"
+        - "Plugin.add"
+        - "Plugin.list"
+        - "Plugin.state"
+        - "Plugin.init"
+        - "PluginInternal."
+        - "Instruction."
+        - "FileSystem."
+        - "Env."
+        - "Auth."
+        - "Provider."
+        - "ProviderHttpApi."
+        - "Agent."
+        - "MCP."
+        - "McpHttpApi."
+        - "ToolRegistry."
+        - "Skill."
+        - "SystemPrompt."
+        - "Reference."
+        - "ShellTool."
+        - "ReadTool."
+        - "LSP."
+        - "Truncate."
+        - "Todo."
+        - "InstanceStore."
+        - "InstanceHttpApi."
+        - "InstanceBootstrap"
+        - "Permission."
+        - "PermissionHttpApi."
+        - "LLMRequestPrep."
+        - "LLM.run"
+        - "State."
+        - "AISDK."
+        - "Credential."
+        - "Git."
+        - "Integration."
+        - "CatalogV2."
+        - "Npm."
+        - "Project."
+        - "ProjectDirectories."
+        - "ProjectCopy."
+        - "ProjectHttpApi."
+        - "AccountRepo."
+        - "ShareNext."
+        - "Format."
+        - "Vcs."
+        - "ModelsDev."
+        - "Policy."
+        - "PluginHost."
+        - "OpencodePlugin."
+        - "Bom."
+        - "SQLiteDrizzle."
+        - "Flock."
+        - "EffectFlock."
+        - "GlobalHttpApi."
+        - "ExperimentalHttpApi."
+        - "Question."
+        - "QuestionHttpApi."
+        - "Command."
+        - "BackgroundJob."
+        - "TaskTool."
+      exclude_names:
+        - "Tool.assertExternalDirectory"
+    query_filter:
+      include_prefixes: ["ai.streamText", "ai.toolCall", "Tool.execute"]
+      exclude_prefixes: []
+    llm_span_prefix: "ai.streamText"
+    tool_span_prefix: "ai.toolCall"
+    root_span_name: ""
+    prompt_extraction:
+      attr: "ai.prompt"
+      sub_key: "messages"
+      format: "json"
+    response_extraction:
+      fields:
+        - attr: "ai.response.text"
+          sub_key: "text"
+          format: "json"
+        - attr: "ai.response.toolCalls"
+          sub_key: "toolCalls"
+          format: "json"
+        - attr: "ai.response.reasoning"
+          sub_key: "reasoning"
+          format: "json"
+      combine_as: "assistant_message"
+    tool_args_extraction:
+      attr: "ai.toolCall.args"
+      format: "json"
+    tool_result_extraction:
+      attr: "ai.toolCall.result"
+      format: "json"
+    request_summary_attr: ""
+    response_summary_span_prefix: "ai.streamText"
+    response_summary_attr: "ai.response"

@@ -60,12 +60,21 @@ async def _start_trace_backend(app: FastAPI, config: AdapterConfig) -> None:
     await repo.start()
     await repo.init_schema()
     app.state.repo = repo
-    app.state.trace_source = make_trace_source(config, repo=repo)
+
+    # 加载 trace_profiles.yaml（若存在）
+    from agent_adapter.trace_profile.loader import load_profiles
+
+    profiles_path = _resolve_profiles_path(config)
+    registry = load_profiles(profiles_path) if profiles_path.exists() else None
+    app.state.profile_registry = registry
+
+    app.state.trace_source = make_trace_source(config, repo=repo, registry=registry, agents=config.agents)
     consumer = TraceConsumer(
         repo,
         brokers=config.kafka_brokers,
         topic=config.kafka_topic,
         group_id=config.kafka_group,
+        profile_registry=registry,
     )
     try:
         await consumer.start()
@@ -80,6 +89,25 @@ async def _start_trace_backend(app: FastAPI, config: AdapterConfig) -> None:
             brokers=config.kafka_brokers, topic=config.kafka_topic,
         )
         app.state.consumer = None
+
+
+def _resolve_profiles_path(config: AdapterConfig) -> Path:
+    """解析 trace_profiles.yaml 路径。
+
+    优先 YAML 配置的 trace_profiles_path；否则从 config YAML 同目录查找。
+    均为相对路径时相对于 adapter root。
+    """
+    from agent_adapter.config import _ADAPTER_ROOT
+
+    if getattr(config, "trace_profiles_path", None):
+        p = Path(config.trace_profiles_path)
+        if not p.is_absolute():
+            p = _ADAPTER_ROOT / p
+        return p
+    yaml_path = getattr(config, "_yaml_path", None)
+    if yaml_path:
+        return Path(yaml_path).parent / "trace_profiles.yaml"
+    return _ADAPTER_ROOT / "deployment" / "config" / "trace_profiles.yaml"
 
 
 async def _stop_trace_backend(app: FastAPI) -> None:
@@ -220,7 +248,8 @@ def create_app(config: AdapterConfig) -> FastAPI:
     )
     app.state.repo = None  # standard 模式 TraceRepository (lifespan 填充)
     app.state.consumer = None  # standard 模式 kafka 消费者 (lifespan 填充, 可能为 None)
-    setattr(app.state, "_config_lock", asyncio.Lock())  # protect YAML concurrent writes
+    app.state.profile_registry = None  # standard 模式 ProfileRegistry (lifespan 填充)
+    app.state._config_lock = asyncio.Lock()  # protect YAML concurrent writes
 
     logger.info(
         "app_created",

@@ -34,6 +34,10 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY src/ ./src/
 COPY pyproject.toml ./
 COPY deployment/config/agent_adapter_config.yaml ./
+# 多 Agent 轨迹 profile（trace_profiles.yaml）。_resolve_profiles_path 按
+# config.trace_profiles_path 默认值在 /app/deployment/config/trace_profiles.yaml 查找
+# （镜像内 _ADAPTER_ROOT=/app）。先内建于镜像；后续如需运行时调整，再改为 volume 挂载。
+COPY deployment/config/trace_profiles.yaml ./deployment/config/trace_profiles.yaml
 
 # 创建运行时数据目录 + 挂载点目录
 # /data/logs   — 业务 Agent 日志挂载点（docker-compose 只读挂载）

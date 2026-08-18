@@ -14,6 +14,10 @@ trace_cleaner.clean_traces 零改动 —— 三个轨迹 API 契约不变 (设�
 需求 4 兼容: gen_ai.prompt/completion 的值是 EDPAgent 对象 repr (SystemMessage(...) /
 ToolCall(...) 等), 非 JSON。repr_extract.parse_repr 把其规整成原生 JSON 结构; 不可解析
 (如 <object at 0x...>) 按决策 E 保留原字符串塞入。
+
+profile 模式（多 Agent 轨迹配置化）：
+- 传入 TraceProfile 时按配置匹配 span + 提取字段
+- 不传 profile 时走原有硬编码逻辑（EDPAgent 兼容）
 """
 
 from __future__ import annotations
@@ -21,6 +25,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from agent_adapter.trace_profile.models import TraceProfile
+from agent_adapter.trace_profile.extractors import extract_field, extract_response
+from agent_adapter.trace_profile.filters import span_matches_filter
 from agent_adapter.trace_source.repr_extract import extract_value
 
 
@@ -78,24 +85,54 @@ def _tool_to_tool_record(span: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _http_to_trace_record(span: dict[str, Any]) -> dict[str, Any]:
-    """http.request SERVER 根 span → TRACE record (无 type 字段, id=trace_id)。"""
+def _llm_to_generation_with_profile(
+    span: dict[str, Any], profile: TraceProfile
+) -> dict[str, Any] | None:
+    """按 profile 配置提取 GENERATION record。"""
+    attrs = _attrs(span)
+    messages = extract_field(attrs, profile.prompt_extraction)
+    if not isinstance(messages, list):
+        messages = [messages] if messages is not None else []
+    output = extract_response(span, profile.response_extraction)
+    if output is None:
+        return None
     return {
-        "id": span.get("trace_id"),
+        "type": "GENERATION",
+        "id": span.get("span_id"),
         "trace_id": span.get("trace_id"),
         "session_id": span.get("session_id"),
-        "timestamp": span.get("start_time"),
         "start_time": span.get("start_time"),
         "end_time": span.get("end_time"),
+        "input": {"messages": messages},
+        "output": output,
     }
 
 
-def spans_to_records(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """扁平 spans → log-mode archive records (按 span start_time 升序)。
+def _tool_to_record_with_profile(span: dict[str, Any], profile: TraceProfile) -> dict[str, Any]:
+    """按 profile 配置提取 TOOL record（含 args/result 保真）。"""
+    attrs = _attrs(span)
+    record: dict[str, Any] = {
+        "type": "TOOL",
+        "id": span.get("span_id"),
+        "trace_id": span.get("trace_id"),
+        "session_id": span.get("session_id"),
+        "name": span.get("name"),
+        "start_time": span.get("start_time"),
+        "end_time": span.get("end_time"),
+    }
+    if profile.tool_args_extraction.attr:
+        args = extract_field(attrs, profile.tool_args_extraction)
+        if args is not None:
+            record["args"] = args
+    if profile.tool_result_extraction.attr:
+        result = extract_field(attrs, profile.tool_result_extraction)
+        if result is not None:
+            record["result"] = result
+    return record
 
-    clean_traces 只消费 GENERATION; TOOL/TRACE 仅为 /traces raw 端点保真, 不影响 cleaned。
-    llm.* 按前缀匹配 (span 名形如 llm.model-sample)。
-    """
+
+def _spans_to_records_legacy(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """原有硬编码逻辑（EDPAgent 兼容，profile=None 时走此路径）。"""
     records: list[dict[str, Any]] = []
     for span in sorted(spans, key=lambda s: s.get("start_time") or ""):
         name = span.get("name", "")
@@ -108,5 +145,53 @@ def spans_to_records(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
             records.append(_tool_to_tool_record(span))
         elif name == "http.request" and kind == "SERVER":
             records.append(_http_to_trace_record(span))
-        # 其余 span 跳过
     return records
+
+
+def _spans_to_records_with_profile(
+    spans: list[dict[str, Any]], profile: TraceProfile
+) -> list[dict[str, Any]]:
+    """按 profile 配置转 records（多 Agent 轨迹配置化）。"""
+    records: list[dict[str, Any]] = []
+    for span in sorted(spans, key=lambda s: s.get("start_time") or ""):
+        name = span.get("name", "")
+        kind = span.get("kind", "")
+        if not span_matches_filter(span, profile.query_filter):
+            continue
+        if profile.llm_span_prefix and name.startswith(profile.llm_span_prefix):
+            rec = _llm_to_generation_with_profile(span, profile)
+            if rec is not None:
+                records.append(rec)
+        elif profile.tool_span_prefix and name.startswith(profile.tool_span_prefix):
+            records.append(_tool_to_record_with_profile(span, profile))
+        elif profile.root_span_name and name == profile.root_span_name and kind == "SERVER":
+            records.append(_http_to_trace_record(span))
+    return records
+
+
+def _http_to_trace_record(span: dict[str, Any]) -> dict[str, Any]:
+    """http.request SERVER 根 span → TRACE record (无 type 字段, id=trace_id)。"""
+    return {
+        "id": span.get("trace_id"),
+        "trace_id": span.get("trace_id"),
+        "session_id": span.get("session_id"),
+        "timestamp": span.get("start_time"),
+        "start_time": span.get("start_time"),
+        "end_time": span.get("end_time"),
+    }
+
+
+def spans_to_records(
+    spans: list[dict[str, Any]],
+    profile: TraceProfile | None = None,
+) -> list[dict[str, Any]]:
+    """扁平 spans → log-mode archive records (按 span start_time 升序)。
+
+    有 profile：按配置匹配 span + 提取字段
+    无 profile：走原有硬编码逻辑（EDPAgent 兼容）
+
+    clean_traces 只消费 GENERATION; TOOL/TRACE 仅为 /traces raw 端点保真, 不影响 cleaned。
+    """
+    if profile is None:
+        return _spans_to_records_legacy(spans)
+    return _spans_to_records_with_profile(spans, profile)

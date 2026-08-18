@@ -188,6 +188,9 @@ class AgentEntryConfig(BaseModel):
     remote_skills_dir: str = "/tmp/skills"
     # managed_docs: 该 agent 的可优化文档配置（spec managed-doc-agent-rule §8.1）。
     managed_docs: list[ManagedDocConfig] = Field(default_factory=list)
+    # trace_profile: 引用 trace_profiles.yaml 中的 profile 名（多 Agent 轨迹配置化）。
+    # 为 None 时走 legacy 硬编码逻辑（EDPAgent 兼容）。
+    trace_profile: str | None = None
 
 
 def _get_adapter_root() -> Path:
@@ -289,6 +292,8 @@ class AdapterConfig(BaseSettings):
     kafka_group: str = "agent-adapter"
     # ── GET /traces/{conv} 服务端短等待 (设计文档 §7: 5s 上报 + 余量) ──
     trace_wait_timeout: float = 10.0
+    # ── 多 Agent 轨迹 profile 路径 ──
+    trace_profiles_path: str = "deployment/config/trace_profiles.yaml"
 
     # ── Internal (not from YAML/env) ──
     _yaml_path: str | None = None
