@@ -7,6 +7,7 @@ package com.openjiuwen.gateway.routing;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
@@ -22,8 +23,8 @@ final class LocalRdcRouteCache {
     private final Map<String, ResolveEntry> resolveByHandle = new ConcurrentHashMap<>();
 
     LocalRdcRouteCache(Duration ttl, LongSupplier clock) {
-        this.ttl = ttl;
-        this.clock = clock;
+        this.ttl = Objects.requireNonNull(ttl, "ttl");
+        this.clock = Objects.requireNonNull(clock, "clock");
     }
 
     void putSearch(String tenantId, String agentId, List<AgentCardRoute> routes) {
@@ -34,9 +35,14 @@ final class LocalRdcRouteCache {
                 new SearchEntry(List.copyOf(routes), clock.getAsLong()));
     }
 
-    Optional<List<AgentCardRoute>> getSearch(String tenantId, String agentId) {
+    /**
+     * Returns cached search hits, or an empty list when missing/expired.
+     * Empty is never cached, so empty always means cache miss.
+     */
+    List<AgentCardRoute> getSearch(String tenantId, String agentId) {
         return getFresh(searchByAgent.get(searchKey(tenantId, agentId)))
-                .map(SearchEntry::routes);
+                .map(SearchEntry::routes)
+                .orElse(List.of());
     }
 
     void putResolve(String tenantId, String routeHandle, String endpointUrl) {
@@ -72,6 +78,7 @@ final class LocalRdcRouteCache {
     }
 
     private interface TimedEntry {
+        /** Epoch millis when this entry was written. */
         long cachedAtMs();
     }
 

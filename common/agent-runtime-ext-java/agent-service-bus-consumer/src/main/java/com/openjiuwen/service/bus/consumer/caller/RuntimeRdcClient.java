@@ -91,9 +91,12 @@ public final class RuntimeRdcClient {
             return candidates;
         } catch (RouteDiscoveryException ex) {
             if (isUnavailable(ex)) {
-                return cache.getSearch(tenantId, agentId)
-                        .orElseThrow(() -> new RouteDiscoveryException(
-                                "RDC instance query unavailable and no cached route for agentId=" + agentId));
+                List<RouteCandidate> cached = cache.getSearch(tenantId, agentId);
+                if (!cached.isEmpty()) {
+                    return cached;
+                }
+                throw new RouteDiscoveryException(
+                        "RDC instance query unavailable and no cached route for agentId=" + agentId);
             }
             throw ex;
         }
@@ -121,8 +124,9 @@ public final class RuntimeRdcClient {
         try {
             JsonNode response = execute(request, "RDC route-handle resolve failed");
             ResolvedRoute route = new ResolvedRoute(requiredText(response, "endpointUrl"),
-                    optionalText(response, "instanceId"), optionalText(response, "routeKey"),
-                    optionalText(response, "contractVersion"));
+                    optionalText(response, "instanceId").orElse(null),
+                    optionalText(response, "routeKey").orElse(null),
+                    optionalText(response, "contractVersion").orElse(null));
             cache.putResolve(tenantId, routeHandle, route);
             return route;
         } catch (RouteDiscoveryException ex) {
@@ -160,10 +164,7 @@ public final class RuntimeRdcClient {
                 throw new RouteDiscoveryException(failureMessage + ": HTTP " + status);
             }
             return objectMapper.readTree(response.body());
-        } catch (InterruptedException failure) {
-            Thread.currentThread().interrupt();
-            throw new RouteDiscoveryException(failureMessage, failure);
-        } catch (IOException failure) {
+        } catch (InterruptedException | IOException failure) {
             throw new RouteDiscoveryException(failureMessage, failure);
         }
     }
@@ -197,19 +198,19 @@ public final class RuntimeRdcClient {
     }
 
     private static String requiredText(JsonNode node, String field) {
-        String value = optionalText(node, field);
-        if (value == null) {
-            throw new RouteDiscoveryException("RDC response is missing " + field);
-        }
-        return value;
+        return optionalText(node, field)
+                .orElseThrow(() -> new RouteDiscoveryException("RDC response is missing " + field));
     }
 
-    private static String optionalText(JsonNode node, String field) {
+    private static Optional<String> optionalText(JsonNode node, String field) {
         if (node == null || !node.hasNonNull(field)) {
-            return null;
+            return Optional.empty();
         }
         String value = node.get(field).asText();
-        return value.isBlank() ? null : value;
+        if (value.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(value);
     }
 
     private static String require(String value, String name) {

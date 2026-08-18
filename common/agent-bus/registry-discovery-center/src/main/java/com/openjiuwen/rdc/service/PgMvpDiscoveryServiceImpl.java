@@ -212,12 +212,12 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
             outcome = "success";
             return dtos;
         } catch (RegistryUnavailableException ex) {
-            Optional<List<AgentCardDto>> cached = localRouteCache.getSearch(
+            List<AgentCardDto> cached = localRouteCache.getSearch(
                     dimension, tenantId, value, contractVersion);
-            if (cached.isPresent()) {
+            if (!cached.isEmpty()) {
                 outcome = "degraded_cached";
-                resultCount = cached.get().size();
-                return cached.get();
+                resultCount = cached.size();
+                return cached;
             }
             outcome = "registry_unavailable";
             throw ex;
@@ -334,37 +334,21 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
         long start = System.nanoTime();
         String outcome = "error";
         try {
-            if (deadline != null) {
-                RegistryRequestDeadline.enforce(deadline, effectiveTraceId);
-            }
-            if (callerRef != null && !callerRef.isBlank()) {
-                callerAuthorizationPolicy.authorize(tenantId, callerRef, effectiveTraceId);
-            }
-            RouteHandleCodec.HandleFields decoded = decodeRouteHandle(routeHandle, tenantId, effectiveTraceId);
-            verifyTenant(tenantId, effectiveTraceId);
-            RouteResolution resolution = lookupRouteResolution(tenantId, decoded, effectiveTraceId);
-            localRouteCache.putResolve(tenantId, routeHandle, resolution);
+            RouteResolution resolution = resolveRouteHandleBody(
+                    routeHandle, tenantId, callerRef, effectiveTraceId, deadline);
             outcome = "success";
             return resolution;
         } catch (TenantIsolationViolationException ex) {
-            if ("error".equals(outcome)) {
-                outcome = "tenant_isolation_violation";
-            }
+            outcome = remapOutcome(outcome, "tenant_isolation_violation");
             throw ex;
         } catch (MalformedRouteHandleException ex) {
-            if ("error".equals(outcome)) {
-                outcome = "malformed_handle";
-            }
+            outcome = remapOutcome(outcome, "malformed_handle");
             throw ex;
         } catch (EntryNotFoundException ex) {
-            if ("error".equals(outcome)) {
-                outcome = "entry_not_found";
-            }
+            outcome = remapOutcome(outcome, "entry_not_found");
             throw ex;
         } catch (LeaseExpiredException ex) {
-            if ("error".equals(outcome)) {
-                outcome = "lease_expired";
-            }
+            outcome = remapOutcome(outcome, "lease_expired");
             throw ex;
         } catch (DeadlineExceededException ex) {
             outcome = "deadline_exceeded";
@@ -383,6 +367,25 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
                     effectiveTraceId, tenantId, null, null, null, null, routeHandle, outcome, latencyMs));
             MDC.remove("traceId");
         }
+    }
+
+    private RouteResolution resolveRouteHandleBody(String routeHandle, String tenantId, String callerRef,
+                                                   String effectiveTraceId, Instant deadline) {
+        if (deadline != null) {
+            RegistryRequestDeadline.enforce(deadline, effectiveTraceId);
+        }
+        if (callerRef != null && !callerRef.isBlank()) {
+            callerAuthorizationPolicy.authorize(tenantId, callerRef, effectiveTraceId);
+        }
+        RouteHandleCodec.HandleFields decoded = decodeRouteHandle(routeHandle, tenantId, effectiveTraceId);
+        verifyTenant(tenantId, effectiveTraceId);
+        RouteResolution resolution = lookupRouteResolution(tenantId, decoded, effectiveTraceId);
+        localRouteCache.putResolve(tenantId, routeHandle, resolution);
+        return resolution;
+    }
+
+    private static String remapOutcome(String current, String mapped) {
+        return "error".equals(current) ? mapped : current;
     }
 
     private RouteHandleCodec.HandleFields decodeRouteHandle(

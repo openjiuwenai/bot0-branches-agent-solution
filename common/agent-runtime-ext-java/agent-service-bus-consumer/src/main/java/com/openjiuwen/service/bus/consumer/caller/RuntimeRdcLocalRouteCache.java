@@ -7,6 +7,7 @@ package com.openjiuwen.service.bus.consumer.caller;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
@@ -21,8 +22,8 @@ final class RuntimeRdcLocalRouteCache {
     private final Map<String, ResolveEntry> resolveByHandle = new ConcurrentHashMap<>();
 
     RuntimeRdcLocalRouteCache(Duration ttl, LongSupplier clock) {
-        this.ttl = ttl;
-        this.clock = clock;
+        this.ttl = Objects.requireNonNull(ttl, "ttl");
+        this.clock = Objects.requireNonNull(clock, "clock");
     }
 
     void putSearch(String tenantId, String agentId, List<RuntimeRdcClient.RouteCandidate> routes) {
@@ -33,12 +34,20 @@ final class RuntimeRdcLocalRouteCache {
                 new SearchEntry(List.copyOf(routes), clock.getAsLong()));
     }
 
-    Optional<List<RuntimeRdcClient.RouteCandidate>> getSearch(String tenantId, String agentId) {
+    /**
+     * Returns cached search hits, or an empty list when missing/expired.
+     * Empty is never cached, so empty always means cache miss.
+     */
+    List<RuntimeRdcClient.RouteCandidate> getSearch(String tenantId, String agentId) {
         return getFresh(searchByAgent.get(searchKey(tenantId, agentId)))
-                .map(SearchEntry::routes);
+                .map(SearchEntry::routes)
+                .orElse(List.of());
     }
 
     void putResolve(String tenantId, String routeHandle, RuntimeRdcClient.ResolvedRoute route) {
+        if (route == null || route.endpointUrl() == null || route.endpointUrl().isBlank()) {
+            return;
+        }
         resolveByHandle.put(resolveKey(tenantId, routeHandle),
                 new ResolveEntry(route, clock.getAsLong()));
     }
@@ -67,6 +76,7 @@ final class RuntimeRdcLocalRouteCache {
     }
 
     private interface TimedEntry {
+        /** Epoch millis when this entry was written. */
         long cachedAtMs();
     }
 

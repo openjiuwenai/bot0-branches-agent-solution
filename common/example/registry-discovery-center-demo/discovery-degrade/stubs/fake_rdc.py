@@ -17,8 +17,11 @@ from __future__ import annotations
 
 import argparse
 import json
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse
+import logging
+from typing import Callable
+from wsgiref.simple_server import WSGIRequestHandler, make_server
+
+LOG = logging.getLogger("fake_rdc")
 
 
 class State:
@@ -27,76 +30,86 @@ class State:
     runtime_base = "http://127.0.0.1:18094"
 
 
-class Handler(BaseHTTPRequestHandler):
-    def log_message(self, fmt, *args):
-        pass
+class QuietHandler(WSGIRequestHandler):
+    def log_message(self, fmt: str, *args) -> None:
+        return
 
-    def _should_fail(self) -> bool:
-        if State.mode != "fail-after":
-            return False
-        if State.ok_remaining <= 0:
-            return True
-        State.ok_remaining -= 1
+
+def should_fail() -> bool:
+    if State.mode != "fail-after":
         return False
+    if State.ok_remaining <= 0:
+        return True
+    State.ok_remaining -= 1
+    return False
 
-    def _send(self, code: int, body: bytes):
-        self.send_response(code)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
 
-    def do_GET(self):
-        path = urlparse(self.path).path
-        prefix = "/api/registry/instances/"
-        if not path.startswith(prefix):
-            self.send_error(404)
-            return
-        if self._should_fail():
-            self._send(503, b'{"error":"REGISTRY_UNAVAILABLE"}')
-            return
-        parts = path[len(prefix) :].split("/")
-        if len(parts) != 2:
-            self.send_error(400)
-            return
-        agent = parts[1]
-        body = json.dumps(
-            [{"routeHandle": f"v2:stub-{agent}", "serviceId": f"svc-{agent}", "health": "ONLINE"}]
-        ).encode()
-        self._send(200, body)
+def read_body(environ) -> bytes:
+    length = int(environ.get("CONTENT_LENGTH") or "0")
+    if length <= 0:
+        return b"{}"
+    return environ["wsgi.input"].read(length)
 
-    def do_POST(self):
-        path = urlparse(self.path).path
-        if path != "/api/registry/route-handle/resolve":
-            self.send_error(404)
-            return
-        if self._should_fail():
-            self._send(503, b'{"error":"REGISTRY_UNAVAILABLE"}')
-            return
-        length = int(self.headers.get("Content-Length", "0"))
-        raw = self.rfile.read(length) if length else b"{}"
-        try:
-            req = json.loads(raw.decode() or "{}")
-        except json.JSONDecodeError:
-            self.send_error(400)
-            return
-        handle = str(req.get("routeHandle", ""))
-        if not handle.startswith("v2:stub-"):
-            self._send(404, b'{"error":"ENTRY_NOT_FOUND"}')
-            return
-        body = json.dumps(
-            {
-                "instanceId": "stub-inst",
-                "endpointUrl": State.runtime_base,
-                "routeKey": "/v1/query",
-                "contractVersion": "1.0.0",
-                "capabilityVersion": "1.0.0",
-            }
-        ).encode()
-        self._send(200, body)
+
+def json_response(status: str, payload: dict | list) -> tuple[str, list[tuple[str, str]], list[bytes]]:
+    body = json.dumps(payload).encode()
+    headers = [("Content-Type", "application/json"), ("Content-Length", str(len(body)))]
+    return status, headers, [body]
+
+
+def handle_instances(path: str) -> tuple[str, list[tuple[str, str]], list[bytes]]:
+    prefix = "/api/registry/instances/"
+    if not path.startswith(prefix):
+        return "404 Not Found", [("Content-Type", "text/plain")], [b"not found"]
+    if should_fail():
+        return json_response("503 Service Unavailable", {"error": "REGISTRY_UNAVAILABLE"})
+    parts = path[len(prefix):].split("/")
+    if len(parts) != 2:
+        return "400 Bad Request", [("Content-Type", "text/plain")], [b"bad request"]
+    agent = parts[1]
+    return json_response(
+        "200 OK",
+        [{"routeHandle": f"v2:stub-{agent}", "serviceId": f"svc-{agent}", "health": "ONLINE"}],
+    )
+
+
+def handle_resolve(environ) -> tuple[str, list[tuple[str, str]], list[bytes]]:
+    if should_fail():
+        return json_response("503 Service Unavailable", {"error": "REGISTRY_UNAVAILABLE"})
+    try:
+        req = json.loads(read_body(environ).decode() or "{}")
+    except json.JSONDecodeError:
+        return "400 Bad Request", [("Content-Type", "text/plain")], [b"bad request"]
+    handle = str(req.get("routeHandle", ""))
+    if not handle.startswith("v2:stub-"):
+        return json_response("404 Not Found", {"error": "ENTRY_NOT_FOUND"})
+    return json_response(
+        "200 OK",
+        {
+            "instanceId": "stub-inst",
+            "endpointUrl": State.runtime_base,
+            "routeKey": "/v1/query",
+            "contractVersion": "1.0.0",
+            "capabilityVersion": "1.0.0",
+        },
+    )
+
+
+def application(environ, start_response: Callable):
+    method = environ.get("REQUEST_METHOD", "GET")
+    path = environ.get("PATH_INFO", "")
+    if method == "GET":
+        status, headers, body = handle_instances(path)
+    elif method == "POST" and path == "/api/registry/route-handle/resolve":
+        status, headers, body = handle_resolve(environ)
+    else:
+        status, headers, body = "404 Not Found", [("Content-Type", "text/plain")], [b"not found"]
+    start_response(status, headers)
+    return body
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=18092)
     ap.add_argument("--mode", choices=("ok", "fail-after"), default="fail-after")
@@ -106,10 +119,12 @@ def main() -> None:
     State.mode = args.mode
     State.ok_remaining = args.ok_count
     State.runtime_base = args.runtime_base
-    httpd = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    print(
-        f"fake_rdc listening on http://127.0.0.1:{args.port} mode={args.mode} ok_count={args.ok_count}",
-        flush=True,
+    httpd = make_server("127.0.0.1", args.port, application, handler_class=QuietHandler)
+    LOG.info(
+        "fake_rdc listening on http://127.0.0.1:%s mode=%s ok_count=%s",
+        args.port,
+        args.mode,
+        args.ok_count,
     )
     httpd.serve_forever()
 

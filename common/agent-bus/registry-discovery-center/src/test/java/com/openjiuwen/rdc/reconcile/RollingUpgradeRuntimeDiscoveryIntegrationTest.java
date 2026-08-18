@@ -20,7 +20,6 @@ import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
 import com.openjiuwen.rdc.service.PgMvpDiscoveryServiceImpl;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 
@@ -93,7 +92,7 @@ class RollingUpgradeRuntimeDiscoveryIntegrationTest {
     }
 
     @Test
-    void after_rolling_reconcile_runtime_discovery_returns_only_surviving_instance() throws Exception {
+    void afterRollingReconcileDiscoveryKeepsOnlySurvivor() throws Exception {
         oldRuntimeServer.enqueue(cardResponse("billing-agent-v1", "1.0.0"));
         newRuntimeServer.enqueue(cardResponse("billing-agent-v2", "2.0.0"));
 

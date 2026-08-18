@@ -7,40 +7,48 @@ from __future__ import annotations
 
 import argparse
 import json
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import logging
+from typing import Callable
+from wsgiref.simple_server import WSGIRequestHandler, make_server
+
+LOG = logging.getLogger("fake_runtime")
 
 
-class Handler(BaseHTTPRequestHandler):
-    def log_message(self, fmt, *args):
-        pass
+class QuietHandler(WSGIRequestHandler):
+    def log_message(self, fmt: str, *args) -> None:
+        return
 
-    def do_POST(self):
-        path = self.path.split("?", 1)[0]
-        if path not in ("/a2a", "/a2a/"):
-            self.send_error(404)
-            return
-        length = int(self.headers.get("Content-Length", "0"))
-        _ = self.rfile.read(length) if length else b""
-        body = json.dumps(
-            {
-                "jsonrpc": "2.0",
-                "id": "smoke-l2",
-                "result": {"ok": True, "source": "fake-runtime"},
-            }
-        ).encode()
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+
+def application(environ, start_response: Callable):
+    method = environ.get("REQUEST_METHOD", "GET")
+    path = environ.get("PATH_INFO", "")
+    if method != "POST" or path not in ("/a2a", "/a2a/"):
+        start_response("404 Not Found", [("Content-Type", "text/plain")])
+        return [b"not found"]
+    length = int(environ.get("CONTENT_LENGTH") or "0")
+    if length > 0:
+        environ["wsgi.input"].read(length)
+    body = json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": "smoke-l2",
+            "result": {"ok": True, "source": "fake-runtime"},
+        }
+    ).encode()
+    start_response(
+        "200 OK",
+        [("Content-Type", "application/json"), ("Content-Length", str(len(body)))],
+    )
+    return [body]
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=18094)
     args = ap.parse_args()
-    httpd = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    print(f"fake_runtime listening on http://127.0.0.1:{args.port}", flush=True)
+    httpd = make_server("127.0.0.1", args.port, application, handler_class=QuietHandler)
+    LOG.info("fake_runtime listening on http://127.0.0.1:%s", args.port)
     httpd.serve_forever()
 
 

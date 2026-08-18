@@ -60,9 +60,7 @@ mvn package && java -jar target/agent-rdc-0.1.0.jar
 mvn -DjunitParallel=false test
 ```
 
-（macOS 建议关 JUnit 类并行，减轻 `kern.sysv.shmmni` 压力；测试使用 Zonky embedded-postgres。）
-
-联机发现过滤 / 降级冒烟见配套 example（本机 PG，无 Docker）：
+联机发现过滤 / 降级冒烟见配套 example：
 
 ```bash
 cd ../../example/registry-discovery-center-demo/discovery-degrade

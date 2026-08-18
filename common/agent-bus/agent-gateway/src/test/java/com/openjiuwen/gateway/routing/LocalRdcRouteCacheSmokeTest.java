@@ -25,7 +25,9 @@ class LocalRdcRouteCacheSmokeTest {
         cache.putResolve("t1", "h1", "http://rt/a2a");
 
         assertThat(cache.getSearch("t1", "a1"))
-                .hasValueSatisfying(list -> assertThat(list.get(0).routeHandle()).isEqualTo("h1"));
+                .singleElement()
+                .extracting(AgentCardRoute::routeHandle)
+                .isEqualTo("h1");
         assertThat(cache.getResolve("t1", "h1")).contains("http://rt/a2a");
         assertThat(cache.getSearch("other", "a1")).isEmpty();
 

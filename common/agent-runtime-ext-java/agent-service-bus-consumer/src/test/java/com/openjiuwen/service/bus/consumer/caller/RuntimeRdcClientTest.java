@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -44,9 +45,10 @@ class RuntimeRdcClientTest {
 
     @Test
     void returnsRegistryOrderedCandidates() {
-        server.createContext("/api/registry/instances/tenant-a/agent-a", exchange -> respond(exchange, 200,
-                "[{\"serviceId\":\"runtime-1\",\"routeHandle\":\"route-1\"},"
-                        + "{\"serviceId\":\"runtime-2\",\"routeHandle\":\"route-2\"}]"));
+        server.createContext("/api/registry/instances/tenant-a/agent-a",
+                exchange -> writeRegistryJson(exchange, 200,
+                        "[{\"serviceId\":\"runtime-1\",\"routeHandle\":\"route-1\"},"
+                                + "{\"serviceId\":\"runtime-2\",\"routeHandle\":\"route-2\"}]"));
 
         assertThat(client.findCandidates("tenant-a", "agent-a"))
                 .containsExactly(new RuntimeRdcClient.RouteCandidate("runtime-1", "route-1"),
@@ -58,7 +60,7 @@ class RuntimeRdcClientTest {
         AtomicReference<String> requestBody = new AtomicReference<>();
         server.createContext("/api/registry/route-handle/resolve", exchange -> {
             requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-            respond(exchange, 200, "{\"endpointUrl\":\"http://runtime-a:8080/a2a\","
+            writeRegistryJson(exchange, 200, "{\"endpointUrl\":\"http://runtime-a:8080/a2a\","
                     + "\"instanceId\":\"instance-a\",\"routeKey\":\"route-key-a\","
                     + "\"contractVersion\":\"1\"}");
         });
@@ -73,9 +75,10 @@ class RuntimeRdcClientTest {
 
     @Test
     void rejectsRegistryFailureAndMalformedResponse() {
-        server.createContext("/api/registry/instances/tenant-a/missing", exchange -> respond(exchange, 404, "{}"));
+        server.createContext("/api/registry/instances/tenant-a/missing",
+                exchange -> writeRegistryJson(exchange, 404, "{}"));
         server.createContext("/api/registry/instances/tenant-a/malformed",
-                exchange -> respond(exchange, 200, "[{\"serviceId\":\"runtime-1\"}]"));
+                exchange -> writeRegistryJson(exchange, 200, "[{\"serviceId\":\"runtime-1\"}]"));
 
         assertThatThrownBy(() -> client.findCandidates("tenant-a", "missing"))
                 .isInstanceOf(RuntimeRdcClient.RouteDiscoveryException.class)
@@ -90,10 +93,10 @@ class RuntimeRdcClientTest {
         java.util.concurrent.atomic.AtomicInteger hits = new java.util.concurrent.atomic.AtomicInteger();
         server.createContext("/api/registry/instances/tenant-a/agent-a", exchange -> {
             if (hits.getAndIncrement() == 0) {
-                respond(exchange, 200,
+                writeRegistryJson(exchange, 200,
                         "[{\"serviceId\":\"runtime-1\",\"routeHandle\":\"route-1\"}]");
             } else {
-                respond(exchange, 503, "{}");
+                writeRegistryJson(exchange, 503, "{}");
             }
         });
 
@@ -109,11 +112,11 @@ class RuntimeRdcClientTest {
         java.util.concurrent.atomic.AtomicInteger hits = new java.util.concurrent.atomic.AtomicInteger();
         server.createContext("/api/registry/route-handle/resolve", exchange -> {
             if (hits.getAndIncrement() == 0) {
-                respond(exchange, 200, "{\"endpointUrl\":\"http://runtime-a:8080/a2a\","
+                writeRegistryJson(exchange, 200, "{\"endpointUrl\":\"http://runtime-a:8080/a2a\","
                         + "\"instanceId\":\"instance-a\",\"routeKey\":\"route-key-a\","
                         + "\"contractVersion\":\"1\"}");
             } else {
-                respond(exchange, 503, "{}");
+                writeRegistryJson(exchange, 503, "{}");
             }
         });
 
@@ -136,10 +139,10 @@ class RuntimeRdcClientTest {
         java.util.concurrent.atomic.AtomicInteger hits = new java.util.concurrent.atomic.AtomicInteger();
         server.createContext("/api/registry/instances/tenant-a/agent-a", exchange -> {
             if (hits.getAndIncrement() == 0) {
-                respond(exchange, 200,
+                writeRegistryJson(exchange, 200,
                         "[{\"serviceId\":\"runtime-1\",\"routeHandle\":\"route-1\"}]");
             } else {
-                respond(exchange, 503, "{}");
+                writeRegistryJson(exchange, 503, "{}");
             }
         });
 
@@ -150,11 +153,18 @@ class RuntimeRdcClientTest {
                 .hasMessageContaining("no cached route");
     }
 
-    private static void respond(HttpExchange exchange, int status, String body) throws IOException {
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", "application/json");
-        exchange.sendResponseHeaders(status, bytes.length);
-        exchange.getResponseBody().write(bytes);
-        exchange.close();
+    /** Stub JSON reply for in-process HttpServer used by this test class only. */
+    private static void writeRegistryJson(HttpExchange exchange, int httpStatus, String jsonBody)
+            throws IOException {
+        byte[] payload = jsonBody == null
+                ? new byte[0]
+                : jsonBody.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().add("Content-Type", "application/json; charset=utf-8");
+        exchange.sendResponseHeaders(httpStatus, payload.length);
+        try (OutputStream out = exchange.getResponseBody()) {
+            if (payload.length > 0) {
+                out.write(payload, 0, payload.length);
+            }
+        }
     }
 }

@@ -44,10 +44,15 @@ final class RdcLocalRouteCache {
                 new SearchEntry(List.copyOf(routes), clock.getAsLong()));
     }
 
-    Optional<List<AgentCardDto>> getSearch(String dimension, String tenantId, String value,
-                                           String contractVersion) {
+    /**
+     * Returns cached search hits, or an empty list when missing/expired.
+     * Empty is never cached, so empty always means cache miss.
+     */
+    List<AgentCardDto> getSearch(String dimension, String tenantId, String value,
+                                 String contractVersion) {
         return getFresh(searchByKey.get(searchKey(dimension, tenantId, value, contractVersion)))
-                .map(SearchEntry::routes);
+                .map(SearchEntry::routes)
+                .orElse(List.of());
     }
 
     void putResolve(String tenantId, String routeHandle, RouteResolution resolution) {
@@ -85,6 +90,7 @@ final class RdcLocalRouteCache {
     }
 
     private interface TimedEntry {
+        /** Epoch millis when this entry was written. */
         long cachedAtMs();
     }
 

@@ -79,7 +79,7 @@ public class HttpRdcRouteClient implements RdcRouteClient {
         try {
             HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (resp.statusCode() == 503 || resp.statusCode() == 502 || resp.statusCode() == 504) {
-                return cache.getSearch(tenantId, agentId).orElse(List.of());
+                return cache.getSearch(tenantId, agentId);
             }
             if (resp.statusCode() >= 400) {
                 return List.of();
@@ -88,9 +88,9 @@ public class HttpRdcRouteClient implements RdcRouteClient {
             cache.putSearch(tenantId, agentId, parsed);
             return parsed;
         } catch (IOException | InterruptedException ex) {
-            Optional<List<AgentCardRoute>> cached = cache.getSearch(tenantId, agentId);
-            if (cached.isPresent()) {
-                return cached.get();
+            List<AgentCardRoute> cached = cache.getSearch(tenantId, agentId);
+            if (!cached.isEmpty()) {
+                return cached;
             }
             throw new RouteResolutionException("RDC search failed for " + agentId, ex);
         }
