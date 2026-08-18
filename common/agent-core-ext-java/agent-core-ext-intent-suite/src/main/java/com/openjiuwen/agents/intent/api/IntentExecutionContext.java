@@ -253,7 +253,7 @@ public final class IntentExecutionContext {
 
     private static Object finiteNumber(double number, Object original) {
         if (!Double.isFinite(number)) {
-            throw new IllegalArgumentException("message snapshot numbers must be finite");
+            return String.valueOf(original);
         }
         return original;
     }

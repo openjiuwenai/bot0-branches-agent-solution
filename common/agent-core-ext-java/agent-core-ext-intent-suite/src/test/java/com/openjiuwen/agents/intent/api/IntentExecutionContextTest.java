@@ -76,6 +76,23 @@ class IntentExecutionContextTest {
                 Map.of("semantic", " "), Map.of())).isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void degradesNonFiniteNumbersToStringsInsteadOfFailing() {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("ratio", Double.NaN);
+        metadata.put("limit", Double.POSITIVE_INFINITY);
+        UserMessage user = UserMessage.builder().content("hello").metadata(metadata).build();
+        ModelContext modelContext = mock(ModelContext.class);
+        when(modelContext.getMessages()).thenReturn(List.of(user));
+
+        IntentExecutionContext context = IntentExecutionContext.create(IntentSuiteConfig.defaults(),
+                new IntentCatalogSnapshot(1L, new InitializedIntents(List.of(), null)), Map.of("semantic", "hello"),
+                Map.of("context", modelContext));
+
+        assertThat(context.conversation().get(0).metadata()).containsEntry("ratio", "NaN").containsEntry("limit",
+                "Infinity");
+    }
+
     @SuppressWarnings("unchecked")
     private static Map<String, Object> mutableMap(Object value) {
         return (Map<String, Object>) value;
