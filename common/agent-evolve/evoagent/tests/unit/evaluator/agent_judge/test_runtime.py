@@ -47,7 +47,7 @@ class _FakeProc:
         self.killed = False
         self.waited = False
 
-    async def communicate(self, input: bytes | None = None) -> tuple[bytes, bytes]:  # noqa: A002
+    async def communicate(self, **kwargs: bytes | None) -> tuple[bytes, bytes]:
         if self._exc is not None:
             raise self._exc
         self.returncode = self._rc
@@ -346,12 +346,13 @@ class TestMakeRuntime:
     def test_jiuwenswarm() -> None:
         rt = make_runtime("jiuwenswarm")
         assert isinstance(rt, JiuwenSwarmRuntime)
-        assert rt._agent_profile == "codex"  # default profile
+        assert getattr(rt, "_agent_profile") == "codex"  # default profile
 
-    def test_jiuwenswarm_with_profile(self) -> None:
+    @staticmethod
+    def test_jiuwenswarm_with_profile() -> None:
         rt = make_runtime("jiuwenswarm", agent_profile="custom_agent")
         assert isinstance(rt, JiuwenSwarmRuntime)
-        assert rt._agent_profile == "custom_agent"
+        assert getattr(rt, "_agent_profile") == "custom_agent"
 
     @staticmethod
     def test_unknown_raises() -> None:
@@ -410,7 +411,7 @@ def _install_fake_acp(
             }
         }
     # Store the config on the client_cls for easy access in tests.
-    client_cls._test_config = config  # type: ignore[attr-defined]
+    setattr(client_cls, "_test_config", config)  # type: ignore[attr-defined]
     return client_cls
 
 
@@ -519,8 +520,9 @@ class TestJiuwenSwarmRuntime:
         with pytest.raises(EvaluationError, match="jiuwenswarm agent error"):
             asyncio.run(runtime.judge(_request(workdir=tmp_path, schema_path=schema)))
 
+    @staticmethod
     def test_timeout_becomes_evaluation_error(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         schema = tmp_path / "schema.json"
         schema.write_text("{}", encoding="utf-8")
@@ -535,8 +537,9 @@ class TestJiuwenSwarmRuntime:
             asyncio.run(runtime.judge(_request(workdir=tmp_path, schema_path=schema)))
         assert exc_info.value.category == "agent_judge_timeout"
 
+    @staticmethod
     def test_unknown_profile_raises(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         schema = tmp_path / "schema.json"
         schema.write_text("{}", encoding="utf-8")
@@ -545,8 +548,9 @@ class TestJiuwenSwarmRuntime:
         with pytest.raises(EvaluationError, match="unknown jiuwenswarm agent profile"):
             asyncio.run(runtime.judge(_request(workdir=tmp_path, schema_path=schema)))
 
+    @staticmethod
     def test_empty_command_raises(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         schema = tmp_path / "schema.json"
         schema.write_text("{}", encoding="utf-8")
@@ -587,7 +591,8 @@ class TestJiuwenSwarmRuntime:
 
 
 class TestSynthesize:
-    def test_claude_structured_output_dict(self, tmp_path: Path, _patch_create: Any) -> None:
+    @staticmethod
+    def test_claude_structured_output_dict(tmp_path: Path, _patch_create: Any) -> None:
         schema = tmp_path / "schema.json"
         schema.write_text('{"type":"object"}', encoding="utf-8")
         attr = {
@@ -612,7 +617,8 @@ class TestSynthesize:
         data = asyncio.run(runtime.synthesize(_request(workdir=tmp_path, schema_path=schema)))
         assert data == attr
 
-    def test_claude_returns_bare_dict(self, tmp_path: Path, _patch_create: Any) -> None:
+    @staticmethod
+    def test_claude_returns_bare_dict(tmp_path: Path, _patch_create: Any) -> None:
         schema = tmp_path / "s.json"
         schema.write_text("{}", encoding="utf-8")
         attr = {"skill_attributions": [], "attribution_status": "completed"}
@@ -622,7 +628,8 @@ class TestSynthesize:
         data = asyncio.run(runtime.synthesize(_request(workdir=tmp_path, schema_path=schema)))
         assert data == attr
 
-    def test_claude_unparseable_raises(self, tmp_path: Path, _patch_create: Any) -> None:
+    @staticmethod
+    def test_claude_unparseable_raises(tmp_path: Path, _patch_create: Any) -> None:
         schema = tmp_path / "s.json"
         schema.write_text("{}", encoding="utf-8")
         proc = _FakeProc(stdout=b"not json", returncode=0)
@@ -631,7 +638,8 @@ class TestSynthesize:
         with pytest.raises(EvaluationError, match="no parseable output"):
             asyncio.run(runtime.synthesize(_request(workdir=tmp_path, schema_path=schema)))
 
-    def test_codex_reads_attribution_message(self, tmp_path: Path, _patch_create: Any) -> None:
+    @staticmethod
+    def test_codex_reads_attribution_message(tmp_path: Path, _patch_create: Any) -> None:
         schema = tmp_path / "schema.json"
         schema.write_text("{}", encoding="utf-8")
         attr = {

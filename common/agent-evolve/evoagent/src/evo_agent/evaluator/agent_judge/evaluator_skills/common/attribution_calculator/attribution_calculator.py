@@ -145,7 +145,17 @@ def _parse_json_arg(raw: str, label: str) -> dict[str, float]:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    # Errors → stderr, info (JSON result) → stdout for machine consumption.
+    _stderr_handler = logging.StreamHandler(sys.stderr)
+    _stderr_handler.setLevel(logging.WARNING)
+    _stderr_handler.setFormatter(logging.Formatter("%(message)s"))
+    _stdout_handler = logging.StreamHandler(sys.stdout)
+    _stdout_handler.setLevel(logging.INFO)
+    _stdout_handler.setFormatter(logging.Formatter("%(message)s"))
+    _stdout_handler.addFilter(lambda r: r.levelno < logging.WARNING)
+    logger.addHandler(_stderr_handler)
+    logger.addHandler(_stdout_handler)
+    logger.setLevel(logging.INFO)
     parser = argparse.ArgumentParser(
         description="Dimension scoring utilities: score computation or threshold checking."
     )
@@ -187,7 +197,7 @@ def main() -> None:
     else:
         result = compute_score(judgments, weights, gate=args.gate)
 
-    sys.stdout.write(json.dumps(result, ensure_ascii=False) + "\n")
+    logger.info(json.dumps(result, ensure_ascii=False))
 
 
 if __name__ == "__main__":

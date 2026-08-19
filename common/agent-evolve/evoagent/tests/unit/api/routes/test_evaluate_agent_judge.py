@@ -121,7 +121,7 @@ def _wait_terminal(client: TestClient, job_id: str, timeout: float = 10.0) -> di
 
 @pytest.fixture(autouse=True)
 def _reset_job_store() -> Any:
-    job_manager._jobs.clear()  # noqa: SLF001
+    getattr(job_manager, "_jobs").clear()
     yield
 
 

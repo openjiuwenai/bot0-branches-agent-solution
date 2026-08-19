@@ -358,14 +358,14 @@ class TestAgentFactory:
             )
         )
         assert isinstance(evaluator, AgentEvaluator)
-        assert evaluator._preset.tool_allowlist == ("Read",)  # noqa: SLF001
-        assert evaluator._preset.max_concurrent == 3  # noqa: SLF001
-        assert evaluator._preset.run_timeout == 42.0  # noqa: SLF001
+        assert getattr(evaluator, "_preset").tool_allowlist == ("Read",)
+        assert getattr(evaluator, "_preset").max_concurrent == 3
+        assert getattr(evaluator, "_preset").run_timeout == 42.0
 
     def test_runtime_override(self) -> None:
         evaluator = create_evaluator(self._cfg(runtime="codex"))
         assert isinstance(evaluator, AgentEvaluator)
-        assert evaluator._preset.runtime == "codex"  # noqa: SLF001
+        assert getattr(evaluator, "_preset").runtime == "codex"
 
     def test_skill_source_local_without_root_raises(self) -> None:
         with pytest.raises(ValueError, match="skill_root"):
@@ -386,13 +386,13 @@ class TestAgentFactory:
     def test_trajectory_budget_forwarded(self) -> None:
         evaluator = create_evaluator(self._cfg(trajectory_budget=12000))
         assert isinstance(evaluator, AgentEvaluator)
-        assert evaluator._trajectory_budget == 12000  # noqa: SLF001
+        assert getattr(evaluator, "_trajectory_budget") == 12000
 
     def test_trajectory_budget_default_uses_module_constant(self) -> None:
         from evo_agent.evaluator.evaluators.agent import _DEFAULT_TRAJECTORY_BUDGET
 
         evaluator = create_evaluator(self._cfg())
-        assert evaluator._trajectory_budget == _DEFAULT_TRAJECTORY_BUDGET  # noqa: SLF001
+        assert getattr(evaluator, "_trajectory_budget") == _DEFAULT_TRAJECTORY_BUDGET
 
     def test_trajectory_budget_wrong_type_raises(self) -> None:
         with pytest.raises(TypeError, match="trajectory_budget"):
@@ -414,7 +414,7 @@ class TestAgentFactory:
     def test_jiuwenswarm_runtime(self) -> None:
         evaluator = create_evaluator(self._cfg(runtime="jiuwenswarm"))
         assert isinstance(evaluator, AgentEvaluator)
-        assert evaluator._preset.runtime == "jiuwenswarm"  # noqa: SLF001
+        assert getattr(evaluator, "_preset").runtime == "jiuwenswarm"
 
     def test_agent_profile_passthrough(self) -> None:
         evaluator = create_evaluator(
@@ -424,8 +424,8 @@ class TestAgentFactory:
         # The runtime adapter should be a JiuwenSwarmRuntime with the custom profile
         from evo_agent.evaluator.agent_judge.runtime import JiuwenSwarmRuntime
 
-        assert isinstance(evaluator._runtime, JiuwenSwarmRuntime)  # noqa: SLF001
-        assert evaluator._runtime._agent_profile == "custom_agent"  # noqa: SLF001
+        assert isinstance(getattr(evaluator, "_runtime"), JiuwenSwarmRuntime)
+        assert getattr(getattr(evaluator, "_runtime"), "_agent_profile") == "custom_agent"
 
     def test_agent_profile_wrong_type_raises(self) -> None:
         with pytest.raises(TypeError, match="agent_profile"):

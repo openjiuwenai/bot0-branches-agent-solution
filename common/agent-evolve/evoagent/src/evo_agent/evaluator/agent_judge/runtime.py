@@ -423,10 +423,12 @@ class JiuwenSwarmRuntime:
     async def _run(self, request: RuntimeJudgeRequest) -> str:
         """Spawn ACP agent via AcpStdioClient, send prompt, return text."""
         if self._client_factory is not None:
-            AcpStdioClient = self._client_factory  # noqa: N806
+            acp_client_cls = self._client_factory
         else:
             try:
                 from jiuwenswarm.acp.stdio_client import AcpStdioClient  # type: ignore  # noqa: I001
+
+                acp_client_cls = AcpStdioClient
             except ImportError as exc:
                 raise EvaluationError(
                     category="agent_judge_binary_missing",
@@ -453,7 +455,7 @@ class JiuwenSwarmRuntime:
             env.update({str(k): str(v) for k, v in profile_env.items()})
         env.update(self._extra_env)
 
-        client = AcpStdioClient(command, args, cwd=str(request.workdir), env=env)
+        client = acp_client_cls(command, args, cwd=str(request.workdir), env=env)
         try:
             await client.connect()
             text = await client.chat(request.prompt, timeout=request.run_timeout)

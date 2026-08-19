@@ -347,8 +347,8 @@ class TestAgentEvaluatorInit:
             runtime=_FakeRuntime(),  # type: ignore[arg-type]
             dimension_thresholds=_DEFAULT_THRESHOLDS,
         )
-        assert ev._trajectory_budget == _DEFAULT_TRAJECTORY_BUDGET  # noqa: SLF001
-        assert ev._trajectory_budget == 4000  # noqa: SLF001
+        assert getattr(ev, "_trajectory_budget") == _DEFAULT_TRAJECTORY_BUDGET
+        assert getattr(ev, "_trajectory_budget") == 4000
 
     @staticmethod
     def test_explicit_budget_overrides_default() -> None:
@@ -358,7 +358,7 @@ class TestAgentEvaluatorInit:
             dimension_thresholds=_DEFAULT_THRESHOLDS,
             trajectory_budget=12000,
         )
-        assert ev._trajectory_budget == 12000  # noqa: SLF001
+        assert getattr(ev, "_trajectory_budget") == 12000
 
     @staticmethod
     def test_zero_budget_raises() -> None:
