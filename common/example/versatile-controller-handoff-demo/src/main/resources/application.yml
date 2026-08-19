@@ -10,9 +10,9 @@ versatile-demo:
   l2-port: ${L2_PORT:18092}
 
 # 通用配置：L1 与 L2 两个 profile 共享的转调识别条件与循环保护参数。
-# 报文样例（生产 node_finished 格式）：
-#   L1 意图转调  {"event":"node_finished","data":{"node_name":"意图返回","outputs":{"response":"3"}}}
-#   L2 退回一级  {"event":"node_finished","data":{"node_name":"不在范围","outputs":{"response":"不在范围"}}}
+# 报文样例（生产 message 格式，值为 data.summary，dedup-key 为顶层 createdTime）：
+#   L1 意图转调  {"event":"message","data":{"node_name":"意图返回","summary":"3",...},"createdTime":...}
+#   L2 退回一级  {"event":"message","data":{"node_name":"不在范围","summary":"不在范围",...},"createdTime":...}
 openjiuwen:
   service:
     query:
@@ -31,15 +31,15 @@ openjiuwen:
         enabled: true
         timeout: 3s
         classify:
-          event-type: node_finished
+          event-type: message
           field-path: /data/node_name
           field-value: [意图返回, 不在范围]
         fields:
           handoff-type: /data/node_name
-          intent-id: /data/outputs/response
+          intent-id: /data/summary
           business-domain: /data/node_name
           target-agent-id: /data/node_name
-          dedup-key: /data/execution_id
+          dedup-key: /createdTime
         target:
           # direct 不参与解析：真实报文无独立目标字段（target-agent-id 与 node_name 同路径，仅提取不使用）
           resolution-priority: [intent]

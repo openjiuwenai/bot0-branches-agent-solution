@@ -26,15 +26,15 @@ openjiuwen:
         self-agent-id: agent_card_l1            # 跨请求循环检测的自身标识
         timeout: 60s                             # 单次出站转调调用超时
         classify:
-          event-type: node_finished              # 可选：限定识别的事件类型
+          event-type: message                  # 可选：限定识别的事件类型
           field-path: /data/node_name            # 客户报文确认前无默认值，必须显式配置
           field-value: [意图返回, 不在范围]      # 未配全则启动失败
         fields:
           handoff-type: /data/handoff_type
-          intent-id: /data/intent_id
+          intent-id: /data/summary
           business-domain: /data/domain
           target-agent-id: /data/target_agent/id
-          dedup-key: /data/execution_id
+          dedup-key: /createdTime
         signal:
           handoff-types: [不在范围]              # upstream-signal：不出站，直接回标记信封
         target:
@@ -64,7 +64,7 @@ openjiuwen:
 （`VERSATILE_HANDOFF_*`），不返回空 COMPLETED。
 
 完整可运行示例见 `common/example/versatile-controller-handoff-demo`（生产
-`node_finished` 报文格式，L1/L2 双 runtime 十场景旅程验收）。
+`message` 报文格式，L1/L2 双 runtime 十场景旅程验收）。
 
 ## 配置说明
 
@@ -75,19 +75,25 @@ openjiuwen:
 
 | 配置项 | 类型 | 默认值 | 说明 |
 |--------|------|--------|------|
-| `classify.event-type` | string | — | 可选。仅对该事件类型的报文做字段识别（如生产 `node_finished`） |
+| `classify.event-type` | string | — | 可选。仅对该事件类型的报文做字段识别（如生产 `message`） |
 | `classify.field-path` | string | — | **必填**。判定"这是转调消息"的字段路径（JSONPath 风格） |
 | `classify.field-value` | list | — | **必填**。路径命中值集合，任一匹配即认定为转调消息 |
 | `fields.handoff-type` | string | — | 转调类型字段的提取路径（signal 匹配、日志用） |
 | `fields.intent-id` | string | — | 意图 id 提取路径，供 `intent-mapping` 解析目标 |
 | `fields.business-domain` | string | — | 业务域提取路径，供 `domain-mapping` 解析目标 |
 | `fields.target-agent-id` | string | — | 报文显式指名目标时的提取路径（resolution `direct` 来源） |
-| `fields.dedup-key` | string | — | 去重键提取路径（如 `execution_id`；同一键的重复转调消息静默跳过） |
+| `fields.dedup-key` | string | — | 去重键提取路径（如生产 `createdTime`；同一键的重复转调消息静默跳过） |
 
 `enabled=true` 但 `classify.field-path` / `classify.field-value` 未配全时**启动失败**
 （`event-type` 单独配置不充分）。提取到的字段值随报文格式约定，参考 demo 的生产
-`node_finished` 样例：`/data/node_name` ∈ `[意图返回, 不在范围]`、
-`/data/outputs/response` 为意图 id。
+`message` 样例：`/data/node_name` ∈ `[意图返回, 不在范围]`、
+`/data/summary` 为意图 id（如 `"3"`）、顶层 `/createdTime` 为 dedup-key。
+
+识别命中但必要字段提取路径**缺失**（键不存在，如生产 SSE 的意图回显帧：
+`text` 带值、无 `summary` 键）→ 该行整行抑制（WARN 日志可观测）：不处理、
+不透传给最终用户、不产出 `MESSAGE_CONTRACT` 报错（2026-08-19 客户现场确认）。
+注意空串值视为字段在场——非本次解析来源的字段合法为空（如 direct 目标为空、
+由 intent 映射解析）。
 
 ### 上行信号（signal）
 
@@ -139,7 +145,6 @@ openjiuwen:
 | `VERSATILE_HANDOFF_CROSS_AGENT_RESUME_UNSUPPORTED` | 下游返回 INPUT_REQUIRED 且 `cross-agent-resume.enabled=false` |
 | `VERSATILE_HANDOFF_DUPLICATE_TARGET` | 单请求内重复转调同一目标，或入站轨迹回环重入（含 `self-agent-id`） |
 | `VERSATILE_HANDOFF_LOOP_LIMIT` | 超出 `max-redirects` 或 `max-route-trace-hops` |
-| `VERSATILE_HANDOFF_MESSAGE_CONTRACT` | 转调消息字段缺失/不合法（如 dedup-key 缺失） |
 | `VERSATILE_HANDOFF_REMOTE_REJECTED` | 下游返回不可恢复失败 |
 | `VERSATILE_HANDOFF_REMOTE_BUSINESS_FAILURE` | 下游业务侧失败终态 |
 | `VERSATILE_HANDOFF_RESULT_INVALID` | 下游结果无法归一为有效回答 |

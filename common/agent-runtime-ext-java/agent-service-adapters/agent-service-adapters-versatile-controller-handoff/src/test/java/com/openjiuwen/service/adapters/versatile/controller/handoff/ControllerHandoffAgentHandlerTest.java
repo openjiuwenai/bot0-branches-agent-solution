@@ -187,7 +187,9 @@ class ControllerHandoffAgentHandlerTest {
     }
 
     @Test
-    void contractViolationProducesTypedError() {
+    void incompleteHandoffFrameSuppressedAndBaselineCompletes() {
+        // 识别命中但提取字段缺失（生产 SSE 的意图回显帧）：不报错不出站，
+        // 且整行抑制——原始控制帧不透传给最终用户
         controllerResponds(
                 "{\"data\":{\"code\":14000}}", // 命中识别但配置的提取字段缺失
                 "{\"event\":\"end\"}");
@@ -195,9 +197,10 @@ class ControllerHandoffAgentHandlerTest {
         RecordingObserver observer = new RecordingObserver();
         handler(caller, handoffProperties()).streamQuery(request(), observer);
         assertThat(caller.lastCall).isNull();
-        assertThat(String.valueOf(observer.chunks.get(0).getData()))
-                .contains("VERSATILE_HANDOFF_MESSAGE_CONTRACT");
-        assertThat(observer.error).isNotNull();
+        assertThat(observer.completed).isTrue();
+        assertThat(observer.error).isNull();
+        // 回显帧本身被抑制，不进用户流（end 等基线帧不受影响）
+        assertThat(observer.chunks).noneMatch(c -> String.valueOf(c.getData()).contains("14000"));
     }
 
     @Test

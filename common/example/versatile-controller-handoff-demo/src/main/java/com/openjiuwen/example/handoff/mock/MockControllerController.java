@@ -26,15 +26,17 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Mock Versatile controller for the FEAT-002 intent-handoff demo (L2 spec §7.2
  * 场景旅程验收). Activated by the {@code mock-controller} profile.
  *
- * <p>Emits the real controller wire format: Dify-style {@code node_finished}
- * SSE events. The two handoff signals below are the production samples verbatim
- * (only the intent value varies per scenario):
+ * <p>Emits the real controller wire format: the two handoff signals are Dify-style
+ * {@code message} SSE events, production samples verbatim (only the intent value
+ * and {@code createdTime} vary per execution):
  * <ul>
  *   <li>L1 意图转调 — {@code node_name="意图返回"}, intent id at
- *       {@code data.outputs.response} (e.g. {@code "3"}).</li>
+ *       {@code data.summary} (e.g. {@code "3"}).</li>
  *   <li>L2 不在范围退回 — {@code node_name="不在范围"},
- *       {@code data.outputs.response="不在范围"}.</li>
+ *       {@code data.summary="不在范围"}.</li>
  * </ul>
+ * 业务答案/终态/中断事件仍为 {@code node_finished} / {@code workflow_finished} /
+ * {@code need_user_input} 形态（FEAT-002 基线提取依赖）。
  *
  * <p>Scenario selection is by {@code inputs.query} keyword (stateless except a
  * per-conversation invocation counter used by the 二级退回一级 journey, where the
@@ -97,21 +99,19 @@ public class MockControllerController {
     }
 
     private static String l1Response(String query, int invocation) {
-        String execId = executionId(invocation);
         if (query.contains("异常")) {
             return sseLines(exceptionEvent());
         }
         String intent = intentForQuery(query);
         if (intent != null && !(query.contains("退回") && invocation >= 2)) {
-            return sseLines(intentHandoffEvent(intent, execId));
+            return sseLines(echoMessageEvent(intent, invocation), intentHandoffEvent(intent, invocation));
         }
         return sseLines(answerEvent("一级本地业务答案：当前工作流已处理完成"), workflowEndEvent());
     }
 
     private static String l2Response(String query, int invocation) {
-        String execId = executionId(invocation);
         if (query.contains("退回") || query.contains("循环")) {
-            return sseLines(notInScopeEvent(execId));
+            return sseLines(notInScopeEvent(invocation));
         }
         if (query.contains("补充信息")) {
             return sseLines(interruptEvent(), workflowEndEvent());
@@ -144,27 +144,38 @@ public class MockControllerController {
     }
 
     /**
-     * L1 意图转调信号 — 生产报文样例原样（intent 值与 execution_id 随执行变化：
-     * 真实控制器每次执行生成新 execution_id，作为 dedup-key，重识别后的再次转调
+     * L1 意图转调信号 — 生产报文样例原样（intent 值与 createdTime 随执行变化：
+     * 真实控制器每条消息的 createdTime 不同，作为 dedup-key，重识别后的再次转调
      * 不会被判为重复消息）。
      */
-    private static String intentHandoffEvent(String intentId, String execId) {
-        return "{\"event\":\"node_finished\",\"data\":{\"agent_id\":\"81476c36-28e6-4ec1-84c5-247be51a9327\","
-                + "\"node_id\":\"node_1787129452975\",\"node_status\":\"node_finished\",\"parent_workflow_id\":\"\","
-                + "\"status\":{\"code\":0,\"desc\":\"succeeded\"},\"node_name\":\"意图返回\",\"node_type\":\"QA\","
-                + "\"inputs\":{},\"outputs\":{\"response\":\"" + intentId + "\"},"
-                + "\"start_time\":1787129556865,\"end_time\":1787129556867,"
-                + "\"execution_id\":\"" + execId + "\"},\"createdTime\":1787129556876}";
+    private static String intentHandoffEvent(String intentId, int invocation) {
+        return "{\"event\":\"message\",\"data\":{\"text\":\"\",\"summary\":\"" + intentId + "\","
+                + "\"node_id\":\"node_1787129452975\",\"node_type\":\"QA\",\"node_name\":\"意图返回\","
+                + "\"is_finished\":true,\"workflow_id\":\"81476c36-28e6-4ec1-84c5-247be51a9317\","
+                + "\"workflow_name\":\"eqijimorengongzuoliu_fenbushiyanzheng\"},"
+                + "\"createdTime\":" + createdTime(invocation) + "}";
     }
 
-    /** L2 不在范围退回信号 — 生产报文样例原样（execution_id 随执行变化）。 */
-    private static String notInScopeEvent(String execId) {
-        return "{\"event\":\"node_finished\",\"data\":{\"agent_id\":\"81476c36-28e6-4ec1-84c5-247be51a9327\","
-                + "\"node_id\":\"node_1787129452975\",\"node_status\":\"node_finished\",\"parent_workflow_id\":\"\","
-                + "\"status\":{\"code\":0,\"desc\":\"succeeded\"},\"node_name\":\"不在范围\",\"node_type\":\"QA\","
-                + "\"inputs\":{},\"outputs\":{\"response\":\"不在范围\"},"
-                + "\"start_time\":1787129556865,\"end_time\":1787129556867,"
-                + "\"execution_id\":\"" + execId + "\"},\"createdTime\":1787129556876}";
+    /**
+     * 生产 SSE 会混入的意图回显帧（2026-08-19 确认）：同一 node_name、无 summary 键、
+     * 意图值在 data.text。识别命中但提取路径缺失 → 分类器按非转调忽略（WARN），
+     * 不报错不出站，交回基线。
+     */
+    private static String echoMessageEvent(String intentId, int invocation) {
+        return "{\"event\":\"message\",\"data\":{\"text\":\"" + intentId + "\","
+                + "\"node_id\":\"node_1787129452975\",\"node_type\":\"QA\",\"node_name\":\"意图返回\","
+                + "\"is_finished\":true,\"workflow_id\":\"81476c36-28e6-4ec1-84c5-247be51a9317\","
+                + "\"workflow_name\":\"eqijimorengongzuoliu_fenbushiyanzheng\"},"
+                + "\"createdTime\":" + (createdTime(invocation) - 1) + "}";
+    }
+
+    /** L2 不在范围退回信号 — 生产报文样例原样（createdTime 随执行变化）。 */
+    private static String notInScopeEvent(int invocation) {
+        return "{\"event\":\"message\",\"data\":{\"text\":\"\",\"summary\":\"不在范围\","
+                + "\"node_id\":\"node_1787129452975\",\"node_type\":\"QA\",\"node_name\":\"不在范围\","
+                + "\"is_finished\":true,\"workflow_id\":\"81476c36-28e6-4ec1-84c5-247be51a9317\","
+                + "\"workflow_name\":\"eqijimorengongzuoliu_fenbushiyanzheng\"},"
+                + "\"createdTime\":" + createdTime(invocation) + "}";
     }
 
     /**
@@ -198,9 +209,9 @@ public class MockControllerController {
                 + "\"node_status\":\"node_finished\"}}";
     }
 
-    /** 每次控制器执行生成唯一 execution_id（真实控制器行为）。 */
-    private static String executionId(int invocation) {
-        return String.format("c83e2944-073f-404b-8211-d1ade7c2%06d", invocation);
+    /** 每次控制器执行生成新的 createdTime（真实控制器行为，作 dedup-key）。 */
+    private static long createdTime(int invocation) {
+        return 1787140547059L + invocation;
     }
 
     private static String sseLines(String... dataLines) {

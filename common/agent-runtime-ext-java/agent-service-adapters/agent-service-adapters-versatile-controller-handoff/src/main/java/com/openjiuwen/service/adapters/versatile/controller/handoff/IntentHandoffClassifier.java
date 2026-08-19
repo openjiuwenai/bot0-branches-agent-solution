@@ -12,14 +12,27 @@ import com.openjiuwen.service.adapters.versatile.controller.handoff.autoconfigur
 import java.util.ArrayList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Classifies controller SSE/REST output lines: identification strictly precedes the
  * FEAT-002 generic error mapping (fixed in the processing chain, not configurable).
  * Never uses exception-text keywords or natural-language similarity (spec 2.2/3.5).
  *
+ * <p>Identification hit but required field extraction missing (key absent) →
+ * IGNORED (WARN observable, line suppressed), not an error: production SSE
+ * interleaves incomplete signal frames (e.g. intent echo with {@code text} set
+ * and no {@code summary} key); they are controller-internal control noise —
+ * neither processed nor forwarded to the end user (spec 2.2, confirmed
+ * 2026-08-19). Blank values count as present — non-participating fields
+ * legitimately carry "" (e.g. direct target empty, resolved by intent
+ * mapping).
+ *
  * @since 2026-08-19
  */
 public class IntentHandoffClassifier {
+    private static final Logger log = LoggerFactory.getLogger(IntentHandoffClassifier.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final ControllerHandoffProperties properties;
@@ -54,13 +67,20 @@ public class IntentHandoffClassifier {
         String targetAgentId = requiredValue(json, fields.getTargetAgentId(), "target-agent-id", missing);
         String dedupKey = readPath(json, fields.getDedupKey()); // optional per spec 2.2
         if (!missing.isEmpty()) {
-            return new HandoffClassification(HandoffClassification.Outcome.CONTRACT_VIOLATION, null);
+            // 生产 SSE 会混入信号字段不全的 message 帧（如 text 带值、summary 键缺失的
+            // 意图回显）：识别命中但提取路径缺失时整行抑制（WARN 可观测）——不处理、
+            // 不透传基线、不报错（spec 2.2，2026-08-19 确认）
+            log.warn("handoff classify hit but required field(s) missing, ignoring as non-handoff:"
+                    + " missing={} line={}", missing, rawLine.trim());
+            return new HandoffClassification(HandoffClassification.Outcome.IGNORED, null);
         }
         return new HandoffClassification(HandoffClassification.Outcome.HANDOFF,
                 new IntentHandoff(handoffType, intentId, businessDomain, targetAgentId, dedupKey, data));
     }
 
     private static String requiredValue(JsonNode json, String configuredPath, String label, List<String> missing) {
+        // 注意只按"路径缺失"计忽略（键不存在）：空串视为字段在场——非本次解析
+        // 来源的字段合法为空（如 direct 目标为空走 intent 映射，spec 3.2）
         String value = readPath(json, configuredPath);
         if (value == null) {
             missing.add(label);

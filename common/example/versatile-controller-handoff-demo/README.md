@@ -1,7 +1,7 @@
 # Versatile Controller Handoff Demo
 
 FEAT-002「Versatile 控制器意图转调消息路由」的场景旅程验收 example（L2 设计 §7.2）。
-单进程同时承载 mock Versatile 控制器与两个 runtime 实例，用生产 `node_finished` 报文格式
+单进程同时承载 mock Versatile 控制器与两个 runtime 实例，用生产 `message` 报文格式
 驱动 L1→L2 转调与 L2 not-in-scope 上行信号（upstream-signal）全链路。
 
 ## 拓扑
@@ -10,7 +10,7 @@ FEAT-002「Versatile 控制器意图转调消息路由」的场景旅程验收 e
 调用方 (curl /v1/query)
   -> layer1 runtime :18091 (profiles: layer1,mock-controller)
        agent_card_l1 + ControllerHandoffAgentHandler -> mock agent_L1_controller
-       意图转调 (node_name=意图返回, outputs.response=意图id)
+       意图转调 (event=message, node_name=意图返回, data.summary=意图id)
          -> intent-mapping 解析 -> A2A -> layer2
   -> layer2 runtime :18092 (profiles: layer2,mock-controller)
        agent_card_l2 + ControllerHandoffAgentHandler -> mock agent_L2_controller
@@ -60,10 +60,11 @@ SKIP_BUILD=1 ./scripts/local-e2e.sh
 
 ## 配置要点
 
-- `application.yml`：共享的转调识别条件（`classify.event-type=node_finished`、
-  `field-path=/data/node_name`、`field-value=[意图返回, 不在范围]`）与字段提取路径。
-  报文样例即生产格式，仅意图值与 `execution_id` 随执行变化（每次执行生成新
-  `execution_id` 作 dedup-key，重识别后的再次转调不会被误判为重复消息）。
+- `application.yml`：共享的转调识别条件（`classify.event-type=message`、
+  `field-path=/data/node_name`、`field-value=[意图返回, 不在范围]`）与字段提取路径
+  （`intent-id=/data/summary`、`dedup-key=/createdTime`）。
+  报文样例即生产格式，仅意图值与 `createdTime` 随执行变化（每次执行新
+  `createdTime` 作 dedup-key，重识别后的再次转调不会被误判为重复消息）。
 - `application-layer2.yml`：`handoff.signal.handoff-types: [不在范围]` ——
   upstream-signal 语义，二级退回一级不出站调用。
 - `application-layer1.yml`：`intent-mapping`（3→l2 / 5→dead / 6→forbidden）。

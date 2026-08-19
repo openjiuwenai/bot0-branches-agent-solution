@@ -96,11 +96,23 @@ class IntentHandoffClassifierTest {
     }
 
     @Test
-    void contractViolationWhenConfiguredFieldMissing() {
+    void missingRequiredFieldsIgnoredAsNotHandoff() {
+        // 生产 SSE 混入信号字段不全的帧（如意图回显：text 带值、summary 键缺失）：
+        // 识别命中但提取路径缺失 → IGNORED 整行抑制（WARN 可观测），
+        // 不处理、不透传基线、不产出 MESSAGE_CONTRACT（spec 2.2，2026-08-19 确认）
         HandoffClassification result = new IntentHandoffClassifier(properties()).classify(
                 "{\"data\":{\"code\":14000}}");
-        // handoff-type/intent-id/business-domain/target-agent-id 路径已配置但报文缺失
-        assertThat(result.outcome()).isEqualTo(HandoffClassification.Outcome.CONTRACT_VIOLATION);
+        assertThat(result.outcome()).isEqualTo(HandoffClassification.Outcome.IGNORED);
+        assertThat(result.handoff()).isNull();
+    }
+
+    @Test
+    void blankRequiredFieldStillPresent() {
+        // 空串视为字段在场：非本次解析来源的字段合法为空（如 direct 目标为空走 intent 映射）
+        HandoffClassification result = new IntentHandoffClassifier(properties()).classify(
+                "{\"data\":{\"code\":14000,\"handoff_type\":\"L1_TO_L2\",\"intent_id\":\"i\","
+                        + "\"domain\":\"\",\"target_agent\":{\"id\":\"\"}}}");
+        assertThat(result.outcome()).isEqualTo(HandoffClassification.Outcome.HANDOFF);
     }
 
     @Test

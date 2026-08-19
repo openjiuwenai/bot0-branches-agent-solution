@@ -161,6 +161,9 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
                     return; // 已命中转调：控制器剩余输出全部抑制（执行已移交下游）
                 }
                 HandoffClassification classification = handoffClassifier.classify(line);
+                if (classification.outcome() == HandoffClassification.Outcome.IGNORED) {
+                    return; // 识别命中但字段不全的回显/噪声帧：整行抑制，不透传基线（spec 2.2）
+                }
                 if (classification.outcome() != HandoffClassification.Outcome.NOT_HANDOFF) {
                     hit.compareAndSet(null, classification);
                     return; // 抑制转调信号
@@ -241,12 +244,6 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
     /** 命中转调后的终态分发：executor 直接驱动 observer（spec 4.2）。 */
     private ControllerHandoffExecutor.ExecResult dispatchHandoff(HandoffClassification classification,
             ServeRequest request, QueryStreamObserver observer, RequestHandoffState state) {
-        if (classification.outcome() == HandoffClassification.Outcome.CONTRACT_VIOLATION) {
-            emitHandoffError(observer, "VERSATILE_HANDOFF_MESSAGE_CONTRACT",
-                    "identification hit but required field extraction failed conversation_id="
-                            + request.getConversationId());
-            return ControllerHandoffExecutor.ExecResult.TERMINAL;
-        }
         ControllerHandoffExecutor executor = executorProvider == null ? null : executorProvider.getIfAvailable();
         if (executor == null) {
             emitHandoffError(observer, "VERSATILE_HANDOFF_CALLER_UNAVAILABLE",

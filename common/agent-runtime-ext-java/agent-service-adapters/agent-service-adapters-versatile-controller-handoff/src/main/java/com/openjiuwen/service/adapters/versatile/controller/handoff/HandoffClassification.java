@@ -16,8 +16,12 @@ public record HandoffClassification(Outcome outcome, IntentHandoff handoff) {
         HANDOFF,
         /** No hit — hand back to the FEAT-002 baseline mapping. */
         NOT_HANDOFF,
-        /** Identification hit but required field extraction failed (spec 2.2). */
-        CONTRACT_VIOLATION
+        /** Identification hit but required field extraction missing (production SSE
+         * interleaves incomplete signal frames, e.g. intent echo with {@code text}
+         * set and no {@code summary} key) — suppress the line entirely: no
+         * processing, no baseline forwarding, no error (spec 2.2, confirmed
+         * 2026-08-19). */
+        IGNORED
     }
 
     public static HandoffClassification notHandoff() {

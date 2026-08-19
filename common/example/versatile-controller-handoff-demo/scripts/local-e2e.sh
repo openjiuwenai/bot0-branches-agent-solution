@@ -5,7 +5,7 @@
 #
 #   layer1 (port 18091, profiles layer1,mock-controller)
 #     agent_card_l1 — runtime + controller-handoff adapter, backed by the
-#     in-process mock controller (agent_L1_controller, node_finished format).
+#     in-process mock controller (agent_L1_controller, message format).
 #   layer2 (port 18092, profiles layer2,mock-controller)
 #     agent_card_l2 — runtime + controller-handoff adapter, backed by
 #     agent_L2_controller. "不在范围" is a signal handoff type
@@ -219,6 +219,9 @@ main() {
   assert_log_contains "s2-l1-outbound" "$LOG_DIR/layer1.log" "handoff outbound target=agent_card_l2 source=INTENT_MAPPING"
   assert_log_contains "s2-l1-caller" "$LOG_DIR/layer1.log" "A2A call agent=agent_card_l2"
   assert_log_contains "s2-l2-received" "$LOG_DIR/layer2.log" "conversation_id=c2-handoff"
+  # mock 在信号帧前发送生产形态的意图回显帧（无 summary 键）：应被整行抑制且不报错
+  assert_log_contains "s2-echo-suppressed" "$LOG_DIR/layer1.log" "handoff classify hit but required field"
+  assert_log_not_contains "s2-no-contract-error" "$LOG_DIR/layer1.log" "VERSATILE_HANDOFF_MESSAGE_CONTRACT"
 
   echo
   echo "---- 场景2b: 同场景流式（SSE 增量透传） ----"
