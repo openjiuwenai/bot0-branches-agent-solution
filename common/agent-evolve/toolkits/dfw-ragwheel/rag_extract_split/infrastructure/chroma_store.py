@@ -125,9 +125,6 @@ def _chroma_persist_dir() -> str:
 
 def drop_collection(collection_name: str) -> None:
     """彻底删除 collection（不再重建）。兼容 CLI 和 Flask 长驻进程。"""
-    import logging
-    logger = logging.getLogger(__name__)
-
     name = str(collection_name).strip()
     persist_dir = _chroma_persist_dir()
     logger.warning("[drop_collection] target=%r persist_dir=%r", name, persist_dir)

@@ -232,15 +232,14 @@ def run_extract(
         emb_after = embed_stats_snapshot()
         last_recall_detail = dict(detail)
 
-        newly_done = [
-            a
-            for a, d in detail.items()
-            if (
-                a not in frozen_answers_done
-                and int(d.get("total") or 0) > 0
-                and int(d.get("hit") or 0) >= int(d.get("total") or 0)
-            )
-        ]
+        newly_done = []
+        for answer, stats in detail.items():
+            if answer in frozen_answers_done:
+                continue
+            total = int(stats.get("total") or 0)
+            hit = int(stats.get("hit") or 0)
+            if total > 0 and hit >= total:
+                newly_done.append(answer)
         before = len(accumulated_qas)
         for a in newly_done:
             frozen_answers_done.add(a)

@@ -78,7 +78,7 @@ class _LLMKitManager:
             return
         try:
             raw = json.loads(legacy_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
+        except (OSError, ValueError):
             logger.debug("failed to load legacy llm_configs.json", exc_info=True)
             return
 
