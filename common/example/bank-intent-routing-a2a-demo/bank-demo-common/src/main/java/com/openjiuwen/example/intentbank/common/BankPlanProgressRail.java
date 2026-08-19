@@ -20,7 +20,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Emits the Intent Agent's actual task-plan progress before a remote invocation. */
+/**
+ * Emits the Intent Agent's actual task-plan progress before a remote invocation.
+ *
+ * @since 0.1.0
+ */
 public final class BankPlanProgressRail extends AgentRail {
     /** Runs after intent routing and before the A2A delegate interrupt Rail. */
     public static final int PRIORITY = 100;

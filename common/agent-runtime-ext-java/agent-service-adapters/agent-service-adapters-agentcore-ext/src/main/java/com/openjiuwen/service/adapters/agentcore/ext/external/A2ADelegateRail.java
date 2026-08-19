@@ -99,6 +99,6 @@ public final class A2ADelegateRail extends BaseInterruptRail {
     }
 
     private static String toolCallId(ToolCall toolCall) {
-        return toolCall == null ? null : toolCall.getId();
+        return toolCall == null ? "" : text(toolCall.getId());
     }
 }

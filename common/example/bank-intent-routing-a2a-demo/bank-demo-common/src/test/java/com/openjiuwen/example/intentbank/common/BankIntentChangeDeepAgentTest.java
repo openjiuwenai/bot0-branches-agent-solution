@@ -55,13 +55,14 @@ class BankIntentChangeDeepAgentTest {
     }
 
     @Test
-    void interruptedTransferReturnsIntentChangeAsSuccessfulDeepAgentResult() {
+    void interruptedTransferReturnsIntentChangeResult() {
         CheckpointerFactory.setDefaultCheckpointer(new InMemoryCheckpointer());
         String sessionId = "bank-intent-change-test";
         DeepAgent agent = HarnessFactory.createDeepAgent(
                 AgentCard.builder().id("bank-intent-change-agent").name("BankIntentChangeAgent")
                         .description("intent change regression agent").build(),
-                DeepAgentConfig.builder().systemPrompt("Always execute one transfer.").workspacePath(workspace.toString())
+                DeepAgentConfig.builder().systemPrompt("Always execute one transfer.")
+                        .workspacePath(workspace.toString())
                         .enableTaskLoop(true).maxIterations(4).completionTimeout(10D)
                         .tools(List.of(BankTools.transfer()))
                         .rails(List.of(new ConfirmationRail(BankTools.TRANSFER,
@@ -111,7 +112,9 @@ class BankIntentChangeDeepAgentTest {
         for (Object chunk : chunks) {
             if (chunk instanceof OutputSchema output) {
                 payloads.add(output.getPayload());
-            } else if (chunk instanceof ControllerOutputChunk output && output.getControllerPayload() != null) {
+                continue;
+            }
+            if (chunk instanceof ControllerOutputChunk output && output.getControllerPayload() != null) {
                 payloads.add(output.getControllerPayload().getData());
             }
         }

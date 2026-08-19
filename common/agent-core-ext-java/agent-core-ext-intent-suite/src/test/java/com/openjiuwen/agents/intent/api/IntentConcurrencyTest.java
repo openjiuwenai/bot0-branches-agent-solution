@@ -24,8 +24,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 /** Tests that concurrent full replacements never leak partial catalogs into calls. */
@@ -48,7 +49,8 @@ class IntentConcurrencyTest {
                 .initializer(new DefaultIntentInitializer()).matcher(firstCandidate).build();
         assertThat(suite.replaceCatalog(versionedCatalog(1, echoSnapshot))).isEqualTo(1L);
 
-        ExecutorService executor = Executors.newFixedThreadPool(RESOLVER_THREADS + 1);
+        ExecutorService executor = new ThreadPoolExecutor(RESOLVER_THREADS + 1, RESOLVER_THREADS + 1, 0L,
+                TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         try {
             List<Future<IntentDecision>> resolvers = new ArrayList<>();
             for (int thread = 0; thread < RESOLVER_THREADS; thread++) {

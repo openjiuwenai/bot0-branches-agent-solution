@@ -25,7 +25,7 @@ import java.util.Map;
 /** Tests user-visible progress generated from the actual DeepAgent todo plan. */
 class BankPlanProgressRailTest {
     @Test
-    void emitsCreatedPlanBeforeFirstRemoteStepWithoutChangingDelegateArguments() {
+    void emitsCreatedPlanBeforeRemoteStepWithoutChangingDelegateArguments() {
         TestInvocation invocation = invokeRail(List.of(
                 todo("first", "给张三转账100元", TodoStatus.IN_PROGRESS, null),
                 todo("second", "给李四转账100元", TodoStatus.PENDING, null)));
