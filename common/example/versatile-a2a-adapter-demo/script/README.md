@@ -7,7 +7,8 @@
 script/
 ├── start.sh          启动 demo jar（宿主机方式）
 ├── send-requests.sh  用 curl 向 A2A 入口发送三轮请求（流式/非流式/自定义 body）
-└── build-image.sh    构建 Docker 镜像（eclipse-temurin:17-jdk-alpine）
+├── start-handoff.sh  启动/停止 versatile-controller-handoff-demo 的 L1/L2 双 runtime
+└── build-image.sh    构建 Docker 镜像（eclipse-temurin:17-jdk-alpine，含两个 demo）
 ```
 
 配套文件（demo 模块根目录）：
@@ -16,6 +17,13 @@ script/
 Dockerfile     基于 eclipse-temurin:17-jdk-alpine，容器内目录结构与仓库一致
 .dockerignore  构建上下文裁剪
 ```
+
+镜像同时可调试两个 demo：
+
+| demo | 入口 | 说明 |
+|---|---|---|
+| versatile-a2a-adapter-demo | `:18080/a2a/` | 对接远端 Versatile（`start.sh` + `send-requests.sh`） |
+| versatile-controller-handoff-demo | `:18091` / `:18092` | FEAT-002 控制器意图转调，自包含 mock 控制器无外部依赖（`start-handoff.sh` / `local-e2e.sh`） |
 
 ---
 
@@ -52,20 +60,30 @@ cd common/example/versatile-a2a-adapter-demo
 docker run -d --name versatile-demo --network host versatile-a2a-adapter-demo:latest
 
 #   方式二（Docker Desktop / 端口映射）：远端 Versatile 地址需指向宿主机入口
-docker run -d --name versatile-demo -p 18080:18080 \
+#         （只调 controller-handoff demo 时不需 VERSATILE_URL，也不必映射 18080）
+docker run -d --name versatile-demo -p 18080:18080 -p 18091:18091 -p 18092:18092 \
   -e VERSATILE_URL=http://host.docker.internal:31113/v1/0/agents/{agent_id}/conversations/{conversation_id} \
   versatile-a2a-adapter-demo:latest
 
 # 3) 进入容器，手动启动服务并发请求（容器内路径与仓库一致）
 docker exec -it versatile-demo /bin/sh
-/app/script/start.sh                      # 手动启动服务（Ready 后可调测）
+/app/script/start.sh                      # demo1: 手动启动服务（Ready 后可调测）
 /app/script/send-requests.sh              # 三轮默认请求
 /app/script/send-requests.sh --round 2 --non-stream
 /app/script/start.sh --stop               # 停止服务
+/app/script/start-handoff.sh              # demo2: controller-handoff L1(:18091)/L2(:18092)
+/app/script/start-handoff.sh --stop       # 停止两个 runtime
 exit                                       # 退出容器，容器继续存活
 
 # 查看服务端日志（容器外）
 docker logs -f versatile-demo        # 或容器内: tail -f /app/target/demo.log
+                                          #           tail -f /app/controller-handoff-demo/target/layer{1,2}.log
+```
+
+controller-handoff demo 十场景旅程验收（自动起停 L1/L2 并逐场景断言）：
+
+```bash
+docker exec versatile-demo sh -c 'SKIP_BUILD=1 /app/controller-handoff-demo/scripts/local-e2e.sh'
 ```
 
 交互式一步到位：`docker run -it --entrypoint /bin/sh versatile-a2a-adapter-demo:latest`，
@@ -109,6 +127,34 @@ docker exec versatile-demo /app/script/send-requests.sh --file /app/a2a-requests
 
 `./start.sh --stop` 通过 `.demo.pid` 停止进程。日志写入 `target/demo.log`。
 
+### start-handoff.sh
+
+启动 versatile-controller-handoff-demo（FEAT-002 控制器意图转调）的 L1/L2 双
+runtime 供长时调测；模块在 `common/example/versatile-controller-handoff-demo`
+（场景关键字、配置说明见其 README）。
+
+| 环境变量 | 默认值 | 说明 |
+|---|---|---|
+| `L1_PORT` | `18091` | 一级 runtime 端口（`/v1/query` 调试入口） |
+| `L2_PORT` | `18092` | 二级 runtime 端口 |
+| `HANDOFF_DIR` | 自动探测 | demo 模块目录（仓库布局 / 容器 `/app/controller-handoff-demo`） |
+| `JAR` | 自动探测 `target/*.jar` | 显式指定 jar 路径 |
+
+`./start-handoff.sh --stop` 通过 `.handoff-l{1,2}.pid` 停止两个 runtime。
+日志写入 `$HANDOFF_DIR/target/layer{1,2}.log`。启动顺序先 L2 后 L1（静态发现），
+脚本会等待 L1 拉到 `agent_card_l2` 后才报 Ready。
+
+调试示例：
+
+```bash
+./script/start-handoff.sh
+curl -N -X POST "http://127.0.0.1:18091/v1/query" -H "Content-Type: application/json" \
+  -H "X-User-ID: u-42" \
+  -d '{"conversation_id":"debug-1","stream":true,"messages":[{"role":"user","content":"帮我转调订机票"}]}'
+```
+
+十场景验收（自动起停、逐场景断言）：`SKIP_BUILD=1 ../versatile-controller-handoff-demo/scripts/local-e2e.sh`。
+
 ### send-requests.sh
 
 | 参数 | 默认 | 说明 |
@@ -131,6 +177,15 @@ docker exec versatile-demo /app/script/send-requests.sh --file /app/a2a-requests
 | `--jar <PATH>` | 自动探测 `target/*.jar` | 指定要 COPY 进镜像的 jar |
 | `--out <DIR>` | `target/` | 镜像 tar 包输出目录 |
 | `--gzip` | 关闭 | 导出 gzip 压缩的镜像包 `.tar.gz` |
+
+| 环境变量 | 默认 | 说明 |
+|---|---|---|
+| `HANDOFF_JAR` | 自动探测 | 指定 controller-handoff demo 的 jar（默认探测兄弟模块 `target/`，缺失时自动 mvn 构建） |
+
+镜像同时打包两个 demo：本 demo jar + controller-handoff demo
+（stage 到 `target/image-extra/controller-handoff-demo/` 后 COPY 为
+`/app/controller-handoff-demo/`）。构建上下文外（兄弟模块缺失）时仅告警、
+镜像不含 handoff demo。
 
 构建成功后自动 `docker save` 导出镜像包：
 `target/versatile-a2a-adapter-demo-<版本>.tar`。复制到生产环境离线部署：

@@ -25,13 +25,17 @@
 #   #   远端 Versatile 若跑在宿主机 127.0.0.1:31113 也能直接访问
 #   docker run -d --name versatile-demo --network host versatile-a2a-adapter-demo:latest
 #   docker exec -it versatile-demo /bin/sh                 # 进入容器（容器不自动启动服务）
-#     进入后: /app/script/start.sh                         # 手动启动服务
+#     进入后: /app/script/start.sh                         # 调试本 demo（:18080 对接远端 Versatile）
 #             /app/script/send-requests.sh                 # 调测发请求
+#             /app/script/start-handoff.sh                 # 调试 controller-handoff demo
+#                                                         #   （L1 :18091 / L2 :18092，自包含 mock）
+#             SKIP_BUILD=1 /app/controller-handoff-demo/scripts/local-e2e.sh   # 十场景验收
 #             /app/script/start.sh --stop                  # 停止服务
+#             /app/script/start-handoff.sh --stop
 #   docker logs -f versatile-demo                          # 看服务端日志
 #
 #   # 方式二 (Docker Desktop / 端口映射): 远端 Versatile 地址需指向宿主机入口
-#   docker run -d --name versatile-demo -p 18080:18080 \
+#   docker run -d --name versatile-demo -p 18080:18080 -p 18091:18091 -p 18092:18092 \
 #     -e VERSATILE_URL=http://host.docker.internal:31113/v1/0/agents/main_planner/conversations/{conversation_id} \
 #     versatile-a2a-adapter-demo:latest
 #
@@ -82,6 +86,38 @@ if [[ -z "$JAR" || ! -f "$JAR" ]]; then
 fi
 echo "Using jar : $JAR"
 
+# ---------- 1b. 同镜像附带 versatile-controller-handoff-demo ----------
+# 镜像同时可调试两个 demo：本 demo（对接远端 Versatile）+ controller-handoff demo
+# （自包含 mock 控制器，L1/L2 双 runtime）。构建上下文是本 demo 目录，兄弟模块的
+# 产物无法直接 COPY，先 stage 到 target/image-extra/ 再进镜像（.dockerignore 已放行）。
+HANDOFF_DEMO_DIR="$REPO_ROOT/common/example/versatile-controller-handoff-demo"
+STAGE_EXTRA="$DEMO_DIR/target/image-extra"
+if [[ -d "$HANDOFF_DEMO_DIR" ]]; then
+  HANDOFF_JAR="${HANDOFF_JAR:-}"
+  if [[ -z "$HANDOFF_JAR" ]]; then
+    HANDOFF_JAR="$(ls "$HANDOFF_DEMO_DIR"/target/versatile-controller-handoff-demo-*.jar 2>/dev/null | head -1 || true)"
+  fi
+  if [[ -z "$HANDOFF_JAR" || ! -f "$HANDOFF_JAR" ]]; then
+    echo "controller-handoff demo jar not found, building it on host with mvn ..."
+    # demo 依赖的 adapter 需先安装到本地仓库（见 handoff demo README）
+    ( cd "$REPO_ROOT/common/agent-runtime-ext-java" \
+      && mvn -q -pl agent-service-adapters/agent-service-adapters-versatile-controller-handoff install -DskipTests )
+    ( cd "$REPO_ROOT" && mvn -q -f common/example/versatile-controller-handoff-demo/pom.xml clean package -DskipTests )
+    HANDOFF_JAR="$(ls "$HANDOFF_DEMO_DIR"/target/versatile-controller-handoff-demo-*.jar 2>/dev/null | head -1 || true)"
+  fi
+  if [[ -z "$HANDOFF_JAR" || ! -f "$HANDOFF_JAR" ]]; then
+    echo "ERROR: failed to produce controller-handoff demo jar under $HANDOFF_DEMO_DIR/target/" >&2
+    exit 1
+  fi
+  echo "Bundling: $HANDOFF_JAR"
+  rm -rf "$STAGE_EXTRA/controller-handoff-demo"
+  mkdir -p "$STAGE_EXTRA/controller-handoff-demo/target" "$STAGE_EXTRA/controller-handoff-demo/scripts"
+  cp "$HANDOFF_JAR" "$STAGE_EXTRA/controller-handoff-demo/target/"
+  cp "$HANDOFF_DEMO_DIR/scripts/local-e2e.sh" "$STAGE_EXTRA/controller-handoff-demo/scripts/"
+else
+  echo "WARN: $HANDOFF_DEMO_DIR not found, image will NOT include the controller-handoff demo" >&2
+fi
+
 # ---------- 2. docker build ----------
 echo "Building image: $TAG"
 docker build -f "$DEMO_DIR/Dockerfile" -t "$TAG" "$DEMO_DIR"
@@ -109,7 +145,9 @@ echo
 echo "本地运行 (调测容器, 不自动启动服务):"
 echo "  docker run -d --name versatile-demo --network host $TAG"
 echo "  docker exec -it versatile-demo /bin/sh"
-echo "    进入后: /app/script/start.sh  &&  /app/script/send-requests.sh"
+echo "    进入后: /app/script/start.sh  &&  /app/script/send-requests.sh   # a2a-adapter demo"
+echo "            /app/script/start-handoff.sh                             # controller-handoff demo"
+echo "            SKIP_BUILD=1 /app/controller-handoff-demo/scripts/local-e2e.sh"
 echo "  docker logs -f versatile-demo"
 echo
 echo "复制到生产环境离线部署:"
