@@ -54,6 +54,7 @@
         <module>agent-service-spec-ext</module>
         <module>agent-service-app/agent-service-app-custom-rest</module>
         <module>agent-service-adapters/agent-service-adapters-versatile</module>
+        <module>agent-service-adapters/agent-service-adapters-versatile-controller-handoff</module>
         <module>agent-service-adapters/agent-service-adapters-agentcore-ext</module>
         <module>agent-service-adapters/agent-service-adapters-agentscope</module>
     </modules>
