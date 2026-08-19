@@ -72,7 +72,7 @@ class WeightedSumScorer:
     judgments → ``0.0``.
     """
 
-    def score(self, judgments: list[DimensionJudgment], weights: dict[str, float]) -> float:
+    def score(self, judgments: list[DimensionJudgment], weights: dict[str, float]) -> float:  # noqa: PLW0211
         scores = _judgment_map(judgments)
         if not scores:
             return 0.0

@@ -15,6 +15,7 @@ import pytest
 from evo_agent.evaluator.agent_judge.runtime import (
     ClaudeRuntime,
     CodexRuntime,
+    JiuwenSwarmRuntime,
     RuntimeJudgeRequest,
     _extract_judgment_dict,
     _parse_dimension_judgment,
@@ -46,7 +47,7 @@ class _FakeProc:
         self.killed = False
         self.waited = False
 
-    async def communicate(self, input: bytes | None = None) -> tuple[bytes, bytes]:
+    async def communicate(self, input: bytes | None = None) -> tuple[bytes, bytes]:  # noqa: A002
         if self._exc is not None:
             raise self._exc
         self.returncode = self._rc
@@ -115,7 +116,8 @@ def _patch_create(monkeypatch: pytest.MonkeyPatch) -> Any:
 
 
 class TestParseDimensionJudgment:
-    def test_direct_object(self) -> None:
+    @staticmethod
+    def test_direct_object() -> None:
         j = _parse_dimension_judgment(
             '{"dimension":"echoed","score":0.8,"reasoning":"ok"}', "safety"
         )
@@ -123,7 +125,8 @@ class TestParseDimensionJudgment:
         assert j.score == 0.8
         assert j.reasoning == "ok"
 
-    def test_claude_envelope_object_result(self) -> None:
+    @staticmethod
+    def test_claude_envelope_object_result() -> None:
         j = _parse_dimension_judgment(
             '{"type":"result","result":{"dimension":"x","score":0.5,"reasoning":"r"}}',
             "task_completion",
@@ -131,7 +134,8 @@ class TestParseDimensionJudgment:
         assert j.score == 0.5
         assert j.dimension == "task_completion"
 
-    def test_claude_envelope_structured_output(self) -> None:
+    @staticmethod
+    def test_claude_envelope_structured_output() -> None:
         # real claude --output-format json envelope: result (string) +
         # structured_output (ready dict, schema-validated) + type=success
         j = _parse_dimension_judgment(
@@ -143,28 +147,33 @@ class TestParseDimensionJudgment:
         assert j.reasoning == "r"
         assert j.dimension == "safety"
 
-    def test_envelope_string_result(self) -> None:
+    @staticmethod
+    def test_envelope_string_result() -> None:
         inner = '{"score":0.3,"reasoning":"r"}'
         j = _parse_dimension_judgment(
             '{{"result": "{}"}}'.format(inner.replace('"', '\\"')), "safety"
         )
         assert j.score == 0.3
 
-    def test_score_clamped(self) -> None:
+    @staticmethod
+    def test_score_clamped() -> None:
         j = _parse_dimension_judgment('{"score":1.5,"reasoning":"r"}', "safety")
         assert j.score == 1.0
         j2 = _parse_dimension_judgment('{"score":-0.2,"reasoning":"r"}', "safety")
         assert j2.score == 0.0
 
-    def test_non_numeric_score_raises(self) -> None:
+    @staticmethod
+    def test_non_numeric_score_raises() -> None:
         with pytest.raises(EvaluationError, match="missing numeric 'score'"):
             _parse_dimension_judgment('{"reasoning":"r"}', "safety")
 
-    def test_unparseable_raises(self) -> None:
+    @staticmethod
+    def test_unparseable_raises() -> None:
         with pytest.raises(EvaluationError, match="no parseable judgment"):
             _parse_dimension_judgment("not json at all", "safety")
 
-    def test_extract_dict_fenced(self) -> None:
+    @staticmethod
+    def test_extract_dict_fenced() -> None:
         # extract_json_data has a fence fallback
         data = _extract_judgment_dict('```json\n{"score":0.4,"reasoning":"r"}\n```')
         assert data is not None and data["score"] == 0.4
@@ -176,7 +185,8 @@ class TestParseDimensionJudgment:
 
 
 class TestClaudeRuntime:
-    def test_command_construction(self, tmp_path: Path, _patch_create: Any) -> None:
+    @staticmethod
+    def test_command_construction(tmp_path: Path, _patch_create: Any) -> None:
         schema = tmp_path / "schema.json"
         schema.write_text('{"type":"object"}', encoding="utf-8")
         proc = _FakeProc(stdout=b'{"dimension":"x","score":0.9,"reasoning":"r"}', returncode=0)
@@ -197,7 +207,8 @@ class TestClaudeRuntime:
         assert "Read,Grep" in cmd
         assert "--permission-mode" in cmd and "plan" in cmd
 
-    def test_env_passthrough(self, tmp_path: Path, _patch_create: Any) -> None:
+    @staticmethod
+    def test_env_passthrough(tmp_path: Path, _patch_create: Any) -> None:
         schema = tmp_path / "s.json"
         schema.write_text("{}", encoding="utf-8")
         proc = _FakeProc(stdout=b'{"score":0.1,"reasoning":""}', returncode=0)
@@ -209,7 +220,8 @@ class TestClaudeRuntime:
         assert env["EXTRA"] == "v"
         assert "PATH" in env  # host env inherited
 
-    def test_cwd_is_workdir(self, tmp_path: Path, _patch_create: Any) -> None:
+    @staticmethod
+    def test_cwd_is_workdir(tmp_path: Path, _patch_create: Any) -> None:
         schema = tmp_path / "s.json"
         schema.write_text("{}", encoding="utf-8")
         proc = _FakeProc(stdout=b'{"score":0.1,"reasoning":""}', returncode=0)
@@ -218,7 +230,8 @@ class TestClaudeRuntime:
         asyncio.run(runtime.judge(_request(workdir=tmp_path, schema_path=schema)))
         assert cap.kwargs["cwd"] == tmp_path
 
-    def test_prompt_via_stdin(self, tmp_path: Path, _patch_create: Any) -> None:
+    @staticmethod
+    def test_prompt_via_stdin(tmp_path: Path, _patch_create: Any) -> None:
         schema = tmp_path / "s.json"
         schema.write_text("{}", encoding="utf-8")
         proc = _FakeProc(stdout=b'{"score":0.1,"reasoning":""}', returncode=0)
@@ -229,7 +242,8 @@ class TestClaudeRuntime:
         assert cap.kwargs["stdin"] is not None  # PIPE
         assert cap.kwargs.get("input") is None  # input fed via communicate inside _run_subprocess
 
-    def test_timeout_kills_process(self, tmp_path: Path, _patch_create: Any) -> None:
+    @staticmethod
+    def test_timeout_kills_process(tmp_path: Path, _patch_create: Any) -> None:
         schema = tmp_path / "s.json"
         schema.write_text("{}", encoding="utf-8")
         proc = _FakeProc(exc=TimeoutError())
@@ -242,7 +256,8 @@ class TestClaudeRuntime:
         assert exc_info.value.category == "agent_judge_timeout"
         assert proc.killed
 
-    def test_nonzero_exit_raises(self, tmp_path: Path, _patch_create: Any) -> None:
+    @staticmethod
+    def test_nonzero_exit_raises(tmp_path: Path, _patch_create: Any) -> None:
         schema = tmp_path / "s.json"
         schema.write_text("{}", encoding="utf-8")
         proc = _FakeProc(stdout=b"out", stderr=b"boom", returncode=2)
@@ -251,7 +266,8 @@ class TestClaudeRuntime:
         with pytest.raises(EvaluationError, match="exited 2"):
             asyncio.run(runtime.judge(_request(workdir=tmp_path, schema_path=schema)))
 
-    def test_bad_stdout_raises(self, tmp_path: Path, _patch_create: Any) -> None:
+    @staticmethod
+    def test_bad_stdout_raises(tmp_path: Path, _patch_create: Any) -> None:
         schema = tmp_path / "s.json"
         schema.write_text("{}", encoding="utf-8")
         proc = _FakeProc(stdout=b"not json", returncode=0)
@@ -260,7 +276,8 @@ class TestClaudeRuntime:
         with pytest.raises(EvaluationError, match="no parseable judgment"):
             asyncio.run(runtime.judge(_request(workdir=tmp_path, schema_path=schema)))
 
-    def test_binary_missing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    @staticmethod
+    def test_binary_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         schema = tmp_path / "s.json"
         schema.write_text("{}", encoding="utf-8")
 
@@ -280,7 +297,8 @@ class TestClaudeRuntime:
 
 
 class TestCodexRuntime:
-    def test_command_construction_and_parse(self, tmp_path: Path, _patch_create: Any) -> None:
+    @staticmethod
+    def test_command_construction_and_parse(tmp_path: Path, _patch_create: Any) -> None:
         schema = tmp_path / "schema.json"
         schema.write_text("{}", encoding="utf-8")
         judgment = b'{"dimension":"echoed","score":0.7,"reasoning":"r"}'
@@ -299,7 +317,8 @@ class TestCodexRuntime:
         assert "judge this" in cmd  # prompt passed as argv element
         assert cap.kwargs["env"]["OPENAI_API_KEY"] == "ok"
 
-    def test_missing_last_message_file_raises(self, tmp_path: Path, _patch_create: Any) -> None:
+    @staticmethod
+    def test_missing_last_message_file_raises(tmp_path: Path, _patch_create: Any) -> None:
         schema = tmp_path / "s.json"
         schema.write_text("{}", encoding="utf-8")
         proc = _FakeProc(returncode=0)
@@ -315,15 +334,251 @@ class TestCodexRuntime:
 
 
 class TestMakeRuntime:
-    def test_claude(self) -> None:
+    @staticmethod
+    def test_claude() -> None:
         assert isinstance(make_runtime("claude"), ClaudeRuntime)
 
-    def test_codex(self) -> None:
+    @staticmethod
+    def test_codex() -> None:
         assert isinstance(make_runtime("codex"), CodexRuntime)
 
-    def test_unknown_raises(self) -> None:
+    @staticmethod
+    def test_jiuwenswarm() -> None:
+        rt = make_runtime("jiuwenswarm")
+        assert isinstance(rt, JiuwenSwarmRuntime)
+        assert rt._agent_profile == "codex"  # default profile
+
+    def test_jiuwenswarm_with_profile(self) -> None:
+        rt = make_runtime("jiuwenswarm", agent_profile="custom_agent")
+        assert isinstance(rt, JiuwenSwarmRuntime)
+        assert rt._agent_profile == "custom_agent"
+
+    @staticmethod
+    def test_unknown_raises() -> None:
         with pytest.raises(ValueError, match="Unknown judge runtime"):
             make_runtime("openclaw")  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# JiuwenSwarmRuntime — mock AcpStdioClient (jiuwenswarm is a lazy import)
+# ---------------------------------------------------------------------------
+
+
+class _FakeAcpClient:
+    """Fake AcpStdioClient for testing JiuwenSwarmRuntime without jiuwenswarm."""
+
+    def __init__(
+        self,
+        command: str,
+        args: list[str] | None = None,
+        *,
+        cwd: str | None = None,
+        env: dict[str, Any] | None = None,
+    ) -> None:
+        self.command = command
+        self.args = args or []
+        self.cwd = cwd
+        self.env = env
+        self.connected = False
+        self.closed = True
+
+    async def connect(self) -> None:
+        self.connected = True
+
+    async def chat(self, message: str, *, timeout: float | None = None) -> str:
+        return '{"score": 0.7, "reasoning": "ok"}'
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+def _install_fake_acp(
+    monkeypatch: pytest.MonkeyPatch,  # noqa: ARG001 — kept for API compat
+    client_cls: type = _FakeAcpClient,
+    config: dict[str, Any] | None = None,
+) -> type:
+    """Return constructor kwargs for JiuwenSwarmRuntime to inject fake ACP client."""
+    if config is None:
+        config = {
+            "acp_agents": {
+                "codex": {
+                    "command": "npx",
+                    "args": ["@zed-industries/codex-acp@latest"],
+                    "env": {"OPENAI_API_KEY": "test-key"},
+                },
+                "empty_cmd": {"command": "", "args": []},
+            }
+        }
+    # Store the config on the client_cls for easy access in tests.
+    client_cls._test_config = config  # type: ignore[attr-defined]
+    return client_cls
+
+
+def _make_runtime(
+    client_cls: type,
+    *,
+    agent_profile: str = "codex",
+    extra_env: dict[str, str] | None = None,
+) -> JiuwenSwarmRuntime:
+    """Build a JiuwenSwarmRuntime with injected fake client + config."""
+    config = getattr(client_cls, "_test_config", {"acp_agents": {}})
+    return JiuwenSwarmRuntime(
+        agent_profile=agent_profile,
+        extra_env=extra_env,
+        _client_factory=client_cls,
+        _config_loader=lambda: config,
+    )
+
+
+class TestJiuwenSwarmRuntime:
+    @staticmethod
+    def test_judge_parses_response(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        schema = tmp_path / "schema.json"
+        schema.write_text("{}", encoding="utf-8")
+
+        class MyClient(_FakeAcpClient):
+            async def chat(self, message: str, *, timeout: float | None = None) -> str:
+                return '{"score": 0.85, "reasoning": "well done"}'
+
+        _install_fake_acp(monkeypatch, MyClient)
+        runtime = _make_runtime(MyClient)
+        j = asyncio.run(runtime.judge(_request(workdir=tmp_path, schema_path=schema)))
+        assert j.dimension == "safety"
+        assert j.score == 0.85
+        assert j.reasoning == "well done"
+
+    @staticmethod
+    def test_cwd_is_workdir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        schema = tmp_path / "schema.json"
+        schema.write_text("{}", encoding="utf-8")
+
+        clients: list[_FakeAcpClient] = []
+
+        class TrackingClient(_FakeAcpClient):
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
+                super().__init__(*args, **kwargs)
+                clients.append(self)
+
+        _install_fake_acp(monkeypatch, TrackingClient)
+        runtime = _make_runtime(TrackingClient)
+        asyncio.run(runtime.judge(_request(workdir=tmp_path, schema_path=schema)))
+        assert len(clients) == 1
+        assert clients[0].cwd == str(tmp_path)
+
+    @staticmethod
+    def test_synthesize_parses_dict(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        schema = tmp_path / "schema.json"
+        schema.write_text("{}", encoding="utf-8")
+        attr = {
+            "skill_attributions": [
+                {"skill_name": "s", "usage_status": "executed", "impact": "positive", "reason": "r"}
+            ],
+            "attribution_status": "completed",
+        }
+
+        class AttrClient(_FakeAcpClient):
+            async def chat(self, message: str, *, timeout: float | None = None) -> str:
+                return json.dumps(attr)
+
+        _install_fake_acp(monkeypatch, AttrClient)
+        runtime = _make_runtime(AttrClient)
+        data = asyncio.run(runtime.synthesize(_request(workdir=tmp_path, schema_path=schema)))
+        assert data == attr
+
+    @staticmethod
+    def test_synthesize_unparseable_raises(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        schema = tmp_path / "schema.json"
+        schema.write_text("{}", encoding="utf-8")
+
+        class BadClient(_FakeAcpClient):
+            async def chat(self, message: str, *, timeout: float | None = None) -> str:
+                return "not json at all"
+
+        _install_fake_acp(monkeypatch, BadClient)
+        runtime = _make_runtime(BadClient)
+        with pytest.raises(EvaluationError, match="no parseable output"):
+            asyncio.run(runtime.synthesize(_request(workdir=tmp_path, schema_path=schema)))
+
+    @staticmethod
+    def test_runtime_error_becomes_evaluation_error(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        schema = tmp_path / "schema.json"
+        schema.write_text("{}", encoding="utf-8")
+
+        class ErrClient(_FakeAcpClient):
+            async def chat(self, message: str, *, timeout: float | None = None) -> str:
+                raise RuntimeError("ACP agent crashed")
+
+        _install_fake_acp(monkeypatch, ErrClient)
+        runtime = _make_runtime(ErrClient)
+        with pytest.raises(EvaluationError, match="jiuwenswarm agent error"):
+            asyncio.run(runtime.judge(_request(workdir=tmp_path, schema_path=schema)))
+
+    def test_timeout_becomes_evaluation_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        schema = tmp_path / "schema.json"
+        schema.write_text("{}", encoding="utf-8")
+
+        class TimeoutClient(_FakeAcpClient):
+            async def chat(self, message: str, *, timeout: float | None = None) -> str:
+                raise TimeoutError()
+
+        _install_fake_acp(monkeypatch, TimeoutClient)
+        runtime = _make_runtime(TimeoutClient)
+        with pytest.raises(EvaluationError) as exc_info:
+            asyncio.run(runtime.judge(_request(workdir=tmp_path, schema_path=schema)))
+        assert exc_info.value.category == "agent_judge_timeout"
+
+    def test_unknown_profile_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        schema = tmp_path / "schema.json"
+        schema.write_text("{}", encoding="utf-8")
+        _install_fake_acp(monkeypatch)
+        runtime = _make_runtime(_FakeAcpClient, agent_profile="nonexistent")
+        with pytest.raises(EvaluationError, match="unknown jiuwenswarm agent profile"):
+            asyncio.run(runtime.judge(_request(workdir=tmp_path, schema_path=schema)))
+
+    def test_empty_command_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        schema = tmp_path / "schema.json"
+        schema.write_text("{}", encoding="utf-8")
+        _install_fake_acp(monkeypatch)
+        runtime = _make_runtime(_FakeAcpClient, agent_profile="empty_cmd")
+        with pytest.raises(EvaluationError, match="has no command"):
+            asyncio.run(runtime.judge(_request(workdir=tmp_path, schema_path=schema)))
+
+    def test_extra_env_merged(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        schema = tmp_path / "schema.json"
+        schema.write_text("{}", encoding="utf-8")
+
+        clients: list[_FakeAcpClient] = []
+
+        class TrackingClient(_FakeAcpClient):
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
+                super().__init__(*args, **kwargs)
+                clients.append(self)
+
+        _install_fake_acp(monkeypatch, TrackingClient)
+        runtime = _make_runtime(TrackingClient, extra_env={"MY_KEY": "my_val"})
+        asyncio.run(runtime.judge(_request(workdir=tmp_path, schema_path=schema)))
+        env = clients[0].env
+        assert env is not None
+        # profile env from config
+        assert env["OPENAI_API_KEY"] == "test-key"
+        # extra_env overrides
+        assert env["MY_KEY"] == "my_val"
+        # host env inherited
+        assert "PATH" in env
 
 
 # ---------------------------------------------------------------------------

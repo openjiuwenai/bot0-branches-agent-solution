@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "ClaudeRuntime",
     "CodexRuntime",
+    "JiuwenSwarmRuntime",
     "JudgeAgentRuntime",
     "RuntimeJudgeRequest",
     "make_runtime",
@@ -54,6 +55,7 @@ _CLAUDE_BINARY = "claude"
 _CLAUDE_PERMISSION_MODE = "plan"  # read-only, no side effects (bounded, per Q1)
 _CODEX_BINARY = "codex"
 _CODEX_SANDBOX = "read-only"  # bounded file access (per Q1)
+_JIUWENSWARM_DEFAULT_PROFILE = "codex"  # default acp_agents profile key
 
 
 @dataclass(frozen=True)
@@ -353,14 +355,165 @@ class CodexRuntime:
         return data
 
 
+class JiuwenSwarmRuntime:
+    """Drive an ACP-compatible agent via jiuwenswarm's ``AcpStdioClient``.
+
+    Unlike :class:`ClaudeRuntime` / :class:`CodexRuntime` (which spawn a CLI
+    binary), this adapter imports ``AcpStdioClient`` as a library and spawns
+    the ACP agent subprocess directly.  The agent's ``command`` / ``args``
+    are read from jiuwenswarm's ``acp_agents[profile]`` config; the session
+    ``cwd`` is set to ``request.workdir`` so the agent can access
+    trajectory.md, skill docs, and schema.json via ``fs/read_text_file``.
+
+    There is no ``--json-schema`` CLI flag; the JSON schema is already
+    embedded in the prompt text, and the returned plain-text response is
+    parsed with :func:`_extract_judgment_dict` (fence-tolerant JSON
+    extraction).
+
+    ``jiuwenswarm`` is a **lazy import** — not a hard dependency of
+    evoagent.  If the package is not installed, :meth:`_run` raises
+    :class:`EvaluationError` with category ``agent_judge_binary_missing``.
+    """
+
+    def __init__(
+        self,
+        *,
+        agent_profile: str = _JIUWENSWARM_DEFAULT_PROFILE,
+        extra_env: dict[str, str] | None = None,
+        _client_factory: Any | None = None,
+        _config_loader: Any | None = None,
+    ) -> None:
+        self._agent_profile = agent_profile
+        self._extra_env = extra_env or {}
+        self._client_factory = _client_factory
+        self._config_loader = _config_loader
+
+    def _get_agent_spec(self) -> dict[str, Any]:
+        """Read ``acp_agents[profile]`` from jiuwenswarm config.yaml."""
+        if self._config_loader is not None:
+            cfg = self._config_loader()
+        else:
+            try:
+                from jiuwenswarm.common.config import get_config  # type: ignore[import-not-found]
+            except ImportError as exc:
+                raise EvaluationError(
+                    category="agent_judge_binary_missing",
+                    safe_message=(
+                        "jiuwenswarm package is not installed; "
+                        "install it to use runtime='jiuwenswarm'"
+                    ),
+                ) from exc
+            cfg = get_config()
+        agents = cfg.get("acp_agents")
+        if not isinstance(agents, dict):
+            raise EvaluationError(
+                category="agent_judge_config_error",
+                safe_message="jiuwenswarm config has no acp_agents section",
+            )
+        spec = agents.get(self._agent_profile)
+        if not isinstance(spec, dict):
+            raise EvaluationError(
+                category="agent_judge_config_error",
+                safe_message=(
+                    f"unknown jiuwenswarm agent profile: {self._agent_profile!r}"
+                ),
+            )
+        return spec
+
+    async def _run(self, request: RuntimeJudgeRequest) -> str:
+        """Spawn ACP agent via AcpStdioClient, send prompt, return text."""
+        if self._client_factory is not None:
+            AcpStdioClient = self._client_factory  # noqa: N806
+        else:
+            try:
+                from jiuwenswarm.acp.stdio_client import AcpStdioClient  # type: ignore  # noqa: I001
+            except ImportError as exc:
+                raise EvaluationError(
+                    category="agent_judge_binary_missing",
+                    safe_message=(
+                        "jiuwenswarm package is not installed; "
+                        "install it to use runtime='jiuwenswarm'"
+                    ),
+                ) from exc
+
+        spec = self._get_agent_spec()
+        command = str(spec.get("command") or "").strip()
+        if not command:
+            raise EvaluationError(
+                category="agent_judge_config_error",
+                safe_message=f"agent profile {self._agent_profile!r} has no command",
+            )
+        raw_args = spec.get("args")
+        args = [str(a) for a in raw_args] if isinstance(raw_args, list) else []
+
+        # Merge: host env ← jiuwenswarm profile env ← extra_env (API keys).
+        env: dict[str, Any] = dict(os.environ)
+        profile_env = spec.get("env")
+        if isinstance(profile_env, dict):
+            env.update({str(k): str(v) for k, v in profile_env.items()})
+        env.update(self._extra_env)
+
+        client = AcpStdioClient(command, args, cwd=str(request.workdir), env=env)
+        try:
+            await client.connect()
+            text = await client.chat(request.prompt, timeout=request.run_timeout)
+            return text or ""
+        except TimeoutError:
+            raise EvaluationError(
+                category="agent_judge_timeout",
+                safe_message=(
+                    f"jiuwenswarm agent timed out after {request.run_timeout}s "
+                    f"for dimension {request.dimension_name!r}"
+                ),
+            ) from None
+        except RuntimeError as exc:
+            raise EvaluationError(
+                category="agent_judge_run_error",
+                safe_message=(
+                    f"jiuwenswarm agent error for {request.dimension_name!r}: {exc}"
+                ),
+            ) from exc
+        finally:
+            try:
+                await asyncio.wait_for(asyncio.shield(client.close()), timeout=30)
+            except Exception:  # noqa: BLE001 — best-effort cleanup
+                pass
+
+    async def judge(self, request: RuntimeJudgeRequest) -> DimensionJudgment:
+        text = await self._run(request)
+        return _parse_dimension_judgment(text, request.dimension_name)
+
+    async def synthesize(self, request: RuntimeJudgeRequest) -> dict[str, Any]:
+        text = await self._run(request)
+        data = _extract_judgment_dict(text)
+        if data is None:
+            raise EvaluationError(
+                category="agent_judge_output_error",
+                safe_message=(
+                    f"jiuwenswarm attribution agent produced no parseable output "
+                    f"for {request.dimension_name!r}"
+                ),
+                raw_response=text,
+            )
+        return data
+
+
 def make_runtime(
-    runtime: Literal["claude", "codex"],
+    runtime: Literal["claude", "codex", "jiuwenswarm"],
     *,
     extra_env: dict[str, str] | None = None,
+    agent_profile: str | None = None,
 ) -> JudgeAgentRuntime:
     """Resolve a runtime name to an adapter (factory hook for the evaluator)."""
     if runtime == "claude":
         return ClaudeRuntime(extra_env=extra_env)
     if runtime == "codex":
         return CodexRuntime(extra_env=extra_env)
-    raise ValueError(f"Unknown judge runtime: {runtime!r} (use 'claude' or 'codex')")
+    if runtime == "jiuwenswarm":
+        return JiuwenSwarmRuntime(
+            agent_profile=agent_profile or _JIUWENSWARM_DEFAULT_PROFILE,
+            extra_env=extra_env,
+        )
+    raise ValueError(
+        f"Unknown judge runtime: {runtime!r} (use 'claude', 'codex', or 'jiuwenswarm')"
+    )

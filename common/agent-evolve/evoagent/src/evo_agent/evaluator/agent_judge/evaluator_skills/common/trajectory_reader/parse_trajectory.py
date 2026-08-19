@@ -13,15 +13,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def load_messages(path: Path) -> list[dict]:
     messages = []
     if not path.exists():
-        print(f"Error: {path} not found", file=sys.stderr)
-        sys.exit(1)
+        raise FileNotFoundError(f"{path} not found")
     with open(path, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -54,22 +56,29 @@ def format_message(idx: int, msg: dict) -> str:
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description="Parse trajectory.jsonl")
     parser.add_argument("--role", help="Filter by role (user/assistant/tool/system)")
     parser.add_argument("--tool", help="Filter by tool name in tool_calls")
     parser.add_argument("--line", type=int, help="Show specific message by index")
     parser.add_argument(
-        "--file", default="trajectory.jsonl", help="Path to trajectory file (default: trajectory.jsonl)"
+        "--file",
+        default="trajectory.jsonl",
+        help="Path to trajectory file (default: trajectory.jsonl)",
     )
     args = parser.parse_args()
 
-    messages = load_messages(Path(args.file))
+    try:
+        messages = load_messages(Path(args.file))
+    except FileNotFoundError as exc:
+        logger.error(str(exc))
+        sys.exit(1)
 
     if args.line is not None:
         if 0 <= args.line < len(messages):
-            print(json.dumps(messages[args.line], ensure_ascii=False, indent=2))
+            logger.info(json.dumps(messages[args.line], ensure_ascii=False, indent=2))
         else:
-            print(f"Error: index {args.line} out of range (0-{len(messages)-1})", file=sys.stderr)
+            logger.error("index %d out of range (0-%d)", args.line, len(messages) - 1)
             sys.exit(1)
         return
 
@@ -86,11 +95,11 @@ def main() -> None:
         filtered.append((idx, msg))
 
     # Output
-    print(f"Total messages: {len(messages)}")
-    print(f"Filtered: {len(filtered)}")
-    print()
+    logger.info("Total messages: %d", len(messages))
+    logger.info("Filtered: %d", len(filtered))
+    logger.info("")
     for idx, msg in filtered:
-        print(format_message(idx, msg))
+        logger.info(format_message(idx, msg))
 
 
 if __name__ == "__main__":

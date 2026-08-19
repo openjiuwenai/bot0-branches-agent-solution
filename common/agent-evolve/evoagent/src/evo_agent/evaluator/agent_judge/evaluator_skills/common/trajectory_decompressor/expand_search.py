@@ -15,15 +15,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def load_messages(path: Path) -> list[dict]:
     messages = []
     if not path.exists():
-        print(f"Error: {path} not found", file=sys.stderr)
-        sys.exit(1)
+        raise FileNotFoundError(f"{path} not found")
     with open(path, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -32,7 +34,9 @@ def load_messages(path: Path) -> list[dict]:
     return messages
 
 
-def search_messages(messages: list[dict], query: str, role: str | None = None) -> list[tuple[int, dict]]:
+def search_messages(
+    messages: list[dict], query: str, role: str | None = None
+) -> list[tuple[int, dict]]:
     results = []
     for idx, msg in enumerate(messages):
         if role and msg.get("role") != role:
@@ -41,7 +45,9 @@ def search_messages(messages: list[dict], query: str, role: str | None = None) -
         content = msg.get("content", "")
         if isinstance(content, list):
             content = " ".join(
-                p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"
+                p.get("text", "")
+                for p in content
+                if isinstance(p, dict) and p.get("type") == "text"
             )
         content_str = str(content)
 
@@ -59,9 +65,9 @@ def search_messages(messages: list[dict], query: str, role: str | None = None) -
 def show_context(messages: list[dict], start: int, end: int) -> None:
     for idx in range(max(0, start), min(len(messages), end + 1)):
         msg = messages[idx]
-        print(f"--- Message [{idx}] ---")
-        print(json.dumps(msg, ensure_ascii=False, indent=2))
-        print()
+        logger.info("--- Message [%d] ---", idx)
+        logger.info(json.dumps(msg, ensure_ascii=False, indent=2))
+        logger.info("")
 
 
 def list_tool_calls(messages: list[dict]) -> None:
@@ -75,21 +81,28 @@ def list_tool_calls(messages: list[dict]) -> None:
                 args_summary = json.dumps(args, ensure_ascii=False)[:200]
             except (json.JSONDecodeError, TypeError):
                 args_summary = str(args_str)[:200]
-            print(f"[{idx}] {name}({args_summary})")
+            logger.info("[%d] %s(%s)", idx, name, args_summary)
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description="Search and expand trajectory context")
     parser.add_argument("query", nargs="?", help="Search query (case-insensitive)")
     parser.add_argument("--role", help="Filter by role")
     parser.add_argument("--context", help="Show message range: start,end (e.g. 5,10)")
     parser.add_argument("--tool-call", action="store_true", help="List all tool calls")
     parser.add_argument(
-        "--file", default="trajectory.jsonl", help="Path to trajectory file (default: trajectory.jsonl)"
+        "--file",
+        default="trajectory.jsonl",
+        help="Path to trajectory file (default: trajectory.jsonl)",
     )
     args = parser.parse_args()
 
-    messages = load_messages(Path(args.file))
+    try:
+        messages = load_messages(Path(args.file))
+    except FileNotFoundError as exc:
+        logger.error(str(exc))
+        sys.exit(1)
 
     if args.tool_call:
         list_tool_calls(messages)
@@ -106,12 +119,12 @@ def main() -> None:
         parser.error("Provide a search query, --context, or --tool-call")
 
     results = search_messages(messages, args.query, role=args.role)
-    print(f"Found {len(results)} matching messages (out of {len(messages)} total):")
-    print()
+    logger.info("Found %d matching messages (out of %d total):", len(results), len(messages))
+    logger.info("")
     for idx, msg in results:
-        print(f"--- Message [{idx}] ---")
-        print(json.dumps(msg, ensure_ascii=False, indent=2))
-        print()
+        logger.info("--- Message [%d] ---", idx)
+        logger.info(json.dumps(msg, ensure_ascii=False, indent=2))
+        logger.info("")
 
 
 if __name__ == "__main__":

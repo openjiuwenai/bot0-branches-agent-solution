@@ -7,6 +7,7 @@ workdir 清理、归因 Agent 在 with 块内运行、未知 skill fail-fast、�
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 from typing import Any
@@ -118,13 +119,18 @@ def _make_evaluator(
     )
 
 
+_USE_DEFAULT_TRAJECTORY = object()
+
+
 def _case(
     *,
-    trajectory: Any = _TRAJECTORY,
+    trajectory: Any = _USE_DEFAULT_TRAJECTORY,
     skill_names: list[str] | None = None,
 ) -> Case:
     if skill_names is None:
         skill_names = ["alpha_skill"]
+    if trajectory is _USE_DEFAULT_TRAJECTORY:
+        trajectory = copy.deepcopy(_TRAJECTORY)
     inputs: dict[str, Any] = {}
     if trajectory is not None:
         inputs["trajectory"] = trajectory
@@ -134,7 +140,8 @@ def _case(
 
 
 class TestAgentEvaluatorEvaluate:
-    def test_success_builds_reason_blob(self, tmp_path: Path) -> None:
+    @staticmethod
+    def test_success_builds_reason_blob(tmp_path: Path) -> None:
         runtime = _FakeRuntime(
             score=0.8,
             attr_dict=_attr_dict(
@@ -172,7 +179,8 @@ class TestAgentEvaluatorEvaluate:
         assert "alpha_skill" in runtime.synthesize_request.prompt
         assert "task_completion" in runtime.synthesize_request.prompt
 
-    def test_is_pass_false_when_any_dimension_below_threshold(self, tmp_path: Path) -> None:
+    @staticmethod
+    def test_is_pass_false_when_any_dimension_below_threshold(tmp_path: Path) -> None:
         # score=0.2 → all dims at 0.2, threshold=0.5 → all fail
         runtime = _FakeRuntime(score=0.2, attr_dict=_attr_dict())
         ev = _make_evaluator(runtime=runtime, workdir_base=str(tmp_path))
@@ -180,7 +188,8 @@ class TestAgentEvaluatorEvaluate:
         blob = json.loads(evaluated.reason)
         assert blob["is_pass"] is False  # 0.2 < 0.5 threshold
 
-    def test_dimension_checks_populated(self, tmp_path: Path) -> None:
+    @staticmethod
+    def test_dimension_checks_populated(tmp_path: Path) -> None:
         thresholds = {"task_completion": 0.5, "safety": 0.8}
         runtime = _FakeRuntime(score=0.8, attr_dict=_attr_dict())
         ev = AgentEvaluator(
@@ -201,7 +210,8 @@ class TestAgentEvaluatorEvaluate:
         tc_check = next(c for c in checks if c["dimension"] == "task_completion")
         assert tc_check["pass"] is True
 
-    def test_top1_negative_is_decisive(self, tmp_path: Path) -> None:
+    @staticmethod
+    def test_top1_negative_is_decisive(tmp_path: Path) -> None:
         runtime = _FakeRuntime(
             attr_dict=_attr_dict(
                 attributions=[
@@ -215,35 +225,41 @@ class TestAgentEvaluatorEvaluate:
         blob = json.loads(evaluated.reason)
         assert blob["attributed_skill"] == "alpha_skill"  # negative beats neutral-first
 
-    def test_top1_empty_when_no_attributions(self, tmp_path: Path) -> None:
+    @staticmethod
+    def test_top1_empty_when_no_attributions(tmp_path: Path) -> None:
         runtime = _FakeRuntime(attr_dict=_attr_dict(attributions=[]))
         ev = _make_evaluator(runtime=runtime, workdir_base=str(tmp_path))
         evaluated = ev.evaluate(_case(), _PLACEHOLDER)
         blob = json.loads(evaluated.reason)
         assert blob["attributed_skill"] == ""
 
-    def test_empty_trajectory_raises(self, tmp_path: Path) -> None:
+    @staticmethod
+    def test_empty_trajectory_raises(tmp_path: Path) -> None:
         ev = _make_evaluator(runtime=_FakeRuntime(), workdir_base=str(tmp_path))
         with pytest.raises(EvaluationError, match="Trace unavailable"):
             ev.evaluate(_case(trajectory={"messages": []}), _PLACEHOLDER)
 
-    def test_missing_skill_names_raises(self, tmp_path: Path) -> None:
+    @staticmethod
+    def test_missing_skill_names_raises(tmp_path: Path) -> None:
         ev = _make_evaluator(runtime=_FakeRuntime(), workdir_base=str(tmp_path))
         with pytest.raises(EvaluationError, match="skill_names is required"):
             ev.evaluate(_case(skill_names=[]), _PLACEHOLDER)
 
-    def test_missing_trajectory_raises(self, tmp_path: Path) -> None:
+    @staticmethod
+    def test_missing_trajectory_raises(tmp_path: Path) -> None:
         ev = _make_evaluator(runtime=_FakeRuntime(), workdir_base=str(tmp_path))
         with pytest.raises(ValueError, match="trajectory"):
             ev.evaluate(_case(trajectory=None), _PLACEHOLDER)
 
-    def test_rollout_error_raises(self, tmp_path: Path) -> None:
+    @staticmethod
+    def test_rollout_error_raises(tmp_path: Path) -> None:
         ev = _make_evaluator(runtime=_FakeRuntime(), workdir_base=str(tmp_path))
         with pytest.raises(EvaluationError) as exc_info:
             ev.evaluate(_case(), {"error": "rollout exploded"})
         assert exc_info.value.category == "rollout_error"
 
-    def test_unknown_skill_attribution_raises(self, tmp_path: Path) -> None:
+    @staticmethod
+    def test_unknown_skill_attribution_raises(tmp_path: Path) -> None:
         # synthesize returns an attribution for a skill NOT in skill_names → fail-fast
         runtime = _FakeRuntime(
             attr_dict=_attr_dict(
@@ -255,7 +271,8 @@ class TestAgentEvaluatorEvaluate:
             ev.evaluate(_case(), _PLACEHOLDER)
         assert exc_info.value.category == "attribution_unknown_skill"
 
-    def test_synthesize_error_propagates(self, tmp_path: Path) -> None:
+    @staticmethod
+    def test_synthesize_error_propagates(tmp_path: Path) -> None:
         runtime = _FakeRuntime(
             synthesize_exc=EvaluationError(
                 category="agent_judge_output_error", safe_message="no parseable output"
@@ -266,13 +283,15 @@ class TestAgentEvaluatorEvaluate:
             ev.evaluate(_case(), _PLACEHOLDER)
         assert exc_info.value.category == "agent_judge_output_error"
 
-    def test_workdir_cleaned_after_success(self, tmp_path: Path) -> None:
+    @staticmethod
+    def test_workdir_cleaned_after_success(tmp_path: Path) -> None:
         ev = _make_evaluator(runtime=_FakeRuntime(), workdir_base=str(tmp_path))
         ev.evaluate(_case(), _PLACEHOLDER)
         leftovers = [p for p in tmp_path.iterdir() if p.name.startswith("evo-agent-judge-")]
         assert leftovers == []
 
-    def test_per_dimension_skills_materialized(self, tmp_path: Path) -> None:
+    @staticmethod
+    def test_per_dimension_skills_materialized(tmp_path: Path) -> None:
         runtime = _RecordingRuntime(score=0.8)
         ev = _make_evaluator(
             runtime=runtime,  # type: ignore[arg-type]
@@ -287,35 +306,40 @@ class TestAgentEvaluatorEvaluate:
 
 
 class TestSelectTop1:
-    def test_prefers_positive(self) -> None:
+    @staticmethod
+    def test_prefers_positive() -> None:
         attrs = [
             SkillAttribution(skill_name="a", impact="neutral"),
             SkillAttribution(skill_name="b", impact="positive"),
         ]
         assert _select_top1_attribution(attrs) == "b"
 
-    def test_prefers_negative(self) -> None:
+    @staticmethod
+    def test_prefers_negative() -> None:
         attrs = [
             SkillAttribution(skill_name="a", impact="neutral"),
             SkillAttribution(skill_name="b", impact="negative"),
         ]
         assert _select_top1_attribution(attrs) == "b"
 
-    def test_falls_back_to_first(self) -> None:
+    @staticmethod
+    def test_falls_back_to_first() -> None:
         attrs = [
             SkillAttribution(skill_name="a", impact="neutral"),
             SkillAttribution(skill_name="b", impact="none"),
         ]
         assert _select_top1_attribution(attrs) == "a"
 
-    def test_empty_returns_empty(self) -> None:
+    @staticmethod
+    def test_empty_returns_empty() -> None:
         assert _select_top1_attribution([]) == ""
 
 
 class TestAgentEvaluatorInit:
     """trajectory_budget init handling."""
 
-    def test_default_budget_is_module_constant(self) -> None:
+    @staticmethod
+    def test_default_budget_is_module_constant() -> None:
         from evo_agent.evaluator.evaluators.agent import _DEFAULT_TRAJECTORY_BUDGET
 
         ev = AgentEvaluator(
@@ -323,19 +347,21 @@ class TestAgentEvaluatorInit:
             runtime=_FakeRuntime(),  # type: ignore[arg-type]
             dimension_thresholds=_DEFAULT_THRESHOLDS,
         )
-        assert ev._trajectory_budget == _DEFAULT_TRAJECTORY_BUDGET
-        assert ev._trajectory_budget == 4000
+        assert ev._trajectory_budget == _DEFAULT_TRAJECTORY_BUDGET  # noqa: SLF001
+        assert ev._trajectory_budget == 4000  # noqa: SLF001
 
-    def test_explicit_budget_overrides_default(self) -> None:
+    @staticmethod
+    def test_explicit_budget_overrides_default() -> None:
         ev = AgentEvaluator(
             preset=get_preset("default"),
             runtime=_FakeRuntime(),  # type: ignore[arg-type]
             dimension_thresholds=_DEFAULT_THRESHOLDS,
             trajectory_budget=12000,
         )
-        assert ev._trajectory_budget == 12000
+        assert ev._trajectory_budget == 12000  # noqa: SLF001
 
-    def test_zero_budget_raises(self) -> None:
+    @staticmethod
+    def test_zero_budget_raises() -> None:
         with pytest.raises(ValueError, match="trajectory_budget"):
             AgentEvaluator(
                 preset=get_preset("default"),
@@ -344,7 +370,8 @@ class TestAgentEvaluatorInit:
                 trajectory_budget=0,
             )
 
-    def test_negative_budget_raises(self) -> None:
+    @staticmethod
+    def test_negative_budget_raises() -> None:
         with pytest.raises(ValueError, match="trajectory_budget"):
             AgentEvaluator(
                 preset=get_preset("default"),

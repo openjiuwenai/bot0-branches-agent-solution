@@ -57,7 +57,8 @@ class _FakeProvider:
 
 
 class TestBuildAttributionPrompt:
-    def test_inlines_judgments_and_skills(self) -> None:
+    @staticmethod
+    def test_inlines_judgments_and_skills() -> None:
         prompt = build_attribution_prompt(_judgments(), skill_names=_SKILLS, skill_provider=None)
         assert "task_completion: 1.0" in prompt
         assert "safety: 0.5" in prompt
@@ -66,11 +67,13 @@ class TestBuildAttributionPrompt:
         # No threshold block when dimension_thresholds is None
         assert "维度阈值校验" not in prompt
 
-    def test_no_provider_hint(self) -> None:
+    @staticmethod
+    def test_no_provider_hint() -> None:
         prompt = build_attribution_prompt(_judgments(), skill_names=_SKILLS, skill_provider=None)
         assert "未提供 skill 文档源" in prompt
 
-    def test_with_provider_inlines_docs(self) -> None:
+    @staticmethod
+    def test_with_provider_inlines_docs() -> None:
         prompt = build_attribution_prompt(
             _judgments(),
             skill_names=_SKILLS,
@@ -79,12 +82,14 @@ class TestBuildAttributionPrompt:
         assert "DOC:alpha_skill" in prompt
         assert "DOC:beta_skill" in prompt
 
-    def test_trajectory_read_hint(self) -> None:
+    @staticmethod
+    def test_trajectory_read_hint() -> None:
         prompt = build_attribution_prompt(_judgments(), skill_names=_SKILLS, skill_provider=None)
         assert "trajectory.jsonl" in prompt
         assert "trajectory.md" in prompt
 
-    def test_dimension_thresholds_in_prompt(self) -> None:
+    @staticmethod
+    def test_dimension_thresholds_in_prompt() -> None:
         thresholds = {"task_completion": 0.5, "safety": 0.8}
         prompt = build_attribution_prompt(
             _judgments(),
@@ -99,7 +104,8 @@ class TestBuildAttributionPrompt:
         assert "0.5" in prompt
         assert "0.8" in prompt
 
-    def test_no_thresholds_no_calculator_hint(self) -> None:
+    @staticmethod
+    def test_no_thresholds_no_calculator_hint() -> None:
         # Without thresholds, the prompt does not instruct the agent to call
         # the calculator script (it's only used for threshold checking).
         prompt = build_attribution_prompt(_judgments(), skill_names=_SKILLS, skill_provider=None)
@@ -107,48 +113,56 @@ class TestBuildAttributionPrompt:
 
 
 class TestJudgmentsAsText:
-    def test_renders_each(self) -> None:
+    @staticmethod
+    def test_renders_each() -> None:
         assert judgments_as_text(_judgments()) == [
             "- task_completion: 1.0 — done",
             "- safety: 0.5 — minor risk",
         ]
 
-    def test_empty(self) -> None:
+    @staticmethod
+    def test_empty() -> None:
         assert judgments_as_text([]) == []
 
 
 class TestParseAttributionOutput:
-    def test_success(self) -> None:
+    @staticmethod
+    def test_success() -> None:
         data = _full_data()
         out = parse_attribution_output(data, skill_names=_SKILLS)
         assert out.attribution_status == "completed"
         assert out.skill_attributions[0].skill_name == "alpha_skill"
         assert out.skill_attributions[0].impact == "positive"
 
-    def test_empty_completed_valid(self) -> None:
+    @staticmethod
+    def test_empty_completed_valid() -> None:
         data = _full_data(attributions=[])
         out = parse_attribution_output(data, skill_names=_SKILLS)
         assert out.skill_attributions == []
         assert out.attribution_status == "completed"
 
-    def test_failed_status_preserved(self) -> None:
+    @staticmethod
+    def test_failed_status_preserved() -> None:
         data = _full_data(attributions=[], status="failed", error="unsure")
         out = parse_attribution_output(data, skill_names=_SKILLS)
         assert out.attribution_status == "failed"
         assert out.attribution_error == "unsure"
 
-    def test_unknown_skill_raises(self) -> None:
+    @staticmethod
+    def test_unknown_skill_raises() -> None:
         data = _full_data(attributions=[_attr(skill_name="ghost")])
         with pytest.raises(EvaluationError) as exc_info:
             parse_attribution_output(data, skill_names=_SKILLS)
         assert exc_info.value.category == "attribution_unknown_skill"
 
-    def test_bad_status_raises(self) -> None:
+    @staticmethod
+    def test_bad_status_raises() -> None:
         data = _full_data(attributions=[], status="maybe")
         with pytest.raises(EvaluationError, match="failed validation"):
             parse_attribution_output(data, skill_names=_SKILLS)
 
-    def test_missing_status_raises(self) -> None:
+    @staticmethod
+    def test_missing_status_raises() -> None:
         data = {"skill_attributions": []}
         with pytest.raises(EvaluationError, match="failed validation"):
             parse_attribution_output(data, skill_names=_SKILLS)

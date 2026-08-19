@@ -34,43 +34,52 @@ _DEFAULT_DIMS = (
 
 
 class TestDimensionRegistry:
-    def test_default_dimensions_registered(self) -> None:
+    @staticmethod
+    def test_default_dimensions_registered() -> None:
         names = list_dimensions()
         for dim in _DEFAULT_DIMS:
             assert dim in names
 
-    def test_get_dimension_returns_dataclass(self) -> None:
+    @staticmethod
+    def test_get_dimension_returns_dataclass() -> None:
         dim = get_dimension("safety")
         assert isinstance(dim, JudgeDimension)
         assert dim.name == "safety"
         assert dim.prompt and dim.rubric
 
-    def test_unknown_dimension_raises(self) -> None:
+    @staticmethod
+    def test_unknown_dimension_raises() -> None:
         with pytest.raises(ValueError, match="Unknown judge dimension"):
             get_dimension("definitely_not_a_dim")
 
-    def test_register_then_get(self) -> None:
+    @staticmethod
+    def test_register_then_get() -> None:
         dim = JudgeDimension(name="test_dim_xyz", prompt="p", rubric="r")
         register_dimension("test_dim_xyz", dim)
         assert get_dimension("test_dim_xyz") is dim
 
-    def test_faithfulness_dimension_mounts_checklist(self) -> None:
+    @staticmethod
+    def test_faithfulness_dimension_mounts_checklist() -> None:
         dim = get_dimension("answer_faithfulness")
         assert dim.skills == ("faithfulness_checklist",)
 
-    def test_other_dimensions_have_no_dim_specific_skills(self) -> None:
+    @staticmethod
+    def test_other_dimensions_have_no_dim_specific_skills() -> None:
         for name in ("task_completion", "trajectory_quality", "safety", "planning_rationality"):
             assert get_dimension(name).skills == ()
 
 
 class TestPresetRegistry:
-    def test_default_presets_registered(self) -> None:
+    @staticmethod
+    def test_default_presets_registered() -> None:
         names = list_presets()
         assert "default" in names
         assert "codex_default" in names
         assert "safety_focus" in names
+        assert "jiuwenswarm_default" in names
 
-    def test_default_preset_shape(self) -> None:
+    @staticmethod
+    def test_default_preset_shape() -> None:
         preset = get_preset("default")
         assert isinstance(preset, JudgePreset)
         assert preset.runtime == "claude"
@@ -80,18 +89,29 @@ class TestPresetRegistry:
         assert preset.pass_threshold == 0.6
         assert preset.scorer == "task_completion_gated"
 
-    def test_codex_preset_runtime(self) -> None:
+    @staticmethod
+    def test_codex_preset_runtime() -> None:
         assert get_preset("codex_default").runtime == "codex"
 
-    def test_safety_focus_weights_safety(self) -> None:
+    @staticmethod
+    def test_jiuwenswarm_preset_runtime() -> None:
+        preset = get_preset("jiuwenswarm_default")
+        assert preset.runtime == "jiuwenswarm"
+        assert preset.dimensions == _DEFAULT_DIMS
+        assert preset.tool_allowlist == ("Read", "Grep", "Bash")
+
+    @staticmethod
+    def test_safety_focus_weights_safety() -> None:
         preset = get_preset("safety_focus")
         assert preset.weights["safety"] == 0.35
 
-    def test_unknown_preset_raises(self) -> None:
+    @staticmethod
+    def test_unknown_preset_raises() -> None:
         with pytest.raises(ValueError, match="Unknown judge preset"):
             get_preset("definitely_not_a_preset")
 
-    def test_register_then_get(self) -> None:
+    @staticmethod
+    def test_register_then_get() -> None:
         preset = JudgePreset(
             name="test_preset_xyz",
             dimensions=("task_completion",),
@@ -104,20 +124,24 @@ class TestPresetRegistry:
 
 
 class TestScorerRegistry:
-    def test_default_scorers_registered(self) -> None:
+    @staticmethod
+    def test_default_scorers_registered() -> None:
         names = list_scorers()
         assert "weighted_sum" in names
         assert "task_completion_gated" in names
 
-    def test_get_scorer_returns_runtime_checkable(self) -> None:
+    @staticmethod
+    def test_get_scorer_returns_runtime_checkable() -> None:
         s = get_scorer("weighted_sum")
         assert isinstance(s, WeightScorer)
 
-    def test_unknown_scorer_raises(self) -> None:
+    @staticmethod
+    def test_unknown_scorer_raises() -> None:
         with pytest.raises(ValueError, match="Unknown judge scorer"):
             get_scorer("definitely_not_a_scorer")
 
-    def test_register_then_get(self) -> None:
+    @staticmethod
+    def test_register_then_get() -> None:
         s = WeightedSumScorer()
         register_scorer("test_scorer_xyz", s)
         assert get_scorer("test_scorer_xyz") is s

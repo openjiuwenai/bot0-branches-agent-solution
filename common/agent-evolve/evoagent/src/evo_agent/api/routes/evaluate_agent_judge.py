@@ -51,7 +51,7 @@ class AgentJudgeRequest(BaseModel):
     preset: str
     skill_names: list[str] = Field(min_length=1)
     expected_result: dict[str, Any] | None = None
-    runtime: Literal["claude", "codex"] | None = None
+    runtime: Literal["claude", "codex", "jiuwenswarm"] | None = None
     tool_allowlist: list[str] | None = None
     skill_source: Literal["local", "adapter", "none"] = "none"
     skill_root: str | None = None
@@ -59,6 +59,14 @@ class AgentJudgeRequest(BaseModel):
     run_timeout: float | None = None
     keep_on_error: bool = False
     extra_env: dict[str, str] | None = None
+    agent_profile: str | None = Field(
+        default=None,
+        description=(
+            "Agent profile name for the jiuwenswarm runtime. "
+            "Selects which acp_agents entry to use from jiuwenswarm config. "
+            "Ignored for claude/codex runtimes."
+        ),
+    )
     trajectory_budget: int | None = Field(
         default=None,
         description=(
@@ -151,6 +159,8 @@ def _build_evaluator_config(request: AgentJudgeRequest) -> dict[str, Any]:
         config["trajectory_budget"] = request.trajectory_budget
     if request.dimension_thresholds is not None:
         config["dimension_thresholds"] = request.dimension_thresholds
+    if request.agent_profile is not None:
+        config["agent_profile"] = request.agent_profile
     return config
 
 

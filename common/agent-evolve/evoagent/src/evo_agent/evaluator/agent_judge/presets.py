@@ -37,7 +37,7 @@ class JudgePreset:
     name: str
     dimensions: tuple[str, ...]
     weights: dict[str, float]
-    runtime: Literal["claude", "codex"]
+    runtime: Literal["claude", "codex", "jiuwenswarm"]
     helper_skills: tuple[str, ...] = ()
     scorer: str = "task_completion_gated"
     tool_allowlist: tuple[str, ...] = ("Read", "Grep")
@@ -122,6 +122,17 @@ def _register_default_presets() -> None:
                 "planning_rationality": 0.1,
             },
             runtime="claude",
+            tool_allowlist=_DEFAULT_ALLOWLIST,
+        ),
+    )
+
+    register_preset(
+        "jiuwenswarm_default",
+        JudgePreset(
+            name="jiuwenswarm_default",
+            dimensions=_DEFAULT_DIMENSIONS,
+            weights=_equal_weights(_DEFAULT_DIMENSIONS),
+            runtime="jiuwenswarm",
             tool_allowlist=_DEFAULT_ALLOWLIST,
         ),
     )

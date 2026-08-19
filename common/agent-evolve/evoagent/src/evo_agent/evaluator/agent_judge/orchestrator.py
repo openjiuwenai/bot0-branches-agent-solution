@@ -86,8 +86,6 @@ class DimensionOrchestrator:
         tasks = [asyncio.create_task(_run_one(dim)) for dim in dimensions]
         try:
             return await asyncio.gather(*tasks)
-        except EvaluationError:
-            raise
         except asyncio.CancelledError:
             raise
         except Exception as exc:

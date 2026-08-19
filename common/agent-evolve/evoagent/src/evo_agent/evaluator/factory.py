@@ -251,8 +251,11 @@ def _create_agent_evaluator(config: dict[str, Any]) -> Any:
     preset = get_preset(preset_name)
 
     runtime = config.get("runtime") or preset.runtime
-    if runtime not in ("claude", "codex"):
-        raise ValueError(f"Agent evaluator 'runtime' must be 'claude' or 'codex', got {runtime!r}.")
+    if runtime not in ("claude", "codex", "jiuwenswarm"):
+        raise ValueError(
+            f"Agent evaluator 'runtime' must be 'claude', 'codex', "
+            f"or 'jiuwenswarm', got {runtime!r}."
+        )
 
     tool_allowlist_raw = config.get("tool_allowlist")
     if tool_allowlist_raw is None:
@@ -297,7 +300,17 @@ def _create_agent_evaluator(config: dict[str, Any]) -> Any:
             f"Unknown skill_source: {skill_source!r} (use 'local', 'adapter', or 'none')."
         )
 
-    runtime_adapter = make_runtime(runtime, extra_env=extra_env)
+    # Optional agent profile for jiuwenswarm runtime (which ACP agent to use).
+    agent_profile_raw = config.get("agent_profile")
+    agent_profile: str | None = None
+    if agent_profile_raw is not None:
+        if not isinstance(agent_profile_raw, str):
+            raise TypeError("'agent_profile' must be a str.")
+        agent_profile = agent_profile_raw
+
+    runtime_adapter = make_runtime(
+        runtime, extra_env=extra_env, agent_profile=agent_profile
+    )
 
     workdir_base = config.get("workdir_base")
     keep_on_error = bool(config.get("keep_on_error", False))

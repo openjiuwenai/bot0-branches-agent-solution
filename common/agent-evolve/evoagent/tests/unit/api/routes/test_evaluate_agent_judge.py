@@ -121,7 +121,7 @@ def _wait_terminal(client: TestClient, job_id: str, timeout: float = 10.0) -> di
 
 @pytest.fixture(autouse=True)
 def _reset_job_store() -> Any:
-    job_manager._jobs.clear()
+    job_manager._jobs.clear()  # noqa: SLF001
     yield
 
 
@@ -298,3 +298,32 @@ def test_trajectory_budget_negative_422(monkeypatch: pytest.MonkeyPatch, tmp_pat
     traj = _trajectory_file(tmp_path)
     resp = _submit(client, traj, trajectory_budget=-100)
     assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# jiuwenswarm runtime
+# ---------------------------------------------------------------------------
+
+
+def test_jiuwenswarm_runtime_accepted(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """runtime='jiuwenswarm' is accepted by the HTTP route (no 422)."""
+    fake = _FakeAgentEvaluator(_build_evaluated())
+    _patch_create(monkeypatch, fake)
+    client = TestClient(create_app())
+    traj = _trajectory_file(tmp_path)
+    resp = _submit(client, traj, runtime="jiuwenswarm")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["status"] == "queued"
+
+
+def test_jiuwenswarm_with_agent_profile(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """agent_profile is accepted alongside runtime='jiuwenswarm'."""
+    fake = _FakeAgentEvaluator(_build_evaluated())
+    _patch_create(monkeypatch, fake)
+    client = TestClient(create_app())
+    traj = _trajectory_file(tmp_path)
+    resp = _submit(client, traj, runtime="jiuwenswarm", agent_profile="custom_agent")
+    assert resp.status_code == 200, resp.text

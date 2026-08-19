@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -73,15 +74,16 @@ _DEFAULT = (
 
 
 class TestDimensionOrchestrator:
-    def test_runs_all_and_stamps_names(self) -> None:
+    @staticmethod
+    def test_runs_all_and_stamps_names() -> None:
         runtime = _FakeRuntime(score=0.7)
         orch = DimensionOrchestrator(runtime, max_concurrent=6)
         judgments = asyncio.run(
             orch.run(
                 _dims(_DEFAULT),
                 _prompt_builder,
-                workdir=__import__("pathlib").Path("/tmp"),
-                schema_path=__import__("pathlib").Path("/tmp/s.json"),
+                workdir=Path("/tmp"),
+                schema_path=Path("/tmp/s.json"),
                 tool_allowlist=("Read", "Grep"),
             )
         )
@@ -92,7 +94,8 @@ class TestDimensionOrchestrator:
         assert [r.dimension_name for r in runtime.requests]  # populated
         assert set(r.dimension_name for r in runtime.requests) == set(_DEFAULT)
 
-    def test_on_progress_monotonic(self) -> None:
+    @staticmethod
+    def test_on_progress_monotonic() -> None:
         runtime = _FakeRuntime()
         progress: list[tuple[int, int]] = []
         orch = DimensionOrchestrator(
@@ -102,8 +105,8 @@ class TestDimensionOrchestrator:
             orch.run(
                 _dims(_DEFAULT),
                 _prompt_builder,
-                workdir=__import__("pathlib").Path("/tmp"),
-                schema_path=__import__("pathlib").Path("/tmp/s.json"),
+                workdir=Path("/tmp"),
+                schema_path=Path("/tmp/s.json"),
                 tool_allowlist=("Read",),
             )
         )
@@ -114,21 +117,23 @@ class TestDimensionOrchestrator:
         assert dones == sorted(dones)
         assert all(t == len(_DEFAULT) for _, t in progress)
 
-    def test_max_concurrent_bound(self) -> None:
+    @staticmethod
+    def test_max_concurrent_bound() -> None:
         runtime = _FakeRuntime(delay=0.03)
         orch = DimensionOrchestrator(runtime, max_concurrent=2)
         asyncio.run(
             orch.run(
                 _dims(_DEFAULT),
                 _prompt_builder,
-                workdir=__import__("pathlib").Path("/tmp"),
-                schema_path=__import__("pathlib").Path("/tmp/s.json"),
+                workdir=Path("/tmp"),
+                schema_path=Path("/tmp/s.json"),
                 tool_allowlist=("Read",),
             )
         )
         assert runtime.max_in_flight <= 2
 
-    def test_fail_fast_raises_and_cancels_rest(self) -> None:
+    @staticmethod
+    def test_fail_fast_raises_and_cancels_rest() -> None:
         # failing dim raises instantly; others sleep — gather must cancel them.
         runtime = _FakeRuntime(fail_dim="safety", delay=0.05)
         orch = DimensionOrchestrator(runtime, max_concurrent=6)
@@ -137,15 +142,16 @@ class TestDimensionOrchestrator:
                 orch.run(
                     _dims(_DEFAULT),
                     _prompt_builder,
-                    workdir=__import__("pathlib").Path("/tmp"),
-                    schema_path=__import__("pathlib").Path("/tmp/s.json"),
+                    workdir=Path("/tmp"),
+                    schema_path=Path("/tmp/s.json"),
                     tool_allowlist=("Read",),
                 )
             )
         # not all dims finished normally (the sleepers were cancelled before return)
         assert len(runtime.finished) < len(_DEFAULT)
 
-    def test_empty_dimensions_raises(self) -> None:
+    @staticmethod
+    def test_empty_dimensions_raises() -> None:
         runtime = _FakeRuntime()
         orch = DimensionOrchestrator(runtime)
         with pytest.raises(EvaluationError, match="no dimensions"):
@@ -153,13 +159,14 @@ class TestDimensionOrchestrator:
                 orch.run(
                     [],
                     _prompt_builder,
-                    workdir=__import__("pathlib").Path("/tmp"),
-                    schema_path=__import__("pathlib").Path("/tmp/s.json"),
+                    workdir=Path("/tmp"),
+                    schema_path=Path("/tmp/s.json"),
                     tool_allowlist=("Read",),
                 )
             )
 
-    def test_non_evaluation_error_wrapped(self) -> None:
+    @staticmethod
+    def test_non_evaluation_error_wrapped() -> None:
         class _BoomRuntime:
             async def judge(self, request: Any) -> DimensionJudgment:  # noqa: ARG002
                 raise RuntimeError("unexpected boom")
@@ -170,8 +177,8 @@ class TestDimensionOrchestrator:
                 orch.run(
                     _dims(("task_completion",)),
                     _prompt_builder,
-                    workdir=__import__("pathlib").Path("/tmp"),
-                    schema_path=__import__("pathlib").Path("/tmp/s.json"),
+                    workdir=Path("/tmp"),
+                    schema_path=Path("/tmp/s.json"),
                     tool_allowlist=("Read",),
                 )
             )

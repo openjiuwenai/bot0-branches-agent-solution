@@ -317,19 +317,23 @@ class TestUnknownType:
 class TestAgentFactory:
     """create_evaluator({'type': 'agent'}) → AgentEvaluator + 配置校验。"""
 
-    def _cfg(self, **overrides: object) -> dict[str, object]:
+    @staticmethod
+    def _cfg(**overrides: object) -> dict[str, object]:
         cfg: dict[str, object] = {
             "type": "agent",
             "preset": "default",
+            "dimension_thresholds": {"task_completion": 0.5, "safety": 0.5},
         }
         cfg.update(overrides)
         return cfg
 
-    def test_creates_agent_evaluator(self) -> None:
-        evaluator = create_evaluator(self._cfg())
+    @staticmethod
+    def test_creates_agent_evaluator() -> None:
+        evaluator = create_evaluator(TestAgentFactory._cfg())
         assert isinstance(evaluator, AgentEvaluator)
 
-    def test_unknown_type_message_lists_agent(self) -> None:
+    @staticmethod
+    def test_unknown_type_message_lists_agent() -> None:
         with pytest.raises(ValueError, match="agent"):
             create_evaluator({"type": "magic"})
 
@@ -354,14 +358,14 @@ class TestAgentFactory:
             )
         )
         assert isinstance(evaluator, AgentEvaluator)
-        assert evaluator._preset.tool_allowlist == ("Read",)
-        assert evaluator._preset.max_concurrent == 3
-        assert evaluator._preset.run_timeout == 42.0
+        assert evaluator._preset.tool_allowlist == ("Read",)  # noqa: SLF001
+        assert evaluator._preset.max_concurrent == 3  # noqa: SLF001
+        assert evaluator._preset.run_timeout == 42.0  # noqa: SLF001
 
     def test_runtime_override(self) -> None:
         evaluator = create_evaluator(self._cfg(runtime="codex"))
         assert isinstance(evaluator, AgentEvaluator)
-        assert evaluator._preset.runtime == "codex"
+        assert evaluator._preset.runtime == "codex"  # noqa: SLF001
 
     def test_skill_source_local_without_root_raises(self) -> None:
         with pytest.raises(ValueError, match="skill_root"):
@@ -382,13 +386,13 @@ class TestAgentFactory:
     def test_trajectory_budget_forwarded(self) -> None:
         evaluator = create_evaluator(self._cfg(trajectory_budget=12000))
         assert isinstance(evaluator, AgentEvaluator)
-        assert evaluator._trajectory_budget == 12000
+        assert evaluator._trajectory_budget == 12000  # noqa: SLF001
 
     def test_trajectory_budget_default_uses_module_constant(self) -> None:
         from evo_agent.evaluator.evaluators.agent import _DEFAULT_TRAJECTORY_BUDGET
 
         evaluator = create_evaluator(self._cfg())
-        assert evaluator._trajectory_budget == _DEFAULT_TRAJECTORY_BUDGET
+        assert evaluator._trajectory_budget == _DEFAULT_TRAJECTORY_BUDGET  # noqa: SLF001
 
     def test_trajectory_budget_wrong_type_raises(self) -> None:
         with pytest.raises(TypeError, match="trajectory_budget"):
@@ -406,3 +410,23 @@ class TestAgentFactory:
     def test_trajectory_budget_negative_raises(self) -> None:
         with pytest.raises(ValueError, match="trajectory_budget"):
             create_evaluator(self._cfg(trajectory_budget=-100))
+
+    def test_jiuwenswarm_runtime(self) -> None:
+        evaluator = create_evaluator(self._cfg(runtime="jiuwenswarm"))
+        assert isinstance(evaluator, AgentEvaluator)
+        assert evaluator._preset.runtime == "jiuwenswarm"  # noqa: SLF001
+
+    def test_agent_profile_passthrough(self) -> None:
+        evaluator = create_evaluator(
+            self._cfg(runtime="jiuwenswarm", agent_profile="custom_agent")
+        )
+        assert isinstance(evaluator, AgentEvaluator)
+        # The runtime adapter should be a JiuwenSwarmRuntime with the custom profile
+        from evo_agent.evaluator.agent_judge.runtime import JiuwenSwarmRuntime
+
+        assert isinstance(evaluator._runtime, JiuwenSwarmRuntime)  # noqa: SLF001
+        assert evaluator._runtime._agent_profile == "custom_agent"  # noqa: SLF001
+
+    def test_agent_profile_wrong_type_raises(self) -> None:
+        with pytest.raises(TypeError, match="agent_profile"):
+            create_evaluator(self._cfg(agent_profile=42))  # type: ignore[dict-item]

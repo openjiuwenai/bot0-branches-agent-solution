@@ -28,7 +28,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
+
+logger = logging.getLogger(__name__)
 
 
 def _clamp(value: float) -> float:
@@ -125,28 +128,24 @@ def _parse_json_arg(raw: str, label: str) -> dict[str, float]:
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
-        print(f"Error: --{label} is not valid JSON: {exc}", file=sys.stderr)
-        sys.exit(1)
+        raise ValueError(f"--{label} is not valid JSON: {exc}") from exc
     if not isinstance(data, dict):
-        print(f"Error: --{label} must be a JSON object, got {type(data).__name__}", file=sys.stderr)
-        sys.exit(1)
+        raise ValueError(f"--{label} must be a JSON object, got {type(data).__name__}")
     result: dict[str, float] = {}
     for key, value in data.items():
         if not isinstance(key, str):
-            print(f"Error: --{label} keys must be strings", file=sys.stderr)
-            sys.exit(1)
+            raise ValueError(f"--{label} keys must be strings")
         try:
             result[key] = float(value)
-        except (TypeError, ValueError):
-            print(
-                f"Error: --{label}[{key!r}] must be a number, got {value!r}",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"--{label}[{key!r}] must be a number, got {value!r}"
+            ) from exc
     return result
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(
         description="Dimension scoring utilities: score computation or threshold checking."
     )
@@ -173,16 +172,22 @@ def main() -> None:
     if not args.weights and not args.thresholds:
         parser.error("Provide --weights (score mode) or --thresholds (check mode).")
 
-    judgments = _parse_json_arg(args.judgments, "judgments")
+    try:
+        judgments = _parse_json_arg(args.judgments, "judgments")
+        if args.thresholds:
+            thresholds = _parse_json_arg(args.thresholds, "thresholds")
+        else:
+            weights = _parse_json_arg(args.weights, "weights")
+    except ValueError as exc:
+        logger.error(str(exc))
+        sys.exit(1)
 
     if args.thresholds:
-        thresholds = _parse_json_arg(args.thresholds, "thresholds")
         result = check_thresholds(judgments, thresholds)
     else:
-        weights = _parse_json_arg(args.weights, "weights")
         result = compute_score(judgments, weights, gate=args.gate)
 
-    print(json.dumps(result, ensure_ascii=False))
+    sys.stdout.write(json.dumps(result, ensure_ascii=False) + "\n")
 
 
 if __name__ == "__main__":

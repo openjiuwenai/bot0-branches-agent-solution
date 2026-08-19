@@ -44,7 +44,7 @@ from evo_agent.evaluator.agent_judge.attribution import (
     parse_attribution_output,
 )
 from evo_agent.evaluator.agent_judge.dimensions import get_dimension
-from evo_agent.evaluator.agent_judge.evaluator_skills.common.attribution_calculator.attribution_calculator import (  # noqa: E501
+from evo_agent.evaluator.agent_judge.evaluator_skills.common.attribution_calculator import (
     check_thresholds,
 )
 from evo_agent.evaluator.agent_judge.orchestrator import DimensionOrchestrator

@@ -42,7 +42,7 @@ class AgentEvaluatorConfig:
     """
 
     preset: str
-    runtime: Literal["claude", "codex"] | None = None
+    runtime: Literal["claude", "codex", "jiuwenswarm"] | None = None
     tool_allowlist: tuple[str, ...] | None = None
     max_concurrent: int | None = None
     run_timeout: float | None = None
@@ -51,3 +51,4 @@ class AgentEvaluatorConfig:
     scorer: str | None = None
     extra_env: dict[str, str] = field(default_factory=dict)
     trajectory_budget: int | None = None
+    agent_profile: str | None = None

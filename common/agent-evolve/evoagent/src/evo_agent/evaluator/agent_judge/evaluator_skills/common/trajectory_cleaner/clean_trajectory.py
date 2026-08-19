@@ -14,8 +14,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def truncate_content(content: str, max_chars: int) -> str:
@@ -64,16 +67,21 @@ def clean_messages(
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description="Clean trajectory.jsonl")
-    parser.add_argument("--file", default="trajectory.jsonl", help="Input file (default: trajectory.jsonl)")
+    parser.add_argument(
+        "--file", default="trajectory.jsonl", help="Input file (default: trajectory.jsonl)"
+    )
     parser.add_argument("--output", default="cleaned_trajectory.jsonl", help="Output file")
-    parser.add_argument("--max-tool-chars", type=int, default=2000, help="Max chars for tool returns")
+    parser.add_argument(
+        "--max-tool-chars", type=int, default=2000, help="Max chars for tool returns"
+    )
     parser.add_argument("--max-content-chars", type=int, default=8000, help="Max chars for content")
     args = parser.parse_args()
 
     input_path = Path(args.file)
     if not input_path.exists():
-        print(f"Error: {input_path} not found", file=sys.stderr)
+        logger.error("%s not found", input_path)
         sys.exit(1)
 
     messages = []
@@ -96,10 +104,10 @@ def main() -> None:
             f.write(json.dumps(msg, ensure_ascii=False, default=str))
             f.write("\n")
 
-    print(f"Original: {original_count} messages")
-    print(f"Cleaned:  {len(cleaned)} messages")
-    print(f"Removed:  {original_count - len(cleaned)} messages")
-    print(f"Output:   {output_path}")
+    logger.info("Original: %d messages", original_count)
+    logger.info("Cleaned:  %d messages", len(cleaned))
+    logger.info("Removed:  %d messages", original_count - len(cleaned))
+    logger.info("Output:   %s", output_path)
 
 
 if __name__ == "__main__":
