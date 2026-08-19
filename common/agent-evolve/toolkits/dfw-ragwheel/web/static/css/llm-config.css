@@ -1,0 +1,273 @@
+/* =============================================
+   DFW-RAG - LLM Config Page Stylesheet
+   Single-screen layout.
+   ============================================= */
+
+.llm-config-page {
+  /* Layout positioning is defined in layout.css */
+}
+
+.llm-config-page .extract-layout {
+  display: flex;
+  flex: 1;
+  min-height: calc(100vh - var(--navbar-height) - 2 * var(--space-xl));
+  overflow: hidden;
+}
+
+.llm-config-page .extract-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-xl);
+  overflow: hidden;
+  background-color: var(--color-bg);
+}
+
+.llm-config-page .execute-cards {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  height: 100%;
+}
+
+.llm-config-page .execute-card {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.llm-config-page .execute-card .card-body {
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.llm-config-page .execute-card form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.llm-config-page .form-row {
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+  flex-shrink: 0;
+}
+
+.llm-config-page .form-group {
+  margin-bottom: var(--space-sm);
+}
+
+.llm-config-page .form-textarea {
+  min-height: 60px;
+  resize: none;
+}
+
+.llm-config-page .form-actions {
+  flex-shrink: 0;
+  margin-top: auto;
+  padding-top: var(--space-md);
+}
+
+/* LLM config list card */
+.llm-config-list-card .card-body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Config panels (profiles / templates) */
+.config-panel {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.config-panel.active {
+  display: flex;
+}
+
+.llm-config-page .extract-sidebar .sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 0 var(--space-lg) var(--space-md);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-md);
+  color: var(--color-text-light);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: var(--space-sm);
+}
+
+.llm-config-page .extract-sidebar .sidebar-brand svg {
+  width: 20px;
+  height: 20px;
+  max-width: 20px;
+  max-height: 20px;
+  color: var(--color-secondary);
+  flex-shrink: 0;
+}
+
+.llm-config-page .extract-sidebar .sidebar-brand svg, .llm-config-page .extract-sidebar .sidebar-link svg {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.llm-config-page .extract-sidebar .sidebar-link svg {
+  width: 18px;
+  height: 18px;
+  max-width: 18px;
+  max-height: 18px;
+  flex-shrink: 0;
+}
+
+.llm-config-page .extract-sidebar .sidebar-brand {
+  padding: 10px var(--space-lg) var(--space-md);
+}
+
+.llm-config-page .extract-sidebar .sidebar-link {
+  padding: 10px var(--space-lg);
+}
+
+/* ===== Modal ===== */
+.llm-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.45);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.25s ease;
+}
+
+.llm-modal-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.llm-modal {
+  background-color: var(--color-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg, 0 4px 16px rgba(44, 62, 80, 0.12));
+  width: 90%;
+  max-width: 760px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: translateY(-20px);
+  transition: transform 0.25s ease;
+}
+
+.llm-modal-overlay.active .llm-modal {
+  transform: translateY(0);
+}
+
+.llm-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-bg);
+  flex-shrink: 0;
+}
+
+.llm-modal-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.llm-modal-close {
+  font-size: 26px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.llm-modal-close:hover {
+  color: var(--color-danger);
+}
+
+.llm-modal-body {
+  padding: var(--space-lg);
+  overflow-y: auto;
+  flex: 1;
+}
+
+.llm-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-bg);
+  flex-shrink: 0;
+}
+
+/* Test result */
+.llm-test-result {
+  margin-top: var(--space-lg);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+}
+
+.llm-test-result.success {
+  background-color: var(--color-success-bg);
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.llm-test-result.error {
+  background-color: var(--color-danger-bg);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.llm-result-content {
+  margin-top: var(--space-sm);
+  padding: var(--space-sm);
+  background-color: var(--color-card);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 260px;
+  overflow-y: auto;
+  color: var(--color-text);
+}
+
+/* Responsive */
+@media (max-width: 991px) {
+  .llm-config-page .extract-layout {
+    flex-direction: column;
+    overflow: auto;
+  }
+
+  .llm-config-page .extract-main {
+    padding: var(--space-md);
+    overflow: visible;
+  }
+
+  .llm-config-page .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .llm-modal {
+    width: 96%;
+    max-height: 95vh;
+  }
+}

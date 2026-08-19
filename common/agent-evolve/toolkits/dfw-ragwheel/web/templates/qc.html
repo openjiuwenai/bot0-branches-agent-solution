@@ -1,0 +1,447 @@
+{% extends "base.html" %}
+
+{% set active_page = 'qc' %}
+{% block title %}知识质检 - DFW-RAG 知识处理平台{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="static/css/extract.css">
+<link rel="stylesheet" href="static/css/qc.css">
+{% endblock %}
+
+{% block sidebar %}
+<aside class="extract-sidebar" id="qcSidebar">
+    <div class="sidebar-brand">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 11 12 14 22 4"/>
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+        </svg>
+        <span>知识质检</span>
+    </div>
+    <nav class="sidebar-nav rag-kqc-tabs" role="tablist">
+        <button type="button" class="sidebar-link rag-kqc-tab active" role="tab" data-kqc-tab="qc" aria-selected="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <polygon points="10 8 16 12 10 16 10 8"/>
+            </svg>
+            <span>质检</span>
+        </button>
+        <button type="button" class="sidebar-link rag-kqc-tab" role="tab" data-kqc-tab="kb" aria-selected="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+            </svg>
+            <span>知识库</span>
+        </button>
+        <button type="button" class="sidebar-link rag-kqc-tab" role="tab" data-kqc-tab="rules" aria-selected="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="4" y1="21" x2="4" y2="14"/>
+                <line x1="4" y1="10" x2="4" y2="3"/>
+                <line x1="12" y1="21" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12" y2="3"/>
+                <line x1="20" y1="21" x2="20" y2="16"/>
+                <line x1="20" y1="12" x2="20" y2="3"/>
+                <line x1="1" y1="14" x2="7" y2="14"/>
+                <line x1="9" y1="8" x2="15" y2="8"/>
+                <line x1="17" y1="16" x2="23" y2="16"/>
+            </svg>
+            <span>规则</span>
+        </button>
+        <button type="button" class="sidebar-link rag-kqc-tab" role="tab" data-kqc-tab="wordlists" aria-selected="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            </svg>
+            <span>违禁词库</span>
+        </button>
+        <button type="button" class="sidebar-link rag-kqc-tab" role="tab" data-kqc-tab="env" aria-selected="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+            </svg>
+            <span>API 环境</span>
+        </button>
+    </nav>
+</aside>
+{% endblock %}
+
+{% block content %}
+<div class="qc-layout">
+    <main class="extract-main">
+        <!-- Panel: 质检 -->
+        <div id="ragKqcPanelQc" class="extract-panel qc-panel rag-kqc-panel active" data-kqc-panel="qc">
+            <div class="panel-header">
+                <h2 class="page-header__title">质检</h2>
+            </div>
+            <div class="panel-body">
+                <div class="execute-cards" style="grid-template-columns: 1fr; grid-template-rows: 1fr;">
+                    <div class="execute-card card">
+                        <div class="card-body">
+                            <div class="pipeline-card-header">
+                                <span class="pipeline-card-title">运行质检</span>
+                                <p class="pipeline-card-description">对 RAG 相似问 / 意图描述进行格式、合规、重复、冲突、语义质量检测。</p>
+                            </div>
+
+                            <div class="qc-form-row">
+                                <label class="qc-label">待检 Excel</label>
+                                <div class="qc-field-grow">
+                                    <input type="text" class="form-input form-input-sm" id="ragKqcInputExcel"
+                                           placeholder="选择 .xlsx 文件（含「相似问信息」「意图信息」sheet）" readonly>
+                                    <input type="file" id="ragKqcInputExcelFile" accept=".xlsx,.xls" class="hidden">
+                                </div>
+                                <button type="button" class="btn btn-sm btn-secondary" id="ragKqcBrowseInputBtn">浏览…</button>
+                            </div>
+
+                            <div class="qc-form-row">
+                                <label class="qc-label">质检任务</label>
+                                <div class="qc-inline-group">
+                                    <label class="qc-radio"><input type="radio" name="ragKqcTask" value="question" checked> 相似问质检</label>
+                                    <label class="qc-radio"><input type="radio" name="ragKqcTask" value="intent"> 意图描述质检</label>
+                                </div>
+                            </div>
+
+                            <div class="qc-form-row">
+                                <label class="qc-label">检测模式</label>
+                                <div class="qc-inline-group">
+                                    <label class="qc-check"><input type="checkbox" id="ragKqcModeBatch" checked> 本批语料质检</label>
+                                    <label class="qc-check"><input type="checkbox" id="ragKqcModeProduction" checked> 生产库联合质检</label>
+                                </div>
+                            </div>
+
+                            <div class="qc-form-row hidden" id="ragKqcIntentFilterArea">
+                                <label class="qc-label">生产库意图筛选</label>
+                                <div class="qc-inline-group">
+                                    <select class="form-select form-select-sm" id="ragKqcIntentFilterMode" style="width: auto;">
+                                        <option value="" selected>不过滤</option>
+                                        <option value="include">只检测选中意图</option>
+                                        <option value="exclude">排除选中意图</option>
+                                    </select>
+                                    <input type="text" class="form-input form-input-sm" id="ragKqcIntentFilterIntents"
+                                           placeholder="逗号分隔的意图名称" style="flex: 1; min-width: 180px;">
+                                </div>
+                            </div>
+
+                            <div class="qc-checker-grid">
+                                <span class="qc-checker-title">检测项开关</span>
+                                <label class="qc-check" id="ragKqcChkFormatWrap"><input type="checkbox" id="ragKqcChkFormat" checked> 格式规范</label>
+                                <label class="qc-check" id="ragKqcChkComplianceWrap"><input type="checkbox" id="ragKqcChkCompliance" checked> 合规安全</label>
+                                <label class="qc-check" id="ragKqcChkDuplicateWrap"><input type="checkbox" id="ragKqcChkDuplicate" checked> 重复检测</label>
+                                <label class="qc-check" id="ragKqcChkConflictWrap"><input type="checkbox" id="ragKqcChkConflict" checked> 冲突检测</label>
+                                <label class="qc-check" id="ragKqcChkDupLlmWrap"><input type="checkbox" id="ragKqcChkDupLlm"> 重复/冲突 LLM 裁决</label>
+                                <label class="qc-check" id="ragKqcChkSemanticWrap"><input type="checkbox" id="ragKqcChkSemantic" checked> 语义质量</label>
+                                <label class="qc-check" id="ragKqcChkLlmWrap"><input type="checkbox" id="ragKqcChkLlm"> 启用 LLM 语义检测</label>
+                                <label class="qc-check hidden" id="ragKqcChkIntentLlmWrap"><input type="checkbox" id="ragKqcChkIntentLlm"> 意图描述 LLM 裁决</label>
+                            </div>
+
+                            <div class="qc-actions">
+                                <button type="button" class="btn btn-primary btn-sm" id="ragKqcStartBtn">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polygon points="5 3 19 12 5 21 5 3"/>
+                                    </svg>
+                                    开始质检
+                                </button>
+                                <button type="button" class="btn btn-danger btn-sm hidden" id="ragKqcStopBtn">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                    </svg>
+                                    终止质检
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-sm" id="ragKqcExportQcBtn" disabled
+                                        title="质检完成后可下载带质检列的 Excel 结果">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                        <polyline points="7 10 12 15 17 10"/>
+                                        <line x1="12" y1="15" x2="12" y2="3"/>
+                                    </svg>
+                                    导出质检结果
+                                </button>
+                                <button type="button" id="ragKqcRetryErrorsBtn" class="btn btn-warning btn-sm" hidden>继续质检异常行</button>
+                                <span class="text-muted" id="ragKqcQcStatus">就绪</span>
+                            </div>
+
+                            <div class="qc-progress-wrap">
+                                <div class="progress">
+                                    <div class="progress-bar" id="ragKqcProgressBar" role="progressbar" style="width:0%;"></div>
+                                </div>
+                                <span class="qc-progress-text" id="ragKqcProgressText">0 / 0</span>
+                            </div>
+
+                            <label class="qc-label qc-label-block">运行日志</label>
+                            <textarea class="form-textarea qc-log" id="ragKqcLog" rows="6" readonly
+                                      placeholder="质检日志将在此显示…"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel: 知识库 -->
+        <div id="ragKqcPanelKb" class="extract-panel qc-panel rag-kqc-panel" data-kqc-panel="kb">
+            <div class="panel-header">
+                <h2 class="page-header__title">知识库</h2>
+            </div>
+            <div class="panel-body">
+                <div class="execute-cards" style="grid-template-columns: 1fr; grid-template-rows: 1fr;">
+                    <div class="execute-card card">
+                        <div class="card-body">
+                            <div class="pipeline-card-header">
+                                <span class="pipeline-card-title">生产库导入 / 导出</span>
+                                <p class="pipeline-card-description">将相似问或意图描述 Excel 导入生产向量库，或导出全量语料。</p>
+                            </div>
+
+                            <div class="qc-form-row">
+                                <label class="qc-label">相似问 Excel → 生产库</label>
+                                <div class="qc-field-grow">
+                                    <input type="text" class="form-input form-input-sm" id="ragKqcIngestQuestionExcel" readonly>
+                                    <input type="file" id="ragKqcIngestQuestionFile" accept=".xlsx,.xls" class="hidden">
+                                </div>
+                                <button type="button" class="btn btn-sm btn-secondary" id="ragKqcBrowseIngestQBtn">浏览…</button>
+                            </div>
+                            <div class="qc-form-row" style="padding-left: 120px;">
+                                <label class="qc-check"><input type="checkbox" id="ragKqcIngestQClear"> 导入前清空相似问生产库</label>
+                                <button type="button" class="btn btn-sm btn-success" id="ragKqcIngestQBtn">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                        <polyline points="14 2 14 8 20 8"/>
+                                        <line x1="12" y1="18" x2="12" y2="12"/>
+                                        <line x1="9" y1="15" x2="15" y2="15"/>
+                                    </svg>
+                                    导入相似问
+                                </button>
+                            </div>
+
+                            <hr class="qc-divider">
+
+                            <div class="qc-form-row">
+                                <label class="qc-label">意图信息 Excel → 意图库</label>
+                                <div class="qc-field-grow">
+                                    <input type="text" class="form-input form-input-sm" id="ragKqcIngestIntentExcel" readonly>
+                                    <input type="file" id="ragKqcIngestIntentFile" accept=".xlsx,.xls" class="hidden">
+                                </div>
+                                <button type="button" class="btn btn-sm btn-secondary" id="ragKqcBrowseIngestIBtn">浏览…</button>
+                            </div>
+                            <div class="qc-form-row" style="padding-left: 120px;">
+                                <label class="qc-check"><input type="checkbox" id="ragKqcIngestIClear"> 导入前清空意图生产库</label>
+                                <button type="button" class="btn btn-sm btn-success" id="ragKqcIngestIBtn">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                        <polyline points="14 2 14 8 20 8"/>
+                                        <line x1="12" y1="18" x2="12" y2="12"/>
+                                        <line x1="9" y1="15" x2="15" y2="15"/>
+                                    </svg>
+                                    导入意图描述
+                                </button>
+                            </div>
+                            <div class="qc-form-row" style="padding-left: 120px;">
+                                <button type="button" class="btn btn-sm btn-secondary" id="ragKqcRefreshKbCountBtn">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="23 4 23 10 17 10"/>
+                                        <polyline points="1 20 1 14 7 14"/>
+                                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                                    </svg>
+                                    刷新条数
+                                </button>
+                                <span class="qc-kb-count" id="ragKqcKbCount">库条数：相似问 — 条 | 意图描述 — 条</span>
+                            </div>
+
+                            <div class="qc-kb-progress-block hidden" id="ragKqcKbProgressWrap">
+                                <div class="qc-kb-progress-phase" id="ragKqcKbProgressPhase">准备中…</div>
+                                <div class="qc-progress-wrap">
+                                    <div class="progress">
+                                        <div class="progress-bar is-animated" id="ragKqcKbProgressBar" role="progressbar" style="width:0%;"></div>
+                                    </div>
+                                    <span class="qc-progress-text" id="ragKqcKbProgressText">已完成 0 / 总计 0</span>
+                                </div>
+                                <span class="text-muted" id="ragKqcKbStatus"></span>
+                            </div>
+
+                            <hr class="qc-divider">
+
+                            <div class="qc-form-row" style="padding-left: 120px;">
+                                <button type="button" class="btn btn-sm btn-secondary" id="ragKqcExportKbBtn">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                        <polyline points="7 10 12 15 17 10"/>
+                                        <line x1="12" y1="15" x2="12" y2="3"/>
+                                    </svg>
+                                    导出生产库语料
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel: 规则 -->
+        <div id="ragKqcPanelRules" class="extract-panel qc-panel rag-kqc-panel" data-kqc-panel="rules">
+            <div class="panel-header">
+                <h2 class="page-header__title">规则</h2>
+            </div>
+            <div class="panel-body">
+                <div class="execute-cards" style="grid-template-columns: 1fr; grid-template-rows: 1fr;">
+                    <div class="execute-card card">
+                        <div class="card-body">
+                            <div class="pipeline-card-header">
+                                <span class="pipeline-card-title">质检规则</span>
+                                <p class="pipeline-card-description">可在此修改规则，仅对本次质检生效。点击「从服务端加载」可恢复默认值。</p>
+                            </div>
+
+                            <p class="qc-editable-hint">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                </svg>
+                                可在此修改规则，仅对本次质检生效，不会写入服务端文件。点击「从服务端加载」可恢复为 <code>config/knowledge_qc/rules.yaml</code> 默认值。
+                            </p>
+
+                            <div class="qc-rules-row">
+                                <div class="qc-rule-col">
+                                    <div class="qc-rule-block">
+                                        <h6>相似度阈值</h6>
+                                        <div class="qc-mini-grid">
+                                            <label>重复检测 ≥</label>
+                                            <input type="number" class="form-input form-input-sm" id="ragKqcDupThreshold" step="0.01" min="0" max="1" value="0.88">
+                                            <label>冲突检测 ≥</label>
+                                            <input type="number" class="form-input form-input-sm" id="ragKqcConfThreshold" step="0.01" min="0" max="1" value="0.78">
+                                            <label>检索 TopK</label>
+                                            <input type="number" class="form-input form-input-sm" id="ragKqcTopK" min="1" max="50" value="5">
+                                        </div>
+                                    </div>
+                                    <div class="qc-rule-block">
+                                        <h6>长度限制</h6>
+                                        <div class="qc-mini-grid">
+                                            <label>最短字数</label>
+                                            <input type="number" class="form-input form-input-sm" id="ragKqcMinChars" min="1" value="2">
+                                            <label>最长字数</label>
+                                            <input type="number" class="form-input form-input-sm" id="ragKqcMaxChars" min="1" value="50">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="qc-rule-col">
+                                    <div class="qc-rule-block">
+                                        <h6>质检范围与性能</h6>
+                                        <div class="qc-mini-grid">
+                                            <label>起始行（0=不限）</label>
+                                            <input type="number" class="form-input form-input-sm" id="ragKqcRowStart" min="0" value="0">
+                                            <label>结束行（0=不限）</label>
+                                            <input type="number" class="form-input form-input-sm" id="ragKqcRowEnd" min="0" value="0">
+                                            <label>Checkpoint 间隔</label>
+                                            <input type="number" class="form-input form-input-sm" id="ragKqcCheckpointInterval" min="0" value="20">
+                                            <label>并发 worker</label>
+                                            <input type="number" class="form-input form-input-sm" id="ragKqcWorkerCount" min="1" value="1">
+                                        </div>
+                                    </div>
+                                    <div class="qc-rule-block">
+                                        <h6>语料 ID 策略</h6>
+                                        <select class="form-select form-select-sm" id="ragKqcIdStrategy">
+                                            <option value="uuid" selected>uuid（推荐生产入库）</option>
+                                            <option value="content_hash">content_hash</option>
+                                            <option value="row">row（仅调试）</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="qc-yaml-col">
+                                    <label class="qc-label qc-label-block">rules.yaml 全文（高级）</label>
+                                    <textarea class="form-textarea qc-yaml" id="ragKqcRulesYaml" rows="18"
+                                              spellcheck="false" placeholder="# 加载后将显示完整 rules.yaml…"></textarea>
+                                </div>
+                            </div>
+
+                            <div class="qc-actions">
+                                <button type="button" class="btn btn-primary btn-sm" id="ragKqcLoadRulesBtn">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="23 4 23 10 17 10"/>
+                                        <polyline points="1 20 1 14 7 14"/>
+                                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                                    </svg>
+                                    从服务端加载
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel: 违禁词库 -->
+        <div id="ragKqcPanelWordlists" class="extract-panel qc-panel rag-kqc-panel" data-kqc-panel="wordlists">
+            <div class="panel-header">
+                <h2 class="page-header__title">违禁词库</h2>
+            </div>
+            <div class="panel-body">
+                <div class="execute-cards" style="grid-template-columns: 1fr; grid-template-rows: 1fr;">
+                    <div class="execute-card card">
+                        <div class="card-body">
+                            <div class="pipeline-card-header">
+                                <span class="pipeline-card-title">违禁词配置</span>
+                                <p class="pipeline-card-description">可在此编辑词库，仅对本次质检生效。</p>
+                            </div>
+
+                            <p class="qc-editable-hint">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                </svg>
+                                可在此编辑词库，仅对本次质检生效，不会写入服务端。点击「加载违禁词库」可恢复为服务端 <code>wordlists/</code> 默认内容。
+                            </p>
+
+                            <div class="qc-wordlists-row form-row" style="grid-template-columns: repeat(2, 1fr);">
+                                <div class="form-group">
+                                    <label class="qc-label qc-label-block">监管违规词 regulatory.txt</label>
+                                    <textarea class="form-textarea qc-wordlist" id="ragKqcRegulatoryText" rows="12"
+                                              placeholder="每行一个词…"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label class="qc-label qc-label-block">违禁词 prohibited.txt</label>
+                                    <textarea class="form-textarea qc-wordlist" id="ragKqcProhibitedText" rows="12"
+                                              placeholder="每行一个词…"></textarea>
+                                </div>
+                            </div>
+
+                            <div class="qc-actions">
+                                <button type="button" class="btn btn-secondary btn-sm" id="ragKqcLoadWordlistsBtn">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="23 4 23 10 17 10"/>
+                                        <polyline points="1 20 1 14 7 14"/>
+                                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                                    </svg>
+                                    加载违禁词库
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel: API 环境 -->
+        <div id="ragKqcPanelEnv" class="extract-panel qc-panel rag-kqc-panel" data-kqc-panel="env">
+            <div class="panel-header">
+                <h2 class="page-header__title">API 环境</h2>
+            </div>
+            <div class="panel-body">
+                <div class="execute-cards" style="grid-template-columns: 1fr; grid-template-rows: 1fr;">
+                    <div class="execute-card card">
+                        <div class="card-body qc-env-body">
+                            <div class="form-row" style="grid-template-columns: repeat(2, 1fr);">
+                                <div class="form-group">
+                                    <label for="ragKqcLlmConfigSelect" class="form-label">LLM 配置</label>
+                                    <select class="form-select" id="ragKqcLlmConfigSelect"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="ragKqcEmbeddingConfigSelect" class="form-label">Embedding 配置</label>
+                                    <select class="form-select" id="ragKqcEmbeddingConfigSelect"></select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="static/js/qc.js"></script>
+{% endblock %}

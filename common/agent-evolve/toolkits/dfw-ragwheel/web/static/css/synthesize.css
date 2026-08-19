@@ -1,0 +1,74 @@
+/* =============================================
+   DFW-RAG - Synthesize Page Stylesheet
+   Single-screen layout.
+   ============================================= */
+
+.synthesize-layout {
+  display: flex;
+  flex: 1;
+  min-height: calc(100vh - var(--navbar-height) - 2 * var(--space-xl));
+  overflow: hidden;
+}
+
+.synthesize-layout .extract-sidebar {
+  /* Layout positioning is defined in layout.css */
+}
+
+.synthesize-layout .extract-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-xl);
+  overflow: hidden;
+  background-color: var(--color-bg);
+}
+
+.synthesize-card .pipeline-form-row {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.synthesize-card .pipeline-file-col .file-source-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.synthesize-card .llm-config-panel {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--space-md);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+  padding: var(--space-md);
+  min-height: 0;
+}
+
+.synthesize-card .llm-config-panel .file-source-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-bottom: var(--space-sm);
+}
+
+.synthesize-card .llm-config-panel .form-label {
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Responsive */
+@media (max-width: 991px) {
+  .synthesize-layout {
+    flex-direction: column;
+    overflow: auto;
+  }
+
+  .synthesize-layout .extract-main {
+    padding: var(--space-md);
+    overflow: visible;
+  }
+
+  .synthesize-card .pipeline-form-row {
+    flex-direction: column;
+  }
+}

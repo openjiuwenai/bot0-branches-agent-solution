@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% set active_page = 'index' %}
+{% block title %}首页 - DFW-RAG 知识处理工具{% endblock %}
+{% block body_attrs %} class="portal-page"{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="static/css/portal.css">
+{% endblock %}
+
+{% block content %}
+<div class="portal-wrapper">
+    <!-- Part ①: Title -->
+    <div class="portal-header">
+        <h1 class="portal-header__title">DFW-RAG 知识处理工具</h1>
+        <p class="portal-header__subtitle">面向 RAG 场景的知识萃取、合成与质检一体化工作台</p>
+    </div>
+
+    <!-- Parts ②-④: Modules -->
+    <div class="portal-modules">
+        <a href="extract/" class="portal-module portal-module--extract">
+            <div class="portal-module__icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>
+                </svg>
+            </div>
+            <h3 class="portal-module__title">知识萃取</h3>
+            <p class="portal-module__text">从基础语料中萃取知识条目，支持导入、执行萃取与结果入库。</p>
+            <span class="portal-module__link">进入模块<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+        </a>
+
+        <a href="synthesize/" class="portal-module portal-module--synthesize">
+            <div class="portal-module__icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                </svg>
+            </div>
+            <h3 class="portal-module__title">知识合成</h3>
+            <p class="portal-module__text">基于现有知识库进行 single/query 等模式的合成与验证。</p>
+            <span class="portal-module__link">进入模块<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+        </a>
+
+        <a href="qc/" class="portal-module portal-module--qc">
+            <div class="portal-module__icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 11 12 14 22 4"/>
+                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                </svg>
+            </div>
+            <h3 class="portal-module__title">知识质检</h3>
+            <p class="portal-module__text">对萃取结果进行规则校验、质量评分与报告导出。</p>
+            <span class="portal-module__link">进入模块<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+        </a>
+    </div>
+</div>
+{% endblock %}

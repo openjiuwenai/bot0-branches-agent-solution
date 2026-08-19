@@ -1,0 +1,208 @@
+/* =============================================
+   DFW-RAG - Portal / Homepage Stylesheet
+   Four-part solid-color layout (DataWeave style).
+   ============================================= */
+
+.portal-page .main-content {
+  margin-left: 0;
+  margin-top: 0;
+  height: 100vh;
+  max-height: 100vh;
+  padding: 0;
+  background-color: #f8fafc;
+  color: #1e293b;
+  overflow: hidden;
+}
+
+.portal-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 100vh;
+}
+
+/* Part ①: Title */
+.portal-header {
+  flex: 0 0 15%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-xl);
+}
+
+.portal-header__title {
+  font-size: 2.75rem;
+  font-weight: var(--font-weight-bold);
+  color: #1e293b;
+  margin-bottom: var(--space-md);
+  letter-spacing: -0.5px;
+}
+
+.portal-header__subtitle {
+  font-size: 1.15rem;
+  color: #475569;
+  max-width: 640px;
+}
+
+/* Parts ②-④: Modules */
+.portal-modules {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+  border-top: 1px solid rgba(30, 41, 59, 0.08);
+}
+
+.portal-module {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-xl);
+  color: #1e293b;
+  text-decoration: none;
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+  position: relative;
+}
+
+.portal-module:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 12%;
+  bottom: 12%;
+  width: 1px;
+  background-color: rgba(30, 41, 59, 0.08);
+}
+
+.portal-module--extract { background-color: rgba(52, 152, 219, 0.06); }
+.portal-module--extract:hover { background-color: rgba(52, 152, 219, 0.12); }
+.portal-module--synthesize { background-color: rgba(39, 174, 96, 0.06); }
+.portal-module--synthesize:hover { background-color: rgba(39, 174, 96, 0.12); }
+.portal-module--qc { background-color: rgba(230, 126, 34, 0.06); }
+.portal-module--qc:hover { background-color: rgba(230, 126, 34, 0.12); }
+
+.portal-module__icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-lg);
+  border: 2px solid currentColor;
+  transition: transform var(--transition-fast), background-color var(--transition-fast);
+}
+
+.portal-module:hover .portal-module__icon {
+  transform: scale(1.05);
+  background-color: rgba(30, 41, 59, 0.06);
+}
+
+.portal-module__icon svg {
+  width: 36px;
+  height: 36px;
+}
+
+.portal-module--extract .portal-module__icon { color: #3498db; }
+.portal-module--synthesize .portal-module__icon { color: #27ae60; }
+.portal-module--qc .portal-module__icon { color: #e67e22; }
+
+.portal-module__title {
+  font-size: 1.6rem;
+  font-weight: var(--font-weight-bold);
+  color: #1e293b;
+  margin-bottom: var(--space-sm);
+}
+
+.portal-module__text {
+  font-size: 1rem;
+  color: #475569;
+  line-height: var(--line-height-relaxed);
+  margin-bottom: var(--space-lg);
+  max-width: 320px;
+}
+
+.portal-module__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: #334155;
+  transition: gap var(--transition-fast), color var(--transition-fast);
+}
+
+.portal-module:hover .portal-module__link {
+  gap: 10px;
+  color: #0f172a;
+}
+
+.portal-module__link svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Hide old elements */
+.portal-page .usage-card,
+.portal-page .page-footer {
+  display: none;
+}
+
+/* Responsive */
+@media (max-width: 991px) {
+  .portal-header {
+    flex: 0 0 auto;
+    padding: var(--space-xl) var(--space-md);
+  }
+
+  .portal-header__title {
+    font-size: 2rem;
+  }
+
+  .portal-header__subtitle {
+    font-size: 1rem;
+  }
+
+  .portal-modules {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .portal-module {
+    flex: 1 1 auto;
+    padding: var(--space-lg) var(--space-md);
+  }
+
+  .portal-module:not(:last-child)::after {
+    display: none;
+  }
+
+  .portal-module:not(:last-child) {
+    border-bottom: 1px solid rgba(30, 41, 59, 0.08);
+  }
+
+  .portal-module__icon {
+    width: 64px;
+    height: 64px;
+    margin-bottom: var(--space-md);
+  }
+
+  .portal-module__icon svg {
+    width: 28px;
+    height: 28px;
+  }
+
+  .portal-module__title {
+    font-size: 1.3rem;
+  }
+
+  .portal-module__text {
+    font-size: 0.95rem;
+    margin-bottom: var(--space-md);
+  }
+}
