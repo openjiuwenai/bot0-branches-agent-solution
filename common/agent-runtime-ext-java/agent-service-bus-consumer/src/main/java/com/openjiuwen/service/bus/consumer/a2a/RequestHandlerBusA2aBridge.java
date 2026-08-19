@@ -11,6 +11,7 @@ import com.openjiuwen.service.bus.consumer.model.AgentBusEventEnvelope;
 import com.openjiuwen.service.bus.consumer.model.BusDispatchResult;
 
 import org.a2aproject.sdk.jsonrpc.common.json.JsonUtil;
+import org.a2aproject.sdk.jsonrpc.common.wrappers.A2AErrorResponse;
 import org.a2aproject.sdk.server.ServerCallContext;
 import org.a2aproject.sdk.server.auth.UnauthenticatedUser;
 import org.a2aproject.sdk.server.requesthandlers.RequestHandler;
@@ -157,6 +158,33 @@ public class RequestHandlerBusA2aBridge {
     }
 
     /**
+     * Serializes an A2A error response (same serializer as the HTTP controller), carrying the client's
+     * JSON-RPC request id decoded from the inline payload, so the gateway can pass the runtime's -32004
+     * (or other) error through verbatim ¡ª byte-identical to the DIRECT (HTTP) path.
+     *
+     * @param code numeric A2A error code (e.g. A2AErrorCodes.UNSUPPORTED_OPERATION.code() = -32004)
+     * @param message human-readable message
+     * @param payload inline A2A JSON-RPC request (to recover the request id); null/blank ¡ú no id
+     * @return complete standard A2A JSON-RPC error response
+     */
+    public String errorResponseJson(int code, String message, byte[] payload) {
+        Object requestId = null;
+        if (payload != null && payload.length > 0) {
+            try {
+                requestId = decode(payload).requestId();
+            } catch (RuntimeException ignore) {
+                // malformed/un-decodable payload ¡ú emit the error without an id (best effort)
+            }
+        }
+        A2AError error = new A2AError(code, message, null);
+        try {
+            return A2aJsonRpcResponseSerializer.serialize(new A2AErrorResponse(requestId, error));
+        } catch (org.a2aproject.sdk.jsonrpc.common.json.JsonProcessingException failure) {
+            throw new IllegalStateException("Failed to serialize A2A error response", failure);
+        }
+    }
+
+    /**
      * Returns whether the upstream request handler accepts a caller-reserved Task id.
      *
      * @return {@code true} when reserved Task ids are supported
@@ -204,7 +232,8 @@ public class RequestHandlerBusA2aBridge {
         Task task = handler.onGetTask(new TaskQueryParams(params.id(), null, params.tenant()), context);
         if (task.status().state().isFinal()) {
             throw new UnsupportedOperationError(null,
-                    "Cannot subscribe to task " + task.id() + " in terminal state " + task.status().state(), null);
+                    "Cannot subscribe to task " + task.id() + " - task is in terminal state: "
+                            + task.status().state(), null);
         }
     }
 
