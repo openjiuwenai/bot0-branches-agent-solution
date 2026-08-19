@@ -196,13 +196,13 @@ public final class MockRuntimeServer {
         boolean initialCreate = existingTask == null;
         boolean waitingForInput = "TASK_STATE_INPUT_REQUIRED".equals(task.state);
         boolean requiresGetTask = "blocking-gettask".equals(task.scenario);
-        if (initialCreate && (immediately || requiresGetTask) && !waitingForInput) {
-            task.asyncQueriesRemaining.set(1);
-            task.state = "TASK_STATE_WORKING";
-        } else if (initialCreate && !waitingForInput) {
-            task.state = "TASK_STATE_COMPLETED";
-        } else {
-            // Resume of existing task or waiting for input — state stays as-is.
+        if (initialCreate && !waitingForInput) {
+            if (immediately || requiresGetTask) {
+                task.asyncQueriesRemaining.set(1);
+                task.state = "TASK_STATE_WORKING";
+            } else {
+                task.state = "TASK_STATE_COMPLETED";
+            }
         }
         jsonRpcWrappedTaskResult(exchange, request.path("id").asText(), task.taskNode());
     }
@@ -661,7 +661,8 @@ public final class MockRuntimeServer {
             if ("TASK_STATE_INPUT_REQUIRED".equals(state) && "input-linear".equals(scenario)) {
                 statusNode.putObject("message").putObject("metadata").set("_interrupt", JSON.valueToTree(
                         interrupt("user_input", "input-" + id, null, "Please provide the account suffix.", null)));
-            } else if ("TASK_STATE_INPUT_REQUIRED".equals(state) && "client-tool".equals(scenario)) {
+            }
+            if ("TASK_STATE_INPUT_REQUIRED".equals(state) && "client-tool".equals(scenario)) {
                 statusNode.putObject("message").putObject("metadata").set("_interrupt", JSON.valueToTree(
                         interrupt("client_tool", "tool-" + id, "local.echo", null,
                                 Map.of("text", "hello from Runtime"))));
