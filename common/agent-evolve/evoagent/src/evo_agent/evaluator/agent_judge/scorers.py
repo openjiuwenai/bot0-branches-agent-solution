@@ -72,7 +72,8 @@ class WeightedSumScorer:
     judgments → ``0.0``.
     """
 
-    def score(self, judgments: list[DimensionJudgment], weights: dict[str, float]) -> float:  # pylint: disable=no-self-use
+    @staticmethod
+    def score(judgments: list[DimensionJudgment], weights: dict[str, float]) -> float:
         scores = _judgment_map(judgments)
         if not scores:
             return 0.0
