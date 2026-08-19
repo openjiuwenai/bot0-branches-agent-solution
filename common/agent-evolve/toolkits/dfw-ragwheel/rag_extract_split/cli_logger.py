@@ -137,13 +137,7 @@ def log_cli_execution(func: F) -> F:
             returncode = _map_returncode(rc)
             status = "success" if returncode == 0 else "failure"
             result["returncode"] = returncode
-        except SystemExit as exc:
-            returncode = _map_returncode(exc.code)
-            status = "success" if returncode == 0 else "failure"
-            result["returncode"] = returncode
-            result["error"] = f"SystemExit({exc.code})"
-            raise
-        except BaseException as exc:
+        except Exception as exc:
             status = "failure"
             returncode = 1
             result["returncode"] = returncode

@@ -337,7 +337,12 @@ def generate_qa_pairs_llm_one_answer(
     append_trace(
         {
             **trace_base,
-            "output": {"raw_content": raw_content, "parsed_qa_pairs": qa_pairs, "usage": usage, "raw_response": raw_response},
+            "output": {
+                "raw_content": raw_content,
+                "parsed_qa_pairs": qa_pairs,
+                "usage": usage,
+                "raw_response": raw_response,
+            },
             "parse_error": None,
             "error": None,
         }

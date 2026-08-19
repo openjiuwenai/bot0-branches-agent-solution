@@ -70,7 +70,8 @@ FEW_SHOT_BY_RELATION: Dict[str, List[Tuple[str, str]]] = {
 2. 相似度 0.88 | 相似问：退货运费谁承担 | 标注意图：退货申请
 
 输出 judgments 数组。""",
-            '{"judgments":[{"index":1,"confirmed":true,"reason":""},{"index":2,"confirmed":false,"reason":"一条是发起退货、一条是咨询运费规则，语义不等价"}]}',
+            '{"judgments":[{"index":1,"confirmed":true,"reason":""},'
+            '{"index":2,"confirmed":false,"reason":"一条是发起退货、一条是咨询运费规则，语义不等价"}]}',
         ),
     ],
     RELATION_CONFLICT: [
@@ -86,7 +87,8 @@ FEW_SHOT_BY_RELATION: Dict[str, List[Tuple[str, str]]] = {
 2. 相似度 0.87 | 相似问：最近的门店在哪 | 标注意图：门店查询
 
 输出 judgments 数组。""",
-            '{"judgments":[{"index":1,"confirmed":false,"reason":"分别为查物流与查历史订单，业务不同"},{"index":2,"confirmed":false,"reason":"查物流与找门店业务不同"}]}',
+            '{"judgments":[{"index":1,"confirmed":false,"reason":"分别为查物流与查历史订单，业务不同"},'
+            '{"index":2,"confirmed":false,"reason":"查物流与找门店业务不同"}]}',
         ),
         (
             """关系类型：冲突

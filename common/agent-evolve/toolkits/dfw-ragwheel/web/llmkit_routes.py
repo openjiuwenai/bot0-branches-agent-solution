@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import logging
 import traceback
 from pathlib import Path
 from typing import Any, Dict, List
@@ -15,8 +16,8 @@ from typing import Any, Dict, List
 from flask import Blueprint, jsonify, redirect, render_template, request
 
 from rag_extract_split.config.llmkit_manager import (
-    _LLMKitManager,
     call_llm_by_config_name,
+    convert_legacy_config_to_profile,
     delete_config_by_name,
     get_llm_config,
     get_manager as get_llm_manager,
@@ -36,6 +37,8 @@ from rag_extract_split.config.embedding_manager import (
     set_active_embedding_config,
 )
 from web.config import config
+
+logger = logging.getLogger(__name__)
 
 llm_bp = Blueprint("llm", __name__)
 
@@ -273,7 +276,7 @@ def save_profile():
         try:
             delete_config_by_name(original_name)
         except Exception:
-            pass
+            logger.warning("删除旧 LLM 配置失败: %s", original_name, exc_info=True)
 
     try:
         profile = manager.profile_manager.save_profile_dict(profile_dict)
@@ -414,7 +417,7 @@ def save_legacy_config():
         try:
             delete_config_by_name(original_name)
         except Exception:
-            pass
+            logger.warning("删除旧 LLM 配置失败: %s", original_name, exc_info=True)
 
     try:
         save_config_by_name(name, old_cfg)
@@ -442,12 +445,19 @@ def activate_legacy_config(name: str):
 def test_legacy_config(name: str):
     try:
         result = test_config_by_name(name)
+        response = result.get("response")
+        if isinstance(response, dict):
+            preview = (
+                (response.get("choices") or [{}])[0]
+                .get("message", {})
+                .get("content", "")
+            )
+        else:
+            preview = str(response or "")
         return jsonify({
             "success": result.get("success", False),
             "message": result.get("message", ""),
-            "response_preview": (result.get("response") or {}).get("choices", [{}])[0].get("message", {}).get("content", "")[:200]
-            if isinstance(result.get("response"), dict)
-            else str(result.get("response", ""))[:200],
+            "response_preview": str(preview)[:200],
         })
     except Exception as e:
         return jsonify({"success": False, "message": f"测试失败: {e}"}), 400
@@ -480,7 +490,7 @@ def test_legacy_config_body():
 
     manager = _get_manager()
     try:
-        temp_profile = _LLMKitManager._convert_legacy_config_to_profile(name, old_cfg)
+        temp_profile = convert_legacy_config_to_profile(name, old_cfg)
         if temp_profile is None:
             raise ValueError("配置格式错误")
         profile = manager.profile_manager.save_profile_dict(temp_profile.to_dict())
@@ -496,7 +506,7 @@ def test_legacy_config_body():
         try:
             manager.profile_manager.delete_profile(profile.id)
         except Exception:
-            pass
+            logger.debug("清理临时 LLM 配置失败", exc_info=True)
 
 
 @llm_bp.route("/api/llm-configs/template", methods=["GET"])
@@ -521,14 +531,24 @@ def llm_config_template():
     return jsonify(template)
 
 
+def _contains_any(msg: str, needles: tuple[str, ...]) -> bool:
+    return any(n in msg for n in needles)
+
+
 def _format_embedding_test_error(exc: BaseException, cfg: Dict[str, Any]) -> Dict[str, Any]:
     """把 Embedding 测试异常转换为前端可展示的友好错误信息。"""
-    import traceback
     msg = str(exc).lower()
     detail = traceback.format_exc()
 
-    if "connection" in msg or "connect" in msg or "max retries" in msg or "refused" in msg or "10061" in msg or "10060" in msg or "目标计算机" in msg:
-        base_url = cfg.get("embedding_base_url") or cfg.get("local_model_dir") or cfg.get("http_post_url") or ""
+    if _contains_any(
+        msg, ("connection", "connect", "max retries", "refused", "10061", "10060", "目标计算机")
+    ):
+        base_url = (
+            cfg.get("embedding_base_url")
+            or cfg.get("local_model_dir")
+            or cfg.get("http_post_url")
+            or ""
+        )
         return {
             "type": "connection_error",
             "message": f"无法连接到 Embedding 服务端点: {base_url}。请检查地址、端口或网络。",
@@ -540,23 +560,32 @@ def _format_embedding_test_error(exc: BaseException, cfg: Dict[str, Any]) -> Dic
             "message": "连接 Embedding 服务超时，请检查服务是否可用或增大超时时间。",
             "detail": detail,
         }
-    if "authentication" in msg or "unauthorized" in msg or "api key" in msg or "401" in msg:
+    if _contains_any(msg, ("authentication", "unauthorized", "api key", "401")):
         return {
             "type": "auth_error",
             "message": "Embedding 服务认证失败，请检查 API Key 是否正确。",
             "detail": detail,
         }
-    if "model" in msg and ("not found" in msg or "does not exist" in msg or "404" in msg):
+    if "model" in msg and _contains_any(msg, ("not found", "does not exist", "404")):
         return {
             "type": "model_not_found",
             "message": f"Embedding 模型不存在: {cfg.get('embedding_model_name')}。请检查模型名称。",
             "detail": detail,
         }
-    if "no such file" in msg or ("does not exist" in msg and cfg.get("mode") == "local") or "不是有效的" in msg or "sentence_transformers" in msg or "sentence-transformer" in msg or "model_name" in msg:
+    local_model_needles = (
+        "no such file",
+        "不是有效的",
+        "sentence_transformers",
+        "sentence-transformer",
+        "model_name",
+    )
+    local_dir_missing = "does not exist" in msg and cfg.get("mode") == "local"
+    if _contains_any(msg, local_model_needles) or local_dir_missing:
         if cfg.get("mode") == "local":
+            model_dir = cfg.get("local_model_dir") or cfg.get("embedding_base_url")
             return {
                 "type": "model_dir_error",
-                "message": f"本地 Embedding 模型目录不存在或无效: {cfg.get('local_model_dir') or cfg.get('embedding_base_url')}。",
+                "message": f"本地 Embedding 模型目录不存在或无效: {model_dir}。",
                 "detail": detail,
             }
         else:
@@ -711,7 +740,7 @@ def save_embedding_profile():
         try:
             delete_embedding_config(original_name)
         except Exception:
-            pass
+            logger.warning("删除旧 Embedding 配置失败: %s", original_name, exc_info=True)
 
     try:
         profile = manager.profile_manager.save_profile_dict(profile_dict)
@@ -754,7 +783,6 @@ def test_saved_embedding_profile(profile_id: str):
         request_mode = cfg.get("request_mode")
         if mode == "local":
             from rag_extract_split.infrastructure.embedding import get_local_embed_func, _vector_to_list
-            from pathlib import Path
             model_dir = cfg.get("local_model_dir") or cfg.get("embedding_base_url")
             if not model_dir:
                 return jsonify({"success": False, "message": "local 模式缺少模型目录"})

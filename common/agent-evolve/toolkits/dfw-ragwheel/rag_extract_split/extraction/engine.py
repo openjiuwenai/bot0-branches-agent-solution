@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import logging
 import uuid
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set
@@ -13,9 +14,15 @@ from rag_extract_split.infrastructure.embedding import embed_stats_snapshot, emb
 from rag_extract_split.extraction.evaluator import evaluate_recall_detail
 from rag_extract_split.extraction.logging import build_round_log_entry, print_round_verbose
 from rag_extract_split.extraction.postprocess import attach_high_similarity_hits
-from rag_extract_split.extraction.round import append_cluster_trace_if_needed, generate_and_upsert_round, prepare_round_allocation
+from rag_extract_split.extraction.round import (
+    append_cluster_trace_if_needed,
+    generate_and_upsert_round,
+    prepare_round_allocation,
+)
 from rag_extract_split.config.models import ExtractIteration, ExtractResult
 from rag_extract_split.config.settings import CONFIG
+
+logger = logging.getLogger(__name__)
 
 
 def safe_progress(
@@ -27,7 +34,7 @@ def safe_progress(
     try:
         callback(payload)
     except Exception:
-        pass
+        logger.debug("progress callback failed", exc_info=True)
 
 
 def collection_name_from_target(target_kb: str) -> str:
@@ -77,12 +84,22 @@ def run_extract(
     collection = collection_name_from_target(target_kb)
 
     bad = [
-        {"id": str(b.get("id") or ""), "query": str(b.get("query") or "").strip(), "answer": str(b.get("answer") or b.get("menu") or "").strip()}
+        {
+            "id": str(b.get("id") or ""),
+            "query": str(b.get("query") or "").strip(),
+            "answer": str(b.get("answer") or b.get("menu") or "").strip(),
+        }
         for b in (badcases or [])
     ]
     bad = [b for b in bad if b["query"] and b["answer"]]
     if not bad:
-        return ExtractResult(task_id=task_id, status="failed", collection=collection, target_kb=target_kb, last_error="BadCase 为空或缺少 query/answer")
+        return ExtractResult(
+            task_id=task_id,
+            status="failed",
+            collection=collection,
+            target_kb=target_kb,
+            last_error="BadCase 为空或缺少 query/answer",
+        )
 
     round_logs: List[Dict[str, Any]] = []
 
@@ -128,7 +145,11 @@ def run_extract(
         for q, v in zip(unique_bad_queries, pre_vecs):
             bad_query_embedding_cache[q] = list(v)
         if verbose:
-            print(f"[cache] 已预计算 badcase query 向量 {len(bad_query_embedding_cache)} 条")
+            logger.info(
+                "%s",
+                "[cache] 已预计算 badcase query 向量 %s 条"
+                % len(bad_query_embedding_cache),
+            )
     last_recall_detail: Dict[str, Dict[str, Any]] = {}
     accumulated_qas: List[Dict[str, Any]] = []
     frozen_answers_done: Set[str] = set()
@@ -214,14 +235,24 @@ def run_extract(
         newly_done = [
             a
             for a, d in detail.items()
-            if a not in frozen_answers_done and int(d.get("total") or 0) > 0 and int(d.get("hit") or 0) >= int(d.get("total") or 0)
+            if (
+                a not in frozen_answers_done
+                and int(d.get("total") or 0) > 0
+                and int(d.get("hit") or 0) >= int(d.get("total") or 0)
+            )
         ]
         before = len(accumulated_qas)
         for a in newly_done:
             frozen_answers_done.add(a)
             accumulated_qas.extend(round_qas_by_answer.get(a, []))
         retained_qa_this_round = len(accumulated_qas) - before
-        iterations.append(ExtractIteration(round_num=round_num, qa_count=retained_qa_this_round, recall_rate=recall_rate))
+        iterations.append(
+            ExtractIteration(
+                round_num=round_num,
+                qa_count=retained_qa_this_round,
+                recall_rate=recall_rate,
+            )
+        )
         frozen_total = len(frozen_answers_done)
         frozen_list = sorted(list(frozen_answers_done))
         newly_done_list = sorted(list(newly_done))
@@ -263,7 +294,7 @@ def run_extract(
             try:
                 write_frozen_qa_xlsx(frozen_qa_snapshot_xlsx, accumulated_qas)
             except Exception:
-                pass
+                logger.warning("failed to write frozen QA snapshot", exc_info=True)
         safe_progress(
             progress_callback,
             {
@@ -307,7 +338,11 @@ def run_extract(
             # 清理本轮临时向量（与项目逻辑一致）
             rollback_n = _delete_round_vectors(collection, round_chroma_ids)
             if verbose:
-                print(f"  成功收尾: 回滚删除本轮临时向量 {rollback_n} 条（与临时入库数一致）")
+                logger.info(
+                    "%s",
+                    "  成功收尾: 回滚删除本轮临时向量 %s 条（与临时入库数一致）"
+                    % rollback_n,
+                )
             log_entry["rollback_deleted"] = rollback_n
             log_entry["outcome"] = "success_cleanup"
             safe_progress(
@@ -340,7 +375,7 @@ def run_extract(
         # 5) 回滚（删除本轮临时入库向量）
         rollback_n = _delete_round_vectors(collection, round_chroma_ids)
         if verbose:
-            print(f"  未达标: 回滚删除本轮临时向量 {rollback_n} 条")
+            logger.info("%s", "  未达标: 回滚删除本轮临时向量 %s 条" % rollback_n)
         log_entry["rollback_deleted"] = rollback_n
         log_entry["outcome"] = "rollback_continue"
 

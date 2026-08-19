@@ -16,7 +16,7 @@ CONFIG: Dict[str, Dict[str, Any]] = {
         # max_count 省略时与 rag_extract_service 一致：len(badcases) + 20
         "target_recall": 1.0,
         "top_k": 10,
-        # 萃取完成后，用新 QA 回查原向量库，附带高相似命中信息到最终 Excel
+        # 萃取完成后，用新 QA 回查原向量库，附带高相似命中了信息到最终 Excel
         "post_similarity_enabled": True,
         "post_similarity_top_k": 5,
         # 对 cosine 距离：值越小越相似；仅保留 <= 阈值的候选

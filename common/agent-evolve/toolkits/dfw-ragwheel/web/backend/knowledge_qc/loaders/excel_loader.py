@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 import pandas as pd
 
@@ -43,7 +44,21 @@ CHECKER_KEY_BY_DIMENSION = {
 DIMENSION_STATUS_PASS = "通过"
 DIMENSION_STATUS_FAIL = "不通过"
 DIMENSION_STATUS_SKIPPED = "未执行"
-QuestionQcRow = Tuple[str, str, Dict[str, str], Dict[str, str], List[str], List[str]]
+
+
+class QuestionQcRow(NamedTuple):
+    verdict: str
+    reason_text: str
+    dim_statuses: Dict[str, str]
+    dim_reason_texts: Dict[str, str]
+    batch_reasons: List[str]
+    prod_reasons: List[str]
+
+
+@dataclass
+class QcExcelResults:
+    question_results: Optional[Dict[int, QuestionQcRow]] = None
+    intent_results: Optional[Dict[int, QuestionQcRow]] = None
 
 
 def is_checker_enabled(rules: dict, dimension_label: str) -> bool:
@@ -224,7 +239,14 @@ def question_row_export(result: CheckResult, rules: dict) -> QuestionQcRow:
     dim_reason_texts = {
         label: "；".join(dim_reasons.get(label, [])) for label in QC_DIMENSION_COLUMNS
     }
-    return verdict, reason_text, question_dimension_statuses(result, rules), dim_reason_texts, batch_reasons, prod_reasons
+    return QuestionQcRow(
+        verdict=verdict,
+        reason_text=reason_text,
+        dim_statuses=question_dimension_statuses(result, rules),
+        dim_reason_texts=dim_reason_texts,
+        batch_reasons=batch_reasons,
+        prod_reasons=prod_reasons,
+    )
 
 
 def intent_row_export(result: IntentCheckResult, rules: dict) -> QuestionQcRow:
@@ -233,10 +255,18 @@ def intent_row_export(result: IntentCheckResult, rules: dict) -> QuestionQcRow:
         all_reasons.append(result.reason)
     verdict, reason_text = verdict_to_row(result.verdict, "；".join(all_reasons))
     dim_statuses = intent_dimension_statuses(result, rules)
-    dim_reason_texts = {
-        "重复检测": result.reason if dim_statuses.get("重复检测") == DIMENSION_STATUS_FAIL else ""
-    }
-    return verdict, reason_text, dim_statuses, dim_reason_texts, [], []
+    fail_reason = ""
+    if dim_statuses.get("重复检测") == DIMENSION_STATUS_FAIL:
+        fail_reason = result.reason
+    dim_reason_texts = {"重复检测": fail_reason}
+    return QuestionQcRow(
+        verdict=verdict,
+        reason_text=reason_text,
+        dim_statuses=dim_statuses,
+        dim_reason_texts=dim_reason_texts,
+        batch_reasons=[],
+        prod_reasons=[],
+    )
 
 
 def write_qc_excel(
@@ -244,10 +274,12 @@ def write_qc_excel(
     output_path: Path,
     rules: dict,
     task: str,
-    question_results: Dict[int, QuestionQcRow] = None,
-    intent_results: Dict[int, QuestionQcRow] = None,
+    results: Optional[QcExcelResults] = None,
 ) -> None:
     """在对应 sheet 末尾追加质检结论、分项结论、分项原因与不通过原因列并写出 Excel。"""
+    payload = results or QcExcelResults()
+    question_results = payload.question_results
+    intent_results = payload.intent_results
     xl = pd.ExcelFile(source_path, engine="openpyxl")
     sheets: Dict[str, pd.DataFrame] = {
         name: pd.read_excel(source_path, sheet_name=name, engine="openpyxl")
@@ -259,7 +291,14 @@ def write_qc_excel(
     prod_on = bool(mode.get("production", True))
 
     def _drop_cols() -> List[str]:
-        cols = [QC_VERDICT_COL, QC_REASON_COL, QC_REASON_BATCH_COL, QC_REASON_PROD_COL, *QC_DIMENSION_COLUMNS, *DIMENSION_REASON_COLUMNS.values()]
+        cols = [
+            QC_VERDICT_COL,
+            QC_REASON_COL,
+            QC_REASON_BATCH_COL,
+            QC_REASON_PROD_COL,
+            *QC_DIMENSION_COLUMNS,
+            *DIMENSION_REASON_COLUMNS.values(),
+        ]
         return cols
 
     def _apply_question(df: pd.DataFrame, results: Dict[int, QuestionQcRow]) -> pd.DataFrame:
@@ -276,14 +315,14 @@ def write_qc_excel(
         for i in range(len(out)):
             row_index = i + 1
             if row_index in results:
-                v, r, dims, dim_reasons, br, pr = results[row_index]
-                verdicts.append(v)
-                reasons.append(r)
-                batch_reasons.append("；".join(br))
-                prod_reasons.append("；".join(pr))
+                row = results[row_index]
+                verdicts.append(row.verdict)
+                reasons.append(row.reason_text)
+                batch_reasons.append("；".join(row.batch_reasons))
+                prod_reasons.append("；".join(row.prod_reasons))
                 for label in QC_DIMENSION_COLUMNS:
-                    dim_values[label].append(dims.get(label, ""))
-                    dim_reason_values[label].append(dim_reasons.get(label, ""))
+                    dim_values[label].append(row.dim_statuses.get(label, ""))
+                    dim_reason_values[label].append(row.dim_reason_texts.get(label, ""))
             else:
                 verdicts.append("")
                 reasons.append("")

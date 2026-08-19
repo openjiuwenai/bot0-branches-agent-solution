@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -24,6 +25,8 @@ from rag_extract_split.llmkit import (
     get_default_data_dir,
 )
 
+
+logger = logging.getLogger(__name__)
 
 EMBEDDING_TEMPLATE_NAME = "embedding_openai_compatible"
 DEFAULT_PROFILE_NAME = "default"
@@ -61,6 +64,11 @@ class _EmbeddingConfigManager:
         self._ensure_default_profile()
         self._initialized = True
 
+    @classmethod
+    def reset_singleton(cls) -> None:
+        cls._instance = None
+        cls._initialized = False
+
     def _template(self) -> Optional[Any]:
         return self.template_manager.get_template(EMBEDDING_TEMPLATE_NAME)
 
@@ -75,19 +83,19 @@ class _EmbeddingConfigManager:
             return
 
         old_cfg = CONFIG.get("rag_embedding", {})
-        profile = self._convert_legacy_embedding_to_profile(DEFAULT_PROFILE_NAME, old_cfg)
+        profile = self.convert_legacy_embedding_to_profile(DEFAULT_PROFILE_NAME, old_cfg)
         if profile is not None:
             self.profile_manager.save_profile(profile)
 
     @staticmethod
-    def _convert_legacy_embedding_to_profile(
+    def convert_legacy_embedding_to_profile(
         name: str, old_cfg: Dict[str, Any]
     ) -> Optional[Profile]:
         """把旧版 rag_embedding 扁平配置转换为 llmkit Profile 对象。"""
         if not isinstance(old_cfg, dict):
             return None
 
-        template = _EmbeddingConfigManager._template_for(EMBEDDING_TEMPLATE_NAME)
+        template = _EmbeddingConfigManager.load_builtin_template(EMBEDDING_TEMPLATE_NAME)
         if template is None:
             return None
 
@@ -148,11 +156,12 @@ class _EmbeddingConfigManager:
         return Profile.from_dict(scaffold)
 
     @classmethod
-    def _template_for(cls, name: str) -> Optional[Any]:
+    def load_builtin_template(cls, name: str) -> Optional[Any]:
         """获取模板对象（兼容未初始化时访问）。"""
         try:
             return TemplateManager(BUILTIN_TEMPLATES_DIR).get_template(name)
         except Exception:
+            logger.debug("failed to load embedding template %s", name, exc_info=True)
             return None
 
     # ---------- active config ----------
@@ -164,8 +173,8 @@ class _EmbeddingConfigManager:
                 name = self.active_file.read_text(encoding="utf-8").strip()
                 if name and self.profile_manager.get_profile_by_name(name) is not None:
                     return name
-            except Exception:
-                pass
+            except (OSError, UnicodeError):
+                logger.debug("failed to read embedding active config file", exc_info=True)
         profiles = self.profile_manager.get_all_profiles()
         if profiles:
             return profiles[0].name
@@ -185,7 +194,7 @@ class _EmbeddingConfigManager:
     def _convert_legacy_dict_to_profile(
         self, name: str, old_cfg: Dict[str, Any]
     ) -> Optional[Profile]:
-        return self._convert_legacy_embedding_to_profile(name, old_cfg)
+        return self.convert_legacy_embedding_to_profile(name, old_cfg)
 
 
 _manager: Optional[_EmbeddingConfigManager] = None
@@ -205,8 +214,7 @@ def reset_manager(project_root: Optional[Path] = None) -> _EmbeddingConfigManage
     """重置管理器（主要用于测试）。"""
     global _manager
     _manager = None
-    _EmbeddingConfigManager._instance = None
-    _EmbeddingConfigManager._initialized = False
+    _EmbeddingConfigManager.reset_singleton()
     return get_manager(project_root)
 
 
@@ -260,8 +268,8 @@ def profile_to_rag_embedding_cfg(profile: Profile) -> Dict[str, Any]:
     if dimensions is not None:
         try:
             cfg["dimensions"] = int(dimensions)
-        except Exception:
-            pass
+        except (TypeError, ValueError):
+            logger.debug("invalid embedding dimensions: %s", dimensions, exc_info=True)
 
     # http 模式额外字段
     if old_request_mode == "http_post":
@@ -330,7 +338,7 @@ def set_active_embedding_config(name: str) -> None:
 def save_embedding_config(name: str, cfg: Dict[str, Any]) -> Profile:
     """保存/更新一个 Embedding 配置（cfg 为旧版 rag_embedding 字典）。"""
     manager = get_manager()
-    profile = _EmbeddingConfigManager._convert_legacy_embedding_to_profile(name, cfg)
+    profile = _EmbeddingConfigManager.convert_legacy_embedding_to_profile(name, cfg)
     if profile is None:
         raise ValueError("无法转换为 llmkit Profile")
     return manager.profile_manager.save_profile(profile)

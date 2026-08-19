@@ -7,9 +7,11 @@ import requests
 
 
 class Embedder(Protocol):
-    def embed(self, texts: List[str]) -> List[List[float]]: ...
+    def embed(self, texts: List[str]) -> List[List[float]]:
+        ...
 
-    def embed_one(self, text: str) -> List[float]: ...
+    def embed_one(self, text: str) -> List[float]:
+        ...
 
 
 class OpenAIEmbedder:
@@ -38,7 +40,7 @@ class OpenAIEmbedder:
             return []
         vectors: List[List[float]] = []
         for i in range(0, len(texts), self._batch_size):
-            batch = texts[i : i + self._batch_size]
+            batch = texts[i:i + self._batch_size]
             resp = self._client.embeddings.create(model=self._model, input=batch)
             sorted_data = sorted(resp.data, key=lambda x: x.index)
             vectors.extend([item.embedding for item in sorted_data])
@@ -70,7 +72,7 @@ class HttpEmbedder:
             return []
         vectors: List[List[float]] = []
         for i in range(0, len(texts), self._batch_size):
-            vectors.extend(self._embed_batch(texts[i : i + self._batch_size]))
+            vectors.extend(self._embed_batch(texts[i:i + self._batch_size]))
         return vectors
 
     def embed_one(self, text: str) -> List[float]:
@@ -126,7 +128,7 @@ class LocalEmbedder:
         model = self._load_model()
         vectors: List[List[float]] = []
         for i in range(0, len(texts), self._batch_size):
-            batch = texts[i : i + self._batch_size]
+            batch = texts[i:i + self._batch_size]
             embeddings = model.encode(batch)
             # 确保返回原生 Python float，避免 numpy.float32 被 Chroma 拒绝
             vectors.extend(embeddings.astype(float).tolist())
@@ -162,7 +164,7 @@ class FallbackEmbedder:
             return vec
         n = self._ngram
         for i in range(len(s) - n + 1):
-            gram = s[i : i + n]
+            gram = s[i:i + n]
             h = hash(gram) % self._dim
             vec[h] += 1.0
         norm = sum(v * v for v in vec) ** 0.5

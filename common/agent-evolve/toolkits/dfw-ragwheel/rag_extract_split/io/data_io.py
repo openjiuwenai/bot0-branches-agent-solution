@@ -2,8 +2,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Sequence
+
+logger = logging.getLogger(__name__)
 
 
 def norm_col_name(s: str) -> str:
@@ -18,8 +21,8 @@ def cell_str(v) -> str:
 
         if isinstance(v, float) and pd.isna(v):
             return ""
-    except Exception:
-        pass
+    except (ImportError, TypeError, ValueError):
+        logger.debug("cell_str pandas na check failed", exc_info=True)
     s = str(v).strip()
     if s.lower() in ("nan", "none"):
         return ""

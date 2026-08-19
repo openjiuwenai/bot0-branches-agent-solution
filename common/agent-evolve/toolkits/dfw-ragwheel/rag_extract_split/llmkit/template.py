@@ -206,8 +206,6 @@ class TemplateManager:
 
     def save_user_template(self, name: str, yaml_text: str) -> "Template":
         """保存用户自定义模板 YAML 到用户模板目录并重新加载。"""
-        from .template import Template
-
         template_data = yaml.safe_load(yaml_text)
         if not isinstance(template_data, dict):
             raise ValueError("Invalid YAML format")

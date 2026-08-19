@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 
 def now_ms() -> int:
@@ -28,9 +31,9 @@ def append_jsonl(path: Path, record: Dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
-    except Exception:
+    except (OSError, TypeError, ValueError):
         # trace 失败不影响主流程
-        pass
+        logger.debug("failed to append jsonl %s", path, exc_info=True)
 
 
 def append_pretty_json_block(path: Path, record: Dict[str, Any]) -> None:
@@ -39,8 +42,8 @@ def append_pretty_json_block(path: Path, record: Dict[str, Any]) -> None:
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False, indent=2))
             f.write("\n\n")
-    except Exception:
-        pass
+    except (OSError, TypeError, ValueError):
+        logger.debug("failed to append pretty json %s", path, exc_info=True)
 
 
 def truncate(s: str, max_len: int = 480) -> str:

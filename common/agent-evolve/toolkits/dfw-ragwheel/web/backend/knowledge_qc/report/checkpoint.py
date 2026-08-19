@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, Tuple, TypeVar
+from typing import Callable, Dict, List, TypeVar
 
 from backend.knowledge_qc.loaders.excel_loader import (
+    QcExcelResults,
     QuestionQcRow,
     intent_row_export,
     question_row_export,
@@ -55,7 +57,7 @@ def build_intent_batch_report(results: List[IntentCheckResult]) -> IntentBatchRe
 
 def question_results_map(
     results: List[CheckResult], rules: dict
-) -> Dict[int, Tuple[str, str, Dict[str, str]]]:
+) -> Dict[int, QuestionQcRow]:
     return {
         r.record.row_index: question_row_export(r, rules) for r in results
     }
@@ -81,23 +83,27 @@ def maybe_emit_checkpoint(
     on_checkpoint(build_report(results))
 
 
-def write_question_checkpoint(
-    input_path: Path,
-    excel_out: Path,
-    json_path: Path,
-    csv_path: Path,
-    rules: dict,
-    report: BatchReport,
-) -> None:
+@dataclass
+class QuestionCheckpointArgs:
+    excel_out: Path
+    json_path: Path
+    csv_path: Path
+    rules: dict
+    report: BatchReport
+
+
+def write_question_checkpoint(input_path: Path, args: QuestionCheckpointArgs) -> None:
     write_qc_excel(
         input_path,
-        excel_out,
-        rules,
+        args.excel_out,
+        args.rules,
         "question",
-        question_results=question_results_map(report.results, rules),
+        QcExcelResults(
+            question_results=question_results_map(args.report.results, args.rules),
+        ),
     )
-    export_json(report, json_path)
-    export_csv(report, csv_path, rules=rules)
+    export_json(args.report, args.json_path)
+    export_csv(args.report, args.csv_path, rules=args.rules)
 
 
 def write_intent_checkpoint(
@@ -111,5 +117,7 @@ def write_intent_checkpoint(
         excel_out,
         rules,
         "intent",
-        intent_results=intent_results_map(report.results, rules),
+        QcExcelResults(
+            intent_results=intent_results_map(report.results, rules),
+        ),
     )

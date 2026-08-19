@@ -141,7 +141,7 @@ def embed_texts(texts: Sequence[str]) -> List[List[float]]:
                 embf = get_local_embed_func(local_dir, normalize_embeddings=normalize)
                 out_local: List[List[float]] = []
                 for i in range(0, len(norm), max(1, bs)):
-                    chunk = norm[i : i + max(1, bs)]
+                    chunk = norm[i:i + max(1, bs)]
                     vecs = embf(chunk)
                     part = [_vector_to_list(v) for v in vecs]
                     out_local.extend(part)
@@ -200,7 +200,7 @@ def embed_texts(texts: Sequence[str]) -> List[List[float]]:
         http_client = httpx.Client(timeout=timeout_sec, trust_env=use_env_proxy)
         client = OpenAI(api_key=(api_key or "no-key"), base_url=base_url, http_client=http_client)
         for i in range(0, len(norm), max(1, bs)):
-            chunk = norm[i : i + max(1, bs)]
+            chunk = norm[i:i + max(1, bs)]
             try:
                 resp = client.embeddings.create(model=model, input=chunk, timeout=timeout_sec)
                 data = getattr(resp, "data", None) or []

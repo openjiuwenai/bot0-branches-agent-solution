@@ -56,6 +56,7 @@ class CheckResult(BaseModel):
     def blocking_issues(self) -> List[Issue]:
         return [i for i in self.issues if not i.passed and i.severity == "high"]
 
+
 class IntentCheckResult(BaseModel):
     record: IntentRecord
     verdict: Verdict

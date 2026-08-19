@@ -109,7 +109,19 @@ def generate_and_upsert_round(
                 continue
             cid = f"extract:{run_tag}:{ans[:24]}:{i}:{sub}:{uuid.uuid4().hex[:6]}"
             round_chroma_ids.append(cid)
-            cases_batch.append(RAGCase(case_id=cid, query=q, answer=a, metadata={"source": "rag_extract", "task_id": task_id, "round": round_num, "run_tag": run_tag}))
+            cases_batch.append(
+                RAGCase(
+                    case_id=cid,
+                    query=q,
+                    answer=a,
+                    metadata={
+                        "source": "rag_extract",
+                        "task_id": task_id,
+                        "round": round_num,
+                        "run_tag": run_tag,
+                    },
+                )
+            )
             v = qa.get("_embedding")
             if v is None:
                 embeddings_ok = False
@@ -120,7 +132,12 @@ def generate_and_upsert_round(
                     embeddings_ok = False
         if cases_batch:
             if embeddings_ok and len(case_embeddings) == len(cases_batch):
-                upsert_cases(collection, cases_batch, batch_size=max(1, int(write_batch_size)), embeddings=case_embeddings)
+                upsert_cases(
+                    collection,
+                    cases_batch,
+                    batch_size=max(1, int(write_batch_size)),
+                    embeddings=case_embeddings,
+                )
             else:
                 upsert_cases(collection, cases_batch, batch_size=max(1, int(write_batch_size)))
 

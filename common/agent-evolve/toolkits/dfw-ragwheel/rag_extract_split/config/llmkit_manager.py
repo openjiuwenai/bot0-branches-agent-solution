@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -27,6 +28,9 @@ from rag_extract_split.llmkit import (
     check_profile,
     get_default_data_dir,
 )
+from rag_extract_split.llmkit.caller import CallOverrides
+
+logger = logging.getLogger(__name__)
 
 
 class _LLMKitManager:
@@ -62,6 +66,11 @@ class _LLMKitManager:
         self._ensure_default_profile()
         self._initialized = True
 
+    @classmethod
+    def reset_singleton(cls) -> None:
+        cls._instance = None
+        cls._initialized = False
+
     def _migrate_legacy_json(self) -> None:
         """迁移旧版 data/llm_configs.json 到 llmkit YAML 配置文件。"""
         legacy_path = self.project_root / "data" / "llm_configs.json"
@@ -69,7 +78,8 @@ class _LLMKitManager:
             return
         try:
             raw = json.loads(legacy_path.read_text(encoding="utf-8"))
-        except Exception:
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
+            logger.debug("failed to load legacy llm_configs.json", exc_info=True)
             return
 
         if not isinstance(raw, dict):
@@ -97,15 +107,15 @@ class _LLMKitManager:
 
         for name in names:
             old_cfg = configs.get(name) or {}
-            profile = self._convert_legacy_config_to_profile(name, old_cfg)
+            profile = self.convert_legacy_config_to_profile(name, old_cfg)
             if profile is not None:
                 self.profile_manager.save_profile(profile)
 
         try:
             bak = legacy_path.with_suffix(".json.bak")
             legacy_path.rename(bak)
-        except Exception:
-            pass
+        except OSError:
+            logger.warning("failed to rename legacy llm_configs.json to backup", exc_info=True)
 
         self.profile_manager.reload()
 
@@ -120,12 +130,12 @@ class _LLMKitManager:
             return
 
         old_cfg = CONFIG.get("rag_llm", {})
-        profile = self._convert_legacy_config_to_profile("default", old_cfg)
+        profile = self.convert_legacy_config_to_profile("default", old_cfg)
         if profile is not None:
             self.profile_manager.save_profile(profile)
 
     @staticmethod
-    def _convert_legacy_config_to_profile(
+    def convert_legacy_config_to_profile(
         name: str, old_cfg: Dict[str, Any]
     ) -> Optional[Profile]:
         """把旧版 rag_llm 扁平配置转换为 llmkit Profile 对象。"""
@@ -133,7 +143,7 @@ class _LLMKitManager:
             return None
 
         template_name = "openai_compatible"
-        template = _LLMKitManager._template_for(template_name)
+        template = _LLMKitManager.load_builtin_template(template_name)
         if template is None:
             return None
 
@@ -149,8 +159,8 @@ class _LLMKitManager:
         if old_cfg.get("temperature") is not None:
             try:
                 data["temperature"] = float(old_cfg["temperature"])
-            except Exception:
-                pass
+            except (TypeError, ValueError):
+                logger.debug("invalid temperature in legacy llm config", exc_info=True)
 
         if request_mode == "http_post":
             scaffold.setdefault("runtime", {})
@@ -186,12 +196,19 @@ class _LLMKitManager:
 
         return Profile.from_dict(scaffold)
 
+    @staticmethod
+    def _convert_legacy_config_to_profile(
+        name: str, old_cfg: Dict[str, Any]
+    ) -> Optional[Profile]:
+        return _LLMKitManager.convert_legacy_config_to_profile(name, old_cfg)
+
     @classmethod
-    def _template_for(cls, name: str) -> Optional[Any]:
+    def load_builtin_template(cls, name: str) -> Optional[Any]:
         """获取模板对象（兼容未初始化时访问）。"""
         try:
             return TemplateManager(BUILTIN_TEMPLATES_DIR).get_template(name)
         except Exception:
+            logger.debug("failed to load llmkit template %s", name, exc_info=True)
             return None
 
 
@@ -212,8 +229,7 @@ def reset_manager(project_root: Optional[Path] = None) -> _LLMKitManager:
     """重置管理器（主要用于测试）。"""
     global _manager
     _manager = None
-    _LLMKitManager._instance = None
-    _LLMKitManager._initialized = False
+    _LLMKitManager.reset_singleton()
     return get_manager(project_root)
 
 
@@ -314,10 +330,17 @@ def list_config_names() -> List[str]:
     return names
 
 
+def convert_legacy_config_to_profile(
+    name: str, old_cfg: Dict[str, Any]
+) -> Optional[Profile]:
+    """把旧版 rag_llm 扁平配置转换为 llmkit Profile 对象。"""
+    return _LLMKitManager.convert_legacy_config_to_profile(name, old_cfg)
+
+
 def save_config_by_name(name: str, cfg: Dict[str, Any]) -> None:
     """保存/更新一个配置（cfg 为旧版 rag_llm 字典）。"""
     manager = get_manager()
-    profile = _LLMKitManager._convert_legacy_config_to_profile(name, cfg)
+    profile = convert_legacy_config_to_profile(name, cfg)
     if profile is None:
         raise ValueError("无法转换为 llmkit Profile")
     manager.profile_manager.save_profile(profile)
@@ -354,5 +377,5 @@ def call_llm_by_config_name(
         profile.id,
         messages=messages,
         profile_manager=manager.profile_manager,
-        stream_enabled=False,
+        overrides=CallOverrides(stream_enabled=False),
     )

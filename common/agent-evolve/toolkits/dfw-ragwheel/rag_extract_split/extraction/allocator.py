@@ -60,7 +60,11 @@ def _allocation_config() -> Dict[str, Any]:
     return cfg
 
 
-def _weights_soft_inverse(active: Sequence[str], detail: Dict[str, Dict[str, Any]], cfg: Dict[str, Any]) -> Dict[str, int]:
+def _weights_soft_inverse(
+    active: Sequence[str],
+    detail: Dict[str, Dict[str, Any]],
+    cfg: Dict[str, Any],
+) -> Dict[str, int]:
     eps = float(cfg.get("soft_inverse_eps", 0.03) or 0.03)
     mix = float(cfg.get("soft_inverse_mix", 0.55) or 0.55)
     power = float(cfg.get("soft_inverse_power", 0.5) or 0.5)

@@ -16,9 +16,12 @@
 """
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_home() -> Path:
@@ -35,6 +38,7 @@ def _resolve_home() -> Path:
 
 
 def main() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     project_root = _resolve_home()
     os.environ["DFW_RAG_HOME"] = str(project_root)
 
@@ -42,7 +46,7 @@ def main() -> int:
     try:
         os.chdir(project_root)
     except OSError as exc:
-        print(f"无法切换到 DFW_RAG_HOME: {project_root} ({exc})", file=sys.stderr)
+        logger.error("无法切换到 DFW_RAG_HOME: %s (%s)", project_root, exc)
         return 1
 
     # 延迟导入，避免在解析 home 前触发包内模块初始化

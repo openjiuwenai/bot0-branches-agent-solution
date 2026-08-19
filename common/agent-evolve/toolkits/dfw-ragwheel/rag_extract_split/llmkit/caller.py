@@ -1,11 +1,21 @@
 """Core LLM calling functions."""
 
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union
 
 import requests
 
 from .profile import Profile
 from .profile_manager import ProfileManager
+
+
+@dataclass
+class CallOverrides:
+    """Optional per-call overrides for stream, timeout, and HTTP session."""
+
+    stream_enabled: Optional[bool] = None
+    timeout: Optional[int] = None
+    session: Optional[requests.Session] = None
 
 
 def call_llm(
@@ -40,25 +50,26 @@ def call_llm(
     if not isinstance(profile, Profile):
         raise ValueError("profile must be a Profile object, dict, or file path")
 
-    method, url, headers, data, profile_timeout, stream = profile.build_request(
+    built = profile.build_request(
         messages, stream_enabled=stream_enabled
     )
 
+    profile_timeout = built.timeout
     if timeout is not None:
         profile_timeout = timeout
 
     req_session = session or requests
     response = req_session.request(
-        method=method,
-        url=url,
-        headers=headers,
-        json=data,
-        stream=stream,
+        method=built.method,
+        url=built.url,
+        headers=built.headers,
+        json=built.data,
+        stream=built.stream,
         timeout=profile_timeout,
     )
     response.raise_for_status()
 
-    if stream:
+    if built.stream:
         return {"stream": response.iter_lines()}
 
     return response.json()
@@ -68,9 +79,7 @@ def call_llm_by_id(
     profile_id: str,
     messages: List[Dict[str, Any]],
     profile_manager: ProfileManager,
-    stream_enabled: Optional[bool] = None,
-    timeout: Optional[int] = None,
-    session: Optional[requests.Session] = None,
+    overrides: Optional[CallOverrides] = None,
 ) -> Dict[str, Any]:
     """Call an LLM by profile ID using a ProfileManager.
 
@@ -78,9 +87,7 @@ def call_llm_by_id(
         profile_id: The ID of the saved profile.
         messages: The conversation messages.
         profile_manager: The ProfileManager instance to look up the profile.
-        stream_enabled: Override the profile's default stream setting.
-        timeout: Override the profile's default timeout.
-        session: Optional requests.Session to use.
+        overrides: Optional stream/timeout/session overrides.
 
     Returns:
         The parsed JSON response.
@@ -92,10 +99,11 @@ def call_llm_by_id(
     if profile is None:
         raise ValueError(f"Profile not found: {profile_id}")
 
+    opts = overrides or CallOverrides()
     return call_llm(
         profile,
         messages=messages,
-        stream_enabled=stream_enabled,
-        timeout=timeout,
-        session=session,
+        stream_enabled=opts.stream_enabled,
+        timeout=opts.timeout,
+        session=opts.session,
     )

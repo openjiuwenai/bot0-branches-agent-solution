@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -10,6 +11,8 @@ from rag_extract_split.infrastructure.embedding import embed_texts
 from rag_extract_split.config.models import RAGCase
 from rag_extract_split.config.settings import CONFIG
 from rag_extract_split.config.embedding_manager import get_active_embedding_config
+
+logger = logging.getLogger(__name__)
 
 CHROMA_CLIENT = None
 CHROMA_CLIENT_KEY = None
@@ -31,7 +34,7 @@ def _resolve_persist_dir(persist_dir: str) -> str:
 def _chunked(items: Sequence[Any], size: int) -> Iterable[Sequence[Any]]:
     bs = max(1, int(size or len(items) or 1))
     for i in range(0, len(items), bs):
-        yield items[i : i + bs]
+        yield items[i:i + bs]
 
 
 def chroma_hnsw_space() -> str:
@@ -60,7 +63,7 @@ def chroma_collection_metadata() -> Dict[str, str]:
         if model:
             meta["embedding_model"] = str(model)
     except Exception:
-        pass
+        logger.debug("failed to attach embedding metadata to chroma collection", exc_info=True)
     return meta
 
 
@@ -101,7 +104,7 @@ def clear_collection_fully(collection_name: str) -> None:
     try:
         client.delete_collection(name)
     except Exception:
-        pass
+        logger.debug("delete_collection failed; will recreate collection", exc_info=True)
     client.get_or_create_collection(name=name, metadata=chroma_collection_metadata())
 
 
@@ -279,10 +282,10 @@ def query_topk(
         metas_ll = res.get("metadatas") or []
         docs_ll = res.get("documents") or []
         dist_ll = res.get("distances") or []
-        for i in range(len(q_part)):
+        for i, query in enumerate(q_part):
             out.append(
                 {
-                    "query": q_part[i],
+                    "query": query,
                     "ids": ids_ll[i] if i < len(ids_ll) else [],
                     "metadatas": metas_ll[i] if i < len(metas_ll) else [],
                     "documents": docs_ll[i] if i < len(docs_ll) else [],

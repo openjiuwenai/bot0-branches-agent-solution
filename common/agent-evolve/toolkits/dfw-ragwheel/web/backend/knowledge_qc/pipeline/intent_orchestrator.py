@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import as_completed
+from dataclasses import dataclass, field
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional
 
@@ -21,6 +22,29 @@ from backend.knowledge_qc.services.chroma_batch import create_chroma_store
 from backend.knowledge_qc.services.embedder import Embedder, create_embedder
 from backend.knowledge_qc.services.embedding_cache import preload_embedding_cache
 from backend.knowledge_qc.services.llm import LLMClient, create_llm
+from backend.knowledge_qc.services.vector_store import IntentBothQueryOpts
+
+
+@dataclass
+class IntentRunOpts:
+    on_progress: Optional[Callable[[int, int, str], None]] = None
+    on_log: Optional[Callable[[str], None]] = None
+    checkpoint_interval: int = 0
+    on_checkpoint: Optional[Callable[[IntentBatchReport], None]] = None
+    should_cancel: Optional[Callable[[], bool]] = None
+    row_indices: Optional[set] = None
+    intent_filter: Optional[Dict[str, Any]] = None
+    retry_mode: bool = False
+
+
+@dataclass
+class IntentCheckOpts:
+    embedding_cache: Dict[str, List[float]] = field(default_factory=dict)
+    top_k: int = 3
+    threshold: float = 0.9
+    batch_on: bool = True
+    prod_on: bool = True
+    intent_filter: Optional[Dict[str, Any]] = None
 
 
 class IntentQualityPipeline:
@@ -46,15 +70,17 @@ class IntentQualityPipeline:
     def run_records(
         self,
         records: List[IntentRecord],
-        on_progress: Callable[[int, int, str], None] = None,
-        on_log: Callable[[str], None] = None,
-        checkpoint_interval: int = 0,
-        on_checkpoint: Callable[[IntentBatchReport], None] | None = None,
-        should_cancel: Callable[[], bool] | None = None,
-        row_indices: Optional[set] = None,
-        intent_filter: Optional[Dict[str, Any]] = None,
-        retry_mode: bool = False,
+        opts: Optional[IntentRunOpts] = None,
     ) -> IntentBatchReport:
+        run_opts = opts or IntentRunOpts()
+        on_progress = run_opts.on_progress
+        on_log = run_opts.on_log
+        checkpoint_interval = run_opts.checkpoint_interval
+        on_checkpoint = run_opts.on_checkpoint
+        should_cancel = run_opts.should_cancel
+        row_indices = run_opts.row_indices
+        intent_filter = run_opts.intent_filter
+        retry_mode = run_opts.retry_mode
         total = len(records)
         intent_cfg = self.rules.get("intent_qc", {})
         top_k = int(intent_cfg.get("recall_top_k", 3))
@@ -180,8 +206,15 @@ class IntentQualityPipeline:
             if on_progress:
                 on_progress(i + 1, total, record.intent_name)
             result = self._check_one(
-                record, embedding_cache, top_k, threshold, batch_on, prod_on,
-                intent_filter=intent_filter,
+                record,
+                IntentCheckOpts(
+                    embedding_cache=embedding_cache,
+                    top_k=top_k,
+                    threshold=threshold,
+                    batch_on=batch_on,
+                    prod_on=prod_on,
+                    intent_filter=intent_filter,
+                ),
             )
             results.append(result)
             if self._should_log_row(result, i, total, log_stride):
@@ -247,18 +280,17 @@ class IntentQualityPipeline:
             if on_checkpoint and checkpoint_interval > 0 and current % checkpoint_interval == 0:
                 log(f"  已增量写入 {current}/{total} 条质检结果")
 
+        check_opts = IntentCheckOpts(
+            embedding_cache=embedding_cache,
+            top_k=top_k,
+            threshold=threshold,
+            batch_on=batch_on,
+            prod_on=prod_on,
+            intent_filter=intent_filter,
+        )
         with create_qc_thread_pool(worker_count) as pool:
             futures = {
-                pool.submit(
-                    self._check_one,
-                    record,
-                    embedding_cache,
-                    top_k,
-                    threshold,
-                    batch_on,
-                    prod_on,
-                    intent_filter=intent_filter,
-                ): i
+                pool.submit(self._check_one, record, check_opts): i
                 for i, record in enumerate(records)
             }
             for future in as_completed(futures):
@@ -307,8 +339,8 @@ class IntentQualityPipeline:
         if result.reason:
             log(f"    └ {result.reason}")
 
+    @staticmethod
     def _intent_result(
-        self,
         record: IntentRecord,
         verdict: Verdict,
         reason: str,
@@ -324,13 +356,14 @@ class IntentQualityPipeline:
     def _check_one(
         self,
         record: IntentRecord,
-        embedding_cache: Dict[str, List[float]],
-        top_k: int,
-        threshold: float,
-        batch_on: bool,
-        prod_on: bool,
-        intent_filter: Optional[Dict[str, Any]] = None,
+        opts: IntentCheckOpts,
     ) -> IntentCheckResult:
+        embedding_cache = opts.embedding_cache
+        top_k = opts.top_k
+        threshold = opts.threshold
+        batch_on = opts.batch_on
+        prod_on = opts.prod_on
+        intent_filter = opts.intent_filter
         dim_statuses = init_intent_dimension_statuses(self.rules)
         desc = record.intent_description.strip()
         if not desc:
@@ -349,10 +382,12 @@ class IntentQualityPipeline:
         hits = self._vector_store.query_intent_both(
             embedding,
             top_k,
-            exclude_id=record.record_id,
-            search_production=prod_on,
-            search_staging=batch_on,
-            intent_filter=intent_filter,
+            IntentBothQueryOpts(
+                exclude_id=record.record_id,
+                search_production=prod_on,
+                search_staging=batch_on,
+                intent_filter=intent_filter,
+            ),
         )
         candidates = filter_hits_for_record(
             [h for h in hits if h["similarity"] >= threshold],

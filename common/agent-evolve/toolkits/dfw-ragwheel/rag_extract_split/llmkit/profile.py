@@ -4,9 +4,21 @@ import copy
 import os
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import yaml
+
+
+@dataclass
+class BuiltRequest:
+    """HTTP request components produced by Profile.build_request."""
+
+    method: str
+    url: str
+    headers: Dict[str, Any]
+    data: Dict[str, Any]
+    timeout: int
+    stream: bool
 
 
 @dataclass
@@ -41,7 +53,7 @@ class Profile:
 
     def build_request(
         self, messages: List[Dict[str, Any]], stream_enabled: Optional[bool] = None
-    ) -> Tuple[str, str, Dict[str, Any], Dict[str, Any], int, bool]:
+    ) -> BuiltRequest:
         """Build all components needed for an HTTP request.
 
         Args:
@@ -49,7 +61,7 @@ class Profile:
             stream_enabled: Override the default stream setting.
 
         Returns:
-            A tuple of (method, url, headers, data, timeout, stream).
+            BuiltRequest with method, url, headers, data, timeout, and stream.
         """
         method = self.request.get("method", "POST")
         url_suffix = self.request.get("url_suffix", "")
@@ -63,7 +75,7 @@ class Profile:
         timeout = self.timeout
         stream = self.stream_enabled if stream_enabled is None else stream_enabled
 
-        return method, url, headers, data, timeout, stream
+        return BuiltRequest(method, url, headers, data, timeout, stream)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize profile to a dictionary."""

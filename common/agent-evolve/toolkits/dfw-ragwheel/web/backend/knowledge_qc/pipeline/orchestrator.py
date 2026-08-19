@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import as_completed
+from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional
@@ -36,6 +37,28 @@ from backend.knowledge_qc.services.similarity_preload import (
     restore_similarity_hits_cache,
     similarity_query_batch_size,
 )
+
+
+@dataclass
+class QuestionRunOpts:
+    seed_production: bool = False
+    on_progress: Optional[Callable[[int, int, str], None]] = None
+    on_log: Optional[Callable[[str], None]] = None
+    checkpoint_interval: int = 0
+    on_checkpoint: Optional[Callable[[BatchReport], None]] = None
+    should_cancel: Optional[Callable[[], bool]] = None
+    row_indices: Optional[set] = None
+    retry_mode: bool = False
+    similarity_hits_by_record_id: Optional[Dict[str, List[Dict[str, Any]]]] = None
+
+
+@dataclass
+class RowErrorSpec:
+    prior_issues: List[Issue]
+    dim_statuses: dict
+    failed_checker: Optional[BaseChecker]
+    checkers_after: List[BaseChecker]
+    rules: dict
 
 
 class QualityPipeline:
@@ -77,21 +100,23 @@ class QualityPipeline:
         records, _ = load_question_sheet(
             excel_path, self.rules, self.rules.get("id", {})
         )
-        return self.run_records(records, seed_production=seed_production)
+        return self.run_records(records, QuestionRunOpts(seed_production=seed_production))
 
     def run_records(
         self,
         records: List[QARecord],
-        seed_production: bool = False,
-        on_progress: Callable[[int, int, str], None] = None,
-        on_log: Callable[[str], None] = None,
-        checkpoint_interval: int = 0,
-        on_checkpoint: Callable[[BatchReport], None] | None = None,
-        should_cancel: Callable[[], bool] | None = None,
-        row_indices: Optional[set] = None,
-        retry_mode: bool = False,
-        similarity_hits_by_record_id: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+        opts: Optional[QuestionRunOpts] = None,
     ) -> BatchReport:
+        run_opts = opts or QuestionRunOpts()
+        seed_production = run_opts.seed_production
+        on_progress = run_opts.on_progress
+        on_log = run_opts.on_log
+        checkpoint_interval = run_opts.checkpoint_interval
+        on_checkpoint = run_opts.on_checkpoint
+        should_cancel = run_opts.should_cancel
+        row_indices = run_opts.row_indices
+        retry_mode = run_opts.retry_mode
+        similarity_hits_by_record_id = run_opts.similarity_hits_by_record_id
         total_all = len(records)
 
         def log(msg: str) -> None:
@@ -367,20 +392,22 @@ class QualityPipeline:
                     result = future.result()
                 except Exception as e:
                     result = _row_error_result(
-                        record=record,
-                        exc=e,
-                        prior_issues=[],
-                        dim_statuses={},
-                        failed_checker=None,
-                        checkers_after=[],
-                        rules=self.rules,
+                        record,
+                        e,
+                        RowErrorSpec(
+                            prior_issues=[],
+                            dim_statuses={},
+                            failed_checker=None,
+                            checkers_after=[],
+                            rules=self.rules,
+                        ),
                     )
                 on_one_finished(index, record, result)
 
         return [r for r in results if r is not None]  # type: ignore[misc]
 
+    @staticmethod
     def _log_row_result(
-        self,
         current: int,
         total: int,
         record: QARecord,
@@ -402,13 +429,15 @@ class QualityPipeline:
                 issues = checker.check(record, ctx)
             except Exception as e:
                 return _row_error_result(
-                    record=record,
-                    exc=e,
-                    prior_issues=all_issues,
-                    dim_statuses=dim_statuses,
-                    failed_checker=checker,
-                    checkers_after=checkers[i + 1 :],
-                    rules=self.rules,
+                    record,
+                    e,
+                    RowErrorSpec(
+                        prior_issues=all_issues,
+                        dim_statuses=dim_statuses,
+                        failed_checker=checker,
+                        checkers_after=checkers[i + 1:],
+                        rules=self.rules,
+                    ),
                 )
             all_issues.extend(issues)
             dim = checker.dimension
@@ -441,16 +470,12 @@ class QualityPipeline:
 def _row_error_result(
     record: QARecord,
     exc: BaseException,
-    prior_issues: List[Issue],
-    dim_statuses: dict,
-    failed_checker: Optional[BaseChecker],
-    checkers_after: List[BaseChecker],
-    rules: dict,
+    spec: RowErrorSpec,
 ) -> CheckResult:
-    if failed_checker is not None:
-        dim_statuses[failed_checker.dimension] = DIMENSION_STATUS_FAIL
-        mark_dimensions_skipped(dim_statuses, checkers_after, rules)
-    issues = list(prior_issues)
+    if spec.failed_checker is not None:
+        spec.dim_statuses[spec.failed_checker.dimension] = DIMENSION_STATUS_FAIL
+        mark_dimensions_skipped(spec.dim_statuses, spec.checkers_after, spec.rules)
+    issues = list(spec.prior_issues)
     reason = _format_row_error(exc)
     issues.append(
         Issue(
@@ -466,7 +491,7 @@ def _row_error_result(
         verdict=Verdict.ERROR,
         issues=issues,
         final_action=Verdict.ERROR.value,
-        dimension_statuses=dim_statuses,
+        dimension_statuses=spec.dim_statuses,
     )
 
 

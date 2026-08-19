@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import sys
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List
@@ -11,6 +13,8 @@ from flask import Blueprint, jsonify, request, send_from_directory
 
 from web.api.cli_executor import run_cli_command
 from web.config import config
+
+logger = logging.getLogger(__name__)
 
 api_bp = Blueprint("api", __name__)
 
@@ -34,7 +38,7 @@ def _parse_json_field(value: str | None, default: Any = None) -> Any:
     try:
         return json.loads(text)
     except Exception as exc:
-        raise ValueError(f"JSON 格式错误: {exc}")
+        raise ValueError(f"JSON 格式错误: {exc}") from exc
 
 
 def _save_upload_file(file_storage) -> Path:
@@ -320,7 +324,6 @@ def _read_collection_from_ids_file(path: Path) -> str | None:
     suffix = path.suffix.lower()
     try:
         if suffix == ".json":
-            import json
             with open(path, "r", encoding="utf-8") as f:
                 payload = json.load(f)
             return str(payload.get("collection") or "").strip() or None
@@ -528,16 +531,13 @@ def _do_delete_collection(collection_name: str) -> Any:
 
 # 知识质检路由由 qc 模块代理后续完善；此处做占位注册，文件缺失时静默跳过。
 try:
-    import sys
-    from pathlib import Path
-
     # 确保 web/backend 在模块搜索路径中，使 qc_routes 能正确导入 backend.knowledge_qc
     _web_backend_dir = Path(__file__).resolve().parent.parent / "backend"
     if str(_web_backend_dir) not in sys.path:
-        sys.path.insert(0, str(_web_backend_dir))
+        sys.path.append(str(_web_backend_dir))
 
     from web.api.qc_routes import qc_bp  # type: ignore[import-not-found]
 
     api_bp.register_blueprint(qc_bp)
 except ImportError:
-    pass
+    logger.debug("qc_routes blueprint not available", exc_info=True)

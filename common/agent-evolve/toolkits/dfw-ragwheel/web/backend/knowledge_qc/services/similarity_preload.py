@@ -57,7 +57,7 @@ def preload_similarity_hits(
     for start in range(0, len(records), batch_size):
         if should_cancel and should_cancel():
             break
-        chunk = records[start : start + batch_size]
+        chunk = records[start:start + batch_size]
         embeddings = [ctx.get_embedding(r.question) for r in chunk]
         exclude_ids = [r.record_id for r in chunk]
         batch_hits = ctx.vector_store.query_both_batch(

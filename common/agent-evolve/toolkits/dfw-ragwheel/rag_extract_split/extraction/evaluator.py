@@ -85,7 +85,12 @@ def evaluate_recall_detail(
         for slot, pi in enumerate(qp_index_map):
             qv, av = pairs[pi]
             request_items.append(
-                {"chroma_result_slot": slot, "badcase_index": pi, "query_text": truncate(qv, 600), "expected_answer_label": truncate(av, 200)}
+                {
+                    "chroma_result_slot": slot,
+                    "badcase_index": pi,
+                    "query_text": truncate(qv, 600),
+                    "expected_answer_label": truncate(av, 200),
+                }
             )
         response_items = []
         for slot, pi in enumerate(qp_index_map):
@@ -145,7 +150,11 @@ def evaluate_recall_detail(
                 "all_ok": all_ok,
                 "skipped_badcase_indexes_sample": skip_indices[:40],
             },
-            "chroma_query_input": {"collection": collection_name, "n_results_top_k": int(top_k), "query_batch": request_items},
+            "chroma_query_input": {
+                "collection": collection_name,
+                "n_results_top_k": int(top_k),
+                "query_batch": request_items,
+            },
             "chroma_query_output": {"per_query_retrieval": response_items},
         }
         fn = str(CONFIG.get("logging", {}).get("recall_trace_file") or "rag_extract_recall_trace.log")

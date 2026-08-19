@@ -5,7 +5,11 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from rag_extract_split.common.helpers import append_jsonl, append_pretty_json_block, log_dir
-from rag_extract_split.generation.cluster import empty_cluster_meta, generate_qa_pairs_cluster_one_answer, generate_qa_pairs_fallback
+from rag_extract_split.generation.cluster import (
+    empty_cluster_meta,
+    generate_qa_pairs_cluster_one_answer,
+    generate_qa_pairs_fallback,
+)
 from rag_extract_split.generation.llm import generate_qa_pairs_llm_one_answer
 from rag_extract_split.config.settings import CONFIG
 

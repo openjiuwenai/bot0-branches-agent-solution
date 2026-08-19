@@ -73,7 +73,7 @@ def embed_texts_http_post(
             if api_key:
                 headers[auth_header] = (f"{auth_scheme} {api_key}".strip() if auth_scheme else api_key)
             for i in range(0, len(norm), max(1, bs)):
-                chunk = list(norm[i : i + max(1, bs)])
+                chunk = list(norm[i:i + max(1, bs)])
                 body: Dict[str, object] = {"model": model, "input": chunk}
                 body.update(extra_body)
                 resp = client.post(post_url, json=body, headers=headers)

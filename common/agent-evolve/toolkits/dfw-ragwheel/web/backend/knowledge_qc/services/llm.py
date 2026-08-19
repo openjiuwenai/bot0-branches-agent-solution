@@ -32,7 +32,8 @@ class LLMRequestError(RuntimeError):
 class LLMClient(Protocol):
     def judge_semantic_quality(
         self, question: str, intent_name: str, intent_description: str = ""
-    ) -> Dict[str, Any]: ...
+    ) -> Dict[str, Any]:
+        ...
 
     def judge_dup_conflict_hits(
         self,
@@ -40,7 +41,8 @@ class LLMClient(Protocol):
         intent_name: str,
         hits: List[Dict[str, Any]],
         relation: str,
-    ) -> Dict[str, Any]: ...
+    ) -> Dict[str, Any]:
+        ...
 
     def judge_intent_description_duplicate(
         self,
@@ -48,7 +50,8 @@ class LLMClient(Protocol):
         description: str,
         hits: List[Dict[str, Any]],
         row_index: int = 0,
-    ) -> Dict[str, Any]: ...
+    ) -> Dict[str, Any]:
+        ...
 
 
 class OpenAILLM:

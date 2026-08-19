@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 import re
 import sys
 import uuid
@@ -29,6 +30,8 @@ from rag_extract_split.cli.single import run_single_pipeline
 from rag_extract_split.config.llm_registry import get_llm_config
 from rag_extract_split.config.embedding_manager import set_active_embedding_config
 from rag_extract_split.cli_logger import log_cli_execution
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_sheet(sheet: str | None) -> str | int | None:
@@ -179,13 +182,13 @@ def _run_extract(args: argparse.Namespace) -> int:
     _apply_cli_overrides(args)
     excel_path = args.excel
     if not excel_path.is_file():
-        print(f"文件不存在: {excel_path}")
+        logger.error("文件不存在: %s", excel_path)
         return 2
     do_import = bool(args.import_only or args.import_excel is not None)
     if do_import:
         import_path = Path(args.import_excel) if args.import_excel is not None else excel_path
         if not import_path.is_file():
-            print(f"导入文件不存在: {import_path}")
+            logger.error("导入文件不存在: %s", import_path)
             return 2
         import_sheet = _parse_sheet(args.import_sheet if args.import_sheet is not None else args.sheet)
         import_collection = str(args.import_collection or args.target_kb)
@@ -197,26 +200,34 @@ def _run_extract(args: argparse.Namespace) -> int:
                 replace=bool(args.import_replace),
                 batch_size=int(args.import_batch_size),
             )
-            print(f"import_done collection={import_collection} file={import_path.name} written={n} replace={'yes' if args.import_replace else 'no'}")
+            replace_flag = "yes" if args.import_replace else "no"
+            logger.info(
+                "import_done collection=%s file=%s written=%s replace=%s",
+                import_collection,
+                import_path.name,
+                n,
+                replace_flag,
+            )
             if getattr(args, "import_export_ids", ""):
                 ids_out = Path(args.import_export_ids)
                 _write_ids_output(imported_ids, ids_out, import_collection)
-                print(f"import_ids_out={ids_out} ids={len(imported_ids)}")
+                logger.info("import_ids_out=%s ids=%s", ids_out, len(imported_ids))
         except Exception as e:
-            print(f"导入失败: {e}")
+            logger.error("导入失败: %s", e)
             return 2
         if args.import_only:
             return 0
 
     badcases = load_badcases_from_excel(excel_path, _parse_sheet(args.sheet))
     if not badcases:
-        print("未解析到有效 BadCase（需同时非空的 query 与 answer 列）")
+        logger.error("未解析到有效 BadCase（需同时非空的 query 与 answer 列）")
         return 2
     pre_task_id = "EXT-" + uuid.uuid4().hex[:10].upper()
     out_xlsx = args.out if args.out is not None else Path(f"extracted_qa_{pre_task_id}.xlsx")
     if not args.quiet:
-        print(f"collection 启动清理: {'开启' if args.clear_collection else '关闭（默认）'}")
-        print(f"知识补全模式: {args.completion_mode}")
+        clear_flag = "开启" if args.clear_collection else "关闭（默认）"
+        logger.info("collection 启动清理: %s", clear_flag)
+        logger.info("知识补全模式: %s", args.completion_mode)
     res = run_extract(
         badcases=badcases,
         rule_text=args.rule_text,
@@ -231,7 +242,15 @@ def _run_extract(args: argparse.Namespace) -> int:
     )
     pairs = list(res.final_qa_pairs or [])
     write_frozen_qa_xlsx(out_xlsx, pairs)
-    print(f"task_id={res.task_id} status={res.status} collection={res.collection} badcases={len(badcases)} qa_pairs={len(pairs)} out={out_xlsx}")
+    logger.info(
+        "task_id=%s status=%s collection=%s badcases=%s qa_pairs=%s out=%s",
+        res.task_id,
+        res.status,
+        res.collection,
+        len(badcases),
+        len(pairs),
+        out_xlsx,
+    )
     if args.json_out:
         meta = {
             "task_id": res.task_id,
@@ -240,13 +259,21 @@ def _run_extract(args: argparse.Namespace) -> int:
             "collection": res.collection,
             "chroma_hnsw_space": chroma_hnsw_space(),
             "last_error": res.last_error,
-            "iterations": [{"round": it.round_num, "qaCount": it.qa_count, "recallRate": it.recall_rate, "ts_ms": it.ts_ms} for it in res.iterations],
+            "iterations": [
+                {
+                    "round": it.round_num,
+                    "qaCount": it.qa_count,
+                    "recallRate": it.recall_rate,
+                    "ts_ms": it.ts_ms,
+                }
+                for it in res.iterations
+            ],
             "round_logs": res.round_logs,
         }
         args.json_out.parent.mkdir(parents=True, exist_ok=True)
         with open(args.json_out, "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)
-        print(f"json={args.json_out}")
+        logger.info("json=%s", args.json_out)
     return 0 if res.status == "success" else 5
 
 
@@ -254,7 +281,7 @@ def _run_import(args: argparse.Namespace) -> int:
     _apply_cli_overrides(args)
     path = Path(args.input)
     if not path.is_file():
-        print(f"文件不存在: {path}")
+        logger.error("文件不存在: %s", path)
         return 2
     n, imported_ids = _import_qa_to_collection(
         excel_path=path,
@@ -263,11 +290,18 @@ def _run_import(args: argparse.Namespace) -> int:
         replace=bool(args.replace),
         batch_size=int(args.batch_size),
     )
-    print(f"import_done collection={args.collection} file={path.name} written={n} replace={'yes' if args.replace else 'no'}")
+    replace_flag = "yes" if args.replace else "no"
+    logger.info(
+        "import_done collection=%s file=%s written=%s replace=%s",
+        args.collection,
+        path.name,
+        n,
+        replace_flag,
+    )
     if args.export_ids:
         out = Path(args.export_ids)
         _write_ids_output(imported_ids, out, str(args.collection))
-        print(f"import_ids_out={out} ids={len(imported_ids)}")
+        logger.info("import_ids_out=%s ids=%s", out, len(imported_ids))
     return 0
 
 
@@ -275,27 +309,33 @@ def _run_query(args: argparse.Namespace) -> int:
     single_q = str(args.input_single or "").strip()
     if single_q:
         # 单条 query 模式
-        print(f"query: {single_q}")
-        print(f"collection: {args.collection}\n")
+        logger.info("query: %s", single_q)
+        logger.info("collection: %s\n", args.collection)
         result = query_topk(str(args.collection), [single_q], int(args.top_k), batch_size=int(args.batch_size))
         for r in result:
-            print(f"query: {r['query']}")
-            print("top-k hits:")
+            logger.info("query: %s", r["query"])
+            logger.info("top-k hits:")
             metas = r.get("metadatas") or []
             docs = r.get("documents") or []
             dists = r.get("distances") or []
             for i, (meta, doc, dist) in enumerate(zip(metas, docs, dists), 1):
                 intent = str((meta or {}).get("answer") or "") if isinstance(meta, dict) else ""
-                print(f"  [{i}] intent: {intent:<12} distance: {dist:.4f}  doc: {doc}")
+                logger.info(
+                    "  [%s] intent: %-12s distance: %.4f  doc: %s",
+                    i,
+                    intent,
+                    dist,
+                    doc,
+                )
         return 0
 
     # 批量文件模式
     if not args.input:
-        print("query 失败：请提供 --input 或 --input-single")
+        logger.error("query 失败：请提供 --input 或 --input-single")
         return 2
     path = Path(args.input)
     if not path.is_file():
-        print(f"文件不存在: {path}")
+        logger.error("文件不存在: %s", path)
         return 2
     rows = load_badcases_from_excel(path, _parse_sheet(args.sheet))
     qs = [str(r.get("query") or "").strip() for r in rows]
@@ -309,14 +349,28 @@ def _run_query(args: argparse.Namespace) -> int:
         ok = ans[i] in top_answers if i < len(ans) else False
         if ok:
             hit += 1
-        details.append({"query": qs[i], "expected_answer": ans[i], "hit_topk": ok, "topk_answers": " | ".join(top_answers)})
+        details.append(
+            {
+                "query": qs[i],
+                "expected_answer": ans[i],
+                "hit_topk": ok,
+                "topk_answers": " | ".join(top_answers),
+            }
+        )
     total = len(qs)
-    print(f"query_done collection={args.collection} hit={hit}/{total} recall={(hit/total if total else 0.0):.4f}")
+    recall = hit / total if total else 0.0
+    logger.info(
+        "query_done collection=%s hit=%s/%s recall=%.4f",
+        args.collection,
+        hit,
+        total,
+        recall,
+    )
     if args.output:
         import pandas as pd
 
         pd.DataFrame(details).to_excel(Path(args.output), index=False, engine="openpyxl")
-        print(f"output={args.output}")
+        logger.info("output=%s", args.output)
     return 0
 
 
@@ -326,17 +380,17 @@ def _run_get(args: argparse.Namespace) -> int:
     out_ids = res.get("ids") or []
     docs = res.get("documents") or []
     metas = res.get("metadatas") or []
-    print(f"get_done requested={len(ids)} hit={len(out_ids)}")
+    logger.info("get_done requested=%s hit=%s", len(ids), len(out_ids))
     for i, cid in enumerate(out_ids):
         item = {"id": cid, "query": docs[i] if i < len(docs) else "", "metadata": metas[i] if i < len(metas) else {}}
-        print(json.dumps(item, ensure_ascii=False))
+        logger.info("%s", json.dumps(item, ensure_ascii=False))
     return 0
 
 
 def _run_list(args: argparse.Namespace) -> int:
     client = get_chroma_client()
     colls = client.list_collections()
-    print(f"collections={len(colls)}")
+    logger.info("collections=%s", len(colls))
     for c in colls:
         name = getattr(c, "name", str(c))
         if args.with_count:
@@ -344,9 +398,9 @@ def _run_list(args: argparse.Namespace) -> int:
                 cnt = client.get_collection(name=name).count()
             except Exception:
                 cnt = "unknown"
-            print(f"- {name} (count={cnt})")
+            logger.info("- %s (count=%s)", name, cnt)
         else:
-            print(f"- {name}")
+            logger.info("- %s", name)
     return 0
 
 
@@ -356,7 +410,7 @@ def _run_update(args: argparse.Namespace) -> int:
 
     path = Path(args.input)
     if not path.is_file():
-        print(f"文件不存在: {path}")
+        logger.error("文件不存在: %s", path)
         return 2
     if path.suffix.lower() == ".csv":
         df = pd.read_csv(path, dtype=str, encoding="utf-8-sig", engine="python")
@@ -364,7 +418,7 @@ def _run_update(args: argparse.Namespace) -> int:
         df = pd.read_excel(path, dtype=str, sheet_name=_parse_sheet(args.sheet) or 0, engine="openpyxl")
     cols = [str(c).strip().lower() for c in df.columns.tolist()]
     if "id" not in cols or "query" not in cols:
-        print("update 输入至少包含 id/query 列")
+        logger.error("update 输入至少包含 id/query 列")
         return 2
     id_col = df.columns[cols.index("id")]
     q_col = df.columns[cols.index("query")]
@@ -377,7 +431,7 @@ def _run_update(args: argparse.Namespace) -> int:
         if cid and q:
             cases.append(RAGCase(case_id=cid, query=q, answer=a, metadata={"op": "update", "source_file": path.name}))
     n = upsert_cases(str(args.collection), cases, batch_size=int(args.batch_size))
-    print(f"update_done collection={args.collection} input={len(cases)} upsert={n}")
+    logger.info("update_done collection=%s input=%s upsert=%s", args.collection, len(cases), n)
     return 0
 
 
@@ -390,7 +444,7 @@ def _confirm_delete_collection(collection_name: str, yes: bool) -> bool:
     try:
         answer = input(f'确定要删除整个 collection "{collection_name}" 吗？该操作不可恢复。[y/N] ')
     except (EOFError, KeyboardInterrupt):
-        print("\n取消删除")
+        logger.info("\n取消删除")
         return False
     return answer.strip().lower() in ('y', 'yes')
 
@@ -405,14 +459,14 @@ def _run_delete(args: argparse.Namespace) -> int:
     if not has_ids and not has_input:
         # 删除整个 collection
         if not _confirm_delete_collection(collection_name, bool(args.yes)):
-            print("delete 取消")
+            logger.info("delete 取消")
             return 0
         try:
             drop_collection(collection_name)
-            print(f"delete_done collection={collection_name} dropped=1")
+            logger.info("delete_done collection=%s dropped=1", collection_name)
             return 0
         except Exception as exc:
-            print(f"delete 失败：{exc}")
+            logger.error("delete 失败：%s", exc)
             return 2
 
     # 按 id 删除
@@ -429,10 +483,10 @@ def _run_delete(args: argparse.Namespace) -> int:
             seen.add(cid)
             final_ids.append(cid)
     if not final_ids:
-        print("delete 失败：请提供 --ids 或 --input + --id-column")
+        logger.error("delete 失败：请提供 --ids 或 --input + --id-column")
         return 2
     n = delete_ids(str(args.collection), final_ids, batch_size=int(args.batch_size))
-    print(f"delete_done collection={args.collection} deleted={n}")
+    logger.info("delete_done collection=%s deleted=%s", args.collection, n)
     return 0
 
 
@@ -489,7 +543,11 @@ def _build_parser() -> argparse.ArgumentParser:
     p_extract.add_argument("--init-count", type=int, default=1, help="保留兼容参数")
     p_extract.add_argument("--rule-text", default="", help="业务规则全文（传给 LLM）")
     p_extract.add_argument("--rule-label", default="", help="规则标签（短）")
-    p_extract.add_argument("--completion-mode", default=str(CONFIG.get("rag_extract", {}).get("completion_mode") or "llm"), choices=["llm", "cluster"])
+    p_extract.add_argument(
+        "--completion-mode",
+        default=str(CONFIG.get("rag_extract", {}).get("completion_mode") or "llm"),
+        choices=["llm", "cluster"],
+    )
     p_extract.add_argument("--llm-config-name", default=None, help="可选：使用已保存的 LLM 配置名称（默认使用 default）")
     p_extract.add_argument("--embedding-config-name", default=None, help="可选：使用已保存的 Embedding 配置名称（默认使用当前激活配置）")
     p_extract.add_argument("--clear-collection", action="store_true", help="启动时先清空目标 collection（默认不清空）")
@@ -618,7 +676,8 @@ def _build_parser() -> argparse.ArgumentParser:
         help="single 模式：LLM 相似问泛化 + embedding 相似度筛选，导出 CSV",
         epilog=(
             "相关命令:\n"
-            "  python -m rag_extract_split.main single --single-input .\\qa.xlsx --single-sheet Sheet1 --single-output .\\out.csv\n"
+            "  python -m rag_extract_split.main single --single-input .\\qa.xlsx"
+            " --single-sheet Sheet1 --single-output .\\out.csv\n"
             "  python -m rag_extract_split.main single --help"
         ),
         formatter_class=argparse.RawTextHelpFormatter,
@@ -642,6 +701,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 @log_cli_execution
 def main() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = _build_parser()
     argv = sys.argv[1:]
     if not argv:

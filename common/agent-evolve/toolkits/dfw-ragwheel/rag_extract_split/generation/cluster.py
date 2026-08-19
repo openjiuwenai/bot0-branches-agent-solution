@@ -7,7 +7,11 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from rag_extract_split.infrastructure.embedding import embed_texts
 
 
-def empty_cluster_meta(*, representative_count: int = 0, representative_questions: Optional[List[str]] = None) -> Dict[str, Any]:
+def empty_cluster_meta(
+    *,
+    representative_count: int = 0,
+    representative_questions: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     return {
         "candidate_count": 0,
         "cluster_count": 0,
@@ -113,7 +117,7 @@ def generate_qa_pairs_cluster_one_answer(
         if len(idxs) == 0:
             continue
         c_emb = emb[idxs]
-        centroid = centers[lab : lab + 1]
+        centroid = centers[lab:lab + 1]
         nearest_local = int(pairwise_distances_argmin_min(centroid, c_emb)[0][0])
         reps.append(candidates[int(idxs[nearest_local])])
 

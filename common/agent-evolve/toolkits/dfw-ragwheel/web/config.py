@@ -2,8 +2,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class Config:
@@ -45,4 +48,4 @@ if _old_web_llm_configs.exists():
             _bak.write_text(_new_llm_configs.read_text(encoding="utf-8"), encoding="utf-8")
         _new_llm_configs.write_text(_old_web_llm_configs.read_text(encoding="utf-8"), encoding="utf-8")
     except Exception:
-        pass
+        logger.warning("迁移旧 LLM 配置失败", exc_info=True)

@@ -12,7 +12,7 @@ from typing import Any
 # 确保项目根目录在 sys.path 中，使 `python web/app.py` 可直接运行
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
+    sys.path.append(str(_PROJECT_ROOT))
 
 from flask import Flask, jsonify, render_template
 from flask_cors import CORS

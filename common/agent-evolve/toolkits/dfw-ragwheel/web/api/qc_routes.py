@@ -4,8 +4,8 @@
 
 from __future__ import annotations
 
-import io
 import json
+import logging
 import os
 import shutil
 import sys
@@ -13,8 +13,8 @@ import tempfile
 import threading
 import time
 import uuid
-from contextlib import redirect_stdout
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -25,7 +25,7 @@ from werkzeug.utils import secure_filename
 # `from backend.knowledge_qc...` 的原始导入路径不变。
 _WEB_DIR = Path(__file__).resolve().parents[1]
 if str(_WEB_DIR) not in sys.path:
-    sys.path.insert(0, str(_WEB_DIR))
+    sys.path.append(str(_WEB_DIR))
 
 from backend.knowledge_qc.qc_bridge import (  # noqa: E402
     get_paths,
@@ -39,6 +39,8 @@ from backend.knowledge_qc.qc_bridge import (  # noqa: E402
 from rag_extract_split.config.llmkit_manager import list_config_names  # noqa: E402
 from rag_extract_split.config.embedding_manager import list_embedding_configs  # noqa: E402
 
+logger = logging.getLogger(__name__)
+
 qc_bp = Blueprint("qc", __name__)
 
 _KQC_JOBS: Dict[str, Dict[str, Any]] = {}
@@ -49,6 +51,30 @@ _QC_TERMINAL_TTL_SEC = 86400
 
 # 当前活跃的 QC 任务（用于刷新后恢复）
 _ACTIVE_QC_JOB: Optional[Dict[str, Any]] = None
+
+
+@dataclass
+class QcJobArgs:
+    job_id: str
+    input_path: Path
+    output_dir: Path
+    rules_dict: Dict[str, Any]
+    task: str
+    env_override: Optional[Dict[str, Any]] = None
+    wordlists_override: Optional[Dict[str, str]] = None
+    llm_config_name: Optional[str] = None
+    embedding_config_name: Optional[str] = None
+    intent_filter: Optional[Dict[str, Any]] = None
+
+
+@dataclass
+class RetryJobArgs:
+    job_id: str
+    source_path: Path
+    output_dir: Path
+    task: str
+    prior_result: Dict[str, Any] = field(default_factory=dict)
+    qc_config: Dict[str, Any] = field(default_factory=dict)
 
 
 def _purge_kqc_jobs() -> None:
@@ -258,12 +284,12 @@ def rag_knowledge_qc_get_env():
         try:
             llm_configs = list_config_names()
         except Exception:
-            pass
+            logger.warning("加载 LLM 配置名称失败", exc_info=True)
         embedding_configs = []
         try:
             embedding_configs = list_embedding_configs()
         except Exception:
-            pass
+            logger.warning("加载 Embedding 配置失败", exc_info=True)
         return jsonify(
             {
                 "success": True,
@@ -280,7 +306,9 @@ def rag_knowledge_qc_get_env():
 def rag_knowledge_qc_config_paths():
     try:
         p = get_paths()
-        rel = lambda path: str(path.relative_to(p["repo_root"])).replace("\\", "/")
+
+        def rel(path: Path) -> str:
+            return str(path.relative_to(p["repo_root"])).replace("\\", "/")
         return jsonify(
             {
                 "success": True,
@@ -393,16 +421,18 @@ def rag_knowledge_qc_run():
         threading.Thread(
             target=_run_qc_thread,
             args=(
-                job_id,
-                input_path,
-                output_dir,
-                rules_dict,
-                task,
-                env_override,
-                wordlists_override,
-                llm_config_name,
-                embedding_config_name,
-                intent_filter,
+                QcJobArgs(
+                    job_id=job_id,
+                    input_path=input_path,
+                    output_dir=output_dir,
+                    rules_dict=rules_dict,
+                    task=task,
+                    env_override=env_override,
+                    wordlists_override=wordlists_override,
+                    llm_config_name=llm_config_name,
+                    embedding_config_name=embedding_config_name,
+                    intent_filter=intent_filter,
+                ),
             ),
             daemon=True,
         ).start()
@@ -411,31 +441,11 @@ def rag_knowledge_qc_run():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-def _run_qc_thread(
-    job_id: str,
-    input_path: Path,
-    output_dir: Path,
-    rules_dict: Dict[str, Any],
-    task: str,
-    env_override: Optional[Dict[str, Any]] = None,
-    wordlists_override: Optional[Dict[str, str]] = None,
-    llm_config_name: Optional[str] = None,
-    embedding_config_name: Optional[str] = None,
-    intent_filter: Optional[Dict[str, Any]] = None,
-) -> None:
+def _run_qc_thread(args: QcJobArgs) -> None:
+    job_id = args.job_id
+    input_path = args.input_path
     try:
-        _run_qc_thread_impl(
-            job_id,
-            input_path,
-            output_dir,
-            rules_dict,
-            task,
-            env_override=env_override,
-            wordlists_override=wordlists_override,
-            llm_config_name=llm_config_name,
-            embedding_config_name=embedding_config_name,
-            intent_filter=intent_filter,
-        )
+        _run_qc_thread_impl(args)
     except Exception as e:  # noqa: BLE001
         _job_log(job_id, f"质检异常: {e}")
         _job_update(job_id, status="failed", error=str(e))
@@ -450,27 +460,31 @@ def _run_qc_thread(
                 _ACTIVE_QC_JOB = None
 
 
-def _run_qc_thread_impl(
-    job_id: str,
-    input_path: Path,
-    output_dir: Path,
-    rules_dict: Dict[str, Any],
-    task: str,
-    env_override: Optional[Dict[str, Any]] = None,
-    wordlists_override: Optional[Dict[str, str]] = None,
-    llm_config_name: Optional[str] = None,
-    embedding_config_name: Optional[str] = None,
-    intent_filter: Optional[Dict[str, Any]] = None,
-) -> None:
+def _run_qc_thread_impl(args: QcJobArgs) -> None:
+    job_id = args.job_id
+    input_path = args.input_path
+    output_dir = args.output_dir
+    rules_dict = args.rules_dict
+    task = args.task
+    env_override = args.env_override
+    wordlists_override = args.wordlists_override
+    llm_config_name = args.llm_config_name
+    embedding_config_name = args.embedding_config_name
+    intent_filter = args.intent_filter
     from backend.knowledge_qc.loaders.excel_loader import (
+        QcExcelResults,
         load_intent_sheet,
         load_question_sheet,
         write_qc_excel,
     )
     from backend.knowledge_qc.models import QCTaskType
-    from backend.knowledge_qc.pipeline.intent_orchestrator import IntentQualityPipeline
-    from backend.knowledge_qc.pipeline.orchestrator import QualityPipeline
+    from backend.knowledge_qc.pipeline.intent_orchestrator import (
+        IntentQualityPipeline,
+        IntentRunOpts,
+    )
+    from backend.knowledge_qc.pipeline.orchestrator import QualityPipeline, QuestionRunOpts
     from backend.knowledge_qc.report.checkpoint import (
+        QuestionCheckpointArgs,
         checkpoint_interval_from_rules,
         intent_results_map,
         question_results_map,
@@ -511,7 +525,7 @@ def _run_qc_thread_impl(
         return _job_cancel_requested(job_id)
 
     _job_log(job_id, "正在初始化（向量库、Embedding API）…")
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     excel_out = output_dir / f"qc_result_{ts}.xlsx"
 
     # 保存源文件副本到输出目录，供续检使用
@@ -537,12 +551,14 @@ def _run_qc_thread_impl(
 
         report = pipeline.run_records(
             records,
-            on_progress=on_progress,
-            on_log=on_log,
-            checkpoint_interval=checkpoint_interval,
-            on_checkpoint=flush_intent if checkpoint_interval > 0 else None,
-            should_cancel=should_cancel,
-            intent_filter=intent_filter,
+            IntentRunOpts(
+                on_progress=on_progress,
+                on_log=on_log,
+                checkpoint_interval=checkpoint_interval,
+                on_checkpoint=flush_intent if checkpoint_interval > 0 else None,
+                should_cancel=should_cancel,
+                intent_filter=intent_filter,
+            ),
         )
         jp, _cp = timestamped_report_paths(output_dir)
         write_qc_excel(
@@ -550,12 +566,10 @@ def _run_qc_thread_impl(
             excel_out,
             rules,
             "intent",
-            intent_results=intent_results_map(report.results, rules),
+            QcExcelResults(intent_results=intent_results_map(report.results, rules)),
         )
         export_intent_json(report, jp)
-        buf = io.StringIO()
-        with redirect_stdout(buf):
-            print_intent_summary(report)
+        summary = print_intent_summary(report)
         cancelled = should_cancel()
         if cancelled:
             _job_log(job_id, f"用户已停止质检（已完成 {report.total} 条）")
@@ -563,7 +577,7 @@ def _run_qc_thread_impl(
             job_id,
             status="cancelled" if cancelled else "completed",
             result={
-                "summary": buf.getvalue(),
+                "summary": summary,
                 "excel_path": str(excel_out),
                 "excel_name": excel_out.name,
                 "json_path": str(jp),
@@ -591,15 +605,26 @@ def _run_qc_thread_impl(
         )
 
     def flush_question(report):
-        write_question_checkpoint(input_path, excel_out, jp, cp, rules, report)
+        write_question_checkpoint(
+            input_path,
+            QuestionCheckpointArgs(
+                excel_out=excel_out,
+                json_path=jp,
+                csv_path=cp,
+                rules=rules,
+                report=report,
+            ),
+        )
 
     report = pipeline.run_records(
         records,
-        on_progress=on_progress,
-        on_log=on_log,
-        checkpoint_interval=checkpoint_interval,
-        on_checkpoint=flush_question if checkpoint_interval > 0 else None,
-        should_cancel=should_cancel,
+        QuestionRunOpts(
+            on_progress=on_progress,
+            on_log=on_log,
+            checkpoint_interval=checkpoint_interval,
+            on_checkpoint=flush_question if checkpoint_interval > 0 else None,
+            should_cancel=should_cancel,
+        ),
     )
 
     write_qc_excel(
@@ -607,14 +632,12 @@ def _run_qc_thread_impl(
         excel_out,
         rules,
         "question",
-        question_results=question_results_map(report.results, rules),
+        QcExcelResults(question_results=question_results_map(report.results, rules)),
     )
     _job_log(job_id, "正在写入报告…")
     export_json(report, jp)
     export_csv(report, cp, rules=rules)
-    buf = io.StringIO()
-    with redirect_stdout(buf):
-        print_summary(report)
+    summary = print_summary(report)
     cancelled = should_cancel()
     if cancelled:
         _job_log(job_id, f"用户已停止质检（已完成 {report.total} 条）")
@@ -622,7 +645,7 @@ def _run_qc_thread_impl(
         job_id,
         status="cancelled" if cancelled else "completed",
         result={
-            "summary": buf.getvalue(),
+            "summary": summary,
             "excel_path": str(excel_out),
             "excel_name": excel_out.name,
             "json_path": str(jp),
@@ -676,7 +699,16 @@ def rag_knowledge_qc_retry_errors():
         output_dir = source_path.parent
         threading.Thread(
             target=_run_retry_errors_thread,
-            args=(job_id, source_path, output_dir, task, prior_result, qc_config),
+            args=(
+                RetryJobArgs(
+                    job_id=job_id,
+                    source_path=source_path,
+                    output_dir=output_dir,
+                    task=task,
+                    prior_result=prior_result,
+                    qc_config=qc_config,
+                ),
+            ),
             daemon=True,
         ).start()
         return jsonify({"success": True, "job_id": job_id})
@@ -684,14 +716,9 @@ def rag_knowledge_qc_retry_errors():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-def _run_retry_errors_thread(
-    job_id: str,
-    source_path: Path,
-    output_dir: Path,
-    task: str,
-    prior_result: Dict[str, Any],
-    qc_config: Dict[str, Any],
-) -> None:
+def _run_retry_errors_thread(args: RetryJobArgs) -> None:
+    job_id = args.job_id
+    prior_result = args.prior_result
     try:
         _job_update(
             job_id,
@@ -699,7 +726,7 @@ def _run_retry_errors_thread(
             progress={"current": 0, "total": 1, "label": ""},
             error=None,
         )
-        _run_retry_errors_thread_impl(job_id, source_path, output_dir, task, prior_result, qc_config)
+        _run_retry_errors_thread_impl(args)
     except Exception as e:
         _job_log(job_id, f"续检异常: {e}")
         msg = str(e)
@@ -711,22 +738,25 @@ def _run_retry_errors_thread(
             _job_update(job_id, status="failed", error=msg)
 
 
-def _run_retry_errors_thread_impl(
-    job_id: str,
-    source_path: Path,
-    output_dir: Path,
-    task: str,
-    prior_result: Dict[str, Any],
-    qc_config: Dict[str, Any],
-) -> None:
+def _run_retry_errors_thread_impl(args: RetryJobArgs) -> None:
+    job_id = args.job_id
+    source_path = args.source_path
+    output_dir = args.output_dir
+    task = args.task
+    prior_result = args.prior_result
+    qc_config = args.qc_config
     from backend.knowledge_qc.loaders.excel_loader import (
+        QcExcelResults,
         load_intent_sheet,
         load_question_sheet,
         write_qc_excel,
     )
     from backend.knowledge_qc.models import QCTaskType
-    from backend.knowledge_qc.pipeline.intent_orchestrator import IntentQualityPipeline
-    from backend.knowledge_qc.pipeline.orchestrator import QualityPipeline
+    from backend.knowledge_qc.pipeline.intent_orchestrator import (
+        IntentQualityPipeline,
+        IntentRunOpts,
+    )
+    from backend.knowledge_qc.pipeline.orchestrator import QualityPipeline, QuestionRunOpts
     from backend.knowledge_qc.report.checkpoint import (
         intent_results_map,
         question_results_map,
@@ -786,12 +816,14 @@ def _run_retry_errors_thread_impl(
         _job_log(job_id, f"共 {len(error_rows)} 条异常意图描述待重检（行号 {', '.join(str(x) for x in sorted(error_rows))}）…")
         retry_report = pipeline.run_records(
             records,
-            on_progress=on_progress,
-            on_log=on_log,
-            should_cancel=should_cancel,
-            row_indices=error_rows,
-            intent_filter=qc_config.get("intent_filter"),
-            retry_mode=True,
+            IntentRunOpts(
+                on_progress=on_progress,
+                on_log=on_log,
+                should_cancel=should_cancel,
+                row_indices=error_rows,
+                intent_filter=qc_config.get("intent_filter"),
+                retry_mode=True,
+            ),
         )
         validate_retry_coverage(
             error_rows,
@@ -799,25 +831,27 @@ def _run_retry_errors_thread_impl(
             row_getter=lambda r: r.record.row_index,
         )
         merged_report = merge_intent_reports(prior_report, retry_report)
-        excel_out = Path(str(prior_result.get("excel_path") or output_dir / f"qc_result_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"))
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        fallback_excel = output_dir / f"qc_result_{ts}.xlsx"
+        excel_out = Path(str(prior_result.get("excel_path") or fallback_excel))
         write_qc_excel(
             source_path,
             excel_out,
             rules,
             "intent",
-            intent_results=intent_results_map(merged_report.results, rules),
+            QcExcelResults(
+                intent_results=intent_results_map(merged_report.results, rules),
+            ),
         )
         if report_json.is_file():
             export_intent_json(merged_report, report_json)
-        buf = io.StringIO()
-        with redirect_stdout(buf):
-            print_intent_summary(merged_report)
+        summary = print_intent_summary(merged_report)
         cancelled = should_cancel()
         _job_update(
             job_id,
             status="cancelled" if cancelled else "completed",
             result={
-                "summary": buf.getvalue(),
+                "summary": summary,
                 "excel_path": str(excel_out),
                 "excel_name": excel_out.name,
                 "json_path": str(report_json) if report_json else "",
@@ -850,12 +884,14 @@ def _run_retry_errors_thread_impl(
     _job_log(job_id, f"共 {len(error_rows)} 条异常相似问待重检（行号 {', '.join(str(x) for x in sorted(error_rows))}）…")
     retry_report = pipeline.run_records(
         records,
-        on_progress=on_progress,
-        on_log=on_log,
-        should_cancel=should_cancel,
-        row_indices=error_rows,
-        retry_mode=True,
-        similarity_hits_by_record_id=prior_hits,
+        QuestionRunOpts(
+            on_progress=on_progress,
+            on_log=on_log,
+            should_cancel=should_cancel,
+            row_indices=error_rows,
+            retry_mode=True,
+            similarity_hits_by_record_id=prior_hits,
+        ),
     )
     validate_retry_coverage(
         error_rows,
@@ -863,26 +899,29 @@ def _run_retry_errors_thread_impl(
         row_getter=lambda r: r.record.row_index,
     )
     merged_report = merge_question_reports(prior_report, retry_report)
-    excel_out = Path(str(prior_result.get("excel_path") or output_dir / f"qc_result_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"))
-    cp = Path(str(prior_result.get("csv_path") or output_dir / f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"))
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    fallback_excel = output_dir / f"qc_result_{ts}.xlsx"
+    fallback_csv = output_dir / f"report_{ts}.csv"
+    excel_out = Path(str(prior_result.get("excel_path") or fallback_excel))
+    cp = Path(str(prior_result.get("csv_path") or fallback_csv))
     write_qc_excel(
         source_path,
         excel_out,
         rules,
         "question",
-        question_results=question_results_map(merged_report.results, rules),
+        QcExcelResults(
+            question_results=question_results_map(merged_report.results, rules),
+        ),
     )
     export_json(merged_report, report_json)
     export_csv(merged_report, cp, rules=rules)
-    buf = io.StringIO()
-    with redirect_stdout(buf):
-        print_summary(merged_report)
+    summary = print_summary(merged_report)
     cancelled = should_cancel()
     _job_update(
         job_id,
         status="cancelled" if cancelled else "completed",
         result={
-            "summary": buf.getvalue(),
+            "summary": summary,
             "excel_path": str(excel_out),
             "excel_name": excel_out.name,
             "json_path": str(report_json),
@@ -1167,7 +1206,7 @@ def _run_export_thread_impl(job_id: str, output_dir: Path) -> None:
     from backend.knowledge_qc.kb_export import export_production_to_excel
 
     _job_log(job_id, "正在读取向量库…")
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     excel_out = output_dir / f"kb_export_{ts}.xlsx"
     intent_count, question_count = export_production_to_excel(excel_out)
     _job_log(job_id, f"导出完成：相似问 {question_count} 条，意图描述 {intent_count} 条")

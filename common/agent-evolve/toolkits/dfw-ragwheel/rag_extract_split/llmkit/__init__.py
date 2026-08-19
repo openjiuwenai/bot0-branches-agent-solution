@@ -1,5 +1,7 @@
 """llmkit: A lightweight toolkit for managing and calling LLM APIs."""
 
+from pathlib import Path
+
 from .caller import call_llm, call_llm_by_id
 from .profile import Profile, substitute_variables
 from .profile_manager import ProfileManager
@@ -20,8 +22,6 @@ __all__ = [
 ]
 
 # Path helpers for web/llmkit bundled templates
-from pathlib import Path
-
 _BUNDLE_DIR = Path(__file__).resolve().parent
 BUILTIN_TEMPLATES_DIR = str(_BUNDLE_DIR / "templates")
 

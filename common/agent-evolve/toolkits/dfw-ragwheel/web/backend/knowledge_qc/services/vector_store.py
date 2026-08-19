@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from chromadb.api.models.Collection import Collection
@@ -11,6 +12,22 @@ from backend.knowledge_qc.services.chroma_hits import (
     hits_from_query_result,
     merge_hits,
 )
+
+
+@dataclass
+class VectorQueryOpts:
+    top_k: int = 5
+    exclude_id: Optional[str] = None
+    corpus_scope: Optional[str] = None
+    where: Optional[Dict[str, Any]] = None
+
+
+@dataclass
+class IntentBothQueryOpts:
+    exclude_id: Optional[str] = None
+    search_production: bool = True
+    search_staging: bool = True
+    intent_filter: Optional[Dict[str, Any]] = None
 
 
 class ChromaVectorStore:
@@ -134,34 +151,34 @@ class ChromaVectorStore:
         ]
         self._chunked_upsert(collection, ids, embeddings, documents, metadatas)
 
+    @staticmethod
     def query(
-        self,
         collection: Collection,
         embedding: List[float],
-        top_k: int = 5,
-        exclude_id: Optional[str] = None,
-        corpus_scope: Optional[str] = None,
-        where: Optional[Dict[str, Any]] = None,
+        opts: Optional[VectorQueryOpts] = None,
     ) -> List[Dict[str, Any]]:
+        query_opts = opts or VectorQueryOpts()
         if collection.count() == 0:
             return []
         result = collection.query(
             query_embeddings=[embedding],
-            n_results=min(top_k, collection.count()),
+            n_results=min(query_opts.top_k, collection.count()),
             include=["documents", "metadatas", "distances"],
-            where=where,
+            where=query_opts.where,
         )
-        return hits_from_query_result(result, exclude_id, corpus_scope or "")
+        return hits_from_query_result(
+            result, query_opts.exclude_id, query_opts.corpus_scope or ""
+        )
 
+    @staticmethod
     def merge_hits(
-        self,
         parts: List[List[Dict[str, Any]]],
         top_k: int = 0,
     ) -> List[Dict[str, Any]]:
         return merge_hits(parts, top_k)
 
+    @staticmethod
     def query_batch(
-        self,
         collection: Collection,
         embeddings: List[List[float]],
         top_k: int,
@@ -243,9 +260,11 @@ class ChromaVectorStore:
                 self.query(
                     self._production,
                     embedding,
-                    top_k,
-                    exclude_id,
-                    corpus_scope="production",
+                    VectorQueryOpts(
+                        top_k=top_k,
+                        exclude_id=exclude_id,
+                        corpus_scope="production",
+                    ),
                 )
             )
         if search_staging:
@@ -253,9 +272,11 @@ class ChromaVectorStore:
                 self.query(
                     self._staging,
                     embedding,
-                    top_k,
-                    exclude_id,
-                    corpus_scope="batch",
+                    VectorQueryOpts(
+                        top_k=top_k,
+                        exclude_id=exclude_id,
+                        corpus_scope="batch",
+                    ),
                 )
             )
         return self.merge_hits(parts)
@@ -264,13 +285,12 @@ class ChromaVectorStore:
         self,
         embedding: List[float],
         top_k: int,
-        exclude_id: Optional[str] = None,
-        search_production: bool = True,
-        search_staging: bool = True,
-        intent_filter: Optional[Dict[str, Any]] = None,
+        opts: Optional[IntentBothQueryOpts] = None,
     ) -> List[Dict[str, Any]]:
+        query_opts = opts or IntentBothQueryOpts()
         parts: List[List[Dict[str, Any]]] = []
         where = None
+        intent_filter = query_opts.intent_filter
         if intent_filter and intent_filter.get("mode") and intent_filter.get("intents"):
             intents = [str(x).strip() for x in intent_filter["intents"] if str(x).strip()]
             if intents:
@@ -278,26 +298,30 @@ class ChromaVectorStore:
                     where = {"intent_name": {"$in": intents}}
                 elif intent_filter["mode"] == "exclude":
                     where = {"intent_name": {"$nin": intents}}
-        if search_production:
+        if query_opts.search_production:
             parts.append(
                 self.query(
                     self._intent_production,
                     embedding,
-                    top_k,
-                    exclude_id,
-                    corpus_scope="production",
-                    where=where,
+                    VectorQueryOpts(
+                        top_k=top_k,
+                        exclude_id=query_opts.exclude_id,
+                        corpus_scope="production",
+                        where=where,
+                    ),
                 )
             )
-        if search_staging:
+        if query_opts.search_staging:
             parts.append(
                 self.query(
                     self._intent_staging,
                     embedding,
-                    top_k,
-                    exclude_id,
-                    corpus_scope="batch",
-                    where=None,
+                    VectorQueryOpts(
+                        top_k=top_k,
+                        exclude_id=query_opts.exclude_id,
+                        corpus_scope="batch",
+                        where=None,
+                    ),
                 )
             )
         return self.merge_hits(parts)

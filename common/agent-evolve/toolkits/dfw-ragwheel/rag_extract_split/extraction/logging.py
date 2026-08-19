@@ -2,7 +2,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, Sequence
+
+logger = logging.getLogger(__name__)
 
 
 def build_round_log_entry(
@@ -85,17 +88,28 @@ def print_round_verbose(
     emb_after: Dict[str, int],
 ) -> None:
     alloc_line = " | ".join(f"{a}={int(alloc.get(a, 0) or 0)}" for a in active) if active else "-"
-    print(
-        f"\n=== 第 {round_num} 轮 ===\n"
-        f"  模式: {completion_mode}\n"
-        f"  分配策略: {alloc_mode} | budget={budget} | count参数={count} | 目标召回={target_recall}\n"
-        f"  本轮每类额度: {alloc_line}\n"
-        f"  生成 QA 条数: {gen_total} | 临时入库向量数: {round_chroma_ids_len}\n"
-        f"  生成来源: LLM类目={llm_cat} | 模板回退类目={fb_cat} | 聚类类目={cluster_cat} | 是否调用LLM={'是' if llm_cat > 0 else '否'}\n"
-        f"  召回: rate={recall_rate:.6f} | all_ok={all_ok} | 本轮新增保留 QA={retained_qa_this_round} | 已冻结答案类别总数={frozen_total}\n"
-        f"  冻结答案类别: 本轮新冻结={list(newly_done_list)} | 已冻结全量={list(frozen_list)}\n"
-        f"  Embedding: 本地批次={emb_after['local_batches']} 本地文本数={emb_after['local_texts']} | "
-        f"远程批次={emb_after['remote_batches']} 远程文本数={emb_after['remote_texts']} | "
-        f"hashing回退次数={emb_after['hashing_full_fallback']} hashing向量数={emb_after['hashing_vectors']} | "
-        f"是否走本地embedding={'是' if emb_after['local_batches'] > 0 else '否'}"
+    logger.info(
+        "%s",
+        (
+            f"\n=== 第 {round_num} 轮 ===\n"
+            f"  模式: {completion_mode}\n"
+            f"  分配策略: {alloc_mode} | budget={budget} | "
+            f"count参数={count} | 目标召回={target_recall}\n"
+            f"  本轮每类额度: {alloc_line}\n"
+            f"  生成 QA 条数: {gen_total} | 临时入库向量数: {round_chroma_ids_len}\n"
+            f"  生成来源: LLM类目={llm_cat} | 模板回退类目={fb_cat} | "
+            f"聚类类目={cluster_cat} | 是否调用LLM={'是' if llm_cat > 0 else '否'}\n"
+            f"  召回: rate={recall_rate:.6f} | all_ok={all_ok} | "
+            f"本轮新增保留 QA={retained_qa_this_round} | "
+            f"已冻结答案类别总数={frozen_total}\n"
+            f"  冻结答案类别: 本轮新冻结={list(newly_done_list)} | "
+            f"已冻结全量={list(frozen_list)}\n"
+            f"  Embedding: 本地批次={emb_after['local_batches']} "
+            f"本地文本数={emb_after['local_texts']} | "
+            f"远程批次={emb_after['remote_batches']} "
+            f"远程文本数={emb_after['remote_texts']} | "
+            f"hashing回退次数={emb_after['hashing_full_fallback']} "
+            f"hashing向量数={emb_after['hashing_vectors']} | "
+            f"是否走本地embedding={'是' if emb_after['local_batches'] > 0 else '否'}"
+        ),
     )

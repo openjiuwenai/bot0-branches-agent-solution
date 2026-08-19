@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import re
-from typing import List
+from dataclasses import dataclass
+from typing import List, Optional
 
 from backend.knowledge_qc.checkers.base import BaseChecker, CheckContext
 from backend.knowledge_qc.checkers.compliance_pii import (
@@ -15,6 +16,27 @@ from backend.knowledge_qc.models import Issue, QARecord
 
 # 相似问质检：合规仅扫描相似问文本，不检测菜单描述（意图描述由「意图描述质检」负责）
 _COMPLIANCE_FIELDS = (("question", "相似问"),)
+
+
+@dataclass
+class WordlistCheckSpec:
+    field: str
+    field_label: str
+    list_name: str
+    prefix: str
+
+
+@dataclass
+class FieldIssueSpec:
+    rule_id: str
+    field: str
+    field_label: str
+    severity: str
+    reason: str
+    suggestion: str
+    auto_fixable: bool = False
+    fixed_text: Optional[str] = None
+    evidence: Optional[dict] = None
 
 
 class ComplianceChecker(BaseChecker):
@@ -35,14 +57,28 @@ class ComplianceChecker(BaseChecker):
             if cfg.get("enable_regulatory", True):
                 issues.extend(
                     self._check_wordlist(
-                        text, attr, label, "regulatory", "COMPLIANCE_REG", ctx
+                        text,
+                        WordlistCheckSpec(
+                            field=attr,
+                            field_label=label,
+                            list_name="regulatory",
+                            prefix="COMPLIANCE_REG",
+                        ),
+                        ctx,
                     )
                 )
 
             if cfg.get("enable_prohibited", True):
                 issues.extend(
                     self._check_wordlist(
-                        text, attr, label, "prohibited", "COMPLIANCE_PROHIBITED", ctx
+                        text,
+                        WordlistCheckSpec(
+                            field=attr,
+                            field_label=label,
+                            list_name="prohibited",
+                            prefix="COMPLIANCE_PROHIBITED",
+                        ),
+                        ctx,
                     )
                 )
 
@@ -57,15 +93,17 @@ class ComplianceChecker(BaseChecker):
                 fixed = desensitize(text)
                 issues.append(
                     _make_field_issue(
-                        rule_id=rule_id,
-                        field=field,
-                        field_label=field_label,
-                        severity="high",
-                        reason=f"{field_label}含{pii_label}：「{m.group()}」",
-                        suggestion="脱敏为占位符，如 [卡号]、[手机号]",
-                        auto_fixable=True,
-                        fixed_text=fixed,
-                        evidence={"spans": spans, "field": field},
+                        FieldIssueSpec(
+                            rule_id=rule_id,
+                            field=field,
+                            field_label=field_label,
+                            severity="high",
+                            reason=f"{field_label}含{pii_label}：「{m.group()}」",
+                            suggestion="脱敏为占位符，如 [卡号]、[手机号]",
+                            auto_fixable=True,
+                            fixed_text=fixed,
+                            evidence={"spans": spans, "field": field},
+                        )
                     )
                 )
 
@@ -74,15 +112,17 @@ class ComplianceChecker(BaseChecker):
             if fixed != text:
                 issues.append(
                     _make_field_issue(
-                        rule_id="COMPLIANCE_PII_ENTITY",
-                        field=field,
-                        field_label=field_label,
-                        severity="medium",
-                        reason=f"{field_label}含具体人名/金额等可识别实体，不宜作为通用语料",
-                        suggestion="改写为通用表述，如「给[收款人]转[金额]」",
-                        auto_fixable=True,
-                        fixed_text=fixed,
-                        evidence={"original": text, "field": field},
+                        FieldIssueSpec(
+                            rule_id="COMPLIANCE_PII_ENTITY",
+                            field=field,
+                            field_label=field_label,
+                            severity="medium",
+                            reason=f"{field_label}含具体人名/金额等可识别实体，不宜作为通用语料",
+                            suggestion="改写为通用表述，如「给[收款人]转[金额]」",
+                            auto_fixable=True,
+                            fixed_text=fixed,
+                            evidence={"original": text, "field": field},
+                        )
                     )
                 )
         return issues
@@ -90,59 +130,48 @@ class ComplianceChecker(BaseChecker):
     def _check_wordlist(
         self,
         text: str,
-        field: str,
-        field_label: str,
-        list_name: str,
-        prefix: str,
+        spec: WordlistCheckSpec,
         ctx: CheckContext,
     ) -> List[Issue]:
         issues: List[Issue] = []
-        words = ctx.wordlist_overrides.get(list_name)
+        words = ctx.wordlist_overrides.get(spec.list_name)
         if words is None:
-            words = load_wordlist(list_name)
+            words = load_wordlist(spec.list_name)
         for word in words:
             if word in text:
                 issues.append(
                     _make_field_issue(
-                        rule_id=f"{prefix}_001",
-                        field=field,
-                        field_label=field_label,
-                        severity="high",
-                        reason=f"{field_label}含违规表述「{word}」",
-                        suggestion="删除或替换为合规话术，不符合监管要求",
-                        evidence={"matched_word": word, "field": field},
+                        FieldIssueSpec(
+                            rule_id=f"{spec.prefix}_001",
+                            field=spec.field,
+                            field_label=spec.field_label,
+                            severity="high",
+                            reason=f"{spec.field_label}含违规表述「{word}」",
+                            suggestion="删除或替换为合规话术，不符合监管要求",
+                            evidence={"matched_word": word, "field": spec.field},
+                        )
                     )
                 )
         return issues
 
 
-def _make_field_issue(
-    rule_id: str,
-    field: str,
-    field_label: str,
-    severity: str,
-    reason: str,
-    suggestion: str,
-    auto_fixable: bool = False,
-    fixed_text: str = None,
-    evidence: dict = None,
-) -> Issue:
-    ev = dict(evidence or {})
-    ev.setdefault("field", field)
-    ev.setdefault("field_label", field_label)
+def _make_field_issue(spec: FieldIssueSpec) -> Issue:
+    ev = dict(spec.evidence or {})
+    ev.setdefault("field", spec.field)
+    ev.setdefault("field_label", spec.field_label)
 
     kw = dict(
         dimension="合规安全",
-        rule_id=rule_id,
-        severity=severity,
-        reason=reason,
-        suggestion=suggestion,
-        auto_fixable=auto_fixable,
+        rule_id=spec.rule_id,
+        severity=spec.severity,
+        reason=spec.reason,
+        suggestion=spec.suggestion,
+        auto_fixable=spec.auto_fixable,
         evidence=ev,
     )
-    if auto_fixable and fixed_text is not None:
-        if field == "question":
-            kw["fixed_question"] = fixed_text
-        elif field == "intent_description":
-            kw["fixed_intent_description"] = fixed_text
+    if spec.auto_fixable and spec.fixed_text is not None:
+        if spec.field == "question":
+            kw["fixed_question"] = spec.fixed_text
+        elif spec.field == "intent_description":
+            kw["fixed_intent_description"] = spec.fixed_text
     return Issue(**kw)

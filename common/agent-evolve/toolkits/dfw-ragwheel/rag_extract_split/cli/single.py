@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import heapq
 import json
+import logging
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -16,6 +17,8 @@ from rag_extract_split.io.data_io import load_badcases_from_excel
 from rag_extract_split.infrastructure.embedding import embed_texts
 from rag_extract_split.generation.llm import llm_config, normalize_llm_content, run_llm_completion
 from rag_extract_split.config.settings import CONFIG
+
+logger = logging.getLogger(__name__)
 
 
 class _MinHeapCollector:
@@ -161,8 +164,18 @@ def _llm_generate_similar_questions(q: str, k: int, llm_config_name: Optional[st
     trace_path = log_dir() / trace_file
     trace_base: Dict[str, Any] = {
         "kind": "single_mode_llm_call",
-        "meta": {"ts_ms": now_ms(), "model": str(cfg.get("model") or ""), "base_url": str(cfg.get("base_url") or ""), "request_mode": str(cfg.get("request_mode") or "")},
-        "input": {"q": truncate(q, 800), "k": int(k), "messages": list(messages), "extra_body": dict(extra_body)},
+        "meta": {
+            "ts_ms": now_ms(),
+            "model": str(cfg.get("model") or ""),
+            "base_url": str(cfg.get("base_url") or ""),
+            "request_mode": str(cfg.get("request_mode") or ""),
+        },
+        "input": {
+            "q": truncate(q, 800),
+            "k": int(k),
+            "messages": list(messages),
+            "extra_body": dict(extra_body),
+        },
     }
     try:
         completion = run_llm_completion(cfg=cfg, model=str(cfg["model"]), messages=messages, extra_body=extra_body)
@@ -183,7 +196,12 @@ def _llm_generate_similar_questions(q: str, k: int, llm_config_name: Optional[st
                 trace_path,
                 {
                     **trace_base,
-                    "output": {"raw_content": raw_content, "parsed_questions": questions, "usage": usage, "raw_response": raw_response},
+                    "output": {
+                        "raw_content": raw_content,
+                        "parsed_questions": questions,
+                        "usage": usage,
+                        "raw_response": raw_response,
+                    },
                     "error": None,
                 },
             )
@@ -303,32 +321,48 @@ def run_single_pipeline(
         CONFIG.setdefault("logging", {})["llm_trace_file"] = str(llm_trace_file)
 
     if not input_path.is_file():
-        print(f"文件不存在: {input_path}")
+        logger.error("文件不存在: %s", input_path)
         return 2
 
     pairs = load_pairs(input_path, sheet, str(q_column), str(a_column))
     if not pairs:
-        print("未读到有效输入行")
+        logger.error("未读到有效输入行")
         return 2
 
     all_rows: List[Dict[str, Any]] = []
     for idx, (q, a) in enumerate(pairs, start=1):
         try:
-            rows = process_one_q(q=q, a=a, k=k, m=m, threshold=threshold, max_attempts=max_attempts, llm_config_name=llm_config_name)
+            rows = process_one_q(
+                q=q,
+                a=a,
+                k=k,
+                m=m,
+                threshold=threshold,
+                max_attempts=max_attempts,
+                llm_config_name=llm_config_name,
+            )
             all_rows.extend(rows)
-            print(f"[{idx}/{len(pairs)}] done rows={len(rows)} q={q[:60]}")
+            logger.info("[%s/%s] done rows=%s q=%s", idx, len(pairs), len(rows), q[:60])
         except Exception as e:
             all_rows.append(
-                {"source_q": q, "source_a": a, "error": str(e), "k": int(k), "m_target": int(m), "threshold": float(threshold)}
+                {
+                    "source_q": q,
+                    "source_a": a,
+                    "error": str(e),
+                    "k": int(k),
+                    "m_target": int(m),
+                    "threshold": float(threshold),
+                }
             )
-            print(f"[{idx}/{len(pairs)}] error={e} q={q[:60]}")
+            logger.error("[%s/%s] error=%s q=%s", idx, len(pairs), e, q[:60])
 
     write_csv(all_rows, output_path)
-    print(f"output={output_path} rows={len(all_rows)}")
+    logger.info("output=%s rows=%s", output_path, len(all_rows))
     return 0
 
 
 def main() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     ap = argparse.ArgumentParser(description="single 模式：逐行生成相似问并做相似度阈值筛选后导出 CSV")
     ap.add_argument("--input", required=True, type=Path, help="输入 CSV/Excel：两列（用户问题/答案）")
     ap.add_argument("--sheet", default=None, help="Excel sheet 名或索引（CSV 可忽略）")

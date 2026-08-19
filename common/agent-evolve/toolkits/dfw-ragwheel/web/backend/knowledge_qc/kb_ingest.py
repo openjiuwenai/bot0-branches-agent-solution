@@ -31,7 +31,7 @@ def embed_texts_with_progress(
     vectors: List[List[float]] = []
     bs = max(1, embedding_batch_size)
     for start in range(0, total, bs):
-        chunk = texts[start : start + bs]
+        chunk = texts[start:start + bs]
         vectors.extend(embedder.embed(chunk))
         current = min(start + len(chunk), total)
         _notify(on_progress, "embedding", current, total)

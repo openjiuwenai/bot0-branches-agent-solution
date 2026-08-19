@@ -48,7 +48,11 @@ def attach_high_similarity_hits(
             if d_f is None or d_f > distance_threshold:
                 continue
             cand_q = str(docs[j] if j < len(docs) else "").strip()
-            cand_a = str((metas[j] or {}).get("answer") if j < len(metas) and isinstance(metas[j], dict) else "").strip()
+            cand_a = str(
+                (metas[j] or {}).get("answer")
+                if j < len(metas) and isinstance(metas[j], dict)
+                else ""
+            ).strip()
             if not cand_q and not cand_a:
                 continue
             if not top1_q:

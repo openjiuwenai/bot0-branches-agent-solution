@@ -103,9 +103,11 @@ def _project_default_env() -> Dict[str, str]:
         defaults["API_TIMEOUT"] = str(emb["timeout_sec"])
 
     try:
-        from rag_extract_split.config.llm_registry import get_llm_config
+        from rag_extract_split.config.llm_registry import (
+            get_llm_config as load_registry_llm_config,
+        )
 
-        llm = get_llm_config()
+        llm = load_registry_llm_config()
     except Exception:
         llm = CONFIG.get("rag_llm", {})
 

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -23,57 +24,73 @@ from backend.knowledge_qc.models import (
     Verdict,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def timestamped_report_paths(output_dir: Union[str, Path]) -> Tuple[Path, Path]:
     """生成带时间戳的报告路径，避免多次运行覆盖。"""
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     out = Path(output_dir)
     return out / f"report_{ts}.json", out / f"report_{ts}.csv"
 
 
-def print_intent_summary(report: IntentBatchReport) -> None:
-    print("=" * 60)
-    print(f"意图描述质检完成：共 {report.total} 条")
+def _emit_lines(lines: List[str]) -> str:
+    for line in lines:
+        logger.info("%s", line)
+    return "\n".join(lines) + "\n"
+
+
+def print_intent_summary(report: IntentBatchReport) -> str:
     err = getattr(report, "errors", 0)
     line = f"  通过: {report.passed}  不通过: {report.failed}"
     if err:
         line += f"  异常: {err}"
-    print(line)
-    print("=" * 60)
+    lines = [
+        "=" * 60,
+        f"意图描述质检完成：共 {report.total} 条",
+        line,
+        "=" * 60,
+    ]
     for r in report.results:
-        print(
+        lines.append(
             f"\n[{format_row_ref(r.record.row_index)}] {r.verdict.value} | "
             f"{r.record.intent_name}"
         )
         if r.reason:
-            print(f"  原因: {r.reason}")
+            lines.append(f"  原因: {r.reason}")
+    return _emit_lines(lines)
 
 
-def print_summary(report: BatchReport) -> None:
-    print("=" * 60)
-    print(f"质检完成：共 {report.total} 条")
+def print_summary(report: BatchReport) -> str:
     err = getattr(report, "errors", 0)
     summary = f"  通过: {report.passed}  不通过: {report.failed}"
     if err:
         summary += f"  异常: {err}"
-    print(summary)
-    print("=" * 60)
+    lines = [
+        "=" * 60,
+        f"质检完成：共 {report.total} 条",
+        summary,
+        "=" * 60,
+    ]
     for r in report.results:
         status = r.verdict.value
-        print(f"\n[{format_row_ref(r.record.row_index)}] {status} | {r.record.question}")
-        print(f"  意图名称: {r.record.intent_name}")
+        lines.append(
+            f"\n[{format_row_ref(r.record.row_index)}] {status} | {r.record.question}"
+        )
+        lines.append(f"  意图名称: {r.record.intent_name}")
         if r.issues:
             for issue in r.issues:
                 if issue.passed:
                     continue
-                print(f"  - [{issue.dimension}] {issue.reason}")
-                print(f"    建议: {issue.suggestion}")
+                lines.append(f"  - [{issue.dimension}] {issue.reason}")
+                lines.append(f"    建议: {issue.suggestion}")
                 if issue.fixed_question:
-                    print(f"    修复后相似问: {issue.fixed_question}")
+                    lines.append(f"    修复后相似问: {issue.fixed_question}")
                 if issue.fixed_intent_description:
-                    print(f"    修复后意图描述: {issue.fixed_intent_description}")
+                    lines.append(f"    修复后意图描述: {issue.fixed_intent_description}")
         else:
-            print(f"  → {r.final_action}")
+            lines.append(f"  → {r.final_action}")
+    return _emit_lines(lines)
 
 
 def export_intent_json(report: IntentBatchReport, path: Union[str, Path]) -> None:
