@@ -1,0 +1,19 @@
+# L2 层：agent_card_l2，对接 mock 控制器 agent_L2_controller。
+# 无 intent 映射；"不在范围" 转调类型在 handoff.signal.handoff-types 中，
+# 识别后不出站调用，直接向上游返回 not-in-scope 标记信封（upstream-signal）。
+openjiuwen:
+  service:
+    agent-id: agent_card_l2
+    a2a:
+      public-url: http://127.0.0.1:${versatile-demo.l2-port}
+      remote-agents:
+        - name: agent_card_l1
+          url: http://127.0.0.1:${versatile-demo.l1-port}
+          streaming: true
+    versatile:
+      url-template: http://127.0.0.1:${versatile-demo.l2-port}/v1/proj/agents/agent_L2_controller/conversations/${versatile-demo.conversation-id-placeholder}
+      handoff:
+        self-agent-id: agent_card_l2
+        signal:
+          handoff-types:
+            - 不在范围

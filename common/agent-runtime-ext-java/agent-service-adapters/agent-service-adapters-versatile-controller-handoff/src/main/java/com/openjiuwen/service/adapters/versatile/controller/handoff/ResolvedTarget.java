@@ -12,6 +12,6 @@ package com.openjiuwen.service.adapters.versatile.controller.handoff;
 public record ResolvedTarget(String agentId, ResolutionSource source) {
 
     public enum ResolutionSource {
-        DIRECT, INTENT_MAPPING, DOMAIN_MAPPING, FIXED_L1
+        DIRECT, INTENT_MAPPING, DOMAIN_MAPPING
     }
 }

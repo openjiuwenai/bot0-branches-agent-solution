@@ -73,7 +73,6 @@ class ControllerHandoffExecutorTest {
         ControllerHandoffProperties p = new ControllerHandoffProperties();
         p.getLoop().setMaxRedirects(3);
         p.getTarget().setAllowedAgents(List.of("agent_card_hotel", "agent_card_l1"));
-        p.getTarget().setFixedL1Entry("agent_card_l1");
         p.setTimeout(Duration.ofSeconds(5));
         return p;
     }
@@ -196,6 +195,24 @@ class ControllerHandoffExecutorTest {
         executor(caller, properties()).execute(handoff(), request(), observer, new RequestHandoffState());
         assertThat(String.valueOf(observer.chunks.get(0).getData()))
                 .contains("VERSATILE_HANDOFF_TARGET_UNAVAILABLE");
+    }
+
+    @Test
+    void synchronousCallerFailureMapsToTargetUnavailable() {
+        // 默认 A2ARemoteAgentClient 对未注册目标同步抛出（不经 future），同样归一为 TARGET_UNAVAILABLE
+        ControllerHandoffProperties p = properties();
+        ControllerHandoffExecutor executor = new ControllerHandoffExecutor(
+                (call, eventObserver) -> {
+                    throw new IllegalStateException("Unknown remote agent: agent_card_dead");
+                },
+                new HandoffTargetResolver(p), new DownstreamEventMapper(), new HandoffLoopGuard(p),
+                new EmptyProvider<>(), p);
+        RecordingObserver observer = new RecordingObserver();
+        assertThat(executor.execute(handoff(), request(), observer, new RequestHandoffState()))
+                .isEqualTo(ControllerHandoffExecutor.ExecResult.TERMINAL);
+        assertThat(String.valueOf(observer.chunks.get(0).getData()))
+                .contains("VERSATILE_HANDOFF_TARGET_UNAVAILABLE");
+        assertThat(observer.error).isNotNull();
     }
 
     @Test

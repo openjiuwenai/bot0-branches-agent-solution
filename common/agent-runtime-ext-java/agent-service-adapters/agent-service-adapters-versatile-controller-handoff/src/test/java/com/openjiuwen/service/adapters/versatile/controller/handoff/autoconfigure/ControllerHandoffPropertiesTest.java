@@ -36,7 +36,8 @@ class ControllerHandoffPropertiesTest {
         assertThat(p.getLoopTraceMetadata().getRouteTraceKey()).isEqualTo("handoffRouteTrace");
         assertThat(p.getLoopTraceMetadata().getSourceAgentKey()).isEqualTo("sourceAgentId");
         assertThat(p.getTarget().getResolutionPriority())
-                .containsExactly("direct", "intent", "domain", "fixed-l1");
+                .containsExactly("direct", "intent", "domain");
+        assertThat(p.getSignal().getHandoffTypes()).isEmpty();
         assertThat(p.getCrossAgentResume().isEnabled()).isFalse();
         assertThat(p.getForwardMetadataKeys()).isEmpty();
     }

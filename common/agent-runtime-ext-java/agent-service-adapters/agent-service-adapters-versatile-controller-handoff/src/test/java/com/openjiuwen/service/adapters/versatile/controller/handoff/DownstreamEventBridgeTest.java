@@ -98,6 +98,17 @@ class DownstreamEventBridgeTest {
     }
 
     @Test
+    void notInScopeEnvelopeSuppressedFromForwarding() {
+        // 协议信号不透传给最终用户（spec 2.2/4.4）：executor 在 outcome.result 上检测后重识别
+        RecordingObserver observer = new RecordingObserver();
+        new DownstreamEventBridge(observer).onArtifact(artifactEvent(
+                HandoffSignals.notInScopeEnvelope(new IntentHandoff("不在范围", "x", "y", null, null, "{}"))));
+        new DownstreamEventBridge(observer).onArtifact(artifactEvent("业务答案"));
+        assertThat(observer.chunks).hasSize(1);
+        assertThat(String.valueOf(observer.chunks.get(0).getData())).isEqualTo("业务答案");
+    }
+
+    @Test
     void cancelledObserverSuppressesForwardingAndCancelsBoundFuture() {
         RecordingObserver observer = new RecordingObserver();
         observer.cancelled = true;

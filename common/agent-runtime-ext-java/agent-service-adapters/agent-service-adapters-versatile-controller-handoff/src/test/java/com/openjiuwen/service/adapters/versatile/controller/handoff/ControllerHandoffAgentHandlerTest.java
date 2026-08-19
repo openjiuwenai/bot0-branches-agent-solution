@@ -122,7 +122,6 @@ class ControllerHandoffAgentHandlerTest {
         f.setTargetAgentId("/data/target_agent/id");
         p.setSelfAgentId("agent_card_l1");
         p.getTarget().setAllowedAgents(List.of("agent_card_hotel", "agent_card_l1"));
-        p.getTarget().setFixedL1Entry("agent_card_l1");
         return p;
     }
 

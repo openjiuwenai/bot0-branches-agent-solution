@@ -68,6 +68,9 @@ class ControllerHandoffIntegrationTest {
     private HttpServer server;
     private String baseUrl;
     private FakeCaller caller;
+    private final List<String[]> perRequestResponses = new ArrayList<>();
+    private final java.util.concurrent.atomic.AtomicInteger requestCount =
+            new java.util.concurrent.atomic.AtomicInteger();
 
     @BeforeEach
     void setUp() throws Exception {
@@ -84,16 +87,21 @@ class ControllerHandoffIntegrationTest {
 
     private void controllerSays(String... lines) {
         server.createContext("/", exchange -> {
-            byte[] body = String.join("\n", lines).getBytes(StandardCharsets.UTF_8);
+            String[] body = lines;
+            if (!perRequestResponses.isEmpty()) {
+                int index = Math.min(requestCount.getAndIncrement(), perRequestResponses.size() - 1);
+                body = perRequestResponses.get(index);
+            }
+            byte[] bytes = String.join("\n", body).getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
-            exchange.sendResponseHeaders(200, body.length);
+            exchange.sendResponseHeaders(200, bytes.length);
             try (OutputStream out = exchange.getResponseBody()) {
-                out.write(body);
+                out.write(bytes);
             }
         });
     }
 
-    private ControllerHandoffAgentHandler handler() {
+    private ControllerHandoffProperties baseProperties() {
         VersatileProperties versatile = new VersatileProperties();
         versatile.setUrlTemplate(baseUrl + "/v1/p/agents/a/conversations/{conversation_id}");
         versatile.setTimeout(Duration.ofSeconds(5));
@@ -110,14 +118,24 @@ class ControllerHandoffIntegrationTest {
         f.setDedupKey("/data/dedup_key");
         hp.setSelfAgentId("agent_card_l1");
         hp.getTarget().setAllowedAgents(List.of("agent_card_l1", "agent_card_hotel", "agent_card_flight"));
-        hp.getTarget().setFixedL1Entry("agent_card_l1");
         hp.getTarget().setIntentMapping(Map.of("intent_flight", "agent_card_flight"));
+        return hp;
+    }
+
+    private ControllerHandoffAgentHandler handler(ControllerHandoffProperties hp) {
+        VersatileProperties versatile = new VersatileProperties();
+        versatile.setUrlTemplate(baseUrl + "/v1/p/agents/a/conversations/{conversation_id}");
+        versatile.setTimeout(Duration.ofSeconds(5));
         ControllerHandoffExecutor executor = new ControllerHandoffExecutor(caller,
                 new HandoffTargetResolver(hp), new DownstreamEventMapper(), new HandoffLoopGuard(hp),
                 new ControllerHandoffAgentHandlerTest.EmptyProvider<>(), hp);
         return new ControllerHandoffAgentHandler(versatile, new IntentHandoffClassifier(hp),
                 new HandoffLoopGuard(hp),
                 new ControllerHandoffAgentHandlerTest.SingleProvider<>(executor), hp);
+    }
+
+    private ControllerHandoffAgentHandler handler() {
+        return handler(baseProperties());
     }
 
     private ServeRequest request(String content) {
@@ -151,15 +169,36 @@ class ControllerHandoffIntegrationTest {
     }
 
     @Test
-    void l2FallsBackToFixedL1Entry() {
-        // 二级退回一级（spec 3.4 / 7.2）
+    void signalHandoffTypeEmitsNotInScopeEnvelopeWithoutOutboundCall() {
+        // 二级退回一级 upstream-signal（spec 3.4/7.2）：signal 类型不出站，直接回标记信封
+        ControllerHandoffProperties hp = baseProperties();
+        hp.getSignal().setHandoffTypes(List.of("L2_TO_L1"));
         controllerSays(handoffLine("L2_TO_L1", "", "", "", "d2"), "{\"event\":\"end\"}");
         RecordingObserver observer = new RecordingObserver();
-        handler().streamQuery(request("不属于本域"), observer);
-        assertThat(caller.calls).hasSize(1);
-        assertThat(caller.calls.get(0).agentName()).isEqualTo("agent_card_l1");
-        assertThat(caller.calls.get(0).message()).isEqualTo("不属于本域"); // 传递当前用户输入
+        handler(hp).streamQuery(request("不属于本域"), observer);
+        assertThat(caller.calls).isEmpty(); // 无反向调用
         assertThat(observer.completed).isTrue();
+        String payload = String.valueOf(observer.chunks.get(observer.chunks.size() - 1).getData());
+        assertThat(payload).contains(HandoffSignals.TYPE_NOT_IN_SCOPE);
+    }
+
+    @Test
+    void downstreamNotInScopeSignalReRunsControllerForReRecognition() {
+        // L2 应答携带 not-in-scope 标记 → executor 返回 NOT_IN_SCOPE → handler 重跑控制器重新识别
+        perRequestResponses.add(new String[] {
+                handoffLine("L1_TO_L2", "intent_flight", "flight", "", "d4"),
+                "{\"event\":\"end\"}"});
+        perRequestResponses.add(new String[] {"{\"event\":\"end\"}"});
+        controllerSays();
+        caller.outcome = new RemoteCallOutcome("rt-1", TaskState.TASK_STATE_COMPLETED, "COMPLETED",
+                HandoffSignals.notInScopeEnvelope(new IntentHandoff("L2_TO_L1", null, null, null, null, "{}")),
+                null, null);
+        RecordingObserver observer = new RecordingObserver();
+        handler().streamQuery(request("不属于本域"), observer);
+        assertThat(caller.calls).hasSize(1); // 只有一次 L2 出站
+        assertThat(requestCount.get()).isEqualTo(2); // 控制器重跑了一次
+        assertThat(observer.completed).isTrue();
+        assertThat(observer.error).isNull();
     }
 
     @Test

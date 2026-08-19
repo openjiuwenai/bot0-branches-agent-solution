@@ -20,7 +20,6 @@ class HandoffTargetResolverTest {
         ControllerHandoffProperties p = new ControllerHandoffProperties();
         ControllerHandoffProperties.Target t = p.getTarget();
         t.setAllowedAgents(List.of("agent_card_l1", "agent_card_hotel", "agent_card_flight"));
-        t.setFixedL1Entry("agent_card_l1");
         t.setIntentMapping(Map.of("intent_hotel", "agent_card_hotel"));
         t.setDomainMapping(Map.of("flight", "agent_card_flight"));
         return p;
@@ -64,14 +63,6 @@ class HandoffTargetResolverTest {
     }
 
     @Test
-    void fixedL1EntryIsLastResort() {
-        ResolvedTarget t = new HandoffTargetResolver(properties())
-                .resolve(handoff(null, null, null));
-        assertThat(t.agentId()).isEqualTo("agent_card_l1");
-        assertThat(t.source()).isEqualTo(ResolvedTarget.ResolutionSource.FIXED_L1);
-    }
-
-    @Test
     void mappedTargetOutsideAllowlistRejected() {
         ControllerHandoffProperties p = properties();
         p.getTarget().setIntentMapping(Map.of("intent_hotel", "agent_card_rogue"));
@@ -83,9 +74,7 @@ class HandoffTargetResolverTest {
 
     @Test
     void noResolvableTargetYieldsMissing() {
-        ControllerHandoffProperties p = properties();
-        p.getTarget().setFixedL1Entry(null);
-        assertThatThrownBy(() -> new HandoffTargetResolver(p).resolve(handoff(null, null, null)))
+        assertThatThrownBy(() -> new HandoffTargetResolver(properties()).resolve(handoff(null, null, null)))
                 .isInstanceOf(HandoffTargetResolutionException.class)
                 .satisfies(ex -> assertThat(((HandoffTargetResolutionException) ex).getErrorCode())
                         .isEqualTo("VERSATILE_HANDOFF_TARGET_MISSING"));

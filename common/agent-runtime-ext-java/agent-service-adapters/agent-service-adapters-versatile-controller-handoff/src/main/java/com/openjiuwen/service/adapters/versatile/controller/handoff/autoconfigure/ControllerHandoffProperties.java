@@ -38,6 +38,8 @@ public class ControllerHandoffProperties {
 
     private final Target target = new Target();
 
+    private final Signal signal = new Signal();
+
     private final Loop loop = new Loop();
 
     private final LoopTraceMetadata loopTraceMetadata = new LoopTraceMetadata();
@@ -86,6 +88,10 @@ public class ControllerHandoffProperties {
 
     public Target getTarget() {
         return target;
+    }
+
+    public Signal getSignal() {
+        return signal;
     }
 
     public Loop getLoop() {
@@ -226,8 +232,7 @@ public class ControllerHandoffProperties {
 
     public static class Target {
         private List<String> allowedAgents = new ArrayList<>();
-        private String fixedL1Entry;
-        private List<String> resolutionPriority = new ArrayList<>(List.of("direct", "intent", "domain", "fixed-l1"));
+        private List<String> resolutionPriority = new ArrayList<>(List.of("direct", "intent", "domain"));
         private Map<String, String> intentMapping = new LinkedHashMap<>();
         private Map<String, String> domainMapping = new LinkedHashMap<>();
 
@@ -237,14 +242,6 @@ public class ControllerHandoffProperties {
 
         public void setAllowedAgents(List<String> allowedAgents) {
             this.allowedAgents = allowedAgents;
-        }
-
-        public String getFixedL1Entry() {
-            return fixedL1Entry;
-        }
-
-        public void setFixedL1Entry(String fixedL1Entry) {
-            this.fixedL1Entry = fixedL1Entry;
         }
 
         public List<String> getResolutionPriority() {
@@ -269,6 +266,25 @@ public class ControllerHandoffProperties {
 
         public void setDomainMapping(Map<String, String> domainMapping) {
             this.domainMapping = domainMapping;
+        }
+    }
+
+    /**
+     * Upstream signal configuration (二级退回一级): controller handoff types listed
+     * here produce the {@link com.openjiuwen.service.adapters.versatile.controller.handoff.HandoffSignals}
+     * not-in-scope marker instead of any outbound call — the adapter answers its
+     * caller, and re-routing happens upstream (chained L1 re-recognition or caller
+     * decision), never via a reverse L2&rarr;L1 invocation.
+     */
+    public static class Signal {
+        private List<String> handoffTypes = new ArrayList<>();
+
+        public List<String> getHandoffTypes() {
+            return handoffTypes;
+        }
+
+        public void setHandoffTypes(List<String> handoffTypes) {
+            this.handoffTypes = handoffTypes;
         }
     }
 

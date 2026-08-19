@@ -55,6 +55,11 @@ public class DownstreamEventBridge implements RemoteAgentCaller.EventObserver {
         if (text == null || text.isBlank()) {
             return;
         }
+        // not-in-scope 标记信封是协议信号而非业务内容：不透传给最终用户，
+        // 由 executor 在 outcome.result 上检测后走重识别（spec 2.2/4.4）。
+        if (HandoffSignals.isNotInScope(text)) {
+            return;
+        }
         if (current.isCancelled()) {
             CompletableFuture<?> future = futureToCancel;
             if (future != null) {

@@ -1,0 +1,28 @@
+# L1 层：agent_card_l1，对接 mock 控制器 agent_L1_controller。
+# 意图映射：3→agent_card_l2（正常转调）、5→agent_card_dead（目标不可达，端口 9 无 card，
+# 发现失败仅告警重试，调用时报 Unknown remote agent → TARGET_UNAVAILABLE）、
+# 6→agent_card_forbidden（不在 allowed-agents，产出 TARGET_NOT_ALLOWED）。
+# 不配置 fixed-l1-entry：intent 解析失败（如意图 "99"）时产出 TARGET_MISSING。
+# L1 收到下游 not-in-scope 标记信封后重跑自身控制器重新识别（upstream-signal）。
+# 转调出站用运行时默认 A2ARemoteAgentClient + 静态发现：remote-agents 在启动时
+# 拉取对端 /.well-known/agent-card.json 注册进 A2ARemoteAgentCardRegistry。
+openjiuwen:
+  service:
+    agent-id: agent_card_l1
+    a2a:
+      public-url: http://127.0.0.1:${versatile-demo.l1-port}
+      remote-agents:
+        - name: agent_card_l2
+          url: http://127.0.0.1:${versatile-demo.l2-port}
+          streaming: true
+        - name: agent_card_dead
+          url: http://127.0.0.1:9
+    versatile:
+      url-template: http://127.0.0.1:${versatile-demo.l1-port}/v1/proj/agents/agent_L1_controller/conversations/${versatile-demo.conversation-id-placeholder}
+      handoff:
+        self-agent-id: agent_card_l1
+        target:
+          intent-mapping:
+            "3": agent_card_l2
+            "5": agent_card_dead
+            "6": agent_card_forbidden

@@ -10,9 +10,12 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Resolves the downstream agent by priority (default: direct &gt; intent &gt; domain &gt; fixed-l1)
+ * Resolves the downstream agent by priority (default: direct &gt; intent &gt; domain)
  * and validates the allowlist. Mappings are deployment configuration, 1:1 unique by
  * the Map binding — the adapter never performs multi-target load selection (spec 4.4/5.5).
+ * The 二级退回一级 journey is NOT resolved here: handoff types configured in
+ * {@code handoff.signal.handoff-types} produce an upstream not-in-scope signal
+ * ({@link HandoffSignals}) with no outbound call at all.
  *
  * @since 2026-08-19
  */
@@ -30,7 +33,6 @@ public class HandoffTargetResolver {
                 case "direct" -> direct(handoff);
                 case "intent" -> fromMapping(target.getIntentMapping(), handoff.intentId());
                 case "domain" -> fromMapping(target.getDomainMapping(), handoff.businessDomain());
-                case "fixed-l1" -> fixedL1(target);
                 default -> Optional.empty();
             };
             if (candidate.isPresent()) {
@@ -60,16 +62,11 @@ public class HandoffTargetResolver {
         return Optional.ofNullable(mapping.get(key));
     }
 
-    private static Optional<String> fixedL1(ControllerHandoffProperties.Target target) {
-        return Optional.ofNullable(target.getFixedL1Entry()).filter(id -> !id.isBlank());
-    }
-
     private static ResolvedTarget.ResolutionSource sourceOf(String source) {
         return switch (source) {
             case "direct" -> ResolvedTarget.ResolutionSource.DIRECT;
             case "intent" -> ResolvedTarget.ResolutionSource.INTENT_MAPPING;
             case "domain" -> ResolvedTarget.ResolutionSource.DOMAIN_MAPPING;
-            case "fixed-l1" -> ResolvedTarget.ResolutionSource.FIXED_L1;
             default -> throw new IllegalArgumentException("unknown resolution source: " + source);
         };
     }

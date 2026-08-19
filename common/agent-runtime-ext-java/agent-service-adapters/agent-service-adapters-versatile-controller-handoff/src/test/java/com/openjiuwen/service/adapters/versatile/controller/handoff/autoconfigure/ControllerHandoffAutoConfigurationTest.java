@@ -32,7 +32,8 @@ class ControllerHandoffAutoConfigurationTest {
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withPropertyValues(
                     "openjiuwen.service.versatile.url-template=http://localhost:1/v1/p/a/c/{conversation_id}")
-            .withUserConfiguration(ControllerHandoffAutoConfiguration.class)
+            .withUserConfiguration(ControllerHandoffAutoConfiguration.class,
+                    ControllerHandoffHandlerAutoConfiguration.class)
             .withBean("fakeCaller", RemoteAgentCaller.class, FakeCaller::new);
 
     @Test
@@ -80,7 +81,8 @@ class ControllerHandoffAutoConfigurationTest {
                         "openjiuwen.service.versatile.handoff.enabled=true",
                         "openjiuwen.service.versatile.handoff.classify.field-path=/data/code",
                         "openjiuwen.service.versatile.handoff.classify.field-value=14000")
-                .withUserConfiguration(ControllerHandoffAutoConfiguration.class)
+                .withUserConfiguration(ControllerHandoffAutoConfiguration.class,
+                    ControllerHandoffHandlerAutoConfiguration.class)
                 .run(context -> {
                     assertThat(context).hasSingleBean(ControllerHandoffAgentHandler.class);
                     assertThat(context).doesNotHaveBean(ControllerHandoffExecutor.class);

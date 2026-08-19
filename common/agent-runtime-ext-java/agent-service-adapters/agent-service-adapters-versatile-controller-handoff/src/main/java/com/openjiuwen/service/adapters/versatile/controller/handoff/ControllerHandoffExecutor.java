@@ -33,6 +33,11 @@ import java.util.concurrent.TimeoutException;
  * RemoteCallOutcome onto the current observer. Drives the observer to a terminal
  * itself and never emits a "COMPLETED" QueryChunk (spec 2.3/2.4/4.5).
  *
+ * <p>Upstream not-in-scope detection: when the downstream answer carries the
+ * {@link HandoffSignals} marker, the executor drives NOTHING — it returns
+ * {@link ExecResult#NOT_IN_SCOPE} and the handler re-runs its own controller for
+ * re-recognition (二级退回一级 upstream-signal semantics, spec 2.2/4.4).
+ *
  * @since 2026-08-19
  */
 public class ControllerHandoffExecutor {
@@ -60,14 +65,22 @@ public class ControllerHandoffExecutor {
         this.config = config;
     }
 
-    public void execute(IntentHandoff handoff, ServeRequest currentRequest, QueryStreamObserver observer,
+    /** 终态语义：observer 已被驱动到终态，或上游信号需要 handler 重新识别。 */
+    public enum ExecResult {
+        /** observer 已驱动到终态（完成/错误），本次执行结束。 */
+        TERMINAL,
+        /** 下游返回 not-in-scope 标记：observer 未被驱动，handler 应重跑控制器重新识别。 */
+        NOT_IN_SCOPE
+    }
+
+    public ExecResult execute(IntentHandoff handoff, ServeRequest currentRequest, QueryStreamObserver observer,
             RequestHandoffState state) {
         ResolvedTarget target;
         try {
             target = targetResolver.resolve(handoff);
         } catch (HandoffTargetResolutionException ex) {
             toHandoffError(observer, ex.getErrorCode(), ex.getMessage(), null);
-            return;
+            return ExecResult.TERMINAL;
         }
         String dedupKey = handoff.dedupKey() != null && !handoff.dedupKey().isBlank()
                 ? handoff.dedupKey() : deriveDedupKey(handoff);
@@ -78,17 +91,17 @@ public class ControllerHandoffExecutor {
                 handoff.intentId(), handoff.businessDomain(), decision.result());
         switch (decision.result()) {
             case DUPLICATE_MESSAGE -> {
-                return; // 同一执行重复消息：跳过，不报错（spec 3.8）
+                return ExecResult.TERMINAL; // 同一执行重复消息：跳过，不报错（spec 3.8）
             }
             case LOOP_LIMIT -> {
                 toHandoffError(observer, "VERSATILE_HANDOFF_LOOP_LIMIT",
                         "max redirects exceeded target=" + target.agentId(), target.agentId());
-                return;
+                return ExecResult.TERMINAL;
             }
             case DUPLICATE_TARGET -> {
                 toHandoffError(observer, "VERSATILE_HANDOFF_DUPLICATE_TARGET",
                         "target already routed in this execution: " + target.agentId(), target.agentId());
-                return;
+                return ExecResult.TERMINAL;
             }
             default -> { /* ALLOW */
             }
@@ -96,7 +109,15 @@ public class ControllerHandoffExecutor {
 
         RemoteCall call = buildRemoteCall(currentRequest, target.agentId(), decision.metadata());
         DownstreamEventBridge bridge = new DownstreamEventBridge(observer);
-        CompletableFuture<RemoteCallOutcome> future = remoteAgentCaller.callOutcome(call, bridge);
+        CompletableFuture<RemoteCallOutcome> future;
+        try {
+            future = remoteAgentCaller.callOutcome(call, bridge);
+        } catch (RuntimeException ex) {
+            // 默认 A2ARemoteAgentClient 对未注册目标同步抛出（不经 future），同样归一为 TARGET_UNAVAILABLE
+            toHandoffError(observer, "VERSATILE_HANDOFF_TARGET_UNAVAILABLE",
+                    "downstream call failed: " + ex, target.agentId());
+            return ExecResult.TERMINAL;
+        }
         bridge.bindFuture(future);
         RemoteCallOutcome outcome;
         try {
@@ -107,22 +128,29 @@ public class ControllerHandoffExecutor {
             future.cancel(true);
             toHandoffError(observer, "VERSATILE_HANDOFF_TIMEOUT",
                     "downstream call timeout after " + config.getTimeout(), target.agentId());
-            return;
+            return ExecResult.TERMINAL;
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             future.cancel(true);
             toHandoffError(observer, "VERSATILE_HANDOFF_TARGET_UNAVAILABLE",
                     "interrupted while awaiting downstream", target.agentId());
-            return;
+            return ExecResult.TERMINAL;
         } catch (CancellationException ex) {
             log.warn("downstream call cancelled conversation_id={}", currentRequest.getConversationId());
-            return; // 上游取消：停止消费，不再驱动 observer
+            return ExecResult.TERMINAL; // 上游取消：停止消费，不再驱动 observer
         } catch (ExecutionException ex) {
             toHandoffError(observer, "VERSATILE_HANDOFF_TARGET_UNAVAILABLE",
                     "downstream call failed: " + String.valueOf(ex.getCause()), target.agentId());
-            return;
+            return ExecResult.TERMINAL;
         }
 
+        // 上行信号优先于终态归一：下游把"不在范围"作为应答标记返回时，不驱动
+        // observer，交回 handler 重跑控制器重新识别（二级退回一级 upstream-signal）。
+        if (HandoffSignals.isNotInScope(outcome.result())) {
+            log.info("handoff downstream not-in-scope signal target={} conversation_id={}",
+                    target.agentId(), currentRequest.getConversationId());
+            return ExecResult.NOT_IN_SCOPE;
+        }
         DownstreamEventMapper.MappedTerminal terminal = eventMapper.fromOutcome(outcome, target.agentId());
         switch (terminal.action()) {
             case COMPLETE -> {
@@ -139,6 +167,7 @@ public class ControllerHandoffExecutor {
             default -> toHandoffError(observer, "VERSATILE_HANDOFF_RESULT_INVALID",
                     "unmapped terminal action", target.agentId());
         }
+        return ExecResult.TERMINAL;
     }
 
     private void handleInputRequired(QueryStreamObserver observer, ServeRequest request, String targetAgentId,

@@ -81,17 +81,17 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
             throw new IllegalStateException(handoffErrorCode(inbound)
                     + " inbound rejected conversation_id=" + request.getConversationId());
         }
-        ControllerExecution execution = execute(request, null);
-        if (execution.handoffHit() != null) {
-            BufferingObserver buffer = new BufferingObserver();
-            dispatchHandoff(execution.handoffHit(), request, buffer);
-            if (buffer.error != null) {
-                throw new IllegalStateException(String.valueOf(buffer.lastErrorPayload), buffer.error);
-            }
-            return new QueryResponse(assistantResult(buffer.joinedContent()), request.getConversationId());
+        BufferingObserver buffer = new BufferingObserver();
+        List<QueryChunk> finalEvents = runHandoffChain(request, buffer);
+        if (buffer.error != null) {
+            throw new IllegalStateException(String.valueOf(buffer.lastErrorPayload), buffer.error);
         }
-        return new QueryResponse(resolveQueryResult(request, execution.finalEvents()),
-                request.getConversationId());
+        if (finalEvents != null) {
+            return new QueryResponse(resolveQueryResult(request, finalEvents),
+                    request.getConversationId());
+        }
+        // 转调/信号路径：executor 或信号已驱动 observer，聚合其内容作为最终应答
+        return new QueryResponse(assistantResult(buffer.joinedContent()), request.getConversationId());
     }
 
     @Override
@@ -107,17 +107,16 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
             return;
         }
         try {
-            ControllerExecution execution = execute(request, observer);
+            List<QueryChunk> finalEvents = runHandoffChain(request, observer);
             if (observer.isCancelled()) {
                 log.warn("controller-handoff streamQuery cancelled conversation_id={}",
                         request.getConversationId());
                 return;
             }
-            if (execution.handoffHit() != null) {
-                dispatchHandoff(execution.handoffHit(), request, observer);
-                return; // executor/错误路径已驱动 observer 到终态
+            if (finalEvents == null) {
+                return; // 转调/信号/错误路径已驱动 observer 到终态
             }
-            Optional<QueryChunk> terminalError = execution.finalEvents().stream()
+            Optional<QueryChunk> terminalError = finalEvents.stream()
                     .filter(c -> QueryChunk.TYPE_ERROR.equals(c.getType()))
                     .findFirst();
             if (terminalError.isPresent()) {
@@ -197,23 +196,65 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
         }
     }
 
+    /**
+     * 转调链驱动：识别 → 信号命中（上行 not-in-scope 应答）或 executor 出站调用；
+     * 下游返回 not-in-scope 标记时重跑本层控制器重新识别（二级退回一级 upstream-signal，
+     * spec 2.2/4.4），重路由受单请求 redirect/去重状态保护（重复目标即 DUPLICATE_TARGET）。
+     *
+     * @return 无转调命中时的基线终态事件；{@code null} 表示 observer 已被驱动到终态
+     */
+    private List<QueryChunk> runHandoffChain(ServeRequest request, QueryStreamObserver observer) {
+        RequestHandoffState state = new RequestHandoffState();
+        ControllerExecution execution = execute(request, observer);
+        while (execution.handoffHit() != null) {
+            HandoffClassification hit = execution.handoffHit();
+            if (isSignalHandoff(hit)) {
+                log.info("handoff not-in-scope signal emitted conversation_id={} type={} intent={} domain={}",
+                        request.getConversationId(), hit.handoff().handoffType(),
+                        hit.handoff().intentId(), hit.handoff().businessDomain());
+                String envelope = HandoffSignals.notInScopeEnvelope(hit.handoff());
+                observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, envelope));
+                observer.onComplete();
+                return null;
+            }
+            ControllerHandoffExecutor.ExecResult result = dispatchHandoff(hit, request, observer, state);
+            if (result == ControllerHandoffExecutor.ExecResult.NOT_IN_SCOPE) {
+                log.info("handoff downstream not-in-scope, re-running controller conversation_id={}",
+                        request.getConversationId());
+                execution = execute(request, observer);
+                continue;
+            }
+            return null; // executor/错误路径已驱动 observer 到终态
+        }
+        return execution.finalEvents();
+    }
+
+    /** handoff.signal.handoff-types 命中：产出上行信号而非出站调用。 */
+    private boolean isSignalHandoff(HandoffClassification classification) {
+        if (classification.handoff() == null) {
+            return false;
+        }
+        return handoffProperties.getSignal().getHandoffTypes()
+                .contains(classification.handoff().handoffType());
+    }
+
     /** 命中转调后的终态分发：executor 直接驱动 observer（spec 4.2）。 */
-    private void dispatchHandoff(HandoffClassification classification, ServeRequest request,
-            QueryStreamObserver observer) {
+    private ControllerHandoffExecutor.ExecResult dispatchHandoff(HandoffClassification classification,
+            ServeRequest request, QueryStreamObserver observer, RequestHandoffState state) {
         if (classification.outcome() == HandoffClassification.Outcome.CONTRACT_VIOLATION) {
             emitHandoffError(observer, "VERSATILE_HANDOFF_MESSAGE_CONTRACT",
                     "identification hit but required field extraction failed conversation_id="
                             + request.getConversationId());
-            return;
+            return ControllerHandoffExecutor.ExecResult.TERMINAL;
         }
         ControllerHandoffExecutor executor = executorProvider == null ? null : executorProvider.getIfAvailable();
         if (executor == null) {
             emitHandoffError(observer, "VERSATILE_HANDOFF_CALLER_UNAVAILABLE",
                     "no RemoteAgentCaller available for handoff conversation_id="
                             + request.getConversationId());
-            return;
+            return ControllerHandoffExecutor.ExecResult.TERMINAL;
         }
-        executor.execute(classification.handoff(), request, observer, new RequestHandoffState());
+        return executor.execute(classification.handoff(), request, observer, state);
     }
 
     private static String handoffErrorCode(HandoffLoopGuard.GuardResult inbound) {

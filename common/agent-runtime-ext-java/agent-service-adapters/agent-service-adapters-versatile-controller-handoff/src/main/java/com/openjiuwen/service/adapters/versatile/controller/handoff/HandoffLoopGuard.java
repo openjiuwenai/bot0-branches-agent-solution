@@ -21,9 +21,12 @@ import java.util.Map;
  * handoffHopCount/handoffRouteTrace/sourceAgentId. Cross-request detection
  * degrades (warn) when the inbound metadata chain is not populated.
  *
- * <p>Trace semantics: every outbound hop appends <b>self</b> to the trace. When an
- * instance receives a ServeRequest whose trace already contains itself, it is the
- * L2 &rarr; L1 &rarr; same-L2 (or any revisit) loop and is rejected.
+ * <p>Trace semantics: every outbound hop appends <b>self</b> to the trace. An
+ * instance rejects an inbound request when the trace contains itself — it was
+ * already a routing target for this conversation and is being re-targeted
+ * (spec 3.8). The 二级退回一级 journey never appears on the trace: it rides the
+ * upstream not-in-scope signal ({@link HandoffSignals}) on the answer channel,
+ * not a reverse invocation.
  *
  * @since 2026-08-19
  */
