@@ -14,7 +14,7 @@
  *   <li>{@link com.openjiuwen.rdc.controller.InstanceRouteController} — FEAT-016
  *       instance list + {@code POST /route-handle/resolve}</li>
  *   <li>{@link com.openjiuwen.rdc.controller.RegistryApiExceptionHandler} —
- *       Feat-015 {@code @RestControllerAdvice} for discover/register</li>
+ *       {@code @RestControllerAdvice} for discover/register</li>
  *   <li>{@link com.openjiuwen.rdc.controller.InstanceRouteApiExceptionHandler} —
  *       FEAT-016 HTTP mapping for instances/resolve (Feat-Func-016 §7)</li>
  * </ul>

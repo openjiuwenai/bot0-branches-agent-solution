@@ -17,10 +17,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.util.Map;
 
 /**
- * HTTP mapping for Feat-015 registry API failures on {@link MvpRegistryController}.
+ * HTTP mapping for discover/register failures on {@link MvpRegistryController}.
  *
- * <p>FEAT-016 instance/resolve endpoints use {@link InstanceRouteApiExceptionHandler}
- * so Feat-015 {@code TENANT_SCOPE_DENIED} → 403 is unchanged on discover/register.
+ * <p>Instance/resolve endpoints use {@link InstanceRouteApiExceptionHandler}.
+ * {@code TENANT_SCOPE_DENIED} → 403 is unchanged on discover/register.
  *
  * @since 0.1.0 (2026)
  */

@@ -24,8 +24,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
- * FEAT-016 HTTP contract for {@code POST /api/registry/route-handle/resolve}
- * (Feat-Func-016 L2 §7). Internal exception codes stay on Feat-015 names.
+ * HTTP contract for {@code POST /api/registry/route-handle/resolve}
+ * (Feat-Func-016 L2 §7). Internal exception codes are unchanged.
  */
 class InstanceRouteApiExceptionHandlerTest {
     private AgentDiscoveryService discovery;

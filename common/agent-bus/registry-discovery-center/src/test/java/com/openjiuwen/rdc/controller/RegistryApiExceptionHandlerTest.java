@@ -16,25 +16,25 @@ import org.springframework.http.ResponseEntity;
 import java.util.Map;
 
 /**
- * Feat-015 discover/register mapping on {@link RegistryApiExceptionHandler}
- * is unchanged after FEAT-016 gained its own HTTP handler.
+ * Discover/register mapping on {@link RegistryApiExceptionHandler}
+ * is unchanged after instance/resolve gained its own HTTP handler.
  */
 class RegistryApiExceptionHandlerTest {
     private final RegistryApiExceptionHandler handler = new RegistryApiExceptionHandler();
 
     @Test
-    void tenantScopeDeniedStays403OnFeat015Handler() {
+    void tenantScopeDeniedStays403OnDiscoverHandler() {
         ResponseEntity<Map<String, Object>> response = handler.handleRegistryFailure(
-                new TenantIsolationViolationException("tenant-A", "tenant-B", "trace-015"));
+                new TenantIsolationViolationException("tenant-A", "tenant-B", "trace-discover"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(response.getBody()).containsEntry("error", "TENANT_SCOPE_DENIED");
     }
 
     @Test
-    void malformedHandleStays404OnFeat015Handler() {
+    void malformedHandleStays404OnDiscoverHandler() {
         ResponseEntity<Map<String, Object>> response = handler.handleRegistryFailure(
-                new MalformedRouteHandleException("bad handle", "trace-015"));
+                new MalformedRouteHandleException("bad handle", "trace-discover"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(response.getBody()).containsEntry("error", "MALFORMED_ROUTE_HANDLE");

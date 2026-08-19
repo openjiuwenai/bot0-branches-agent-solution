@@ -18,9 +18,9 @@ import java.util.Map;
 /**
  * HTTP mapping for FEAT-016 instance list and route-handle resolve.
  *
- * <p>Internal {@link RegistryFailure#failureCode()} stays on the Feat-015
- * names so exception types are unchanged. This handler only translates the
- * HTTP status and public {@code error} field to Feat-Func-016 §7.
+ * <p>Internal {@link RegistryFailure#failureCode()} is unchanged on the
+ * exception types. This handler only translates the HTTP status and public
+ * {@code error} field for instance/resolve (Feat-Func-016 §7).
  *
  * @since 0.1.0 (2026)
  */
