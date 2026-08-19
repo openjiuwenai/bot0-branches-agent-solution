@@ -22,7 +22,7 @@ import java.util.Optional;
  *
  * @since 2026-06-30
  */
-final class VersatileResponseExtractor {
+public final class VersatileResponseExtractor {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final VersatileProperties properties;
@@ -38,12 +38,12 @@ final class VersatileResponseExtractor {
     private String interruptInputRequirement;
     private String interruptResumeToken;
 
-    VersatileResponseExtractor(VersatileProperties properties, IntentAgentResolver agentResolver) {
+    public VersatileResponseExtractor(VersatileProperties properties, IntentAgentResolver agentResolver) {
         this.properties = Objects.requireNonNull(properties, "properties");
         this.agentResolver = Objects.requireNonNull(agentResolver, "agentResolver");
     }
 
-    List<QueryChunk> consumeLine(String line) {
+    public List<QueryChunk> consumeLine(String line) {
         if (line == null || line.isBlank()) {
             return List.of();
         }
@@ -88,7 +88,7 @@ final class VersatileResponseExtractor {
         return List.of(new QueryChunk(QueryChunk.TYPE_CHUNK, data.get()));
     }
 
-    List<QueryChunk> finish() {
+    public List<QueryChunk> finish() {
         if (pendingInterrupt) {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("message", interruptPrompt);

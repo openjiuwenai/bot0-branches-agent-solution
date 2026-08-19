@@ -23,11 +23,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  * user profile; round-robin cursors are per-{@code intent_id} and in-memory only
  * (reset on process restart).
  */
-final class IntentAgentResolver {
+public final class IntentAgentResolver {
     private final VersatileProperties properties;
     private final Map<String, AtomicInteger> roundRobinCursors = new ConcurrentHashMap<>();
 
-    IntentAgentResolver(VersatileProperties properties) {
+    public IntentAgentResolver(VersatileProperties properties) {
         this.properties = Objects.requireNonNull(properties, "properties");
     }
 
@@ -44,7 +44,7 @@ final class IntentAgentResolver {
      * @return the resolved agentCard path segment, always present
      * @throws IllegalStateException if no agentCard can be resolved for the intent
      */
-    Optional<String> resolve(String intentId, String workflowAgentId) {
+    public Optional<String> resolve(String intentId, String workflowAgentId) {
         if (workflowAgentId != null && !workflowAgentId.isBlank()) {
             return Optional.of(workflowAgentId);
         }

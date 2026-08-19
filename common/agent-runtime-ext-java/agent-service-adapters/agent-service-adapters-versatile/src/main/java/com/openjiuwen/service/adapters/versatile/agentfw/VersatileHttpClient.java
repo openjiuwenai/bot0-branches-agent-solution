@@ -42,7 +42,7 @@ import javax.net.ssl.X509TrustManager;
  *
  * @since 2026-06-30
  */
-final class VersatileHttpClient {
+public final class VersatileHttpClient {
     private static final Logger log = LoggerFactory.getLogger(VersatileHttpClient.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String MASKED_VALUE = "***masked***";
@@ -52,7 +52,7 @@ final class VersatileHttpClient {
     private final HttpClient httpClient;
     private final SSLSocketFactory insecureSslSocketFactory;
 
-    VersatileHttpClient(VersatileProperties properties) {
+    public VersatileHttpClient(VersatileProperties properties) {
         this.properties = properties;
         this.httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
@@ -65,7 +65,7 @@ final class VersatileHttpClient {
         }
     }
 
-    void postStream(VersatileRequestExtractor.RemoteRequest request, LineConsumer consumer)
+    public void postStream(VersatileRequestExtractor.RemoteRequest request, LineConsumer consumer)
             throws IOException, InterruptedException {
         String body = OBJECT_MAPPER.writeValueAsString(request.body());
         String url = withQueryParams(request.url(), request.params());
@@ -242,7 +242,7 @@ final class VersatileHttpClient {
      * @since 2026-06-30
      */
     @FunctionalInterface
-    interface LineConsumer {
+    public interface LineConsumer {
         /**
          * Accepts one decoded response line.
          *
@@ -250,6 +250,6 @@ final class VersatileHttpClient {
          * @throws IOException when line processing fails
          * @throws InterruptedException when line processing is interrupted
          */
-        void accept(String line) throws IOException, InterruptedException;
+        public void accept(String line) throws IOException, InterruptedException;
     }
 }

@@ -25,18 +25,18 @@ import java.util.Set;
  *
  * @since 2026-06-30
  */
-final class VersatileRequestExtractor {
+public final class VersatileRequestExtractor {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
 
     private final VersatileProperties properties;
 
-    VersatileRequestExtractor(VersatileProperties properties) {
+    public VersatileRequestExtractor(VersatileProperties properties) {
         this.properties = Objects.requireNonNull(properties, "properties");
     }
 
-    RemoteRequest extract(ServeRequest request) {
+    public RemoteRequest extract(ServeRequest request) {
         Map<String, Object> sourceBody = mapValue(request.getMetadata().get("body"));
         Map<String, Object> remoteBody = new LinkedHashMap<>(mapValue(sourceBody.get("custom_data")));
         Map<String, Object> inputs = new LinkedHashMap<>(mapValue(remoteBody.get("inputs")));
@@ -290,7 +290,7 @@ final class VersatileRequestExtractor {
     private record SemanticInput(String query, String intent) {
     }
 
-    record RemoteRequest(
+    public record RemoteRequest(
             String url,
             Map<String, String> headers,
             Map<String, String> params,
