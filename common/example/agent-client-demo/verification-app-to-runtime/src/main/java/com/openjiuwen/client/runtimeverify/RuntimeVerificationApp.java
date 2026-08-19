@@ -452,6 +452,10 @@ public final class RuntimeVerificationApp {
             AtomicInteger toolExecutions, boolean observedIncompleteInput)
             throws IOException, InterruptedException {
         run.snapshot = JSON.convertValue(snapshot, Object.class);
+        if (snapshot.callTree() != null) {
+            run.treeSnapshot = snapshot.callTree();
+            run.tree = JSON.convertValue(snapshot.callTree(), Object.class);
+        }
         run.toolExecutions = toolExecutions.get();
         verifyRecoveryContract(run);
         verifyMockWireContract(run);
