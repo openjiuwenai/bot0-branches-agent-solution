@@ -68,13 +68,17 @@ services:
     image: apache/rocketmq:5.3.1
     container_name: agentbus-rocketmq-init
     # 一次性容器:等 broker 注册 nameserver 后,建 8 个 topic 再退出(Exited 0).
+    # 注意:updatetopic 用 -b 直连 broker(rocketmq-broker:10911),而非 -n 走 nameserver 路由.
+    # 原因:broker.conf 里 brokerIP1=127.0.0.1,broker 向 nameserver 注册的地址是 127.0.0.1:10911,
+    # 在 Linux Docker 默认 bridge 网络下,init 容器拿到该地址会指向自己的 loopback 导致连不上 broker.
+    # 改用 -b 直接指定 compose 服务名,跨 Linux/Windows 一致;topicList 仍用 -n(nameserver 服务名可解析).
     entrypoint: /bin/sh
     command:
       - -c
       - |
         sleep 12
         for t in ascend_bus_invocation_req ascend_bus_invocation_deliver ascend_bus_invocation_resp_in ascend_bus_invocation_resp_out ascend_bus_a2a_req ascend_bus_a2a_deliver ascend_bus_a2a_resp_in ascend_bus_a2a_resp_out; do
-          sh /home/rocketmq/rocketmq-5.3.1/bin/mqadmin updatetopic -n rocketmq-nameserver:9876 -c DefaultCluster -t "$$t" && echo "created $$t"
+          sh /home/rocketmq/rocketmq-5.3.1/bin/mqadmin updatetopic -b rocketmq-broker:10911 -c DefaultCluster -t "$$t" && echo "created $$t"
         done
         echo "=== topic list ==="
         sh /home/rocketmq/rocketmq-5.3.1/bin/mqadmin topicList -n rocketmq-nameserver:9876 | grep ascend_bus || true
