@@ -254,7 +254,15 @@ public class BusForwarder {
             InvocationResponseStatus folded = FiveStateFolder.fold(event.eventType());
             if (FiveStateFolder.isTerminal(folded) || folded == InvocationResponseStatus.REJECTED
                     || folded == InvocationResponseStatus.FAILED) {
-                return Optional.of(statusBody(folded, event.taskId(), event.body()));
+                // Faithful passthrough: if the runtime attached a complete JSON-RPC response (a2aResponse,
+                // e.g. the -32004 error the bus-side built for a terminal / not-subscribable
+                // SubscribeToTask), surface it verbatim — unify with DIRECT, where the runtime's HTTP
+                // SubscribeToTask returns the error as-is. Otherwise fall back to the synthesized body.
+                String body = event.body();
+                if (body != null && body.startsWith("{\"jsonrpc\"")) {
+                    return Optional.of(body);
+                }
+                return Optional.of(statusBody(folded, event.taskId(), body));
             }
         }
         return Optional.of(statusBody(InvocationResponseStatus.FAILED, null,
