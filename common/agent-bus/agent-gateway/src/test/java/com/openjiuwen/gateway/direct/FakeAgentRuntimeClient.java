@@ -135,4 +135,14 @@ public class FakeAgentRuntimeClient implements AgentRuntimeClient {
         }
         return new ArrayList<>(frames).stream();
     }
+
+    @Override
+    public String getTask(String endpointUrl, String taskId, String tenantId, Integer historyLength) {
+        this.lastEndpoint = endpointUrl;
+        this.lastBody = "{\"jsonrpc\":\"2.0\",\"method\":\"GetTask\",\"params\":{\"id\":\""
+                + taskId + "\",\"tenant\":\"" + tenantId + "\""
+                + (historyLength != null ? ",\"historyLength\":" + historyLength : "")
+                + "}}";
+        return response;
+    }
 }

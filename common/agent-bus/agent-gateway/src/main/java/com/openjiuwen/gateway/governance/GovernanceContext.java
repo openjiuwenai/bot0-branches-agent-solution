@@ -27,6 +27,7 @@ public class GovernanceContext {
     private String contextId;
     private String rawBody;
     private String idempotencyFingerprint;
+    private Integer historyLength;
 
     /**
      * Get trace correlation id.
@@ -207,5 +208,23 @@ public class GovernanceContext {
      */
     public void setIdempotencyFingerprint(String idempotencyFingerprint) {
         this.idempotencyFingerprint = idempotencyFingerprint;
+    }
+
+    /**
+     * Get the optional GetTask history length (v0830 S6).
+     *
+     * @return history length, or {@code null} if not specified
+     */
+    public Integer historyLength() {
+        return historyLength;
+    }
+
+    /**
+     * Set the optional GetTask history length.
+     *
+     * @param historyLength history length (may be null)
+     */
+    public void setHistoryLength(Integer historyLength) {
+        this.historyLength = historyLength;
     }
 }

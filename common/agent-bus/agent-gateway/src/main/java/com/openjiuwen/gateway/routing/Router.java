@@ -9,14 +9,17 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.openjiuwen.gateway.direct.AgentRuntimeClient;
-import com.openjiuwen.gateway.governance.GovernanceContext;
 import com.openjiuwen.gateway.governance.GovernanceException;
+import com.openjiuwen.gateway.governance.ErrorCodes;
+import com.openjiuwen.gateway.governance.MethodResultException;
+import com.openjiuwen.gateway.governance.GovernanceContext;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 
@@ -68,7 +71,7 @@ public class Router {
             throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "ROUTE_NO_CANDIDATES",
                     "No routable instance for agent " + effectiveAgentId);
         }
-        AgentCardRoute chosen = candidates.get(0);
+        AgentCardRoute chosen = selectByWeight(candidates);
         ResolvedRoute resolved;
         try {
             resolved = rdc.resolveRouteHandle(chosen.routeHandle(), ctx.tenantId());
@@ -79,7 +82,7 @@ public class Router {
         String outbound = injectTenantId(ctx.rawBody(), ctx.tenantId());
         String response = runtime.invokeSync(resolved.endpointUrl(), outbound);
         extractTaskId(response).filter(s -> !s.isBlank()).ifPresent(
-                taskId -> stickyIndex.put(taskId, chosen.routeHandle()));
+                taskId -> stickyIndex.put(taskId, chosen.routeHandle(), chosen.targetServiceId()));
         return response;
     }
 
@@ -100,7 +103,7 @@ public class Router {
             throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "ROUTE_NO_CANDIDATES",
                     "No routable instance for agent " + effectiveAgentId);
         }
-        AgentCardRoute chosen = candidates.get(0);
+        AgentCardRoute chosen = selectByWeight(candidates);
         ResolvedRoute resolved;
         try {
             resolved = rdc.resolveRouteHandle(chosen.routeHandle(), ctx.tenantId());
@@ -117,7 +120,7 @@ public class Router {
                         .filter(s -> !s.isBlank())
                         .ifPresent(taskId -> {
                             if (stickyWritten.compareAndSet(false, true)) {
-                                stickyIndex.put(taskId, chosen.routeHandle());
+                                stickyIndex.put(taskId, chosen.routeHandle(), chosen.targetServiceId());
                             }
                         });
             }
@@ -139,8 +142,8 @@ public class Router {
     public Stream<String> routeResumeStream(GovernanceContext ctx) {
         String taskId = ctx.taskId();
         String routeHandle = stickyIndex.find(taskId)
-                .orElseThrow(() -> new GovernanceException(HttpStatus.NOT_FOUND, "RESUME_OWNER_UNKNOWN",
-                        "No sticky owner for task " + taskId));
+                .orElseThrow(() -> new MethodResultException(ErrorCodes.CONTINUATION_FAILED,
+                        "no sticky owner for task " + taskId, null));
         ResolvedRoute resolved;
         try {
             resolved = rdc.resolveRouteHandle(routeHandle, ctx.tenantId());
@@ -164,8 +167,8 @@ public class Router {
     public String routeResume(GovernanceContext ctx) {
         String taskId = ctx.taskId();
         String routeHandle = stickyIndex.find(taskId)
-                .orElseThrow(() -> new GovernanceException(HttpStatus.NOT_FOUND, "RESUME_OWNER_UNKNOWN",
-                        "No sticky owner for task " + taskId));
+                .orElseThrow(() -> new MethodResultException(ErrorCodes.CONTINUATION_FAILED,
+                        "no sticky owner for task " + taskId, null));
         ResolvedRoute resolved;
         try {
             resolved = rdc.resolveRouteHandle(routeHandle, ctx.tenantId());
@@ -178,19 +181,67 @@ public class Router {
     }
 
     /**
-     * Inject the authoritative tenant into {@code params.metadata.tenantId} (AC-RT-1 / GW-RT-10).
+     * Route a GetTask query to its Task owner via the sticky index (v0830 S6,
+     * FEAT-011 L2 §8.1). Read-only: no Task creation, no Agent execution.
+     * Sticky miss → CONTINUATION_FAILED (task owner not found).
+     * Runtime -32001 (task not found) passed through in the body.
+     *
+     * @param ctx governance context (tenantId, taskId)
+     * @return the runtime response body (Task snapshot or JSON-RPC error -32001)
+     */
+    public String routeGet(GovernanceContext ctx) {
+        String taskId = ctx.taskId();
+        String routeHandle = stickyIndex.find(taskId)
+                .orElseThrow(() -> new MethodResultException(ErrorCodes.CONTINUATION_FAILED,
+                        "no sticky owner for task " + taskId, null));
+        ResolvedRoute resolved;
+        try {
+            resolved = rdc.resolveRouteHandle(routeHandle, ctx.tenantId());
+        } catch (RouteResolutionException ex) {
+            throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "ROUTE_RESOLVE_FAILED",
+                    "Cannot resolve route handle", ex);
+        }
+        return runtime.getTask(resolved.endpointUrl(), taskId, ctx.tenantId(), ctx.historyLength());
+    }
+
+    /**
+     * Route a SubscribeToTask re-subscription to the Task owner via the sticky index
+     * (v0830 S8 direct, FEAT-011 L2 §8.3). Sticky miss → CONTINUATION_FAILED.
+     * Opens SSE to runtime's standard SubscribeToTask entry (no streamRef for direct path).
+     *
+     * @param ctx governance context (tenantId, taskId, rawBody)
+     * @return lazy stream of SSE data payloads (runtime SubscribeToTask SSE)
+     */
+    public Stream<String> routeSubscribe(GovernanceContext ctx) {
+        String taskId = ctx.taskId();
+        String routeHandle = stickyIndex.find(taskId)
+                .orElseThrow(() -> new MethodResultException(ErrorCodes.CONTINUATION_FAILED,
+                        "no sticky owner for task " + taskId, null));
+        ResolvedRoute resolved;
+        try {
+            resolved = rdc.resolveRouteHandle(routeHandle, ctx.tenantId());
+        } catch (RouteResolutionException ex) {
+            throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "ROUTE_RESOLVE_FAILED",
+                    "Cannot resolve route handle", ex);
+        }
+        String outbound = injectTenantId(ctx.rawBody(), ctx.tenantId());
+        return runtime.openStream(resolved.endpointUrl(), outbound);
+    }
+
+    /**
+     * Inject the authoritative tenant into {@code params.tenant} (AC-RT-1 / GW-RT-10,
+     * v0830 — runtime expects {@code params.tenant}, NOT {@code params.metadata.tenantId}).
      *
      * @param rawBody  original JSON-RPC body
      * @param tenantId authoritative tenant from G2
-     * @return body with {@code params.metadata.tenantId} set, or the original body if not an object
+     * @return body with {@code params.tenant} set, or the original body if not an object
      */
     String injectTenantId(String rawBody, String tenantId) {
         try {
             JsonNode root = mapper.readTree(rawBody);
             if (root.isObject()) {
                 ObjectNode params = withObject(root, "params");
-                ObjectNode metadata = withObject(params, "metadata");
-                metadata.put("tenantId", tenantId);
+                params.put("tenant", tenantId);
                 return mapper.writeValueAsString(root);
             }
             return rawBody;
@@ -238,5 +289,32 @@ public class Router {
     private static Optional<String> text(JsonNode parent, String field) {
         JsonNode node = parent.path(field);
         return (node.isMissingNode() || node.isNull()) ? Optional.empty() : Optional.of(node.asText());
+    }
+
+    /**
+     * Weighted load-balancing selection from RDC candidates (supplement info 1,
+     * v0830). Picks one instance with probability proportional to its weight,
+     * not always the first. Weight ≤0 is treated as 1 (excluded is RDC's job).
+     *
+     * @param candidates non-empty list from RDC (caller checks empty)
+     * @return the selected instance
+     */
+    public static AgentCardRoute selectByWeight(List<AgentCardRoute> candidates) {
+        if (candidates.size() == 1) {
+            return candidates.get(0);
+        }
+        int total = 0;
+        for (AgentCardRoute c : candidates) {
+            total += Math.max(c.weight(), 1);
+        }
+        int pick = ThreadLocalRandom.current().nextInt(total);
+        int acc = 0;
+        for (AgentCardRoute c : candidates) {
+            acc += Math.max(c.weight(), 1);
+            if (pick < acc) {
+                return c;
+            }
+        }
+        return candidates.get(candidates.size() - 1);
     }
 }
