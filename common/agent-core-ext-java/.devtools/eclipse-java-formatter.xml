@@ -12,6 +12,7 @@
     <setting id="org.eclipse.jdt.core.formatter.tabulation.size" value="4"/>
     <setting id="org.eclipse.jdt.core.formatter.indentation.size" value="4"/>
     <setting id="org.eclipse.jdt.core.formatter.lineSplit" value="120"/>
+    <setting id="org.eclipse.jdt.core.formatter.alignment_for_enum_constants" value="49"/>
     <setting id="org.eclipse.jdt.core.formatter.comment.format_javadoc_comments" value="false"/>
     <setting id="org.eclipse.jdt.core.formatter.comment.format_block_comments" value="false"/>
     <setting id="org.eclipse.jdt.core.formatter.comment.format_line_comments" value="false"/>
