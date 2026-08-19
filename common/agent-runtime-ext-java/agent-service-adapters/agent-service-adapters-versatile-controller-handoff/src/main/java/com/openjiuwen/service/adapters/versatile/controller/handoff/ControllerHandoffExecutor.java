@@ -125,7 +125,15 @@ public class ControllerHandoffExecutor {
 
         DownstreamEventMapper.MappedTerminal terminal = eventMapper.fromOutcome(outcome, target.agentId());
         switch (terminal.action()) {
-            case COMPLETE -> observer.onComplete();
+            case COMPLETE -> {
+                // 非流式调用没有增量事件，终答只存在于 outcome.result：作为业务内容下发。
+                // 流式调用的内容由 bridge 事件承载，这里不重复下发（spec 2.4）。
+                if (!call.isCallerStreaming()
+                        && outcome.result() != null && !outcome.result().isBlank()) {
+                    observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, outcome.result()));
+                }
+                observer.onComplete();
+            }
             case INPUT_REQUIRED -> handleInputRequired(observer, currentRequest, target.agentId(), outcome);
             case ERROR -> toHandoffError(observer, terminal.errorCode(), terminal.detail(), target.agentId());
             default -> toHandoffError(observer, "VERSATILE_HANDOFF_RESULT_INVALID",

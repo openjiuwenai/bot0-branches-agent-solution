@@ -148,6 +148,21 @@ class ControllerHandoffExecutorTest {
     }
 
     @Test
+    void nonStreamCompletedOutcomeForwardsResultAsChunk() {
+        FakeCaller caller = new FakeCaller();
+        ServeRequest nonStream = request();
+        nonStream.setStream(false);
+        assertThat(caller.lastCall).isNull();
+        RecordingObserver observer = new RecordingObserver();
+        executor(caller, properties()).execute(handoff(), nonStream, observer, new RequestHandoffState());
+        assertThat(caller.lastCall.isCallerStreaming()).isFalse();
+        assertThat(observer.chunks).hasSize(1); // 非流式终答经 result 下发，而非 COMPLETED chunk
+        assertThat(observer.chunks.get(0).getType()).isEqualTo(QueryChunk.TYPE_CHUNK);
+        assertThat(observer.chunks.get(0).getData()).isEqualTo("down answer");
+        assertThat(observer.completed).isTrue();
+    }
+
+    @Test
     void inputRequiredDefaultGatedToUnsupportedFailure() {
         FakeCaller caller = new FakeCaller();
         caller.outcome = new RemoteCallOutcome("rt-9", TaskState.TASK_STATE_INPUT_REQUIRED,
