@@ -10,6 +10,7 @@ import com.openjiuwen.client.api.InvocationEvent;
 import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.api.InvocationSnapshot;
 import com.openjiuwen.client.api.ObservationTimeoutException;
+import com.openjiuwen.client.api.RetryPolicy;
 import com.openjiuwen.client.api.TaskState;
 import com.openjiuwen.client.api.calltree.CallTreeSnapshot;
 import com.openjiuwen.client.transport.spi.CallTreeTransportProvider;
@@ -98,16 +99,6 @@ public class A2aHttpTransportProvider
      */
     private static final Duration DEFAULT_BLOCKING_OBSERVATION_TIMEOUT = Duration.ofMinutes(10);
 
-    /**
-     * 有效非终态快照之间的查询间隔；不限制有效 WORKING 返回次数。
-     */
-    private static final Duration DEFAULT_BLOCKING_POLL_INTERVAL = Duration.ofMillis(500);
-
-    /**
-     * UNKNOWN 恢复的最大重发次数（含首次恢复尝试）。耗尽后投递进展不确定，不无限重试。
-     */
-    private static final int MAX_CREATE_RECOVERY_ATTEMPTS = 3;
-    private static final int MAX_OBSERVATION_RECOVERY_FAILURES = 3;
     private static final int MAX_COMPLETED_TREES = 256;
 
     private final URI endpoint;
@@ -117,7 +108,7 @@ public class A2aHttpTransportProvider
     private final ScheduledExecutorService scheduler;
     private final Duration sseIdleTimeout;
     private final Duration blockingObservationTimeout;
-    private final Duration blockingPollInterval;
+    private final RetryPolicy retryPolicy;
     private final EndpointPolicy endpointPolicy;
 
     private final ConcurrentMap<String, Channel> byInvocationRef = new ConcurrentHashMap<>();
@@ -173,17 +164,28 @@ public class A2aHttpTransportProvider
 
     A2aHttpTransportProvider(String baseUrl, ObjectMapper mapper, Duration sseIdleTimeout,
             EndpointPolicy endpointPolicy) {
+        this(baseUrl, mapper, sseIdleTimeout, endpointPolicy, RetryPolicy.defaults());
+    }
+
+    A2aHttpTransportProvider(String baseUrl, ObjectMapper mapper, Duration sseIdleTimeout,
+            EndpointPolicy endpointPolicy, RetryPolicy retryPolicy) {
         this(baseUrl, mapper, sseIdleTimeout, endpointPolicy,
-                DEFAULT_BLOCKING_OBSERVATION_TIMEOUT, DEFAULT_BLOCKING_POLL_INTERVAL);
+                DEFAULT_BLOCKING_OBSERVATION_TIMEOUT, retryPolicy);
     }
 
     A2aHttpTransportProvider(String baseUrl, ObjectMapper mapper, Duration sseIdleTimeout,
             EndpointPolicy endpointPolicy, Duration blockingObservationTimeout, Duration blockingPollInterval) {
+        this(baseUrl, mapper, sseIdleTimeout, endpointPolicy,
+                blockingObservationTimeout, retryPolicyForInterval(blockingPollInterval));
+    }
+
+    A2aHttpTransportProvider(String baseUrl, ObjectMapper mapper, Duration sseIdleTimeout,
+            EndpointPolicy endpointPolicy, Duration blockingObservationTimeout, RetryPolicy retryPolicy) {
         String normalized = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.endpoint = URI.create(normalized.endsWith("/a2a") ? normalized : normalized + "/a2a");
         this.sseIdleTimeout = sseIdleTimeout;
         this.blockingObservationTimeout = blockingObservationTimeout;
-        this.blockingPollInterval = blockingPollInterval;
+        this.retryPolicy = java.util.Objects.requireNonNull(retryPolicy, "retryPolicy");
         this.endpointPolicy = endpointPolicy;
         this.io = new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
                 new SynchronousQueue<>(), daemonFactory("a2a-transport-io"));
@@ -193,6 +195,13 @@ public class A2aHttpTransportProvider
                 .executor(io)
                 .build();
         this.codec = new A2aJsonCodec(mapper);
+    }
+
+    private static RetryPolicy retryPolicyForInterval(Duration interval) {
+        return RetryPolicy.builder()
+                .initialDelay(interval)
+                .maxDelay(interval.multipliedBy(4L))
+                .build();
     }
 
     static Duration defaultIdleTimeout() {
@@ -809,7 +818,7 @@ public class A2aHttpTransportProvider
                         }
                         return;
                     }
-                    scheduleBlockingPoll(ch, snapshotRef, observationResult, blockingPollInterval.toMillis());
+                    scheduleBlockingPoll(ch, snapshotRef, observationResult, retryDelayMillis(1));
                 });
     }
 
@@ -824,7 +833,7 @@ public class A2aHttpTransportProvider
             return;
         }
         int failures = ++ch.observationFailures;
-        if (failures >= MAX_OBSERVATION_RECOVERY_FAILURES) {
+        if (failures >= retryPolicy.maxConsecutiveFailures()) {
             Throwable exhausted = classified != null ? failure : A2aTransportException.network(
                     "automatic GetTask observation failed " + failures + " times: "
                             + rootMessage(failure), failure);
@@ -834,8 +843,7 @@ public class A2aHttpTransportProvider
             failStream(ch, exhausted);
             return;
         }
-        long delay = blockingPollInterval.toMillis() * (1L << (failures - 1));
-        scheduleBlockingPoll(ch, snapshotRef, observationResult, delay);
+        scheduleBlockingPoll(ch, snapshotRef, observationResult, retryDelayMillis(failures));
     }
 
     /**
@@ -1097,7 +1105,7 @@ public class A2aHttpTransportProvider
     private void onSubscriptionFailure(Channel ch, String reason, Throwable failure) {
         if (endpointPolicy.type() == com.openjiuwen.client.api.EndpointType.RUNTIME && ch.taskRef != null) {
             ch.recovering.set(false);
-            if (++ch.observationFailures >= MAX_OBSERVATION_RECOVERY_FAILURES) {
+            if (++ch.observationFailures >= retryPolicy.maxConsecutiveFailures()) {
                 publishUncertain(ch, reason + "; recovery failed " + ch.observationFailures
                         + " times: " + rootMessage(failure), ErrorCodes.RECOVERY_RETRY_EXHAUSTED);
                 return;
@@ -1115,17 +1123,16 @@ public class A2aHttpTransportProvider
             return;
         }
         int attempts = ++ch.observationFailures;
-        if (attempts >= MAX_OBSERVATION_RECOVERY_FAILURES) {
+        if (attempts >= retryPolicy.maxConsecutiveFailures()) {
             publishUncertain(ch, reason + "; recovery failed " + attempts + " times: " + rootMessage(failure),
                     ErrorCodes.RECOVERY_RETRY_EXHAUSTED);
             return;
         }
-        long delay = 200L * (1L << (attempts - 1));
         ch.recoveryFuture = scheduler.schedule(() -> {
             if (!ch.terminal.get()) {
                 beginDisconnectRecovery(ch, reason);
             }
-        }, delay, TimeUnit.MILLISECONDS);
+        }, retryDelayMillis(attempts), TimeUnit.MILLISECONDS);
     }
 
     private void pollTask(Channel ch, String reason) {
@@ -1144,9 +1151,13 @@ public class A2aHttpTransportProvider
             markRecoveredTree(ch);
             if (!projectQueriedState(ch, snap)) {
                 ch.recoveryFuture = scheduler.schedule(
-                        () -> beginDisconnectRecovery(ch, reason), 200L, TimeUnit.MILLISECONDS);
+                        () -> beginDisconnectRecovery(ch, reason), retryDelayMillis(1), TimeUnit.MILLISECONDS);
             }
         });
+    }
+
+    private long retryDelayMillis(int consecutiveFailure) {
+        return retryPolicy.delayForFailure(consecutiveFailure).toMillis();
     }
 
     private boolean recordTaskObservationSuccess(Channel ch, InvocationSnapshot snapshot) {
@@ -1229,12 +1240,11 @@ public class A2aHttpTransportProvider
      * @param attempt 当前尝试序号，从 1 开始
      */
     private void recoverUnconfirmedCreate(Channel ch, String reason, int attempt) {
-        if (attempt > MAX_CREATE_RECOVERY_ATTEMPTS) {
+        if (attempt > retryPolicy.maxConsecutiveFailures()) {
             publishUncertain(ch, reason + "; idempotent create retry exhausted after "
-                    + MAX_CREATE_RECOVERY_ATTEMPTS + " attempts");
+                    + retryPolicy.maxConsecutiveFailures() + " attempts");
             return;
         }
-        long backoffMs = 200L * (1L << (attempt - 1));
         scheduler.schedule(() -> {
             ch.recoveryAttempt = attempt;
             // 重发前释放在途守卫：本次重发若再次中断，仍能进入下一轮恢复。
@@ -1246,7 +1256,7 @@ public class A2aHttpTransportProvider
             } else {
                 startUnaryCreate(ch, ch.createBody, ch.credential);
             }
-        }, backoffMs, TimeUnit.MILLISECONDS);
+        }, retryDelayMillis(attempt), TimeUnit.MILLISECONDS);
     }
 
     /**

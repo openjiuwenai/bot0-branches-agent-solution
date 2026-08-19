@@ -20,6 +20,7 @@ import com.openjiuwen.client.api.InvocationCall;
 import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.api.InvocationRequest;
 import com.openjiuwen.client.api.InvocationSnapshot;
+import com.openjiuwen.client.api.RetryPolicy;
 import com.openjiuwen.client.api.calltree.Completeness;
 import com.openjiuwen.client.api.calltree.SpeakingPhase;
 import com.openjiuwen.client.transport.spi.CredentialProvider;
@@ -378,6 +379,84 @@ class EndpointAndCallTreeTest {
             assertEquals("RECOVERY_RETRY_EXHAUSTED",
                     failure.getCause() instanceof com.openjiuwen.client.api.ClassifiedError classified
                             ? classified.code() : null);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void builderPropagatesConfiguredRecoveryFailureLimit() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        HttpServer server = server(exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            if (calls.getAndIncrement() == 0) {
+                sse(exchange, frame("1", delegation("root-configured", "agent-a", "root-configured",
+                        "agent-b", "task-b")));
+            } else {
+                serviceUnavailable(exchange);
+            }
+        });
+        RetryPolicy retryPolicy = RetryPolicy.builder()
+                .initialDelay(java.time.Duration.ofMillis(5))
+                .maxDelay(java.time.Duration.ofMillis(10))
+                .maxConsecutiveFailures(1)
+                .build();
+        try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
+                .endpointUrl(url(server)).retryPolicy(retryPolicy).build()) {
+            InvocationCall call = client.invoke(InvocationRequest.builder().conversationId("configured")
+                    .mode(InvocationMode.STREAMING).input("hello").build());
+            ExecutionException failure = assertThrows(ExecutionException.class,
+                    () -> call.completion().toCompletableFuture().get(5, TimeUnit.SECONDS));
+
+            assertEquals(2, calls.get());
+            assertTrue(failure.getCause().getMessage().contains("recovery failed 1 times"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void builderPropagatesConfiguredRecoveryInterval() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        java.util.concurrent.atomic.AtomicLong workingResponseNanos = new java.util.concurrent.atomic.AtomicLong();
+        java.util.concurrent.atomic.AtomicLong nextRetryNanos = new java.util.concurrent.atomic.AtomicLong();
+        HttpServer server = server(exchange -> {
+            JsonNode request = MAPPER.readTree(exchange.getRequestBody().readAllBytes());
+            String method = request.path("method").asText();
+            int call = calls.getAndIncrement();
+            if (call == 0) {
+                sse(exchange, frame("1", delegation("root-interval", "agent-a", "root-interval",
+                        "agent-b", "task-b")));
+            } else if (call == 1) {
+                serviceUnavailable(exchange);
+            } else if (call == 2) {
+                workingResponseNanos.set(System.nanoTime());
+                json(exchange, directTaskResponse("root-interval", "TASK_STATE_WORKING", "working"));
+            } else if (call == 3) {
+                nextRetryNanos.set(System.nanoTime());
+                serviceUnavailable(exchange);
+            } else if ("GetTask".equals(method)) {
+                json(exchange, directTaskResponse("root-interval", "TASK_STATE_COMPLETED", "done"));
+            } else {
+                serviceUnavailable(exchange);
+            }
+        });
+        RetryPolicy retryPolicy = RetryPolicy.builder()
+                .initialDelay(java.time.Duration.ofMillis(400))
+                .maxDelay(java.time.Duration.ofMillis(800))
+                .maxConsecutiveFailures(3)
+                .build();
+        try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
+                .endpointUrl(url(server)).retryPolicy(retryPolicy).build()) {
+            InvocationSnapshot snapshot = client.invoke(InvocationRequest.builder().conversationId("interval")
+                    .mode(InvocationMode.STREAMING).input("hello").build())
+                    .completion().toCompletableFuture().get(5, TimeUnit.SECONDS);
+
+            long retryDelayMillis = TimeUnit.NANOSECONDS.toMillis(
+                    nextRetryNanos.get() - workingResponseNanos.get());
+            assertEquals("done", snapshot.outputText());
+            assertTrue(retryDelayMillis >= 300L,
+                    "configured 400ms recovery interval must reach the transport; actual=" + retryDelayMillis);
         } finally {
             server.stop(0);
         }

@@ -256,12 +256,21 @@ SUBMITTED → WORKING → INPUT_REQUIRED → COMPLETED
 
 ### 1. 构造 `AgentClient`
 
-唯一必填项是 `transport`（决定 wire 协议与网关地址）。连接真实网关时还需 `credentialProvider`。
+使用内置 A2A Transport 时，唯一必填项是 `endpointUrl`。连接真实网关时还需
+`credentialProvider`；也可以通过 `transport(...)` 完整替换内置 Transport。
 
 ```java
 AgentClient client = AgentClients.builder()
-        .transport(new A2aHttpTransportProvider("https://agent-bus.example.com"))
+        .endpointType(EndpointType.GATEWAY)
+        .endpointUrl("https://agent-bus.example.com")
         .credentialProvider(CredentialProvider.staticToken("my-token"))
+        .retryPolicy(RetryPolicy.builder()
+                .initialDelay(Duration.ofMillis(200))
+                .maxDelay(Duration.ofMillis(800))
+                .multiplier(2.0)
+                .jitterFactor(0.2)
+                .maxConsecutiveFailures(3)
+                .build())
         // 以下均有默认值，按需覆盖：
         // .toolRegistry(...)        // 默认空实现
         // .stateStore(...)          // 默认内存实现
@@ -592,7 +601,13 @@ boolean retryable = ClassifiedError.retryableOf(throwable);
 | 处于 `INPUT_REQUIRED` | 服务端按约定关流，保持通道开放等待续跑，不做任何处置 |
 | 其余非终态 | 先用 `GetTask` 主动查询确认真实状态；能确定就据此投影（多数断连由此完全恢复） |
 | 查询也无法确定 | 投递 `ProgressUncertain` 事件并正常结算，**不伪造终态也不悬挂** |
-| 尚未取得 taskRef（创建未确认） | 以同幂等键、同正文重发创建（最多 3 次），由网关幂等回放取回原 Task，不产生重复 Task |
+| 尚未取得 taskRef（创建未确认） | 以同幂等键、同正文按 `RetryPolicy` 有界重发创建，由网关幂等回放取回原 Task，不产生重复 Task |
+
+`RetryPolicy.defaults()` 保持 FEAT-006 默认语义：连续失败上限为 3，按
+200ms、400ms、800ms 指数退避。`initialDelay`、`maxDelay`、`multiplier`、
+`jitterFactor` 和 `maxConsecutiveFailures` 均可配置；该策略同时用于周期性
+`GetTask`、SSE 重订阅和 Gateway 创建结果未确认恢复。确定性错误不会重试，
+任一次合法 Task 状态或有效订阅帧会重置连续失败计数。
 
 `ProgressUncertain` 不是失败。`completion()` 返回的快照会附带 `Recovery` 线索，告诉业务下一步：
 

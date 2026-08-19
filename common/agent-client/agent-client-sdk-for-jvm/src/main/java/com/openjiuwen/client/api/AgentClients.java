@@ -61,6 +61,7 @@ public final class AgentClients {
         private CredentialProvider credentialProvider;
         private EndpointType endpointType = EndpointType.GATEWAY;
         private String endpointUrl;
+        private RetryPolicy retryPolicy = RetryPolicy.defaults();
 
         /**
          * 设置传输提供者（必填，决定 wire 协议与网关地址）。
@@ -92,6 +93,21 @@ public final class AgentClients {
          */
         public Builder endpointUrl(String v) {
             this.endpointUrl = v;
+            return this;
+        }
+
+        /**
+         * 设置内置 A2A Transport 的链路异常恢复策略。
+         *
+         * <p>该配置控制 GetTask 周期性重试、SSE 重订阅、连续失败熔断和 Gateway
+         * 幂等创建恢复。使用自定义 {@link #transport(TransportProvider)} 时应由自定义
+         * Transport 自行应用恢复策略。
+         *
+         * @param v 重试策略
+         * @return Builder
+         */
+        public Builder retryPolicy(RetryPolicy v) {
+            this.retryPolicy = Objects.requireNonNull(v, "retryPolicy");
             return this;
         }
 
@@ -177,8 +193,8 @@ public final class AgentClients {
                     throw new NullPointerException("transport or endpointUrl must be provided");
                 }
                 resolvedTransport = endpointType == EndpointType.RUNTIME
-                        ? new RuntimeTransportProvider(endpointUrl)
-                        : new GatewayTransportProvider(endpointUrl);
+                        ? new RuntimeTransportProvider(endpointUrl, retryPolicy)
+                        : new GatewayTransportProvider(endpointUrl, retryPolicy);
             }
             LocalToolRegistry reg = (registry != null) ? registry : new DefaultToolRegistry();
             ClientStateStore store = (stateStore != null) ? stateStore : new InMemoryStateStore();
