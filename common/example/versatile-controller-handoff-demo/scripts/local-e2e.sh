@@ -221,7 +221,7 @@ main() {
   assert_log_contains "s2-l1-caller" "$LOG_DIR/layer1.log" "A2A call agent=agent_card_l2"
   assert_log_contains "s2-l2-received" "$LOG_DIR/layer2.log" "conversation_id=c2-handoff"
   # mock 在信号帧前发送生产形态的意图回显帧（无 summary 键）：应被整行抑制且不报错
-  assert_log_contains "s2-echo-suppressed" "$LOG_DIR/layer1.log" "handoff classify hit but required field"
+  assert_log_contains "s2-echo-suppressed" "$LOG_DIR/layer1.log" "handoff classify hit but no usable resolution source"
   assert_log_not_contains "s2-no-contract-error" "$LOG_DIR/layer1.log" "VERSATILE_HANDOFF_MESSAGE_CONTRACT"
 
   echo

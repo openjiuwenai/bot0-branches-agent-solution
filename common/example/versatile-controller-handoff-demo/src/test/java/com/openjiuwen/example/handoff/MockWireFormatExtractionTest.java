@@ -65,8 +65,6 @@ class MockWireFormatExtractionTest {
         handoff.setClassify(classify);
         handoff.getFields().setHandoffType("/data/node_name");
         handoff.getFields().setIntentId("/data/summary");
-        handoff.getFields().setBusinessDomain("/data/node_name");
-        handoff.getFields().setTargetAgentId("/data/node_name");
         handoff.getFields().setDedupKey("/createdTime");
         IntentHandoffClassifier classifer = new IntentHandoffClassifier(handoff);
 
@@ -90,8 +88,10 @@ class MockWireFormatExtractionTest {
         assertThat(notInScope.outcome()).isEqualTo(HandoffClassification.Outcome.HANDOFF);
         assertThat(notInScope.handoff().intentId()).isEqualTo("不在范围");
 
-        // 生产意图回显帧（text 带值、summary 键缺失）：识别命中但提取路径缺失 →
-        // IGNORED 整行抑制（不处理、不透传、不报错）
+        // 生产意图回显帧（text 带值、summary 键缺失）：识别命中但三个解析来源全无
+        // 非空值 → IGNORED 整行抑制（不处理、不透传、不报错；2026-08-20 三选一契约）
+        // 注意勿将 business-domain/target-agent-id 配置为 node_name 等恒有值的路径——
+        // 新契约下非空即算可用来源，会让回显帧误判 HANDOFF
         HandoffClassification echo =
                 classifer.classify("data: {\"event\":\"message\",\"data\":{\"text\":\"3\","
                         + "\"node_id\":\"node_1787129452975\",\"node_type\":\"QA\",\"node_name\":\"意图返回\","

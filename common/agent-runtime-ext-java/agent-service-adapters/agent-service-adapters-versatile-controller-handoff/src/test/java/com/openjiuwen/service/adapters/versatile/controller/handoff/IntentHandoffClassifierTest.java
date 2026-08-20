@@ -116,6 +116,54 @@ class IntentHandoffClassifierTest {
     }
 
     @Test
+    void handoffWhenSingleResolutionSourcePresent() {
+        // 生产报文只携带本次解析用到的字段（如仅 summary 意图值，无 domain/target 键）：
+        // 三个解析来源（intent/domain/direct）任一非空即 HANDOFF（2026-08-20 确认，
+        // 对齐 HandoffTargetResolver 的 resolution-priority 语义）
+        HandoffClassification result = new IntentHandoffClassifier(properties()).classify(
+                "{\"data\":{\"code\":14000,\"handoff_type\":\"L1_TO_L2\",\"intent_id\":\"intent_hotel\"}}");
+        assertThat(result.outcome()).isEqualTo(HandoffClassification.Outcome.HANDOFF);
+        assertThat(result.handoff().businessDomain()).isNull();
+        assertThat(result.handoff().targetAgentId()).isNull();
+    }
+
+    @Test
+    void missingHandoffTypeNoLongerBlocksHandoff() {
+        // handoff-type 改为可选：路径缺失置 null，signal.handoff-types 匹配自然不命中
+        HandoffClassification result = new IntentHandoffClassifier(properties()).classify(
+                "{\"data\":{\"code\":14000,\"intent_id\":\"i\",\"domain\":\"hotel\"}}");
+        assertThat(result.outcome()).isEqualTo(HandoffClassification.Outcome.HANDOFF);
+        assertThat(result.handoff().handoffType()).isNull();
+    }
+
+    @Test
+    void allResolutionSourcesBlankOrMissingIgnored() {
+        // 识别命中但三个解析来源全空（键缺失或空串）：无可解析目标，整行 IGNORED
+        // （WARN 可观测）——含默认回复等 QA 帧被宽松识别条件误命中的场景
+        HandoffClassification allBlank = new IntentHandoffClassifier(properties()).classify(
+                "{\"data\":{\"code\":14000,\"handoff_type\":\"T\",\"intent_id\":\"\","
+                        + "\"domain\":\"\",\"target_agent\":{\"id\":\"\"}}}");
+        assertThat(allBlank.outcome()).isEqualTo(HandoffClassification.Outcome.IGNORED);
+
+        HandoffClassification blankAndMissing = new IntentHandoffClassifier(properties()).classify(
+                "{\"data\":{\"code\":14000,\"intent_id\":\"\"}}");
+        assertThat(blankAndMissing.outcome()).isEqualTo(HandoffClassification.Outcome.IGNORED);
+    }
+
+    @Test
+    void signalHandoffTypeBypassesResolutionSourceGate() {
+        // signal.handoff-types 命中的类型（如 L2 退回一级）不出站、无需解析目标：
+        // 三个来源全空仍判 HANDOFF（upstream-signal 语义，spec 3.4）
+        ControllerHandoffProperties p = properties();
+        p.getSignal().setHandoffTypes(List.of("L2_TO_L1"));
+        HandoffClassification result = new IntentHandoffClassifier(p).classify(
+                "{\"data\":{\"code\":14000,\"handoff_type\":\"L2_TO_L1\",\"intent_id\":\"\","
+                        + "\"domain\":\"\",\"target_agent\":{\"id\":\"\"}}}");
+        assertThat(result.outcome()).isEqualTo(HandoffClassification.Outcome.HANDOFF);
+        assertThat(result.handoff().handoffType()).isEqualTo("L2_TO_L1");
+    }
+
+    @Test
     void missingDedupKeyIsNotContractViolation() {
         HandoffClassification result = new IntentHandoffClassifier(properties()).classify(
                 "{\"data\":{\"code\":14000,\"handoff_type\":\"L1_TO_L2\",\"intent_id\":\"i\","

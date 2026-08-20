@@ -101,11 +101,15 @@ openjiuwen:
 `message` 样例：`/data/node_name` ∈ `[意图返回, 不在范围]`、
 `/data/summary` 为意图 id（如 `"3"`）、顶层 `/createdTime` 为 dedup-key。
 
-识别命中但必要字段提取路径**缺失**（键不存在，如生产 SSE 的意图回显帧：
-`text` 带值、无 `summary` 键）→ 该行整行抑制（WARN 日志可观测）：不处理、
-不透传给最终用户、不产出 `MESSAGE_CONTRACT` 报错（2026-08-19 客户现场确认）。
-注意空串值视为字段在场——非本次解析来源的字段合法为空（如 direct 目标为空、
-由 intent 映射解析）。
+识别命中后按**三选一非空**判定转调成立：`intent-id` / `business-domain` /
+`target-agent-id` 三个解析来源任一提取到非空值即可（生产报文只携带本次
+解析用到的字段，对齐 `resolution-priority` 语义）。三者全缺失或全空串
+（如生产 SSE 的意图回显帧：`text` 带值、无 `summary` 键；或宽松识别条件
+误命中的普通 QA 回复帧）→ 该行整行抑制（WARN 日志可观测）：不处理、
+不透传给最终用户、不产出 `MESSAGE_CONTRACT` 报错（2026-08-19 客户现场
+确认；2026-08-20 由全路径必填放宽为三选一非空）。`handoff-type` 为可选
+（路径缺失置 null，signal 匹配自然不命中）；命中 `signal.handoff-types`
+的转调类型不受三选一约束——signal 不出站、无需解析目标。
 
 ### 上行信号（signal）
 

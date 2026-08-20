@@ -36,8 +36,6 @@ openjiuwen:
         fields:
           handoff-type: /data/node_name
           intent-id: /data/summary
-          business-domain: /data/node_name
-          target-agent-id: /data/node_name
           dedup-key: /createdTime
         target:
           # direct 不参与解析：真实报文无独立目标字段（target-agent-id 与 node_name 同路径，仅提取不使用）
