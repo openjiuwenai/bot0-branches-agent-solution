@@ -191,6 +191,16 @@ def create_app(config: AdapterConfig) -> FastAPI:
     pipelines = _build_pipelines(config)
     agent_clients = _build_agent_clients(config)
     skill_store = build_skill_store(config)
+    skillhub_service = None
+    if config.skillhub_enabled:
+        from agent_adapter.skillhub import SkillHubService
+
+        skillhub_service = SkillHubService(config=config, skill_store=skill_store)
+        logger.info(
+            "skillhub_integration_enabled",
+            base_url=config.skillhub_base_url,
+            auth_mode=config.skillhub_auth_mode,
+        )
 
     # Managed-doc service: registry validates restart configs at build time
     # (raises on misconfigured restart doc without health_url/agent_url — spec D4).
@@ -209,6 +219,7 @@ def create_app(config: AdapterConfig) -> FastAPI:
     app.state.pipelines = pipelines
     app.state.agent_clients = agent_clients
     app.state.skill_store = skill_store
+    app.state.skillhub_service = skillhub_service
     app.state.managed_doc_service = managed_doc_service
     app.state.pipeline = next(iter(pipelines.values())) if pipelines else None  # backward compat
     app.state.poll_task: asyncio.Task | None = None
