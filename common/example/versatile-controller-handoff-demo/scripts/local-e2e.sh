@@ -12,22 +12,24 @@
 #     (handoff.signal.handoff-types): L2 answers its caller with the
 #     not-in-scope marker envelope — no outbound call (upstream-signal).
 #
-# Handoff calls go A2A JSON-RPC (POST /a2a) peer-to-peer via the default
-# A2ARemoteAgentClient; loop-trace metadata
-# (handoffHopCount/handoffRouteTrace/sourceAgentId) rides the A2A metadata
-# as the spec's 循环保护（跨请求）journey requires.
+# Handoff outbound is delegated to the runtime coordinator: the handler emits a
+# single-item a2a_delegate interrupt (resume=true) and the coordinator performs
+# the A2A JSON-RPC call (POST /a2a), persists the shadow task and re-invokes the
+# handler with runtime.remoteToolResults once the remote batch settles;
+# loop-trace metadata (handoffHopCount/handoffRouteTrace/sourceAgentId) rides
+# the A2A metadata as the spec's 循环保护（跨请求）journey requires.
 #
 # Journeys (L2 spec §7.2, one scenario each):
 #   1  一级命中本地工作流        default query        → 本地答案, 无转调调用
-#   2  一级转调二级              query 转调            → 意图返回 "3" → agent_card_l2 → 二级答案
-#   3  二级退回一级重新路由      query 退回            → L2 not-in-scope 标记 → L1 重识别 → 本地答案
+#   2  一级转调二级              query 转调            → 意图返回 "3" → a2a_delegate 中断 → 协调器 → 二级答案
+#   3  二级退回一级重新路由      query 退回            → L2 not-in-scope 信封 → re-invoke 重识别 → 本地答案
 #   4  控制器返回真正异常        query 异常            → FEAT-002 错误映射 FAILED
 #   5  转调消息缺少目标信息      query 无目标          → VERSATILE_HANDOFF_TARGET_MISSING
 #   6  未授权目标               query 越权            → VERSATILE_HANDOFF_TARGET_NOT_ALLOWED
 #   7  目标调用失败              query 不可达          → VERSATILE_HANDOFF_TARGET_UNAVAILABLE
-#   8  下游请求用户输入(未启用)  query 补充信息        → VERSATILE_HANDOFF_CROSS_AGENT_RESUME_UNSUPPORTED
-#   9  循环保护（同请求）        query 循环            → L1 重识别仍转调同目标 → DUPLICATE_TARGET
-#   10 调用超时                 query 超时            → VERSATILE_HANDOFF_TIMEOUT (handoff.timeout=3s, L2 sleeps 10s)
+#   8  下游请求用户输入          query 补充信息        → 中断呈现（message=请补充入住日期, toolCallId=handoff:agent_card_l2:*）
+#   9  循环保护（弹回后同目标）  query 循环            → re-invoke 仍转调弹回目标 → DUPLICATE_TARGET
+#   10 调用超时                 query 超时            → VERSATILE_HANDOFF_TIMEOUT (timeout-seconds=3, L2 sleeps 10s)
 #
 # Usage:
 #   ./scripts/local-e2e.sh              # build if needed, run all scenarios
@@ -215,8 +217,9 @@ main() {
   echo "==================== 场景2: 一级转调二级 (intent=3 → agent_card_l2) ===================="
   resp=$(send_query "c2-handoff" "帮我转调订机票")
   echo "    response: $(echo "$resp" | head -c 400)"
+  # 非流式：中断 → 协调器出站 → re-invoke 终答直通（remoteToolResults.joinedResults）
   assert_contains "s2-l2-answer" "$resp" "二级本域业务答案"
-  assert_log_contains "s2-l1-outbound" "$LOG_DIR/layer1.log" "handoff outbound target=agent_card_l2 source=INTENT_MAPPING"
+  assert_log_contains "s2-l1-interrupt" "$LOG_DIR/layer1.log" "handoff delegate interrupt emitted.*target=agent_card_l2"
   assert_log_contains "s2-l1-caller" "$LOG_DIR/layer1.log" "A2A call agent=agent_card_l2"
   assert_log_contains "s2-l2-received" "$LOG_DIR/layer2.log" "conversation_id=c2-handoff"
   # mock 在信号帧前发送生产形态的意图回显帧（无 summary 键）：应被整行抑制且不报错
@@ -228,6 +231,7 @@ main() {
   local sse
   sse=$(send_query_sse "c2b-handoff-stream" "帮我转调订机票")
   echo "    sse: $(echo "$sse" | head -c 400)"
+  # 流式：远端内容经协调器投影为 REMOTE_AGENT_OUTPUT（content 包裹）
   assert_contains "s2b-stream-answer" "$sse" "二级本域业务答案"
 
   echo
@@ -237,9 +241,9 @@ main() {
   assert_contains "s3-final-local-answer" "$resp" "一级本地业务答案"
   # L2 识别"不在范围"后不出站调用，直接回 not-in-scope 标记信封（upstream-signal）
   assert_log_contains "s3-l2-signal-emitted" "$LOG_DIR/layer2.log" "handoff not-in-scope signal emitted"
-  assert_log_not_contains "s3-l2-no-outbound" "$LOG_DIR/layer2.log" "handoff outbound target="
-  # L1 检测到标记后重跑自身控制器重新识别
-  assert_log_contains "s3-l1-re-recognition" "$LOG_DIR/layer1.log" "handoff downstream not-in-scope, re-running controller"
+  assert_log_not_contains "s3-l2-no-outbound" "$LOG_DIR/layer2.log" "handoff delegate interrupt emitted"
+  # L1 re-invoke 入口检测到标记信封后重跑自身控制器重新识别
+  assert_log_contains "s3-l1-re-recognition" "$LOG_DIR/layer1.log" "handoff remote not-in-scope envelope detected, re-running controller"
   # L1 同一会话被控制器执行两次：首次转调、二次本地命中
   local l1_count
   l1_count=$(grep -c "Mock controller agentId=agent_L1_controller conversationId=c3-bounce" "$LOG_DIR/layer1.log" || true)
@@ -264,47 +268,48 @@ main() {
   sse=$(send_query_sse "c5-missing" "无目标：意图没有映射")
   echo "    sse: $(echo "$sse" | head -c 500)"
   assert_contains "s5-target-missing" "$sse" "VERSATILE_HANDOFF_TARGET_MISSING"
-  assert_log_contains "s5-log-code" "$LOG_DIR/layer1.log" "handoff failed code=VERSATILE_HANDOFF_TARGET_MISSING"
+  assert_log_contains "s5-log-code" "$LOG_DIR/layer1.log" "handoff path failed code=VERSATILE_HANDOFF_TARGET_MISSING"
 
   echo
   echo "==================== 场景6: 未授权目标 (intent=6 → agent_card_forbidden) ===================="
   sse=$(send_query_sse "c6-forbidden" "越权：目标不在允许范围")
   echo "    sse: $(echo "$sse" | head -c 500)"
   assert_contains "s6-not-allowed" "$sse" "VERSATILE_HANDOFF_TARGET_NOT_ALLOWED"
-  assert_log_contains "s6-log-code" "$LOG_DIR/layer1.log" "handoff failed code=VERSATILE_HANDOFF_TARGET_NOT_ALLOWED"
+  assert_log_contains "s6-log-code" "$LOG_DIR/layer1.log" "handoff path failed code=VERSATILE_HANDOFF_TARGET_NOT_ALLOWED"
 
   echo
   echo "==================== 场景7: 目标调用失败 (intent=5 → dead port) ===================="
   sse=$(send_query_sse "c7-unreachable" "不可达：目标端口不通")
   echo "    sse: $(echo "$sse" | head -c 500)"
   assert_contains "s7-unavailable" "$sse" "VERSATILE_HANDOFF_TARGET_UNAVAILABLE"
-  assert_log_contains "s7-log-code" "$LOG_DIR/layer1.log" "handoff failed code=VERSATILE_HANDOFF_TARGET_UNAVAILABLE"
-  assert_log_contains "s7-unknown-agent" "$LOG_DIR/layer1.log" "Unknown remote agent: agent_card_dead"
+  assert_log_contains "s7-log-code" "$LOG_DIR/layer1.log" "handoff path failed code=VERSATILE_HANDOFF_TARGET_UNAVAILABLE"
+  assert_log_contains "s7-unknown-agent" "$LOG_DIR/layer1.log" "agent_card_dead"
 
   echo
-  echo "==================== 场景8: 下游请求用户输入（续接能力未启用） ===================="
+  echo "==================== 场景8: 下游请求用户输入（中断呈现，可续接） ===================="
   sse=$(send_query_sse "c8-input-required" "补充信息：下游要问用户")
-  echo "    sse: $(echo "$sse" | head -c 600)"
-  assert_contains "s8-resume-unsupported" "$sse" "VERSATILE_HANDOFF_CROSS_AGENT_RESUME_UNSUPPORTED"
-  assert_log_contains "s8-log-code" "$LOG_DIR/layer1.log" "handoff failed code=VERSATILE_HANDOFF_CROSS_AGENT_RESUME_UNSUPPORTED"
+  echo "    sse: $(echo "$sse" | head -c 800)"
+  # L2 基线 need_user_input 中断经 A2A 回传，协调器以 publicInterrupt 形状呈现客户端
+  assert_contains "s8-input-prompt" "$sse" "请补充入住日期"
+  assert_contains "s8-toolcall-prefix" "$sse" "handoff:agent_card_l2:"
   assert_log_contains "s8-l2-interrupt" "$LOG_DIR/layer2.log" "A2A interrupt detected.*c8-input-required"
 
   echo
-  echo "==================== 场景9: 循环保护（重识别后同目标反复转调） ===================="
+  echo "==================== 场景9: 循环保护（弹回后重识别仍转调同目标） ===================="
   sse=$(send_query_sse "c9-loop" "循环：二级始终不在范围")
   echo "    sse: $(echo "$sse" | head -c 500)"
-  # L2 回 not-in-scope 标记 → L1 重识别仍转调同一目标 → 单请求重复目标防环报错
+  # L2 回 not-in-scope 信封 → L1 re-invoke 重识别仍转调同一（已弹回）目标 → 防环报错
   assert_contains "s9-duplicate-target" "$sse" "VERSATILE_HANDOFF_DUPLICATE_TARGET"
-  assert_log_contains "s9-log-code" "$LOG_DIR/layer1.log" "handoff failed code=VERSATILE_HANDOFF_DUPLICATE_TARGET"
+  assert_log_contains "s9-log-code" "$LOG_DIR/layer1.log" "handoff path failed code=VERSATILE_HANDOFF_DUPLICATE_TARGET"
   # L2 只收到一次转调，且自身从不出站（upstream-signal 无反向调用）
-  assert_log_not_contains "s9-l2-no-outbound" "$LOG_DIR/layer2.log" "handoff outbound target="
+  assert_log_not_contains "s9-l2-no-outbound" "$LOG_DIR/layer2.log" "handoff delegate interrupt emitted"
 
   echo
-  echo "==================== 场景10: 调用超时 (handoff.timeout=3s, L2 延迟 10s) ===================="
+  echo "==================== 场景10: 调用超时 (timeout-seconds=3, L2 延迟 10s) ===================="
   sse=$(send_query_sse "c10-timeout" "超时：下游睡 10 秒")
   echo "    sse: $(echo "$sse" | head -c 500)"
   assert_contains "s10-timeout" "$sse" "VERSATILE_HANDOFF_TIMEOUT"
-  assert_log_contains "s10-log-code" "$LOG_DIR/layer1.log" "handoff failed code=VERSATILE_HANDOFF_TIMEOUT"
+  assert_log_contains "s10-log-code" "$LOG_DIR/layer1.log" "handoff path failed code=VERSATILE_HANDOFF_TIMEOUT"
 
   echo
   echo "==> All §7.2 journeys passed."

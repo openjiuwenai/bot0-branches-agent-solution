@@ -82,22 +82,29 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
         log.info("Handling controller-handoff query conversation_id={} stream={} user_id={} tenant_id={} messages={}",
                 request.getConversationId(), request.isStream(), request.getUserId(),
                 request.getTenantId(), request.getMessages().size());
-        HandoffLoopGuard.GuardResult inbound = loopGuard.checkInbound(request);
-        if (inbound != HandoffLoopGuard.GuardResult.ALLOW) {
-            throw new IllegalStateException(handoffErrorCode(inbound)
-                    + " inbound rejected conversation_id=" + request.getConversationId());
-        }
+        // re-invoke 轮（remoteToolResults 在场）是自身委派的续接：metadata 上的 trace
+        // 三键为本实例出站前写入（协调器 buildBatchResumeRequest 保留），含 self 属
+        // 预期，不得判为回环重入——inbound guard 只作用于全新入站请求（设计稿 4.5）
         RemoteToolResults remote = RemoteToolResults.parse(request);
+        if (remote == null) {
+            HandoffLoopGuard.GuardResult inbound = loopGuard.checkInbound(request);
+            if (inbound != HandoffLoopGuard.GuardResult.ALLOW) {
+                throw new IllegalStateException(handoffErrorCode(inbound)
+                        + " inbound rejected conversation_id=" + request.getConversationId());
+            }
+        }
         if (remote != null) {
             if (remote.failure() != null) {
                 throw new IllegalStateException(remote.failure().errorCode()
                         + " remote invocation failed: " + remote.failure().detail());
             }
             if (!remote.hasNotInScopeEnvelope()) {
-                // happy-path re-invoke：非流式终答直通；流式内容已由协调器投影
+                // happy-path re-invoke：非流式终答直通
                 return new QueryResponse(assistantResult(remote.joinedResults()),
                         request.getConversationId());
             }
+            log.info("handoff remote not-in-scope envelope detected, re-running controller conversation_id={}",
+                    request.getConversationId());
         }
         List<QueryChunk> finalEvents = runHandoffChain(request, null,
                 remote == null ? Set.of() : remote.bouncedTargets());
@@ -110,14 +117,16 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
         log.info("Handling controller-handoff streamQuery conversation_id={} stream={} user_id={} tenant_id={} messages={}",
                 request.getConversationId(), request.isStream(), request.getUserId(),
                 request.getTenantId(), request.getMessages().size());
-        HandoffLoopGuard.GuardResult inbound = loopGuard.checkInbound(request);
-        if (inbound != HandoffLoopGuard.GuardResult.ALLOW) {
-            emitHandoffError(observer, handoffErrorCode(inbound),
-                    "inbound route-trace rejected: " + inbound
-                            + " conversation_id=" + request.getConversationId());
-            return;
-        }
         RemoteToolResults remote = RemoteToolResults.parse(request);
+        if (remote == null) {
+            HandoffLoopGuard.GuardResult inbound = loopGuard.checkInbound(request);
+            if (inbound != HandoffLoopGuard.GuardResult.ALLOW) {
+                emitHandoffError(observer, handoffErrorCode(inbound),
+                        "inbound route-trace rejected: " + inbound
+                                + " conversation_id=" + request.getConversationId());
+                return;
+            }
+        }
         if (remote != null) {
             if (remote.failure() != null) {
                 emitHandoffError(observer, remote.failure().errorCode(), remote.failure().detail());

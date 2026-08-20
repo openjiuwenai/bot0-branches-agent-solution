@@ -223,4 +223,22 @@ class ControllerHandoffAgentHandlerTest {
                 .contains("VERSATILE_HANDOFF_DUPLICATE_TARGET");
         assertThat(observer.error).isNotNull();
     }
+
+    @Test
+    void reInvokeCarryingSelfTraceIsNotRejectedAsInboundLoop() {
+        // re-invoke（remoteToolResults 在场）是自身委派的续接轮：request.metadata 上的
+        // trace 三键是本实例出站前写入的（协调器 buildBatchResumeRequest 保留），
+        // 含 self 属预期——不得判为回环重入（迁移设计稿 4.5）
+        controllerResponds("{\"event\":\"end\"}");
+        RecordingObserver observer = new RecordingObserver();
+        ServeRequest r = request("订机票");
+        r.getMetadata().put("handoffHopCount", 1);
+        r.getMetadata().put("handoffRouteTrace", List.of("agent_card_l1"));
+        r.getMetadata().put("sourceAgentId", "agent_card_l1");
+        r.getMetadata().put("runtime.remoteToolResults",
+                Map.of("handoff:agent_card_flight:abc", "二级答案"));
+        handler(handoffProperties()).streamQuery(r, observer);
+        assertThat(observer.completed).isTrue();
+        assertThat(observer.error).isNull();
+    }
 }

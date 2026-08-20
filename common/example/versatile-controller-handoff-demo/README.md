@@ -11,32 +11,37 @@ FEAT-002「Versatile 控制器意图转调消息路由」的场景旅程验收 e
   -> layer1 runtime :18091 (profiles: layer1,mock-controller)
        agent_card_l1 + ControllerHandoffAgentHandler -> mock agent_L1_controller
        意图转调 (event=message, node_name=意图返回, data.summary=意图id)
-         -> intent-mapping 解析 -> A2A -> layer2
+         -> intent-mapping 解析 -> 单 item a2a_delegate 中断 (resume=true)
+         -> runtime 协调器出站 A2A 调用 layer2（shadow task 持久化/remoteTaskId 续调）
   -> layer2 runtime :18092 (profiles: layer2,mock-controller)
        agent_card_l2 + ControllerHandoffAgentHandler -> mock agent_L2_controller
        不在范围 (node_name=不在范围)
          -> handoff.signal.handoff-types 命中 -> 不出站调用，
             直接返回 {"type":"versatile_handoff_not_in_scope",...} 标记信封
-       layer1 executor 检测标记 -> 重跑本层控制器重新识别（无反向 L2→L1 调用）
+       layer1 re-invoke (runtime.remoteToolResults) 检测标记
+         -> 重跑本层控制器重新识别（无反向 L2→L1 调用）
 ```
 
-出站调用使用运行时默认 `A2ARemoteAgentClient` + 静态发现
-（`openjiuwen.service.a2a.remote-agents` 启动时拉取对端 `/.well-known/agent-card.json`）。
+出站调用由 runtime 协调器执行（`RemoteInvocationBatchCoordinator`）：handler 产出
+`a2a_delegate` 中断后，协调器经 `A2ARemoteAgentClient` + 静态发现
+（`openjiuwen.service.a2a.remote-agents` 启动时拉取对端 `/.well-known/agent-card.json`）
+发起调用；remote 批 settle 后以 `resume=true` 重新进入 handler，结果在
+`runtime.remoteToolResults` metadata 中（信封重识别 / REMOTE_* 失败码映射 / 终答直通）。
 
 ## 场景（scripts/local-e2e.sh，对应 L2 §7.2）
 
 | # | query 关键字 | 旅程 |
 |---|--------------|------|
 | 1 | （默认） | 一级命中本地工作流，无转调 |
-| 2 | 转调 | 一级转调二级（intent=3 → agent_card_l2），2b 为流式 |
-| 3 | 退回 | L2 not-in-scope 信号 → L1 重识别 → 本地答案 |
+| 2 | 转调 | 一级转调二级（intent=3 → agent_card_l2），2b 为流式（REMOTE_AGENT_OUTPUT 投影） |
+| 3 | 退回 | L2 not-in-scope 信封 → L1 re-invoke 重识别 → 本地答案 |
 | 4 | 异常 | 控制器真正异常走 FEAT-002 错误映射 |
 | 5 | 无目标 | intent=99 未映射 → `VERSATILE_HANDOFF_TARGET_MISSING` |
 | 6 | 越权 | 目标不在 allowed-agents → `VERSATILE_HANDOFF_TARGET_NOT_ALLOWED` |
-| 7 | 不可达 | 目标未注册 → `VERSATILE_HANDOFF_TARGET_UNAVAILABLE` |
-| 8 | 补充信息 | 下游 INPUT_REQUIRED 且续接未启用 → `VERSATILE_HANDOFF_CROSS_AGENT_RESUME_UNSUPPORTED` |
-| 9 | 循环 | L1 重识别仍转调同目标 → `VERSATILE_HANDOFF_DUPLICATE_TARGET` |
-| 10 | 超时 | 下游延迟 10s 超 handoff.timeout=3s → `VERSATILE_HANDOFF_TIMEOUT` |
+| 7 | 不可达 | 目标未注册 → 协调器 REMOTE 失败映射 `VERSATILE_HANDOFF_TARGET_UNAVAILABLE` |
+| 8 | 补充信息 | L2 INPUT_REQUIRED 经 A2A 回传 → 中断呈现（`请补充入住日期` + `handoff:agent_card_l2:` 前缀 toolCallId），客户端续接走 runtime 中断机制 |
+| 9 | 循环 | L2 弹回后 re-invoke 重识别仍转调同目标 → `VERSATILE_HANDOFF_DUPLICATE_TARGET` |
+| 10 | 超时 | 下游延迟 10s 超 remote-agents `timeout-seconds=3` → REMOTE_TIMEOUT 映射 `VERSATILE_HANDOFF_TIMEOUT` |
 
 ## 运行
 
@@ -67,7 +72,8 @@ SKIP_BUILD=1 ./scripts/local-e2e.sh
   `createdTime` 作 dedup-key，重识别后的再次转调不会被误判为重复消息）。
 - `application-layer2.yml`：`handoff.signal.handoff-types: [不在范围]` ——
   upstream-signal 语义，二级退回一级不出站调用。
-- `application-layer1.yml`：`intent-mapping`（3→l2 / 5→dead / 6→forbidden）。
+- `application-layer1.yml`：`intent-mapping`（3→l2 / 5→dead / 6→forbidden）与
+  remote-agents `timeout-seconds: 3`（agent_card_l2，场景 10 超时语义）。
 - mock 控制器（`mock-controller` profile）按 `inputs.query` 关键字选场景，
   同会话计数驱动"退回"场景第二次调用返回本地答案。
 
