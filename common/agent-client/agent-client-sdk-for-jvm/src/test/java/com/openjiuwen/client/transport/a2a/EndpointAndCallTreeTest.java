@@ -53,16 +53,18 @@ class EndpointAndCallTreeTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Test
-    void runtimePolicyDropsAllAttributesButKeepsClientTools() {
+    void runtimePolicyKeepsTraceAttributesAndDropsOtherAttributes() {
         ToolWireSpec tool = new ToolWireSpec("lookup", "lookup data", "{\"type\":\"object\"}");
         TransportProvider.CreateCommand source = new TransportProvider.CreateCommand(
                 "inv", "inv", "key", "ctx", "agent-a", InvocationMode.ASYNC, "hello",
                 List.of(tool), "secret", null,
-                Map.of("traceId", "trace-1", "tenant_id", "tenant-a", "routingAgent", "agent-b"));
+                Map.of("traceId", "trace-1", "correlationId", "correlation-1",
+                        "tenant_id", "tenant-a", "routingAgent", "agent-b"));
 
         TransportProvider.CreateCommand projected = RuntimeEndpointPolicy.INSTANCE.createCommand(source);
 
-        assertTrue(projected.attributes().isEmpty());
+        assertEquals(Map.of("traceId", "trace-1", "correlationId", "correlation-1"),
+                projected.attributes());
         assertEquals(List.of(tool), projected.clientTools());
         assertNull(projected.agentId());
         assertNull(projected.credentialToken());
@@ -87,7 +89,8 @@ class EndpointAndCallTreeTest {
                     .conversationId("runtime-policy")
                     .mode(InvocationMode.BLOCKING)
                     .credentialToken("request-secret")
-                    .attribute("traceId", "trace-1")
+                    .traceId("trace-1")
+                    .correlationId("correlation-1")
                     .attribute("tenantId", "must-not-leak")
                     .attribute("Authorization", "must-not-leak")
                     .input("hello")
@@ -95,8 +98,11 @@ class EndpointAndCallTreeTest {
 
             assertNull(authorization.get());
             assertFalse(request.get().path("params").path("metadata").has("agentId"));
-            assertFalse(request.get().path("params").path("metadata").has("attributes"),
-                    "Runtime direct mode must not forward arbitrary request attributes");
+            JsonNode attributes = request.get().path("params").path("metadata").path("attributes");
+            assertEquals("trace-1", attributes.path("traceId").asText());
+            assertEquals("correlation-1", attributes.path("correlationId").asText());
+            assertFalse(attributes.has("tenantId"));
+            assertFalse(attributes.has("Authorization"));
             assertEquals("root answer", snapshot.outputText());
             assertNull(snapshot.callTree(), "BLOCKING must not construct a call tree");
         } finally {
@@ -118,11 +124,15 @@ class EndpointAndCallTreeTest {
                 .credentialProvider(CredentialProvider.staticToken("secret"))
                 .build()) {
             client.invoke(InvocationRequest.builder().agentId("agent-a").conversationId("gateway-policy")
-                    .mode(InvocationMode.BLOCKING).input("hello").build())
+                    .mode(InvocationMode.BLOCKING).traceId("trace-gateway")
+                    .correlationId("correlation-gateway").input("hello").build())
                     .completion().toCompletableFuture().get(3, TimeUnit.SECONDS);
 
             assertEquals("Bearer secret", authorization.get());
             assertEquals("agent-a", request.get().path("params").path("metadata").path("agentId").asText());
+            JsonNode attributes = request.get().path("params").path("metadata").path("attributes");
+            assertEquals("trace-gateway", attributes.path("traceId").asText());
+            assertEquals("correlation-gateway", attributes.path("correlationId").asText());
         } finally {
             server.stop(0);
         }

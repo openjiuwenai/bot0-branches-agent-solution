@@ -8,10 +8,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.Duration;
-
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+
+/**
+ * RetryPolicy 的单元测试，验证默认策略、自定义策略和非法参数校验。
+ *
+ * @since 2026-08-19
+ */
 class RetryPolicyTest {
     @Test
     void defaultsMatchFeat006RecoverySemantics() {

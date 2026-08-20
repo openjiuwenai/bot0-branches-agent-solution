@@ -4,16 +4,20 @@
 
 package com.openjiuwen.client.api;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * 链路异常后的 Task 查询、流式重订阅和幂等创建恢复策略。
+ * 定义 agent-client 在链路异常场景下的恢复行为。
  *
- * <p>失败序号从 1 开始。延迟按指数退避计算，并在应用 jitter 后受
- * {@link #maxDelay()} 限制。连续失败达到 {@link #maxConsecutiveFailures()}
- * 时停止当前 invocation 的本地观察，但不会取消服务端 Task。
+ * <p>适用范围包括 Task 状态轮询、流式响应重订阅和幂等创建重试。
+ * 从第 1 次失败开始计数，每次失败后等待一段退避时间再重试。退避时间
+ * 从初始值起步，逐次放大，但不会超过上限。可选地引入随机抖动以分散
+ * 重试风暴。当连续失败次数达到设定的上限后，本地停止观察，服务端
+ * Task 不受影响。
  *
  * @since 2026-08-19
  */
@@ -23,22 +27,23 @@ public final class RetryPolicy {
     private static final double DEFAULT_MULTIPLIER = 2.0d;
     private static final int DEFAULT_MAX_CONSECUTIVE_FAILURES = 3;
 
+    private final int maxConsecutiveFailures;
     private final Duration initialDelay;
     private final Duration maxDelay;
     private final double multiplier;
     private final double jitterFactor;
-    private final int maxConsecutiveFailures;
 
     private RetryPolicy(Builder builder) {
+        this.maxConsecutiveFailures = builder.maxConsecutiveFailures;
         this.initialDelay = builder.initialDelay;
         this.maxDelay = builder.maxDelay;
         this.multiplier = builder.multiplier;
         this.jitterFactor = builder.jitterFactor;
-        this.maxConsecutiveFailures = builder.maxConsecutiveFailures;
     }
 
     /**
-     * 返回 FEAT-006 的兼容默认策略：3 次连续失败上限，200/400/800ms 退避，不启用 jitter。
+     * 返回 FEAT-006 的兼容默认策略：最多 3 次连续失败，
+     * 退避间隔依次为 200ms、400ms、800ms，不启用抖动。
      *
      * @return 默认策略
      */
@@ -55,28 +60,53 @@ public final class RetryPolicy {
         return new Builder();
     }
 
-    public Duration initialDelay() {
-        return initialDelay;
-    }
-
-    public Duration maxDelay() {
-        return maxDelay;
-    }
-
-    public double multiplier() {
-        return multiplier;
-    }
-
-    public double jitterFactor() {
-        return jitterFactor;
-    }
-
+    /**
+     * 返回最大连续失败次数。
+     *
+     * @return 最大连续失败次数
+     */
     public int maxConsecutiveFailures() {
         return maxConsecutiveFailures;
     }
 
     /**
-     * 计算指定连续失败序号对应的延迟。
+     * 返回初始退避延迟。
+     *
+     * @return 初始退避延迟
+     */
+    public Duration initialDelay() {
+        return initialDelay;
+    }
+
+    /**
+     * 返回最大退避延迟。
+     *
+     * @return 最大退避延迟
+     */
+    public Duration maxDelay() {
+        return maxDelay;
+    }
+
+    /**
+     * 返回退避倍数。
+     *
+     * @return 退避倍数
+     */
+    public double multiplier() {
+        return multiplier;
+    }
+
+    /**
+     * 返回抖动因子。
+     *
+     * @return 抖动因子
+     */
+    public double jitterFactor() {
+        return jitterFactor;
+    }
+
+    /**
+     * 计算指定连续失败序号对应的退避延迟。
      *
      * @param consecutiveFailure 从 1 开始的连续失败序号
      * @return 退避延迟
@@ -85,53 +115,65 @@ public final class RetryPolicy {
         if (consecutiveFailure < 1) {
             throw new IllegalArgumentException("consecutiveFailure must be at least 1");
         }
-        double exponential = initialDelay.toMillis()
-                * Math.pow(multiplier, consecutiveFailure - 1.0d);
-        double bounded = Math.min(maxDelay.toMillis(), exponential);
-        if (jitterFactor > 0.0d) {
-            double jitter = ThreadLocalRandom.current().nextDouble(-jitterFactor, jitterFactor);
-            bounded *= 1.0d + jitter;
+        long baseMillis = scaleUpToCeiling(initialDelay.toMillis(), consecutiveFailure - 1);
+        long jitteredMillis = applyJitterTo(baseMillis);
+        long clampedMillis = clampToValidRange(jitteredMillis);
+        return Duration.ofMillis(clampedMillis);
+    }
+
+    private long scaleUpToCeiling(long startMillis, int times) {
+        long ceiling = maxDelay.toMillis();
+        long value = startMillis;
+        while (times > 0 && value < ceiling) {
+            long next = BigDecimal.valueOf(value)
+                    .multiply(BigDecimal.valueOf(multiplier))
+                    .setScale(0, RoundingMode.DOWN)
+                    .longValue();
+            value = Math.min(ceiling, next);
+            times--;
         }
-        long delayMillis = Math.max(1L, Math.min(maxDelay.toMillis(), Math.round(bounded)));
-        return Duration.ofMillis(delayMillis);
+        return value;
+    }
+
+    private long applyJitterTo(long valueMillis) {
+        if (jitterFactor <= 0.0d) {
+            return valueMillis;
+        }
+        BigDecimal scaled = BigDecimal.valueOf(valueMillis);
+        double randomFactor = ThreadLocalRandom.current()
+                .nextDouble(1.0d - jitterFactor, 1.0d + jitterFactor);
+        BigDecimal factor = BigDecimal.valueOf(randomFactor);
+        return scaled.multiply(factor).setScale(0, RoundingMode.HALF_UP).longValue();
+    }
+
+    private long clampToValidRange(long valueMillis) {
+        long bottom = 1L;
+        long top = maxDelay.toMillis();
+        if (valueMillis < bottom) {
+            return bottom;
+        }
+        if (valueMillis > top) {
+            return top;
+        }
+        return valueMillis;
     }
 
     /**
      * RetryPolicy 构造器。
      */
     public static final class Builder {
+        private int maxConsecutiveFailures = DEFAULT_MAX_CONSECUTIVE_FAILURES;
         private Duration initialDelay = DEFAULT_INITIAL_DELAY;
         private Duration maxDelay = DEFAULT_MAX_DELAY;
         private double multiplier = DEFAULT_MULTIPLIER;
         private double jitterFactor;
-        private int maxConsecutiveFailures = DEFAULT_MAX_CONSECUTIVE_FAILURES;
 
-        public Builder initialDelay(Duration value) {
-            this.initialDelay = requirePositiveMillis(value, "initialDelay");
-            return this;
-        }
-
-        public Builder maxDelay(Duration value) {
-            this.maxDelay = requirePositiveMillis(value, "maxDelay");
-            return this;
-        }
-
-        public Builder multiplier(double value) {
-            if (!Double.isFinite(value) || value < 1.0d) {
-                throw new IllegalArgumentException("multiplier must be finite and at least 1.0");
-            }
-            this.multiplier = value;
-            return this;
-        }
-
-        public Builder jitterFactor(double value) {
-            if (!Double.isFinite(value) || value < 0.0d || value >= 1.0d) {
-                throw new IllegalArgumentException("jitterFactor must be in [0.0, 1.0)");
-            }
-            this.jitterFactor = value;
-            return this;
-        }
-
+        /**
+         * 设置最大连续失败次数。
+         *
+         * @param value 最大连续失败次数，至少为 1
+         * @return 当前构造器
+         */
         public Builder maxConsecutiveFailures(int value) {
             if (value < 1) {
                 throw new IllegalArgumentException("maxConsecutiveFailures must be at least 1");
@@ -140,6 +182,61 @@ public final class RetryPolicy {
             return this;
         }
 
+        /**
+         * 设置初始退避延迟。
+         *
+         * @param value 初始延迟
+         * @return 当前构造器
+         */
+        public Builder initialDelay(Duration value) {
+            this.initialDelay = requirePositiveMillis(value, "initialDelay");
+            return this;
+        }
+
+        /**
+         * 设置最大退避延迟。
+         *
+         * @param value 最大延迟
+         * @return 当前构造器
+         */
+        public Builder maxDelay(Duration value) {
+            this.maxDelay = requirePositiveMillis(value, "maxDelay");
+            return this;
+        }
+
+        /**
+         * 设置退避倍数。
+         *
+         * @param value 退避倍数，至少为 1.0
+         * @return 当前构造器
+         */
+        public Builder multiplier(double value) {
+            if (!Double.isFinite(value) || value < 1.0d) {
+                throw new IllegalArgumentException("multiplier must be finite and at least 1.0");
+            }
+            this.multiplier = value;
+            return this;
+        }
+
+        /**
+         * 设置抖动因子。
+         *
+         * @param value 抖动因子，取值范围 [0.0, 1.0)
+         * @return 当前构造器
+         */
+        public Builder jitterFactor(double value) {
+            if (!Double.isFinite(value) || value < 0.0d || value >= 1.0d) {
+                throw new IllegalArgumentException("jitterFactor must be in [0.0, 1.0)");
+            }
+            this.jitterFactor = value;
+            return this;
+        }
+
+        /**
+         * 构建 RetryPolicy 实例。
+         *
+         * @return RetryPolicy 实例
+         */
         public RetryPolicy build() {
             if (maxDelay.compareTo(initialDelay) < 0) {
                 throw new IllegalArgumentException("maxDelay must not be less than initialDelay");
