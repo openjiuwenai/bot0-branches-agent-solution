@@ -59,7 +59,6 @@ final class ToolDispatcher {
      * @param ctx ToolExecutionContext
      * @return 执行 future
      */
-
     CompletableFuture<ToolExecutionRecord> dispatch(InvocationEvent.ToolCall call, ToolExecutionContext ctx) {
         String toolCallId = call.toolCallId();
         Optional<ToolExecutionRecord> already = store.findRecord(toolCallId);
@@ -86,7 +85,13 @@ final class ToolDispatcher {
         inFlight.remove(toolCallId);
     }
 
-    /** 执行完整管道并以 StateStore 中先写入的最终记录为准。 */
+    /**
+     * 执行完整管道并以 StateStore 中先写入的最终记录为准。
+     *
+     * @param call 工具调用事件
+     * @param ctx 工具执行上下文
+     * @return 执行结果
+     */
     private CompletableFuture<ToolExecutionRecord> runPipeline(InvocationEvent.ToolCall call,
                                                                ToolExecutionContext ctx) {
         String toolCallId = call.toolCallId();
@@ -97,7 +102,13 @@ final class ToolDispatcher {
                 .whenCompleteAsync((r, e) -> inFlight.remove(toolCallId));
     }
 
-    /** 在调用 handler 前依次完成快照可见性、注册、参数、策略和审批校验。 */
+    /**
+     * 在调用 handler 前依次完成快照可见性、注册、参数、策略和审批校验。
+     *
+     * @param call 工具调用事件
+     * @param ctx 工具执行上下文
+     * @return 校验通过后的执行结果或拒绝记录
+     */
     private CompletableFuture<ToolExecutionRecord> computeRaw(InvocationEvent.ToolCall call,
                                                               ToolExecutionContext ctx) {
         String toolCallId = call.toolCallId();
@@ -150,7 +161,14 @@ final class ToolDispatcher {
         });
     }
 
-    /** 执行 handler，并把协作式超时和异常归一化为唯一最终记录。 */
+    /**
+     * 执行 handler，并把协作式超时和异常归一化为唯一最终记录。
+     *
+     * @param reg 已注册的工具实例
+     * @param invocation 工具调用参数
+     * @param ctx 工具执行上下文
+     * @return 执行结果
+     */
     private CompletableFuture<ToolExecutionRecord> runTool(LocalTool.Registered reg,
                                                            ToolInvocation invocation,
                                                            ToolExecutionContext ctx) {
@@ -183,7 +201,6 @@ final class ToolDispatcher {
      * @param ex Throwable
      * @return unwrap
      */
-
     private static Throwable unwrap(Throwable ex) {
         Throwable c = ex;
         while ((c instanceof java.util.concurrent.CompletionException
@@ -199,7 +216,6 @@ final class ToolDispatcher {
      * @param ex Throwable
      * @return rootMessage
      */
-
     private static String rootMessage(Throwable ex) {
         Throwable c = unwrap(ex);
         return (c.getMessage() != null) ? c.getMessage() : c.getClass().getSimpleName();

@@ -56,8 +56,9 @@ public final class ErrorCodes {
      *
      * <p>v0730 网关北向方法白名单只放行 {@code SendMessage} / {@code SendStreamingMessage} / {@code GetTask}；
      * {@code CancelTask} / {@code SubscribeToTask} 会返回该码（见评审文档 BLK-2/BLK-3）。
+     *
+     * <p>Gateway 冻结的原始 wire 错误码：请求方法未通过方法白名单校验。
      */
-    /** Gateway 冻结的原始 wire 错误码：请求方法未通过方法白名单校验。 */
     public static final String GATEWAY_VALIDATION_METHOD = "VALIDATION_METHOD";
 
     /** 客户端语义别名；wire 值保持 Gateway 的 {@link #GATEWAY_VALIDATION_METHOD}。 */
