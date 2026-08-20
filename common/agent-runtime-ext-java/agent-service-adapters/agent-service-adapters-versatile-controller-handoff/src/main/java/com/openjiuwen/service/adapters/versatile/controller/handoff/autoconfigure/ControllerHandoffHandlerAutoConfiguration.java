@@ -6,7 +6,6 @@ package com.openjiuwen.service.adapters.versatile.controller.handoff.autoconfigu
 
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
 import com.openjiuwen.service.adapters.versatile.controller.handoff.ControllerHandoffAgentHandler;
-import com.openjiuwen.service.adapters.versatile.controller.handoff.HandoffLoopGuard;
 import com.openjiuwen.service.adapters.versatile.controller.handoff.HandoffTargetResolver;
 import com.openjiuwen.service.adapters.versatile.controller.handoff.IntentHandoffClassifier;
 import com.openjiuwen.service.app.autoconfigure.AgentServiceAutoConfiguration;
@@ -61,12 +60,6 @@ public class ControllerHandoffHandlerAutoConfiguration implements InitializingBe
 
     @Bean
     @ConditionalOnMissingBean
-    public HandoffLoopGuard handoffLoopGuard(ControllerHandoffProperties props) {
-        return new HandoffLoopGuard(props);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
     public HandoffTargetResolver handoffTargetResolver(ControllerHandoffProperties props) {
         return new HandoffTargetResolver(props);
     }
@@ -76,10 +69,9 @@ public class ControllerHandoffHandlerAutoConfiguration implements InitializingBe
     public ControllerHandoffAgentHandler controllerHandoffAgentHandler(
             VersatileProperties versatileProperties,
             IntentHandoffClassifier classifier,
-            HandoffLoopGuard loopGuard,
             HandoffTargetResolver targetResolver,
             ControllerHandoffProperties handoffProperties) {
-        return new ControllerHandoffAgentHandler(versatileProperties, classifier, loopGuard,
+        return new ControllerHandoffAgentHandler(versatileProperties, classifier,
                 targetResolver, handoffProperties);
     }
 }

@@ -14,7 +14,6 @@ A2A 调用、shadow task 持久化与中断-续跑链（出站机制迁移设计
 
 ```
 入站请求
-  → 入口短路（仅新请求）：loopGuard.checkInbound 跨请求回环检测
   → 入口短路（re-invoke 轮）：解析 runtime.remoteToolResults
       失败成员 → REMOTE_* 错误码映射（REMOTE_TIMEOUT→TIMEOUT，其余→TARGET_UNAVAILABLE）
       无信封   → 终答直通（流式已由协调器投影，仅收尾；非流式 joinedResults 下发）
@@ -23,7 +22,7 @@ A2A 调用、shadow task 持久化与中断-续跑链（出站机制迁移设计
   → HandoffTargetResolver 目标解析
   → signal 命中 → not-in-scope 信封（upstream-signal，不出站）
   → 转调命中   → a2a_delegate 中断（toolCallId=handoff:<agentId>:<uuid>，
-                 trace 三键与透传键并入 request.metadata 供协调器出站）
+                 透传键与执行上下文并入 request.metadata 供协调器出站）
 ```
 
 re-invoke 语义：协调器在 remote 批 settle 后以 `resume=true` 重新进入本 handler，
@@ -45,7 +44,6 @@ openjiuwen:
       url-template: http://controller:3001/v1/{project_id}/agents/{agent_id}/conversations/{conversation_id}
       handoff:
         enabled: true
-        self-agent-id: agent_card_l1            # 跨请求循环检测的自身标识
         classify:
           event-type: message                  # 可选：限定识别的事件类型
           field-path: /data/node_name            # 客户报文确认前无默认值，必须显式配置
@@ -65,14 +63,6 @@ openjiuwen:
             "3": agent_card_l2
           domain-mapping:
             hotel: agent_card_layer2_hotel
-        loop:
-          max-redirects: 3
-          max-route-trace-hops: 8
-          duplicate-target-detection: true
-        loop-trace-metadata:                     # 转调轨迹随 A2A metadata 透传的键名
-          hop-count-key: handoffHopCount
-          route-trace-key: handoffRouteTrace
-          source-agent-key: sourceAgentId
         forward-metadata-keys: []                # 需原样透传给下游的额外 metadata 键
 ```
 
@@ -135,28 +125,20 @@ openjiuwen:
 按 `resolution-priority` 依次尝试，第一个解析出目标的来源生效；全部来源均未命中 →
 `VERSATILE_HANDOFF_TARGET_MISSING`。
 
-### 循环保护（loop / loop-trace-metadata）
+### 循环保护
 
-| 配置项 | 类型 | 默认值 | 说明 |
-|--------|------|--------|------|
-| `loop.max-route-trace-hops` | int | `8` | 跨请求轨迹（`route-trace-key`）最大跳数，超出 → `VERSATILE_HANDOFF_LOOP_LIMIT` |
-| `loop-trace-metadata.hop-count-key` | string | `handoffHopCount` | 跳数计数随 A2A metadata 透传的键名 |
-| `loop-trace-metadata.route-trace-key` | string | `handoffRouteTrace` | 已访问轨迹列表随 A2A metadata 透传的键名 |
-| `loop-trace-metadata.source-agent-key` | string | `sourceAgentId` | 发起方标识随 A2A metadata 透传的键名 |
-
-轨迹三键在产出 a2a_delegate 中断前写入 `request.metadata`，协调器 `outboundMetadata`
-对非 RESERVED 键原样透传到 `RemoteCall.metadata`。弹回目标的同链重复转调由
-toolCallId 无状态解析保护（re-invoke 后再转调同目标 →
-`VERSATILE_HANDOFF_DUPLICATE_TARGET`），无需 `loop.duplicate-target-detection` 类
-请求内状态。
+无跨请求轨迹体系：FEAT-002 拓扑为固定两层（一级 ↔ 二级控制器），二级退回采用
+upstream-signal 语义不出站，链深恒为 1，不存在跨请求回环。spec §2.1 的循环保护
+（SHOULD，"最大转调次数、重复路由检测或等价保护"）由 re-invoke 轮弹回目标的
+toolCallId 无状态解析承担：弹回后同轮重识别再转调同一目标 →
+`VERSATILE_HANDOFF_DUPLICATE_TARGET`，无需请求内状态或轨迹传播配置。
 
 ### 其他
 
 | 配置项 | 类型 | 默认值 | 说明 |
 |--------|------|--------|------|
 | `enabled` | boolean | `false` | 总开关 |
-| `self-agent-id` | string | — | 本实例 agent id，用于跨请求回环检测与轨迹记录 |
-| `forward-metadata-keys` | list | `[]` | 除 loop-trace 三键外，需原样透传给下游的 metadata 键 |
+| `forward-metadata-keys` | list | `[]` | 需原样透传给下游的 metadata 键 |
 
 出站超时与续接能力均不在本模块配置：超时取协调器的
 `openjiuwen.service.a2a.remote-agents[].timeout-seconds`；下游 INPUT_REQUIRED 的续接
@@ -170,8 +152,7 @@ toolCallId 无状态解析保护（re-invoke 后再转调同目标 →
 | `VERSATILE_HANDOFF_TARGET_NOT_ALLOWED` | 目标不在 `allowed-agents` 白名单 |
 | `VERSATILE_HANDOFF_TARGET_UNAVAILABLE` | 目标未注册 / 出站连接失败（协调器 REMOTE_* 失败映射，REMOTE_TIMEOUT 除外） |
 | `VERSATILE_HANDOFF_TIMEOUT` | 出站调用超过 remote-agents `timeout-seconds`（REMOTE_TIMEOUT 映射） |
-| `VERSATILE_HANDOFF_DUPLICATE_TARGET` | re-invoke 后再转调已弹回的同一目标，或入站轨迹回环重入（含 `self-agent-id`） |
-| `VERSATILE_HANDOFF_LOOP_LIMIT` | 跨请求轨迹超出 `max-route-trace-hops` |
+| `VERSATILE_HANDOFF_DUPLICATE_TARGET` | re-invoke 后再转调已弹回的同一目标 |
 
 ## 已知事项
 

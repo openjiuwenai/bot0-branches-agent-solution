@@ -15,9 +15,7 @@
 # Handoff outbound is delegated to the runtime coordinator: the handler emits a
 # single-item a2a_delegate interrupt (resume=true) and the coordinator performs
 # the A2A JSON-RPC call (POST /a2a), persists the shadow task and re-invokes the
-# handler with runtime.remoteToolResults once the remote batch settles;
-# loop-trace metadata (handoffHopCount/handoffRouteTrace/sourceAgentId) rides
-# the A2A metadata as the spec's 循环保护（跨请求）journey requires.
+# handler with runtime.remoteToolResults once the remote batch settles.
 #
 # Journeys (L2 spec §7.2, one scenario each):
 #   1  一级命中本地工作流        default query        → 本地答案, 无转调调用

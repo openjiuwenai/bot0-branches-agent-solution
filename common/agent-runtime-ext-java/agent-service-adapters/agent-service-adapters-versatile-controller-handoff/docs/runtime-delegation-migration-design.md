@@ -58,7 +58,7 @@ shadow 快照恢复。因此把现有中断改成 a2a_delegate 形状只会让 r
 | NOT_IN_SCOPE 后 handler 链内 while 重跑控制器 | runtime re-invoke handler + handler 入口检查 `runtime.remoteToolResults` 中是否含 `HandoffSignals` 信封 |
 | `HandoffSignals` 信封由 executor 在 outcome 上识别 | 信封作为 L2 终答交给协调器；识别逻辑移到 handler 入口（metadata 检查），识别后抑制信封不透传用户/控制器 |
 | 单请求 dedup / redirect / DUPLICATE_TARGET guard | 单 item 批内无链内重发，`DUPLICATE_MESSAGE` 链路整体消失；「续接弹回后再转调同一目标」由 handler 依据 `runtime.remoteBatchId` / `runtime.remoteToolResults` 把弹回 target 记入本轮 state，再转调同目标 → `DUPLICATE_TARGET` 明确报错 |
-| 跨请求 trace（hopCount/routeTrace/sourceAgentId）由 `prepareOutbound` 构造进 `RemoteCall.metadata` | 协调器 `start()` 的 outboundMetadata 取自 `batch.request` metadata（不取 item）——trace 键必须进入 request metadata 并确认协调器透传，或扩展 item 契约携带 trace |
+| 跨请求 trace（hopCount/routeTrace/sourceAgentId）由 `prepareOutbound` 构造进 `RemoteCall.metadata` | **已裁剪（2026-08-20 复核）**：FEAT-002 拓扑固定两层、二级 upstream-signal 不出站、下游不做转发，不存在跨请求回环；spec §2.1 循环保护（SHOULD）由 re-invoke 轮 toolCallId 无状态解析的 `DUPLICATE_TARGET` 等价满足。`HandoffLoopGuard`/`self-agent-id`/`loop.*`/`loop-trace-metadata.*`/`VERSATILE_HANDOFF_LOOP_LIMIT` 整体退役 |
 | 错误码 `VERSATILE_HANDOFF_TIMEOUT/TARGET_UNAVAILABLE/...` | 协调器 member fail 语义（`REMOTE_TIMEOUT/REMOTE_UNAVAILABLE/REMOTE_RATE_LIMITED/REMOTE_PROTOCOL_ERROR`）；需在 handler 层映射回 `VERSATILE_HANDOFF_*` 或重新定义错误码分层 |
 | 流式 chunk 经 `DownstreamEventBridge` 直推 observer | 协调器 `MemberEventObserver` → `SerialQueryStreamObserver` 转发；需验证事件顺序/完整性等价 |
 | 下游超时 `handoff.timeout` | 协调器调度超时（队列/并发参数）语义不同，需对齐 |
@@ -114,6 +114,13 @@ shadow 快照恢复。因此把现有中断改成 a2a_delegate 形状只会让 r
     `loop.duplicate-target-detection` 删除，超时语义移交 remote-agents
     `timeout-seconds`；错误码表删去 executor 专属四码（REMOTE_REJECTED/
     REMOTE_BUSINESS_FAILURE/RESULT_INVALID/CALLER_UNAVAILABLE）。
+  - 追加裁剪（2026-08-20 晚，对照 FEAT-002 spec 复核）：阶段 1 引入的跨请求
+    trace 体系（`HandoffLoopGuard`、`self-agent-id`、`loop.max-route-trace-hops`、
+    `loop-trace-metadata.*`、`VERSATILE_HANDOFF_LOOP_LIMIT`、入站回环检测）整体
+    退役——spec 无跨请求轨迹/多跳累计要求，upstream-signal 语义下链深恒为 1，
+    spec 的循环保护 SHOULD 由无状态 `DUPLICATE_TARGET` 等价满足；出站 metadata
+    仅保留 `forward-metadata-keys` 与执行上下文（tenant/user/space）。
+    「re-invoke 轮携带自身 trace 触发误判」的 guard 跳过补丁随之失去存在前提。
   验收：模块全量单测 + demo 十场景 e2e 全过（场景 2/3/8/9/10 断言已对齐新链路）。
 - **阶段 2（已完成，并入阶段 1）**：第二轮续接旅程：客户端补 input → 协调器 remoteTaskId
   续调 L2 → L2 弹回信封 → re-invoke 重识别；handler 入口信封识别 + 弹回 target 记入

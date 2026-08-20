@@ -27,10 +27,6 @@ class ControllerHandoffPropertiesTest {
     void defaultsMatchSpec() {
         ControllerHandoffProperties p = new ControllerHandoffProperties();
         assertThat(p.isEnabled()).isFalse();
-        assertThat(p.getLoop().getMaxRouteTraceHops()).isEqualTo(8);
-        assertThat(p.getLoopTraceMetadata().getHopCountKey()).isEqualTo("handoffHopCount");
-        assertThat(p.getLoopTraceMetadata().getRouteTraceKey()).isEqualTo("handoffRouteTrace");
-        assertThat(p.getLoopTraceMetadata().getSourceAgentKey()).isEqualTo("sourceAgentId");
         assertThat(p.getTarget().getResolutionPriority())
                 .containsExactly("direct", "intent", "domain");
         assertThat(p.getSignal().getHandoffTypes()).isEmpty();

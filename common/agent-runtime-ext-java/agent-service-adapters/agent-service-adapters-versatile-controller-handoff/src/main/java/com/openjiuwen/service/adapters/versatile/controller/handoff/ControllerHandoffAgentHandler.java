@@ -55,20 +55,17 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
     private final VersatileHttpClient client;
     private final VersatileRequestExtractor requestExtractor;
     private final IntentHandoffClassifier handoffClassifier;
-    private final HandoffLoopGuard loopGuard;
     private final HandoffTargetResolver targetResolver;
     private final ControllerHandoffProperties handoffProperties;
 
     public ControllerHandoffAgentHandler(VersatileProperties versatileProperties,
             IntentHandoffClassifier handoffClassifier,
-            HandoffLoopGuard loopGuard,
             HandoffTargetResolver targetResolver,
             ControllerHandoffProperties handoffProperties) {
         this.properties = Objects.requireNonNull(versatileProperties, "versatileProperties");
         this.client = new VersatileHttpClient(this.properties);
         this.requestExtractor = new VersatileRequestExtractor(this.properties);
         this.handoffClassifier = handoffClassifier;
-        this.loopGuard = loopGuard;
         this.targetResolver = targetResolver;
         this.handoffProperties = handoffProperties;
     }
@@ -82,17 +79,8 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
         log.info("Handling controller-handoff query conversation_id={} stream={} user_id={} tenant_id={} messages={}",
                 request.getConversationId(), request.isStream(), request.getUserId(),
                 request.getTenantId(), request.getMessages().size());
-        // re-invoke 轮（remoteToolResults 在场）是自身委派的续接：metadata 上的 trace
-        // 三键为本实例出站前写入（协调器 buildBatchResumeRequest 保留），含 self 属
-        // 预期，不得判为回环重入——inbound guard 只作用于全新入站请求（设计稿 4.5）
+        // re-invoke 轮（remoteToolResults 在场）是自身委派的续接，入口短路优先消费
         RemoteToolResults remote = RemoteToolResults.parse(request);
-        if (remote == null) {
-            HandoffLoopGuard.GuardResult inbound = loopGuard.checkInbound(request);
-            if (inbound != HandoffLoopGuard.GuardResult.ALLOW) {
-                throw new IllegalStateException(handoffErrorCode(inbound)
-                        + " inbound rejected conversation_id=" + request.getConversationId());
-            }
-        }
         if (remote != null) {
             if (remote.failure() != null) {
                 throw new IllegalStateException(remote.failure().errorCode()
@@ -118,15 +106,6 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
                 request.getConversationId(), request.isStream(), request.getUserId(),
                 request.getTenantId(), request.getMessages().size());
         RemoteToolResults remote = RemoteToolResults.parse(request);
-        if (remote == null) {
-            HandoffLoopGuard.GuardResult inbound = loopGuard.checkInbound(request);
-            if (inbound != HandoffLoopGuard.GuardResult.ALLOW) {
-                emitHandoffError(observer, handoffErrorCode(inbound),
-                        "inbound route-trace rejected: " + inbound
-                                + " conversation_id=" + request.getConversationId());
-                return;
-            }
-        }
         if (remote != null) {
             if (remote.failure() != null) {
                 emitHandoffError(observer, remote.failure().errorCode(), remote.failure().detail());
@@ -325,7 +304,7 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
         return new QueryChunk(QueryChunk.TYPE_INTERRUPT, payload);
     }
 
-    /** 中断产出前把 trace 三键与透传键并入 request.metadata（协调器出站取自此，设计稿 4.2）。 */
+    /** 中断产出前把透传键与执行上下文并入 request.metadata（协调器出站取自此，设计稿 4.2）。 */
     private void prepareDelegationMetadata(ServeRequest request) {
         Map<String, Object> metadata = request.getMetadata() == null
                 ? new LinkedHashMap<>() : new LinkedHashMap<>(request.getMetadata());
@@ -344,13 +323,7 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
         if (request.getSpaceId() != null) {
             metadata.put("spaceId", request.getSpaceId());
         }
-        metadata.putAll(loopGuard.outboundTraceMetadata(request));
         request.setMetadata(metadata);
-    }
-
-    private static String handoffErrorCode(HandoffLoopGuard.GuardResult inbound) {
-        return inbound == HandoffLoopGuard.GuardResult.LOOP_LIMIT
-                ? "VERSATILE_HANDOFF_LOOP_LIMIT" : "VERSATILE_HANDOFF_DUPLICATE_TARGET";
     }
 
     private static void emitHandoffError(QueryStreamObserver observer, String code, String detail) {

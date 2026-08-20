@@ -83,7 +83,7 @@ class ControllerHandoffAgentHandlerTest {
         f.setIntentId("/data/intent_id");
         f.setBusinessDomain("/data/domain");
         f.setTargetAgentId("/data/target_agent/id");
-        p.setSelfAgentId("agent_card_l1");
+        p.setForwardMetadataKeys(List.of("customCtx"));
         p.getTarget().setAllowedAgents(List.of("agent_card_hotel", "agent_card_flight", "agent_card_l1"));
         p.getTarget().setIntentMapping(Map.of("intent_flight", "agent_card_flight"));
         return p;
@@ -91,7 +91,7 @@ class ControllerHandoffAgentHandlerTest {
 
     private ControllerHandoffAgentHandler handler(ControllerHandoffProperties handoffProps) {
         return new ControllerHandoffAgentHandler(versatileProperties(),
-                new IntentHandoffClassifier(handoffProps), new HandoffLoopGuard(handoffProps),
+                new IntentHandoffClassifier(handoffProps),
                 new HandoffTargetResolver(handoffProps), handoffProps);
     }
 
@@ -156,18 +156,20 @@ class ControllerHandoffAgentHandlerTest {
     }
 
     @Test
-    void handoffInterruptWritesTraceAndForwardKeysIntoRequestMetadata() {
+    void handoffInterruptWritesForwardContextIntoRequestMetadata() {
+        // 无跨请求轨迹体系（FEAT-002 循环保护由 re-invoke 轮的 toolCallId 无状态
+        // 解析承担）：出站 metadata 只含透传键与执行上下文
         ControllerHandoffProperties hp = handoffProperties();
         controllerResponds(handoffLine("L1_TO_L2", "intent_flight", "flight", ""),
                 "{\"event\":\"end\"}");
         ServeRequest req = request("订机票");
         req.setTenantId("t1");
+        req.getMetadata().put("customCtx", "ctx-1");
         handler(hp).streamQuery(req, new RecordingObserver());
-        assertThat(req.getMetadata().get("handoffHopCount")).isEqualTo(1);
-        assertThat((List<Object>) req.getMetadata().get("handoffRouteTrace"))
-                .containsExactly("agent_card_l1");
-        assertThat(req.getMetadata().get("sourceAgentId")).isEqualTo("agent_card_l1");
         assertThat(req.getMetadata().get("tenantId")).isEqualTo("t1");
+        assertThat(req.getMetadata().get("customCtx")).isEqualTo("ctx-1");
+        assertThat(req.getMetadata()).doesNotContainKeys(
+                "handoffHopCount", "handoffRouteTrace", "sourceAgentId");
     }
 
     @Test
@@ -212,23 +214,9 @@ class ControllerHandoffAgentHandlerTest {
     }
 
     @Test
-    void inboundRouteTraceLoopRejectedBeforeControllerCall() {
-        controllerResponds("{\"data\":{\"code\":14000}}", "{\"event\":\"end\"}");
-        RecordingObserver observer = new RecordingObserver();
-        ServeRequest r = request("订机票");
-        r.getMetadata().put("handoffHopCount", 2);
-        r.getMetadata().put("handoffRouteTrace", List.of("agent_card_l1", "agent_card_hotel"));
-        handler(handoffProperties()).streamQuery(r, observer);
-        assertThat(String.valueOf(observer.chunks.get(0).getData()))
-                .contains("VERSATILE_HANDOFF_DUPLICATE_TARGET");
-        assertThat(observer.error).isNotNull();
-    }
-
-    @Test
-    void reInvokeCarryingSelfTraceIsNotRejectedAsInboundLoop() {
-        // re-invoke（remoteToolResults 在场）是自身委派的续接轮：request.metadata 上的
-        // trace 三键是本实例出站前写入的（协调器 buildBatchResumeRequest 保留），
-        // 含 self 属预期——不得判为回环重入（迁移设计稿 4.5）
+    void reInvokeRoundIgnoresInertTraceLikeMetadataKeys() {
+        // re-invoke（remoteToolResults 在场）驱动终答直通；metadata 上即便残留
+        // trace 形状的键也只是惰性数据，无跨请求回环检测消费它们
         controllerResponds("{\"event\":\"end\"}");
         RecordingObserver observer = new RecordingObserver();
         ServeRequest r = request("订机票");

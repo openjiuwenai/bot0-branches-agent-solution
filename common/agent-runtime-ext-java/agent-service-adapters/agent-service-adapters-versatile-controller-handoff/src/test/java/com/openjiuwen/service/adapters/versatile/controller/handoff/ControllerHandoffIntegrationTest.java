@@ -92,7 +92,6 @@ class ControllerHandoffIntegrationTest {
         f.setBusinessDomain("/data/domain");
         f.setTargetAgentId("/data/target_agent/id");
         f.setDedupKey("/data/dedup_key");
-        hp.setSelfAgentId("agent_card_l1");
         hp.getTarget().setAllowedAgents(List.of("agent_card_l1", "agent_card_hotel", "agent_card_flight"));
         hp.getTarget().setIntentMapping(Map.of("intent_flight", "agent_card_flight"));
         return hp;
@@ -103,7 +102,7 @@ class ControllerHandoffIntegrationTest {
         versatile.setUrlTemplate(baseUrl + "/v1/p/agents/a/conversations/{conversation_id}");
         versatile.setTimeout(Duration.ofSeconds(5));
         return new ControllerHandoffAgentHandler(versatile, new IntentHandoffClassifier(hp),
-                new HandoffLoopGuard(hp), new HandoffTargetResolver(hp), hp);
+                new HandoffTargetResolver(hp), hp);
     }
 
     private ControllerHandoffAgentHandler handler() {

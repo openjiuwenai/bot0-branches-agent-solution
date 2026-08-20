@@ -23,7 +23,6 @@ openjiuwen:
     versatile:
       url-template: http://127.0.0.1:${versatile-demo.l1-port}/v1/proj/agents/agent_L1_controller/conversations/${versatile-demo.conversation-id-placeholder}
       handoff:
-        self-agent-id: agent_card_l1
         target:
           intent-mapping:
             "3": agent_card_l2

@@ -25,8 +25,6 @@ public class ControllerHandoffProperties {
 
     private boolean enabled = false;
 
-    private String selfAgentId;
-
     private Classify classify;
 
     private final Fields fields = new Fields();
@@ -34,10 +32,6 @@ public class ControllerHandoffProperties {
     private final Target target = new Target();
 
     private final Signal signal = new Signal();
-
-    private final Loop loop = new Loop();
-
-    private final LoopTraceMetadata loopTraceMetadata = new LoopTraceMetadata();
 
     private List<String> forwardMetadataKeys = new ArrayList<>();
 
@@ -47,14 +41,6 @@ public class ControllerHandoffProperties {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
-    }
-
-    public String getSelfAgentId() {
-        return selfAgentId;
-    }
-
-    public void setSelfAgentId(String selfAgentId) {
-        this.selfAgentId = selfAgentId;
     }
 
     public Classify getClassify() {
@@ -75,14 +61,6 @@ public class ControllerHandoffProperties {
 
     public Signal getSignal() {
         return signal;
-    }
-
-    public Loop getLoop() {
-        return loop;
-    }
-
-    public LoopTraceMetadata getLoopTraceMetadata() {
-        return loopTraceMetadata;
     }
 
     public List<String> getForwardMetadataKeys() {
@@ -256,48 +234,6 @@ public class ControllerHandoffProperties {
 
         public void setHandoffTypes(List<String> handoffTypes) {
             this.handoffTypes = handoffTypes;
-        }
-    }
-
-    public static class Loop {
-        private int maxRouteTraceHops = 8;
-
-        public int getMaxRouteTraceHops() {
-            return maxRouteTraceHops;
-        }
-
-        public void setMaxRouteTraceHops(int maxRouteTraceHops) {
-            this.maxRouteTraceHops = maxRouteTraceHops;
-        }
-    }
-
-    public static class LoopTraceMetadata {
-        private String hopCountKey = "handoffHopCount";
-        private String routeTraceKey = "handoffRouteTrace";
-        private String sourceAgentKey = "sourceAgentId";
-
-        public String getHopCountKey() {
-            return hopCountKey;
-        }
-
-        public void setHopCountKey(String hopCountKey) {
-            this.hopCountKey = hopCountKey;
-        }
-
-        public String getRouteTraceKey() {
-            return routeTraceKey;
-        }
-
-        public void setRouteTraceKey(String routeTraceKey) {
-            this.routeTraceKey = routeTraceKey;
-        }
-
-        public String getSourceAgentKey() {
-            return sourceAgentKey;
-        }
-
-        public void setSourceAgentKey(String sourceAgentKey) {
-            this.sourceAgentKey = sourceAgentKey;
         }
     }
 }
