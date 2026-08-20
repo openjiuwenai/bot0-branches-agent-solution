@@ -127,4 +127,14 @@ public class HttpAgentRuntimeClient implements AgentRuntimeClient {
                             + (firstLine.isBlank() ? "" : " " + firstLine));
         }
     }
+
+    @Override
+    public String getTask(String endpointUrl, String taskId, String tenantId, Integer historyLength) {
+        String body = "{\"jsonrpc\":\"2.0\",\"id\":\"" + UUID.randomUUID()
+                + "\",\"method\":\"GetTask\",\"params\":{\"id\":\"" + taskId
+                + "\",\"tenant\":\"" + tenantId + "\""
+                + (historyLength != null ? ",\"historyLength\":" + historyLength : "")
+                + "}}";
+        return invokeSync(endpointUrl, body);
+    }
 }

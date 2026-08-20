@@ -1,0 +1,32 @@
+server:
+  port: ${TRANSFER_AGENT_PORT:18202}
+
+spring:
+  application:
+    name: transfer-agent
+  config:
+    import: optional:file:./application-intent_local.yml
+
+openjiuwen:
+  service:
+    agent-id: transfer-agent
+    handler: agentcore
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      agent-name: TransferAgent
+      agent-description: 收集收款人和金额，在用户确认后执行银行转账
+      provider-organization: OpenJiuwen
+      streaming: true
+      default-input-modes: ["text", "text/plain"]
+      default-output-modes: ["text", "text/plain", "application/json"]
+      skills:
+        - id: execute_transfer
+          name: Execute bank transfer
+          description: 银行转账汇款：给指定收款人转账；例如给张三转100元、给王五转50元。信息不足时追问收款人或金额，执行前要求确认
+          tags: ["bank", "transfer", "interrupt", "confirmation"]
+          examples: ["给张三转100元", "我要转账"]
+          input-modes: ["text", "text/plain"]
+          output-modes: ["text", "text/plain", "application/json"]

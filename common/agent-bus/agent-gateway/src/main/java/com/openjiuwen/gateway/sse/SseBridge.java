@@ -4,7 +4,10 @@
 
 package com.openjiuwen.gateway.sse;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -23,6 +26,8 @@ import java.util.stream.Stream;
  */
 @Component
 public class SseBridge {
+    private static final Logger LOG = LoggerFactory.getLogger(SseBridge.class);
+
     /**
      * Write runtime frames as SSE events to the client output stream.
      *
@@ -42,7 +47,31 @@ public class SseBridge {
                 }
                 writeFrame(out, frame);
             }
+        } catch (java.io.UncheckedIOException ex) {
+            // Runtime stream closed/disconnected (unchecked wrapper from stream iterator)
+            // → propagate to close client output (bidirectional disconnect, supplement info 3).
+            // Log so runtime→client disconnect propagation is observable (S8-4 reverse).
+            LOG.info("runtime stream disconnected; closing client SSE (reverse bridge release)");
+            Throwable cause = ex.getCause();
+            if (cause instanceof IOException ioCause) {
+                throw ioCause;
+            }
+            throw ex;
+        } catch (AsyncRequestNotUsableException ex) {
+            // Spring 6+ LifecycleServletOutputStream.flush on a gone client throws this (an IOException
+            // subclass). The response is no longer usable — log + return (don't rethrow); rethrowing only
+            // produces a noisy container stack after the controller already handled the disconnect.
+            LOG.info("SSE client disconnected; runtime stream released (forward bridge release)");
+            return firstFrame;
+        } catch (IOException ex) {
+            // Forward bridge release (AC-CFG-6 / S8-4): the client SSE disconnected (Ctrl+C / broken
+            // pipe) — the try-with-resources above already closed the runtime frame stream, releasing
+            // the downstream runtime SSE. Log so client→runtime disconnect propagation is observable.
+            LOG.info("SSE client disconnected; runtime stream released (forward bridge release)");
+            throw ex;
         }
+        // Stream ended normally (runtime closed) → client output flushed by last writeFrame;
+        // caller's try-with-resources or response completion closes the client side.
         return firstFrame;
     }
 
@@ -57,11 +86,26 @@ public class SseBridge {
      * @throws IOException if writing to the client fails (e.g. disconnect)
      */
     public void writeSse(OutputStream out, Iterator<String> iterator, String firstFrame) throws IOException {
-        if (firstFrame != null) {
-            writeFrame(out, firstFrame);
-        }
-        while (iterator.hasNext()) {
-            writeFrame(out, iterator.next());
+        try {
+            if (firstFrame != null) {
+                writeFrame(out, firstFrame);
+            }
+            while (iterator.hasNext()) {
+                writeFrame(out, iterator.next());
+            }
+        } catch (java.io.UncheckedIOException ex) {
+            LOG.info("runtime stream disconnected; closing client SSE (reverse bridge release)");
+            Throwable cause = ex.getCause();
+            if (cause instanceof IOException ioCause) {
+                throw ioCause;
+            }
+            throw ex;
+        } catch (AsyncRequestNotUsableException ex) {
+            LOG.info("SSE client disconnected; runtime stream released (forward bridge release)");
+            // don't rethrow (Spring async client-abort; see 2-arg overload)
+        } catch (IOException ex) {
+            LOG.info("SSE client disconnected; runtime stream released (forward bridge release)");
+            throw ex;
         }
     }
 
@@ -77,7 +121,22 @@ public class SseBridge {
      * @throws IOException if writing to the client fails (e.g. disconnect)
      */
     public void writeSse(OutputStream out, String frame) throws IOException {
-        writeFrame(out, frame);
+        try {
+            writeFrame(out, frame);
+        } catch (java.io.UncheckedIOException ex) {
+            LOG.info("runtime stream disconnected; closing client SSE (reverse bridge release)");
+            Throwable cause = ex.getCause();
+            if (cause instanceof IOException ioCause) {
+                throw ioCause;
+            }
+            throw ex;
+        } catch (AsyncRequestNotUsableException ex) {
+            LOG.info("SSE client disconnected; runtime stream released (forward bridge release)");
+            // don't rethrow (Spring async client-abort; see 2-arg overload)
+        } catch (IOException ex) {
+            LOG.info("SSE client disconnected; runtime stream released (forward bridge release)");
+            throw ex;
+        }
     }
 
     private static void writeFrame(OutputStream out, String frame) throws IOException {

@@ -282,7 +282,7 @@ class BusStreamingAndResumeTest {
 
     @Test
     void b7_resumeEnvelopeCarriesTaskId() {
-        sticky.put("task-7", "h1");
+        sticky.put("task-7", "h1", "svc-rt");
         rdc.setCandidates(List.of());
         g4.check("T1", "m-r1", "fp");
         feed.inject(AgentBusEventType.INVOCATION_RESPONSE, null, null);
@@ -291,9 +291,9 @@ class BusStreamingAndResumeTest {
 
     @Test
     void b7_resumeNoSearchUsesStickyRoute() {
-        sticky.put("task-7", "h1");
+        sticky.put("task-7", "h1", "svc-rt");
         assertThat(sticky.find("task-7")).isPresent();
-        sticky.put("task-7", "h1");
+        sticky.put("task-7", "h1", "svc-rt");
         assertThat(sticky.find("task-7")).hasValue("h1");
     }
 
@@ -310,7 +310,7 @@ class BusStreamingAndResumeTest {
 
     @Test
     void b8_continueInputWireSameAsResume() {
-        sticky.put("task-ci", "h1");
+        sticky.put("task-ci", "h1", "svc-rt");
         assertThat(sticky.find("task-ci")).contains("h1");
     }
 

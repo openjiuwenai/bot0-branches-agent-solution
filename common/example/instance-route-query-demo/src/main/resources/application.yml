@@ -1,0 +1,18 @@
+server:
+  port: ${SERVER_PORT:18090}
+
+spring:
+  # registry-discovery-center lib jar 传递引入 spring-boot-starter-jdbc（HikariCP），
+  # demo 用内存仓储无需数据库；同时已从 pom 排除 HikariCP，此处再排除 Boot4 的
+  # DataSource 自动配置类（包名 org.springframework.boot.jdbc.autoconfigure）双保险。
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.jdbc.autoconfigure.JdbcTemplateAutoConfiguration
+  main:
+    banner-mode: "off"
+
+logging:
+  level:
+    com.openjiuwen.rdc: INFO
+    com.openjiuwen.example.fe016: INFO
