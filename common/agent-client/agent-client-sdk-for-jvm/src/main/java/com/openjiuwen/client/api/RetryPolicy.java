@@ -124,13 +124,14 @@ public final class RetryPolicy {
     private long scaleUpToCeiling(long startMillis, int times) {
         long ceiling = maxDelay.toMillis();
         long value = startMillis;
-        while (times > 0 && value < ceiling) {
+        int remaining = times;
+        while (remaining > 0 && value < ceiling) {
             long next = BigDecimal.valueOf(value)
                     .multiply(BigDecimal.valueOf(multiplier))
                     .setScale(0, RoundingMode.DOWN)
                     .longValue();
             value = Math.min(ceiling, next);
-            times--;
+            remaining--;
         }
         return value;
     }
@@ -140,8 +141,10 @@ public final class RetryPolicy {
             return valueMillis;
         }
         BigDecimal scaled = BigDecimal.valueOf(valueMillis);
+        BigDecimal low = BigDecimal.ONE.subtract(BigDecimal.valueOf(jitterFactor));
+        BigDecimal high = BigDecimal.ONE.add(BigDecimal.valueOf(jitterFactor));
         double randomFactor = ThreadLocalRandom.current()
-                .nextDouble(1.0d - jitterFactor, 1.0d + jitterFactor);
+                .nextDouble(low.doubleValue(), high.doubleValue());
         BigDecimal factor = BigDecimal.valueOf(randomFactor);
         return scaled.multiply(factor).setScale(0, RoundingMode.HALF_UP).longValue();
     }

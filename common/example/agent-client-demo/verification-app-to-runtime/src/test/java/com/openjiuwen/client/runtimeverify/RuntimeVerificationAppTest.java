@@ -65,7 +65,7 @@ class RuntimeVerificationAppTest {
     }
 
     @Test
-    void asyncScenarioUsesBusinessGetInvocationAndRuntimeAttributeAllowlist() throws Exception {
+    void asyncScenarioUsesBusinessGetInvocationAndRuntimeAllowlist() throws Exception {
         JsonNode run = execute("async-gettask", "ASYNC");
 
         assertEquals("VERIFIED", run.path("status").asText());
@@ -93,6 +93,8 @@ class RuntimeVerificationAppTest {
             } else if ("GetTask".equals(method)) {
                 getTaskRequests++;
                 assertFalse(body.path("params").has("metadata"));
+            } else {
+                continue;
             }
         }
         assertEquals(1, createRequests);
