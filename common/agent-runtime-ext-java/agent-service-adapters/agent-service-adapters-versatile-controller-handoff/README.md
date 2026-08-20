@@ -154,6 +154,10 @@ toolCallId 无状态解析承担：弹回后同轮重识别再转调同一目标
 | `VERSATILE_HANDOFF_TIMEOUT` | 出站调用超过 remote-agents `timeout-seconds`（REMOTE_TIMEOUT 映射） |
 | `VERSATILE_HANDOFF_DUPLICATE_TARGET` | re-invoke 后再转调已弹回的同一目标 |
 
+错误形状与基线 extractor 契约一致（`{"code":"VERSATILE_HANDOFF_*","reason":"..."}`）：
+流式以 `TYPE_ERROR` chunk 下发，非流式以同 JSON 异常上抛；协调器的 `REMOTE_*` 原始码
+只保留在 `reason` 中供诊断，客户端无需识别（无分层错误码）。
+
 ## 已知事项
 
 - 本地构建依赖 `.m2` 中的 `agent-service-app:0.1.1.post1` 为 develop HEAD 构建

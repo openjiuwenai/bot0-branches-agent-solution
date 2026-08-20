@@ -83,8 +83,12 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
         RemoteToolResults remote = RemoteToolResults.parse(request);
         if (remote != null) {
             if (remote.failure() != null) {
-                throw new IllegalStateException(remote.failure().errorCode()
-                        + " remote invocation failed: " + remote.failure().detail());
+                // 非流式失败与流式 emitHandoffError 同契约：{"code","reason"} JSON 上抛
+                //（基线 extractor 错误形状），不引入 REMOTE_* 分层错误码
+                log.warn("handoff path failed code={} detail={}",
+                        remote.failure().errorCode(), remote.failure().detail());
+                throw new IllegalStateException(errorJson(
+                        remote.failure().errorCode(), remote.failure().detail()));
             }
             if (!remote.hasNotInScopeEnvelope()) {
                 // happy-path re-invoke：非流式终答直通
@@ -327,21 +331,25 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
     }
 
     private static void emitHandoffError(QueryStreamObserver observer, String code, String detail) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("code", code);
-        payload.put("reason", detail == null ? "" : detail);
-        String json;
-        try {
-            json = MAPPER.writeValueAsString(payload);
-        } catch (Exception ex) {
-            json = "{\"code\":\"" + code + "\"}";
-        }
+        String json = errorJson(code, detail);
         log.warn("handoff path failed code={} detail={}", code, detail);
         if (observer == null) {
             throw new IllegalStateException(json); // query 收集模式：错误以异常上抛
         }
         observer.onNext(new QueryChunk(QueryChunk.TYPE_ERROR, json));
         observer.onError(new IllegalStateException(json));
+    }
+
+    /** 基线 extractor 错误契约：{"code":"...","reason":"..."} JSON。 */
+    private static String errorJson(String code, String detail) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("code", code);
+        payload.put("reason", detail == null ? "" : detail);
+        try {
+            return MAPPER.writeValueAsString(payload);
+        } catch (Exception ex) {
+            return "{\"code\":\"" + code + "\"}";
+        }
     }
 
     private static void emit(List<QueryChunk> chunks, QueryStreamObserver observer) {

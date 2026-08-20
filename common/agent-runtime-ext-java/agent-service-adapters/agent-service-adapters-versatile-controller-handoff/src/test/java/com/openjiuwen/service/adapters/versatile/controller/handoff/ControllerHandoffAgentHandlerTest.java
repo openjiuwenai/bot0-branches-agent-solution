@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 class ControllerHandoffAgentHandlerTest {
 
@@ -211,6 +212,22 @@ class ControllerHandoffAgentHandlerTest {
         assertThat(observer.error).isNull();
         // 回显帧本身被抑制，不进用户流（end 等基线帧不受影响）
         assertThat(observer.chunks).noneMatch(c -> String.valueOf(c.getData()).contains("14000"));
+    }
+
+    @Test
+    void reInvokeFailureFollowsBaselineErrorContractInQueryMode() {
+        // 非流式 re-invoke 失败：不引入 REMOTE_* 分层错误码（客户端不识别），
+        // 以基线 extractor 的 {"code","reason"} JSON 契约上抛（emitHandoffError 归一）
+        ServeRequest r = request("订机票");
+        r.setStream(false);
+        r.getMetadata().put("runtime.remoteToolResults", Map.of(
+                "handoff:agent_card_flight:abc",
+                Map.of("ok", false, "code", "REMOTE_TIMEOUT", "message", "timed out after 3s")));
+        IllegalStateException ex = catchThrowableOfType(() ->
+                handler(handoffProperties()).query(r), IllegalStateException.class);
+        assertThat(ex.getMessage()).startsWith("{\"code\":\"VERSATILE_HANDOFF_TIMEOUT\"");
+        assertThat(ex.getMessage()).contains("\"reason\":\"REMOTE_TIMEOUT: timed out after 3s")
+                .contains("handoff:agent_card_flight:abc");
     }
 
     @Test
