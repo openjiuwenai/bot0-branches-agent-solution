@@ -13,6 +13,9 @@ import com.openjiuwen.service.adapters.agentcore.ext.concurrency.AgentFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
 /**
  * Per-Task Agent factory for DFX-002 concurrency mode.
  *
@@ -20,11 +23,26 @@ import org.slf4j.LoggerFactory;
  * with shared configuration extracted from the startup-time global initialization
  * performed by {@link EdpaExtHandler#performInit}.
  *
+ * <p><strong>V1 thread safety</strong>: {@code create()} is serialized via
+ * {@link ReentrantLock} because {@code HarnessFactory.createDeepAgent()} and
+ * {@code DeepAgent.ensureInitialized()} write to the global
+ * {@code Runner.resourceMgr()} maps ({@code ResourceMgr.idToCard},
+ * {@code ToolMgr.mcpServerNameToIds} etc.), which are plain {@code HashMap}
+ * and not thread-safe. Agent execution (LLM calls, tool invocations) runs
+ * outside the lock and is fully parallel.
+ *
+ * <p>V2 optimization (future): once agent-core-java supports
+ * {@code ensureInitializedLocal()} and {@code createDeepAgent(..., skipGlobal=true)},
+ * the lock can be removed and creation becomes fully parallel.
+ *
  * @since 0.1.2
  */
 public class EdpAgentFactory implements AgentFactory {
 
     private static final Logger log = LoggerFactory.getLogger(EdpAgentFactory.class);
+
+    /** V1: serializes agent creation to prevent concurrent writes to global ResourceMgr HashMaps. */
+    private final Lock creationLock = new ReentrantLock();
 
     private final AgentCard agentCard;
 
@@ -43,7 +61,24 @@ public class EdpAgentFactory implements AgentFactory {
 
     @Override
     public Object create() {
-        log.info("EdpAgentFactory creating per-Task DeepAgent, agentId={}", agentCard.getId());
+        creationLock.lock();
+        try {
+            log.info("EdpAgentFactory creating per-Task DeepAgent, agentId={}", agentCard.getId());
+            return createAgent();
+        } finally {
+            creationLock.unlock();
+        }
+    }
+
+    /**
+     * Creates and initializes a single DeepAgent instance.
+     *
+     * <p>Called inside the creation lock; subclasses may override for testing
+     * or to customise the creation pipeline.
+     *
+     * @return a fully initialized DeepAgent
+     */
+    protected DeepAgent createAgent() {
         DeepAgent agent = HarnessFactory.createDeepAgent(agentCard, deepAgentConfig, null);
         agent.ensureInitialized();
         return agent;
