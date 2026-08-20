@@ -17,6 +17,13 @@
 # the A2A JSON-RPC call (POST /a2a), persists the shadow task and re-invokes the
 # handler with runtime.remoteToolResults once the remote batch settles.
 #
+# Outbound policy (layer1 yml):
+#   - contextId rewrite: openjiuwen.service.versatile.handoff.forward.context-id-prefix-target=true
+#     → adapter 的 ForwardContextIdRemoteAgentCaller 把出站 contextId 改写为
+#     <目标agentId>-<原contextId>（确定性派生，续调一致）
+#   - forward-after-done: mock L1 意图帧 flush 后延迟 2s 才终态，场景2 用日志
+#     时间戳断言 L2 收到调用的时刻 >= L1 控制器 workflow finished（先完成、后转发）
+#
 # Journeys (L2 spec §7.2, one scenario each):
 #   1  一级命中本地工作流        default query        → 本地答案, 无转调调用
 #   2  一级转调二级              query 转调            → 意图返回 "3" → a2a_delegate 中断 → 协调器 → 二级答案
@@ -166,6 +173,27 @@ assert_eq() {
   return 1
 }
 
+# 取日志中首条匹配行的 ISO 时间戳（Spring 默认格式，同机时钟可直接字典序比较）
+log_timestamp() {
+  local logfile="$1" pattern="$2"
+  grep -m1 "$pattern" "$logfile" 2>/dev/null | awk '{print $1}'
+}
+
+# 断言 later >= earlier：L1 等控制器执行完成后才转发的时间序证明
+assert_log_order() {
+  local label="$1" earlier="$2" later="$3"
+  if [ -z "$earlier" ] || [ -z "$later" ]; then
+    echo "    FAIL: $label missing timestamp earlier='${earlier:-<none>}' later='${later:-<none>}'" >&2
+    return 1
+  fi
+  if [[ "$later" > "$earlier" || "$later" == "$earlier" ]]; then
+    echo "    PASS: $label ($later >= $earlier)"
+    return 0
+  fi
+  echo "    FAIL: $label later=$later < earlier=$earlier" >&2
+  return 1
+}
+
 # 等待静态发现完成：对端 card 已注册进 A2ARemoteAgentCardRegistry（默认
 # A2ARemoteAgentClient 依赖 registry 命中；失败每 30s 重试，这里等到成功为止）
 wait_for_discovery() {
@@ -219,7 +247,13 @@ main() {
   assert_contains "s2-l2-answer" "$resp" "二级本域业务答案"
   assert_log_contains "s2-l1-interrupt" "$LOG_DIR/layer1.log" "handoff delegate interrupt emitted.*target=agent_card_l2"
   assert_log_contains "s2-l1-caller" "$LOG_DIR/layer1.log" "A2A call agent=agent_card_l2"
-  assert_log_contains "s2-l2-received" "$LOG_DIR/layer2.log" "conversation_id=c2-handoff"
+  assert_log_contains "s2-l2-received" "$LOG_DIR/layer2.log" "conversation_id=agent_card_l2-c2-handoff"
+  # L1 等控制器执行完成才转发：L2 mock 收到调用的时间戳 >= L1 "workflow finished"
+  # （mock 意图帧 flush 后延迟 2s 才终态，若命中即转发则该断言失败）
+  local l1_done l2_called
+  l1_done=$(log_timestamp "$LOG_DIR/layer1.log" "L1 controller workflow finished conversationId=c2-handoff invocation=1")
+  l2_called=$(log_timestamp "$LOG_DIR/layer2.log" "Mock controller agentId=agent_L2_controller conversationId=agent_card_l2-c2-handoff")
+  assert_log_order "s2-forward-after-controller-done" "$l1_done" "$l2_called"
   # mock 在信号帧前发送生产形态的意图回显帧（无 summary 键）：应被整行抑制且不报错
   assert_log_contains "s2-echo-suppressed" "$LOG_DIR/layer1.log" "handoff classify hit but no usable resolution source"
   assert_log_not_contains "s2-no-contract-error" "$LOG_DIR/layer1.log" "VERSATILE_HANDOFF_MESSAGE_CONTRACT"

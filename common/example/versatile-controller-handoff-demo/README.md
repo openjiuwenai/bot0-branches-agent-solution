@@ -28,6 +28,18 @@ FEAT-002「Versatile 控制器意图转调消息路由」的场景旅程验收 e
 发起调用；remote 批 settle 后以 `resume=true` 重新进入 handler，结果在
 `runtime.remoteToolResults` metadata 中（信封重识别 / REMOTE_* 失败码映射 / 终答直通）。
 
+两条出站行为约定（均由 layer1 配置驱动，见 `application-layer1.yml`）：
+
+- **先完成后转发**：handler 命中意图后继续消费控制器 SSE 流直至执行完成（剩余
+  输出抑制），`a2a_delegate` 中断在控制器流结束后才产出。mock L1 意图分支为真
+  流式（`StreamingResponseBody`）——意图帧 flush 后延迟 2s 才发终态，e2e 场景 2
+  以日志时间戳断言 L2 收到调用 ≥ L1 `workflow finished`。
+- **contextId 前缀改写**：`openjiuwen.service.versatile.handoff.forward.context-id-prefix-target=true`
+  时 adapter 的 `ForwardContextIdRemoteAgentCaller`（`RemoteAgentCaller` 装饰器，随
+  handoff 自动装配注册）替换 runtime 默认出站调用器，把出站 contextId 确定性改写为
+  `<目标agentId>-<原contextId>`（如 `agent_card_l2-c2-handoff`）——续调用相同原值
+  改写结果一致，INPUT_REQUIRED 续接不受影响；不配置则透传原 contextId。
+
 ## 场景（scripts/local-e2e.sh，对应 L2 §7.2）
 
 | # | query 关键字 | 旅程 |
@@ -73,7 +85,9 @@ SKIP_BUILD=1 ./scripts/local-e2e.sh
 - `application-layer2.yml`：`handoff.signal.handoff-types: [不在范围]` ——
   upstream-signal 语义，二级退回一级不出站调用。
 - `application-layer1.yml`：`intent-mapping`（3→l2 / 5→dead / 6→forbidden）与
-  remote-agents `timeout-seconds: 3`（agent_card_l2，场景 10 超时语义）。
+  remote-agents `timeout-seconds: 3`（agent_card_l2，场景 10 超时语义）；
+  `openjiuwen.service.versatile.handoff.forward.context-id-prefix-target: true` 开启
+  出站 contextId 前缀改写（`<目标agentId>-<原contextId>`）。
 - mock 控制器（`mock-controller` profile）按 `inputs.query` 关键字选场景，
   同会话计数驱动"退回"场景第二次调用返回本地答案。
 

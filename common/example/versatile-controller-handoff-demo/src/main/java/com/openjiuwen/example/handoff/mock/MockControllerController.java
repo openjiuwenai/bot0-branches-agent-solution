@@ -17,7 +17,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -36,7 +40,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  *       {@code data.summary="不在范围"}.</li>
  * </ul>
  * 业务答案/终态/中断事件仍为 {@code node_finished} / {@code workflow_finished} /
- * {@code need_user_input} 形态（FEAT-002 基线提取依赖）。
+ * {@code need_user_input} 形态（FEAT-002 基线提取依赖）。L1 意图分支为真流式：
+ * 意图帧 flush 后延迟 {@value #INTENT_TAIL_DELAY_MS}ms 才发终态（模拟真实控制器
+ * 在意图消息后继续执行工作流，e2e 断言 L1 等执行完成才 A2A 转发）。
  *
  * <p>Scenario selection is by {@code inputs.query} keyword (stateless except a
  * per-conversation invocation counter used by the 二级退回一级 journey, where the
@@ -70,19 +76,26 @@ public class MockControllerController {
     /** Versatile agent id this mock serves for the L2 layer runtime. */
     public static final String L2_AGENT_ID = "agent_L2_controller";
 
+    /** L1 意图命中后控制器"继续执行"的时长，e2e 断言转发发生在此之前之后。 */
+    private static final long INTENT_TAIL_DELAY_MS = 2_000L;
+
     private final Map<String, AtomicInteger> invocations = new ConcurrentHashMap<>();
 
     /**
      * Handles a mock controller SSE request, selecting a canned response by
      * agentId + query keyword.
      *
+     * <p>L1 intent-handoff responses are真流式：意图事件先 flush，随后控制器
+     * "继续执行" 2s 才发 workflow_finished —— L1 handler 必须等控制器执行完成
+     * 才产出 a2a_delegate 转发，e2e 以日志时间戳断言先完成、后转发。
+     *
      * @param agentId the path variable controller agent identifier
      * @param conversationId the path variable conversation identifier
      * @param body the raw request body (may be {@code null})
-     * @return a {@code 200 OK} with {@code text/event-stream} body
+     * @return a {@code 200 OK} with {@code text/event-stream} streamed body
      */
     @PostMapping("/v1/proj/agents/{agentId}/conversations/{conversationId}")
-    public ResponseEntity<String> mockVersatile(
+    public ResponseEntity<StreamingResponseBody> mockVersatile(
             @PathVariable String agentId,
             @PathVariable String conversationId,
             @RequestBody(required = false) String body) {
@@ -93,28 +106,44 @@ public class MockControllerController {
         log.info("Mock controller agentId={} conversationId={} invocation={} query={}",
                 agentId, conversationId, count, query);
         if (L2_AGENT_ID.equals(agentId)) {
-            return sse(l2Response(query, count));
+            return sse(out -> l2Response(out, query, count));
         }
-        return sse(l1Response(query, count));
+        return sse(out -> l1Stream(out, query, count, conversationId));
     }
 
-    private static String l1Response(String query, int invocation) {
+    /** L1 意图分支：意图帧 flush 后延迟 {@value #INTENT_TAIL_DELAY_MS}ms 再终态。 */
+    private void l1Stream(OutputStream out, String query, int invocation, String conversationId)
+            throws IOException {
         if (query.contains("异常")) {
-            return sseLines(exceptionEvent());
+            sseLines(out, exceptionEvent());
+            return;
         }
         String intent = intentForQuery(query);
         if (intent != null && !(query.contains("退回") && invocation >= 2)) {
-            return sseLines(echoMessageEvent(intent, invocation), intentHandoffEvent(intent, invocation));
+            sseLines(out, echoMessageEvent(intent, invocation), intentHandoffEvent(intent, invocation));
+            out.flush();
+            try {
+                Thread.sleep(INTENT_TAIL_DELAY_MS);
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                throw new IOException("intent tail delay interrupted", ex);
+            }
+            log.info("L1 controller workflow finished conversationId={} invocation={}",
+                    conversationId, invocation);
+            sseLines(out, workflowEndEvent());
+            return;
         }
-        return sseLines(answerEvent("一级本地业务答案：当前工作流已处理完成"), workflowEndEvent());
+        sseLines(out, answerEvent("一级本地业务答案：当前工作流已处理完成"), workflowEndEvent());
     }
 
-    private static String l2Response(String query, int invocation) {
+    private void l2Response(OutputStream out, String query, int invocation) throws IOException {
         if (query.contains("退回") || query.contains("循环")) {
-            return sseLines(notInScopeEvent(invocation));
+            sseLines(out, notInScopeEvent(invocation));
+            return;
         }
         if (query.contains("补充信息")) {
-            return sseLines(interruptEvent(), workflowEndEvent());
+            sseLines(out, interruptEvent(), workflowEndEvent());
+            return;
         }
         if (query.contains("超时")) {
             try {
@@ -123,7 +152,7 @@ public class MockControllerController {
                 Thread.currentThread().interrupt();
             }
         }
-        return sseLines(answerEvent("二级本域业务答案：机票已预订"), workflowEndEvent());
+        sseLines(out, answerEvent("二级本域业务答案：机票已预订"), workflowEndEvent());
     }
 
     private static String intentForQuery(String query) {
@@ -214,18 +243,22 @@ public class MockControllerController {
         return 1787140547059L + invocation;
     }
 
-    private static String sseLines(String... dataLines) {
-        StringBuilder sb = new StringBuilder();
+    private static void sseLines(OutputStream out, String... dataLines) throws IOException {
         for (String line : dataLines) {
-            sb.append("data: ").append(line).append("\n\n");
+            out.write(("data: " + line + "\n\n").getBytes(StandardCharsets.UTF_8));
         }
-        return sb.toString();
     }
 
-    private static ResponseEntity<String> sse(String body) {
+    private static ResponseEntity<StreamingResponseBody> sse(StreamingResponseBodyWriter writer) {
+        StreamingResponseBody body = writer::writeTo;
         return ResponseEntity.ok()
                 .contentType(MediaType.TEXT_EVENT_STREAM)
                 .body(body);
+    }
+
+    @FunctionalInterface
+    private interface StreamingResponseBodyWriter {
+        void writeTo(OutputStream out) throws IOException;
     }
 
     private static String extractQuery(String body) {

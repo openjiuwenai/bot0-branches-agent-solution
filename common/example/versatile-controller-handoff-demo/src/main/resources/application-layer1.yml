@@ -28,3 +28,8 @@ openjiuwen:
             "3": agent_card_l2
             "5": agent_card_dead
             "6": agent_card_forbidden
+        forward:
+          # 转发出站 contextId 改写为 <目标agentId>-<原contextId>（确定性派生，
+          # INPUT_REQUIRED 续调改写结果一致）；不配置则透传原 contextId
+          # （adapter 的 ForwardContextIdRemoteAgentCaller 装饰器）
+          context-id-prefix-target: true
