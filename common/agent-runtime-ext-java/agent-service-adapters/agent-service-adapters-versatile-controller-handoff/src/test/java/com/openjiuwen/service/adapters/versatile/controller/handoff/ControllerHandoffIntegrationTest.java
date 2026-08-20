@@ -202,6 +202,30 @@ class ControllerHandoffIntegrationTest {
     }
 
     @Test
+    void duplicateMessageAfterNotInScopeReRunDrivesObserverToTerminal() {
+        // NOT_IN_SCOPE 弹回后重识别、控制器重发同 dedup-key 转调：DUPLICATE_MESSAGE 不再
+        // 静默跳过——首次转调未驱动 observer 终态，跳过会让流挂起，必须归一为类型化错误
+        perRequestResponses.add(new String[] {
+                handoffLine("L1_TO_L2", "intent_flight", "flight", "", "same-key"),
+                "{\"event\":\"end\"}"});
+        perRequestResponses.add(new String[] {
+                handoffLine("L1_TO_L2", "intent_flight", "flight", "", "same-key"),
+                "{\"event\":\"end\"}"});
+        controllerSays();
+        caller.outcome = new RemoteCallOutcome("rt-1", TaskState.TASK_STATE_COMPLETED, "COMPLETED",
+                HandoffSignals.notInScopeEnvelope(new IntentHandoff("L2_TO_L1", null, null, null, null, "{}")),
+                null, null);
+        RecordingObserver observer = new RecordingObserver();
+        handler().streamQuery(request("不属于本域"), observer);
+        assertThat(caller.calls).hasSize(1); // 第二次同 key 转调未再出站
+        assertThat(requestCount.get()).isEqualTo(2); // 控制器重跑了一次
+        assertThat(observer.completed).isFalse(); // 不是静默完成
+        assertThat(observer.error).isNotNull(); // 终态：类型化错误，而非挂起
+        String payload = String.valueOf(observer.chunks.get(observer.chunks.size() - 1).getData());
+        assertThat(payload).contains("VERSATILE_HANDOFF_DUPLICATE_MESSAGE");
+    }
+
+    @Test
     void gatewayFailureMapsToTargetUnavailableWithErrorPayload() {
         controllerSays(handoffLine("L1_TO_L2", "intent_flight", "flight", "agent_card_flight", "d3"),
                 "{\"event\":\"end\"}");

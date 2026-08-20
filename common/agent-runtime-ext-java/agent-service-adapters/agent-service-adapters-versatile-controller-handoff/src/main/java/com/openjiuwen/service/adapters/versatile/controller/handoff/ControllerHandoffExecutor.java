@@ -79,7 +79,7 @@ public class ControllerHandoffExecutor {
         try {
             target = targetResolver.resolve(handoff);
         } catch (HandoffTargetResolutionException ex) {
-            toHandoffError(observer, ex.getErrorCode(), ex.getMessage(), null);
+            toHandoffError(observer, state, ex.getErrorCode(), ex.getMessage(), null);
             return ExecResult.TERMINAL;
         }
         String dedupKey = handoff.dedupKey() != null && !handoff.dedupKey().isBlank()
@@ -91,15 +91,24 @@ public class ControllerHandoffExecutor {
                 handoff.intentId(), handoff.businessDomain(), decision.result());
         switch (decision.result()) {
             case DUPLICATE_MESSAGE -> {
-                return ExecResult.TERMINAL; // 同一执行重复消息：跳过，不报错（spec 3.8）
+                // 同一执行重复消息：跳过出站。唯一可达路径是 NOT_IN_SCOPE 弹回后重识别
+                // 重发同 key——该链路首次转调未驱动 observer 终态，静默跳过会让流挂起，
+                // 必须补一个类型化错误终态（TERMINAL 契约：observer 已驱动到终态）。
+                if (!state.observerDriven()) {
+                    toHandoffError(observer, state, "VERSATILE_HANDOFF_DUPLICATE_MESSAGE",
+                            "duplicate handoff message after not-in-scope bounce target="
+                                    + target.agentId(),
+                            target.agentId());
+                }
+                return ExecResult.TERMINAL;
             }
             case LOOP_LIMIT -> {
-                toHandoffError(observer, "VERSATILE_HANDOFF_LOOP_LIMIT",
+                toHandoffError(observer, state, "VERSATILE_HANDOFF_LOOP_LIMIT",
                         "max redirects exceeded target=" + target.agentId(), target.agentId());
                 return ExecResult.TERMINAL;
             }
             case DUPLICATE_TARGET -> {
-                toHandoffError(observer, "VERSATILE_HANDOFF_DUPLICATE_TARGET",
+                toHandoffError(observer, state, "VERSATILE_HANDOFF_DUPLICATE_TARGET",
                         "target already routed in this execution: " + target.agentId(), target.agentId());
                 return ExecResult.TERMINAL;
             }
@@ -114,7 +123,7 @@ public class ControllerHandoffExecutor {
             future = remoteAgentCaller.callOutcome(call, bridge);
         } catch (RuntimeException ex) {
             // 默认 A2ARemoteAgentClient 对未注册目标同步抛出（不经 future），同样归一为 TARGET_UNAVAILABLE
-            toHandoffError(observer, "VERSATILE_HANDOFF_TARGET_UNAVAILABLE",
+            toHandoffError(observer, state, "VERSATILE_HANDOFF_TARGET_UNAVAILABLE",
                     "downstream call failed: " + ex, target.agentId());
             return ExecResult.TERMINAL;
         }
@@ -126,20 +135,20 @@ public class ControllerHandoffExecutor {
                     : future.get(config.getTimeout().toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException ex) {
             future.cancel(true);
-            toHandoffError(observer, "VERSATILE_HANDOFF_TIMEOUT",
+            toHandoffError(observer, state, "VERSATILE_HANDOFF_TIMEOUT",
                     "downstream call timeout after " + config.getTimeout(), target.agentId());
             return ExecResult.TERMINAL;
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             future.cancel(true);
-            toHandoffError(observer, "VERSATILE_HANDOFF_TARGET_UNAVAILABLE",
+            toHandoffError(observer, state, "VERSATILE_HANDOFF_TARGET_UNAVAILABLE",
                     "interrupted while awaiting downstream", target.agentId());
             return ExecResult.TERMINAL;
         } catch (CancellationException ex) {
             log.warn("downstream call cancelled conversation_id={}", currentRequest.getConversationId());
             return ExecResult.TERMINAL; // 上游取消：停止消费，不再驱动 observer
         } catch (ExecutionException ex) {
-            toHandoffError(observer, "VERSATILE_HANDOFF_TARGET_UNAVAILABLE",
+            toHandoffError(observer, state, "VERSATILE_HANDOFF_TARGET_UNAVAILABLE",
                     "downstream call failed: " + String.valueOf(ex.getCause()), target.agentId());
             return ExecResult.TERMINAL;
         }
@@ -161,17 +170,18 @@ public class ControllerHandoffExecutor {
                     observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, outcome.result()));
                 }
                 observer.onComplete();
+                state.markObserverDriven();
             }
-            case INPUT_REQUIRED -> handleInputRequired(observer, currentRequest, target.agentId(), outcome);
-            case ERROR -> toHandoffError(observer, terminal.errorCode(), terminal.detail(), target.agentId());
-            default -> toHandoffError(observer, "VERSATILE_HANDOFF_RESULT_INVALID",
+            case INPUT_REQUIRED -> handleInputRequired(observer, state, currentRequest, target.agentId(), outcome);
+            case ERROR -> toHandoffError(observer, state, terminal.errorCode(), terminal.detail(), target.agentId());
+            default -> toHandoffError(observer, state, "VERSATILE_HANDOFF_RESULT_INVALID",
                     "unmapped terminal action", target.agentId());
         }
         return ExecResult.TERMINAL;
     }
 
-    private void handleInputRequired(QueryStreamObserver observer, ServeRequest request, String targetAgentId,
-            RemoteCallOutcome outcome) {
+    private void handleInputRequired(QueryStreamObserver observer, RequestHandoffState state,
+            ServeRequest request, String targetAgentId, RemoteCallOutcome outcome) {
         CrossAgentResumePort port = resumePortProvider == null ? null : resumePortProvider.getIfAvailable();
         boolean resumable = config.getCrossAgentResume().isEnabled()
                 && port != null
@@ -179,7 +189,7 @@ public class ControllerHandoffExecutor {
                 && port.saveResumeAssociation(request.getConversationId(), targetAgentId,
                         outcome.remoteTaskId(), targetAgentId);
         if (!resumable) {
-            toHandoffError(observer, "VERSATILE_HANDOFF_CROSS_AGENT_RESUME_UNSUPPORTED",
+            toHandoffError(observer, state, "VERSATILE_HANDOFF_CROSS_AGENT_RESUME_UNSUPPORTED",
                     "downstream requires input but cross-agent resume is unavailable"
                             + " (enabled=" + config.getCrossAgentResume().isEnabled()
                             + ", port=" + (port != null) + ", remoteTaskId=" + outcome.remoteTaskId() + ")",
@@ -195,6 +205,7 @@ public class ControllerHandoffExecutor {
         interrupt.put("_interrupt", association);
         observer.onNext(new QueryChunk(QueryChunk.TYPE_INTERRUPT, interrupt));
         observer.onComplete();
+        state.markObserverDriven();
     }
 
     private RemoteCall buildRemoteCall(ServeRequest request, String targetAgentId,
@@ -220,7 +231,8 @@ public class ControllerHandoffExecutor {
                 null, metadata, null, request.isStream());
     }
 
-    private void toHandoffError(QueryStreamObserver observer, String code, String detail, String targetAgentId) {
+    private void toHandoffError(QueryStreamObserver observer, RequestHandoffState state, String code,
+            String detail, String targetAgentId) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("code", code);
         payload.put("reason", detail == null ? "" : detail);
@@ -236,6 +248,7 @@ public class ControllerHandoffExecutor {
         log.warn("handoff failed code={} target={} detail={}", code, targetAgentId, detail);
         observer.onNext(new QueryChunk(QueryChunk.TYPE_ERROR, json));
         observer.onError(new IllegalStateException(json));
+        state.markObserverDriven();
     }
 
     private static String deriveDedupKey(IntentHandoff handoff) {

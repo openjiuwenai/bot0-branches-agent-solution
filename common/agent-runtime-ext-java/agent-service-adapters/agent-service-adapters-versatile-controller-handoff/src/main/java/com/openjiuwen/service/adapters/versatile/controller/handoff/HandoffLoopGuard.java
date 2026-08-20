@@ -54,7 +54,9 @@ public class HandoffLoopGuard {
         ControllerHandoffProperties.LoopTraceMetadata keys = properties.getLoopTraceMetadata();
         Object hopRaw = request.getMetadata() == null ? null : request.getMetadata().get(keys.getHopCountKey());
         if (hopRaw == null) {
-            log.warn("handoff route-trace metadata missing on inbound request conversation_id={} — "
+            // L1 部署下普通终端用户请求均无该元数据（仅 agent 间转调才携带），逐请求告警
+            // 会产生全量日志噪音，降为 DEBUG
+            log.debug("handoff route-trace metadata missing on inbound request conversation_id={} — "
                     + "cross-request loop detection degraded to per-request scope",
                     request.getConversationId());
             return GuardResult.ALLOW;

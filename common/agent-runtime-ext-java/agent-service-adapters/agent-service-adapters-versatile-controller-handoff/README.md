@@ -14,6 +14,12 @@ FEAT-002 Versatile 控制器意图转调 adapter（L2 设计见 agent-solution-d
 检测到标记后重跑自身控制器重新识别（`ExecResult.NOT_IN_SCOPE`），全程无反向 L2→L1
 调用。标记信封是协议信号，不透传给最终用户。
 
+NOT_IN_SCOPE 重跑的流式注意事项：首次控制器运行命中转调信号前已下发的 chunk 与
+重跑后的 chunk 会拼接输出（生产中转调信号通常在流首，影响小）。重跑后若控制器重发
+同一 dedup-key 的转调消息，guard 判 `DUPLICATE_MESSAGE` 并归一为
+`VERSATILE_HANDOFF_DUPLICATE_MESSAGE` 错误终态（首次转调未驱动终态时不再静默跳过，
+避免流挂起）。
+
 ## 启用
 
 ```yaml

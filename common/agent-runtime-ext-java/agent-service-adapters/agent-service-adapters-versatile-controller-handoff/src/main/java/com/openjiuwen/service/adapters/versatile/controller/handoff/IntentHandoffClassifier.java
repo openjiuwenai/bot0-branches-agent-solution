@@ -119,6 +119,8 @@ public class IntentHandoffClassifier {
     }
 
     private static String stripSseDataPrefix(String trimmed) {
+        // 两类入口：data: 前缀行（剥前缀后解析 JSON）；event: 等其他 SSE 字段行返回空串，
+        // 此时 readTree 得 null，由 matchesEventType 回头匹配原始行（event-type 显式配置时）
         if (trimmed.startsWith("data:")) {
             return trimmed.substring("data:".length()).trim();
         }
