@@ -613,7 +613,7 @@ public final class DefaultAgentClient implements AgentClient {
                 lastState = s.state();
                 forward(s);
                 if (s.terminal()) {
-                    finishTerminal(s.state(), null, null);
+                    settle(s.state(), null, null);
                 }
             } else if (event instanceof InvocationEvent.ContentDelta d) {
                 output.append(d.text());
@@ -643,10 +643,10 @@ public final class DefaultAgentClient implements AgentClient {
                     output.append(c.outputText());
                 }
                 forward(c);
-                finishTerminal(TaskState.COMPLETED, null, null);
+                settle(TaskState.COMPLETED, null, null);
             } else if (event instanceof InvocationEvent.Failed f) {
                 forward(f);
-                finishTerminal(TaskState.FAILED, f.errorCode(), f.message());
+                settle(TaskState.FAILED, f.errorCode(), f.message());
             } else {
                 // 理论不可达：所有 InvocationEvent 子类型均已覆盖。
                 throw new IllegalStateException("unexpected event: " + event);
@@ -663,7 +663,7 @@ public final class DefaultAgentClient implements AgentClient {
                 String code = ClassifiedError.codeOf(throwable);
                 forward(new InvocationEvent.Failed(invocationRef, code, throwable.getMessage(),
                         ClassifiedError.retryableOf(throwable)));
-                finishTerminal(TaskState.FAILED, code, throwable.getMessage());
+                settle(TaskState.FAILED, code, throwable.getMessage());
             }
         }
 
@@ -671,7 +671,7 @@ public final class DefaultAgentClient implements AgentClient {
         public void onComplete() {
             // 上游流结束但未到终态：以最后已知状态兜底完成（不制造额外失败，也不悬挂）。
             if (!finished.get()) {
-                finishTerminal(lastState, null, null);
+                settle(lastState, null, null);
             }
         }
 
@@ -700,7 +700,7 @@ public final class DefaultAgentClient implements AgentClient {
          * 本句柄不会再收到任何事件。以非终态 INPUT_REQUIRED 结算，避免调用方悬挂。
          */
         void settleAtInputPoint() {
-            finishTerminal(TaskState.INPUT_REQUIRED, null, null);
+            settle(TaskState.INPUT_REQUIRED, null, null);
         }
 
         void acceptExistingTask(String taskRef) {
@@ -730,7 +730,7 @@ public final class DefaultAgentClient implements AgentClient {
             TaskState st = (snap.state() != null) ? snap.state() : TaskState.UNKNOWN;
             lastState = st;
             String text = snap.outputText();
-            // 必须累积到 output：finishTerminal 用它组装 completion() 快照的 outputText。
+            // 必须累积到 output：settle 用它组装 completion() 结算快照的 outputText。
             // 只 forward 事件而不累积，会让快照驱动的 invocation（continueInput 及其内部工具续跑）
             // 拿到 outputText=null 的 completion，业务侧表现为"续轮结果为空"。
             if (text != null) {
@@ -745,7 +745,7 @@ public final class DefaultAgentClient implements AgentClient {
                 // ASYNC 非终态：保持 Call 未完成，等待业务后续 getInvocation，不结算。
                 return;
             }
-            finishTerminal(st, snap.errorCode(), snap.message());
+            settle(st, snap.errorCode(), snap.message());
         }
 
         void completeFromQuery(InvocationSnapshot snap) {
@@ -778,7 +778,7 @@ public final class DefaultAgentClient implements AgentClient {
                 driveClientTool(state, tc);
             } else {
                 forward(new InvocationEvent.InputRequired(invocationRef, null, null));
-                finishTerminal(TaskState.INPUT_REQUIRED, null, null);
+                settle(TaskState.INPUT_REQUIRED, null, null);
             }
         }
 
@@ -788,7 +788,7 @@ public final class DefaultAgentClient implements AgentClient {
          * @param st 任务状态
          * @param snap 续跑响应快照
          * @param text 累积后的输出文本
-         * @return ASYNC 非终态返回 true（保持 Call 未完成，跳过 finishTerminal）；其余返回 false
+         * @return ASYNC 非终态返回 true（保持 Call 未完成，跳过 settle）；其余返回 false
          */
         private boolean forwardResumeStateEvent(TaskState st, InvocationSnapshot snap, String text) {
             if (st == TaskState.COMPLETED) {
@@ -831,7 +831,7 @@ public final class DefaultAgentClient implements AgentClient {
             String code = ClassifiedError.codeOf(ex);
             forward(new InvocationEvent.Failed(invocationRef, code, ex.getMessage(),
                     ClassifiedError.retryableOf(ex)));
-            finishTerminal(TaskState.FAILED, code, ex.getMessage());
+            settle(TaskState.FAILED, code, ex.getMessage());
         }
 
         private void forward(InvocationEvent event) {
@@ -840,7 +840,7 @@ public final class DefaultAgentClient implements AgentClient {
             }
         }
 
-        private void finishTerminal(TaskState state, String errorCode, String message) {
+        private void settle(TaskState state, String errorCode, String message) {
             if (!finished.compareAndSet(false, true)) {
                 return;
             }

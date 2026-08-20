@@ -112,6 +112,8 @@ public interface Registration extends AutoCloseable {
 
 - gateway URL 指向 Agent Bus；
 - 凭据来自企业凭据代理、环境或短期 token provider；
+- 通过 `AgentClients.Builder.retryPolicy(...)` 配置链路异常后的查询/重订阅间隔、
+  最大退避、jitter 和连续失败上限；默认策略为 200/400/800ms、连续失败 3 次熔断；
 - invocation、cursor、tool result 和 idempotency 使用持久化 store；
 - Action 的最终业务系统也接受幂等键；SDK 本地防重不能替代业务效果幂等；
 - 首版 SDK 与示例按 **JDK 17** 基线落地（决策项 L-08 已敲定为 17）。代码只使用 17 稳定特性（record、sealed、instanceof 模式匹配、文本块），不依赖虚拟线程；升级到 JDK 21+ 时可平滑替换执行器实现，公共 API 不变。

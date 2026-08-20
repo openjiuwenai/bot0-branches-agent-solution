@@ -28,6 +28,12 @@ import java.util.UUID;
  * @since 2026-07-27
  */
 public final class InvocationRequest {
+    /** Runtime 直连与 Gateway 模式共用的 trace 属性键。 */
+    public static final String TRACE_ID_ATTRIBUTE = "traceId";
+
+    /** Runtime 直连与 Gateway 模式共用的 correlation 属性键。 */
+    public static final String CORRELATION_ID_ATTRIBUTE = "correlationId";
+
     private final String agentId;
     private final String conversationId;
     private final InvocationMode mode;
@@ -109,7 +115,8 @@ public final class InvocationRequest {
     }
 
     /**
-     * 调用截止时间；为空表示不设截止。
+     * 调用截止时间；从 {@link AgentClient#invoke(InvocationRequest)} 被调用时开始计时，
+     * 为空表示不设置业务截止时间。
      *
      * @return 截止时间
      */
@@ -127,7 +134,8 @@ public final class InvocationRequest {
     }
 
     /**
-     * 透传属性（只读视图）。
+     * 请求属性（只读视图）。Gateway 的投影规则由 Gateway 契约决定；Runtime 直连仅投影
+     * {@link #TRACE_ID_ATTRIBUTE traceId} 和 {@link #CORRELATION_ID_ATTRIBUTE correlationId}。
      *
      * @return 透传属性
      */
@@ -237,7 +245,7 @@ public final class InvocationRequest {
         }
 
         /**
-         * 设置截止时间。
+         * 设置从 {@code invoke()} 开始计时的调用截止时间。
          *
          * @param v 截止时间
          * @return 本构造器
@@ -268,6 +276,26 @@ public final class InvocationRequest {
         public Builder attribute(String k, String v) {
             this.attributes.put(k, v);
             return this;
+        }
+
+        /**
+         * 设置链路追踪标识。该属性可安全投影到 Gateway 与 Runtime 请求 metadata。
+         *
+         * @param v 链路追踪标识
+         * @return 本构造器
+         */
+        public Builder traceId(String v) {
+            return attribute(TRACE_ID_ATTRIBUTE, v);
+        }
+
+        /**
+         * 设置业务关联标识。该属性可安全投影到 Gateway 与 Runtime 请求 metadata。
+         *
+         * @param v 业务关联标识
+         * @return 本构造器
+         */
+        public Builder correlationId(String v) {
+            return attribute(CORRELATION_ID_ATTRIBUTE, v);
         }
 
         /**
