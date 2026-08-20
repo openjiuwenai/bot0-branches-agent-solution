@@ -6,15 +6,11 @@ package com.openjiuwen.service.adapters.versatile.controller.handoff;
 
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
 import com.openjiuwen.service.adapters.versatile.controller.handoff.autoconfigure.ControllerHandoffProperties;
-import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
-import com.openjiuwen.service.app.controller.a2a.client.RemoteCall;
-import com.openjiuwen.service.app.controller.a2a.client.RemoteCallOutcome;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 import com.openjiuwen.service.spec.dto.ServeRequest;
 
 import com.sun.net.httpserver.HttpServer;
-import org.a2aproject.sdk.spec.TaskState;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,13 +23,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Spec 7.2 场景旅程验收：一级转调二级、二级退回一级、异常区分、目标不可用、
- * 重复去重、单请求循环保护；以及 7.4 masking（错误载荷不携带原始报文）。
+ * Spec 7.2 场景旅程验收：一级转调二级（a2a_delegate 中断）、二级退回一级
+ * （remoteToolResults 信封重识别）、异常区分、目标不可用（REMOTE_* 映射）、
+ * 弹回目标重复转调保护；以及 7.4 masking（错误载荷不携带原始报文）。
  */
 class ControllerHandoffIntegrationTest {
 
@@ -47,27 +43,8 @@ class ControllerHandoffIntegrationTest {
         @Override public void onComplete() { this.completed = true; }
     }
 
-    static class FakeCaller implements RemoteAgentCaller {
-        final List<RemoteCall> calls = new ArrayList<>();
-        RemoteCallOutcome outcome = new RemoteCallOutcome("rt-1", TaskState.TASK_STATE_COMPLETED,
-                "COMPLETED", "二级答案", null, null);
-        RuntimeException failure;
-
-        @Override
-        public CompletableFuture<RemoteCallOutcome> callOutcome(RemoteCall call, EventObserver observer) {
-            calls.add(call);
-            if (failure != null) {
-                CompletableFuture<RemoteCallOutcome> f = new CompletableFuture<>();
-                f.completeExceptionally(failure);
-                return f;
-            }
-            return CompletableFuture.completedFuture(outcome);
-        }
-    }
-
     private HttpServer server;
     private String baseUrl;
-    private FakeCaller caller;
     private final List<String[]> perRequestResponses = new ArrayList<>();
     private final java.util.concurrent.atomic.AtomicInteger requestCount =
             new java.util.concurrent.atomic.AtomicInteger();
@@ -77,7 +54,6 @@ class ControllerHandoffIntegrationTest {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.start();
         baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
-        caller = new FakeCaller();
     }
 
     @AfterEach
@@ -179,7 +155,7 @@ class ControllerHandoffIntegrationTest {
         controllerSays(handoffLine("L2_TO_L1", "", "", "", "d2"), "{\"event\":\"end\"}");
         RecordingObserver observer = new RecordingObserver();
         handler(hp).streamQuery(request("不属于本域"), observer);
-        assertThat(caller.calls).isEmpty(); // 无反向调用
+        assertThat(observer.chunks).hasSize(1); // 无出站：仅信封一个 chunk
         assertThat(observer.completed).isTrue();
         String payload = String.valueOf(observer.chunks.get(observer.chunks.size() - 1).getData());
         assertThat(payload).contains(HandoffSignals.TYPE_NOT_IN_SCOPE);
@@ -249,20 +225,6 @@ class ControllerHandoffIntegrationTest {
         ServeRequest r = request("补充后的输入");
         r.getMetadata().put("runtime.remoteToolResults", results);
         return r;
-    }
-
-    @Test
-    void duplicateMessageAfterNotInScopeReRunDrivesObserverToTerminal() {
-        // executor 出站段退役后 DUPLICATE_MESSAGE 链路整体消失；弹回目标重复转调
-        // 由 DUPLICATE_TARGET（上述用例）覆盖
-        org.junit.jupiter.api.Assumptions.assumeTrue(false, "Task 4: 链路随 executor 退役删除");
-    }
-
-    @Test
-    void gatewayFailureMapsToTargetUnavailableWithErrorPayload() {
-        // 出站失败经协调器 REMOTE_* 错误以 remoteToolResults 回传——由
-        // remoteToolResultsFailureDrivesTypedError 覆盖
-        org.junit.jupiter.api.Assumptions.assumeTrue(false, "Task 3 覆盖后删除");
     }
 
     @Test

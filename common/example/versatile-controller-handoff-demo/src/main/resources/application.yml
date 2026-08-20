@@ -29,7 +29,6 @@ openjiuwen:
         resume-token-get: /data/resume_token
       handoff:
         enabled: true
-        timeout: 3s
         classify:
           event-type: message
           field-path: /data/node_name

@@ -54,62 +54,6 @@ class HandoffLoopGuardTest {
     }
 
     @Test
-    void outboundAppendsSelfAndIncrementsHop() {
-        HandoffLoopGuard guard = new HandoffLoopGuard(properties());
-        HandoffLoopGuard.OutboundDecision d = guard.prepareOutbound("agent_card_hotel", "k1",
-                request(Map.of("handoffHopCount", 1, "handoffRouteTrace", List.of("agent_card_l1"),
-                        "sourceAgentId", "agent_card_l1")),
-                new RequestHandoffState());
-        assertThat(d.result()).isEqualTo(HandoffLoopGuard.GuardResult.ALLOW);
-        assertThat(d.metadata()).containsEntry("handoffHopCount", 2);
-        // 入站轨迹已含 self：不重复追加（轨迹记录访问过的 agent，重复无意义）
-        assertThat((List<Object>) d.metadata().get("handoffRouteTrace"))
-                .containsExactly("agent_card_l1");
-        assertThat(d.metadata()).containsEntry("sourceAgentId", "agent_card_l1");
-    }
-
-    @Test
-    void outboundFirstHopInitializesSourceAndTrace() {
-        HandoffLoopGuard guard = new HandoffLoopGuard(properties());
-        HandoffLoopGuard.OutboundDecision d = guard.prepareOutbound("agent_card_hotel", "k1",
-                request(null), new RequestHandoffState());
-        assertThat(d.metadata()).containsEntry("handoffHopCount", 1);
-        assertThat((List<Object>) d.metadata().get("handoffRouteTrace")).containsExactly("agent_card_l1");
-        assertThat(d.metadata()).containsEntry("sourceAgentId", "agent_card_l1");
-    }
-
-    @Test
-    void duplicateDedupKeySkipsSecondCall() {
-        HandoffLoopGuard guard = new HandoffLoopGuard(properties());
-        ServeRequest req = request(null);
-        RequestHandoffState state = new RequestHandoffState();
-        guard.prepareOutbound("a", "k1", req, state);
-        assertThat(guard.prepareOutbound("a", "k1", req, state).result())
-                .isEqualTo(HandoffLoopGuard.GuardResult.DUPLICATE_MESSAGE);
-    }
-
-    @Test
-    void redirectCountOverLimitYieldsLoopLimit() {
-        HandoffLoopGuard guard = new HandoffLoopGuard(properties());
-        ServeRequest req = request(null);
-        RequestHandoffState state = new RequestHandoffState();
-        guard.prepareOutbound("a", "k1", req, state);
-        guard.prepareOutbound("b", "k2", req, state);
-        assertThat(guard.prepareOutbound("c", "k3", req, state).result())
-                .isEqualTo(HandoffLoopGuard.GuardResult.LOOP_LIMIT);
-    }
-
-    @Test
-    void repeatedTargetInSameRequestYieldsDuplicateTarget() {
-        HandoffLoopGuard guard = new HandoffLoopGuard(properties());
-        ServeRequest req = request(null);
-        RequestHandoffState state = new RequestHandoffState();
-        guard.prepareOutbound("a", "k1", req, state);
-        HandoffLoopGuard.OutboundDecision d = guard.prepareOutbound("a", "k2", req, state);
-        assertThat(d.result()).isEqualTo(HandoffLoopGuard.GuardResult.DUPLICATE_TARGET);
-    }
-
-    @Test
     void outboundTraceMetadataIncrementsHopAndAppendsSelf() {
         HandoffLoopGuard guard = new HandoffLoopGuard(properties());
         Map<String, Object> metadata = new HashMap<>();

@@ -6,7 +6,6 @@ package com.openjiuwen.service.adapters.versatile.controller.handoff.autoconfigu
 
 import org.junit.jupiter.api.Test;
 
-import java.time.Duration;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,7 +27,6 @@ class ControllerHandoffPropertiesTest {
     void defaultsMatchSpec() {
         ControllerHandoffProperties p = new ControllerHandoffProperties();
         assertThat(p.isEnabled()).isFalse();
-        assertThat(p.getTimeout()).isEqualTo(Duration.ofSeconds(60));
         assertThat(p.getLoop().getMaxRedirects()).isEqualTo(3);
         assertThat(p.getLoop().getMaxRouteTraceHops()).isEqualTo(8);
         assertThat(p.getLoop().isDuplicateTargetDetection()).isTrue();
@@ -38,7 +36,6 @@ class ControllerHandoffPropertiesTest {
         assertThat(p.getTarget().getResolutionPriority())
                 .containsExactly("direct", "intent", "domain");
         assertThat(p.getSignal().getHandoffTypes()).isEmpty();
-        assertThat(p.getCrossAgentResume().isEnabled()).isFalse();
         assertThat(p.getForwardMetadataKeys()).isEmpty();
     }
 

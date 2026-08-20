@@ -16,10 +16,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Two-layer loop protection (spec 3.8/4.6): per-request dedup + redirect counting
- * + repeated-target detection; cross-request detection via A2A metadata-carried
- * handoffHopCount/handoffRouteTrace/sourceAgentId. Cross-request detection
- * degrades (warn) when the inbound metadata chain is not populated.
+ * Loop protection (spec 3.8/4.6): inbound route-trace validation via A2A
+ * metadata-carried handoffHopCount/handoffRouteTrace/sourceAgentId, plus outbound
+ * trace metadata construction for the next hop. Cross-request detection degrades
+ * (debug) when the inbound metadata chain is not populated.
  *
  * <p>Trace semantics: every outbound hop appends <b>self</b> to the trace. An
  * instance rejects an inbound request when the trace contains itself — it was
@@ -40,13 +40,7 @@ public class HandoffLoopGuard {
     }
 
     public enum GuardResult {
-        ALLOW, LOOP_LIMIT, DUPLICATE_TARGET, DUPLICATE_MESSAGE
-    }
-
-    public record OutboundDecision(GuardResult result, Map<String, Object> metadata) {
-        static OutboundDecision allow(Map<String, Object> metadata) {
-            return new OutboundDecision(GuardResult.ALLOW, metadata);
-        }
+        ALLOW, LOOP_LIMIT, DUPLICATE_TARGET
     }
 
     /** Inbound route-trace validation; read from ServeRequest.metadata. */
@@ -75,41 +69,6 @@ public class HandoffLoopGuard {
             }
         }
         return GuardResult.ALLOW;
-    }
-
-    /**
-     * Same-request dedup/count/target checks plus outbound trace metadata construction
-     * (hop+1, self appended to trace, sourceAgentId preserved or initialized).
-     */
-    public OutboundDecision prepareOutbound(String targetAgentId, String dedupKey, ServeRequest request,
-            RequestHandoffState state) {
-        if (!state.dedupKeys().add(dedupKey)) {
-            log.info("handoff duplicate message skipped conversation_id={} dedup_key={}",
-                    request.getConversationId(), dedupKey);
-            return new OutboundDecision(GuardResult.DUPLICATE_MESSAGE, Map.of());
-        }
-        if (state.redirectCount() + 1 > properties.getLoop().getMaxRedirects()) {
-            return new OutboundDecision(GuardResult.LOOP_LIMIT, Map.of());
-        }
-        if (properties.getLoop().isDuplicateTargetDetection() && state.targets().contains(targetAgentId)) {
-            return new OutboundDecision(GuardResult.DUPLICATE_TARGET, Map.of());
-        }
-        state.incrementRedirect();
-        state.targets().add(targetAgentId);
-
-        ControllerHandoffProperties.LoopTraceMetadata keys = properties.getLoopTraceMetadata();
-        Map<String, Object> inbound = request.getMetadata() == null ? Map.of() : request.getMetadata();
-        List<String> trace = new ArrayList<>(toStringList(inbound.get(keys.getRouteTraceKey())));
-        String self = properties.getSelfAgentId();
-        if (self != null && !self.isBlank() && !trace.contains(self)) {
-            trace.add(self);
-        }
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        metadata.put(keys.getHopCountKey(), toInt(inbound.get(keys.getHopCountKey()), 0) + 1);
-        metadata.put(keys.getRouteTraceKey(), trace);
-        Object source = inbound.get(keys.getSourceAgentKey());
-        metadata.put(keys.getSourceAgentKey(), source != null ? source : self);
-        return OutboundDecision.allow(metadata);
     }
 
     /**

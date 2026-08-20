@@ -6,7 +6,6 @@ package com.openjiuwen.service.adapters.versatile.controller.handoff.autoconfigu
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,11 +25,7 @@ public class ControllerHandoffProperties {
 
     private boolean enabled = false;
 
-    private Duration timeout = Duration.ofSeconds(60);
-
     private String selfAgentId;
-
-    private final CrossAgentResume crossAgentResume = new CrossAgentResume();
 
     private Classify classify;
 
@@ -54,24 +49,12 @@ public class ControllerHandoffProperties {
         this.enabled = enabled;
     }
 
-    public Duration getTimeout() {
-        return timeout;
-    }
-
-    public void setTimeout(Duration timeout) {
-        this.timeout = timeout;
-    }
-
     public String getSelfAgentId() {
         return selfAgentId;
     }
 
     public void setSelfAgentId(String selfAgentId) {
         this.selfAgentId = selfAgentId;
-    }
-
-    public CrossAgentResume getCrossAgentResume() {
-        return crossAgentResume;
     }
 
     public Classify getClassify() {
@@ -138,18 +121,6 @@ public class ControllerHandoffProperties {
 
     private static boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
-    }
-
-    public static class CrossAgentResume {
-        private boolean enabled = false;
-
-        public boolean isEnabled() {
-            return enabled;
-        }
-
-        public void setEnabled(boolean enabled) {
-            this.enabled = enabled;
-        }
     }
 
     public static class Classify {
