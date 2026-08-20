@@ -63,17 +63,36 @@ shadow 快照恢复。因此把现有中断改成 a2a_delegate 形状只会让 r
 | 流式 chunk 经 `DownstreamEventBridge` 直推 observer | 协调器 `MemberEventObserver` → `SerialQueryStreamObserver` 转发；需验证事件顺序/完整性等价 |
 | 下游超时 `handoff.timeout` | 协调器调度超时（队列/并发参数）语义不同，需对齐 |
 
-## 4. 待确认的 runtime 侧行为（迁移前置调研项）
+## 4. runtime 侧行为确认（2026-08-20 调研结论）
 
-1. **resume=true 的 re-invoke 请求构造**：`buildBatchResumeRequest` 保留原
-   messages 并注入 `runtime.remoteToolResults` metadata。request extractor
-   是否会把它注入控制器会话（作为工具/agent 消息）需确认；信封不应作为对话
-   内容进入控制器——识别后应在 extractor 之前抑制。
-2. **request metadata 透传链**：trace 键放进 L1 入站 request metadata 后，
-   协调器出站是否原样透传（`outboundMetadata` 的 allowlist 行为）。
-3. **单 item 批的中断呈现形状**：客户端看到的中断 payload（items 形态）
-   与现 demo 场景 8 断言的兼容性。
-4. **streaming 模式下协调器转发顺序**与 `DownstreamEventBridge` 的差异。
+1. **resume=true 的 re-invoke 请求构造**（已确认）：`buildBatchResumeRequest`
+   保留原 messages、把 remote 结果注入 `runtime.remoteToolResults` metadata。
+   Versatile request extractor **不读该键**（无任何引用）——不会自动进入控制器会话，
+   handler 必须在入口自行消费；信封抑制天然成立（识别逻辑在 handler，extractor 之前）。
+2. **request metadata 透传链**（已确认）：协调器 `outboundMetadata` 仅剔除
+   `RESERVED_METADATA`（`_interrupt` / `runtime.parentTaskId` /
+   `runtime.remoteToolInputs` / `runtime.remoteBatchId` / `runtime.remoteToolResults`），
+   其余键**原样透传**到 `RemoteCall.metadata`。trace 键
+   （`handoffHopCount` / `handoffRouteTrace` / `sourceAgentId`）走 request metadata 可行：
+   handler 产出中断前把更新后的 trace 写入 `request.metadata` 即可（`ServeRequest`
+   可变，协调器 `start()` 取 `batch.request` 的 metadata 构造出站）。
+3. **单 item 批的中断呈现形状**（已确认）：客户端看到
+   `publicInterrupt` 形状 `{message: <inputPrompt>, items:[{toolCallId, toolName, message}]}`
+   ——干净、无 `context._interrupt_kind` 泄漏。demo 场景 8 断言改为该形状。
+   单 item 输入形式：`interruptItems` 对无 `items` 键的中断 map 整体作为单 item
+   （基线 `buildA2aDelegateInterrupt` 即此形式）。
+4. **流式转发形状**（已确认，与现行为有差异）：remote 事件经 `MemberEventObserver`
+   投影为 `TYPE_REMOTE_AGENT_OUTPUT`（携带 `TaskArtifactUpdateEvent`）推送
+   `SerialQueryStreamObserver` → 父 observer，**不是** executor 路径的 `TYPE_CHUNK`
+   （`DownstreamEventBridge`）。非流式请求不投影（`shouldProjectEvents=false`），
+   结果仅存在于 `remoteToolResults`。含义：happy-path re-invoke 时 handler 对
+   `remoteToolResults` 无信封的处理必须区分流式（内容已投影，仅 `onComplete()`）
+   与非流式（需把结果作为 `TYPE_CHUNK` 下发）。
+5. **第二轮路由**（已确认）：A2A 层 `A2AProtocolAdapter.trustedMetadata` 把
+   `ctx.getTaskId()` 注入为 `runtime.parentTaskId`（保留键剥离不可信来源）→
+   `tryResumePending` → 协调器按 shadow task 恢复 batch → `member.remoteTaskId`
+   续调同一远端 task。客户端只需向同一 L1 task 发消息，单 member 批无需
+   targeted inputs（pending member 默认吃 `lastUserQuery`）。
 
 ## 5. 分阶段落地
 
