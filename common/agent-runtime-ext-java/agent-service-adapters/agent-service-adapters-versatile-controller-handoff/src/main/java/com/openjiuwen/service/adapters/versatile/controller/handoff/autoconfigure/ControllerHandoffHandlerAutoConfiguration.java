@@ -6,9 +6,15 @@ package com.openjiuwen.service.adapters.versatile.controller.handoff.autoconfigu
 
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
 import com.openjiuwen.service.adapters.versatile.controller.handoff.ControllerHandoffAgentHandler;
+import com.openjiuwen.service.adapters.versatile.controller.handoff.ForwardContextIdRemoteAgentCaller;
 import com.openjiuwen.service.adapters.versatile.controller.handoff.HandoffTargetResolver;
 import com.openjiuwen.service.adapters.versatile.controller.handoff.IntentHandoffClassifier;
+import com.openjiuwen.service.app.a2a.catalog.A2ARemoteAgentCardRegistry;
+import com.openjiuwen.service.app.autoconfigure.A2AAutoConfiguration;
 import com.openjiuwen.service.app.autoconfigure.AgentServiceAutoConfiguration;
+import com.openjiuwen.service.app.config.A2AProperties;
+import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentClient;
+import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 import com.openjiuwen.service.spec.spi.AgentHandler;
 
 import org.springframework.beans.factory.InitializingBean;
@@ -32,9 +38,14 @@ import org.springframework.context.annotation.Bean;
  * to the runtime coordinator via the a2a_delegate interrupt, so the target resolver
  * is registered here alongside the handler.
  *
+ * <p>Also runs before {@link A2AAutoConfiguration} so the optional
+ * {@code forward.context-id-prefix-target} caller can claim the
+ * {@code RemoteAgentCaller} slot before the runtime's conditional default
+ * (same order-sensitive pattern).
+ *
  * @since 2026-08-19
  */
-@AutoConfiguration(before = AgentServiceAutoConfiguration.class)
+@AutoConfiguration(before = {AgentServiceAutoConfiguration.class, A2AAutoConfiguration.class})
 @ConditionalOnProperty(prefix = "openjiuwen.service.versatile.handoff", name = "enabled",
         havingValue = "true")
 @EnableConfigurationProperties({VersatileProperties.class, ControllerHandoffProperties.class})
@@ -73,5 +84,27 @@ public class ControllerHandoffHandlerAutoConfiguration implements InitializingBe
             ControllerHandoffProperties handoffProperties) {
         return new ControllerHandoffAgentHandler(versatileProperties, classifier,
                 targetResolver, handoffProperties);
+    }
+
+    /**
+     * Optional outbound contextId rewrite ({@code forward.context-id-prefix-target}):
+     * replaces the runtime's conditional default caller with the
+     * {@link ForwardContextIdRemoteAgentCaller} decorator — every outbound A2A
+     * call carries {@code <目标agentId>-<原contextId>}. {@code @ConditionalOnMissingBean}
+     * keeps user-provided callers in charge.
+     *
+     * @param registry runtime-managed remote Agent Card registry
+     * @param a2aProperties runtime A2A configuration
+     * @return contextId-prefixing remote caller
+     */
+    @Bean
+    @ConditionalOnProperty(prefix = "openjiuwen.service.versatile.handoff.forward",
+            name = "context-id-prefix-target", havingValue = "true")
+    @ConditionalOnMissingBean(RemoteAgentCaller.class)
+    public RemoteAgentCaller forwardContextIdRemoteAgentCaller(A2ARemoteAgentCardRegistry registry,
+            A2AProperties a2aProperties) {
+        A2ARemoteAgentClient delegate = new A2ARemoteAgentClient(registry,
+                a2aProperties.getRemoteInvocation().getMaxConcurrency());
+        return new ForwardContextIdRemoteAgentCaller(delegate);
     }
 }

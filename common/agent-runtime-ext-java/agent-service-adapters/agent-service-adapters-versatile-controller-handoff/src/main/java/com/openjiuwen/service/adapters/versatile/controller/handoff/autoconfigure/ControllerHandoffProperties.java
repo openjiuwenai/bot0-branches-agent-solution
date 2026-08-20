@@ -33,6 +33,8 @@ public class ControllerHandoffProperties {
 
     private final Signal signal = new Signal();
 
+    private final Forward forward = new Forward();
+
     private List<String> forwardMetadataKeys = new ArrayList<>();
 
     public boolean isEnabled() {
@@ -61,6 +63,10 @@ public class ControllerHandoffProperties {
 
     public Signal getSignal() {
         return signal;
+    }
+
+    public Forward getForward() {
+        return forward;
     }
 
     public List<String> getForwardMetadataKeys() {
@@ -234,6 +240,24 @@ public class ControllerHandoffProperties {
 
         public void setHandoffTypes(List<String> handoffTypes) {
             this.handoffTypes = handoffTypes;
+        }
+    }
+
+    /**
+     * Outbound forward policy (handoff delegate interrupt → runtime coordinator
+     * 出站调用): contextId rewrite options for the A2A wire call. The rewrite is
+     * a deterministic derivation ({@code <目标agentId>-<原contextId>}), so
+     * INPUT_REQUIRED 续调 of one delegation chain carry the same rewritten id.
+     */
+    public static class Forward {
+        private boolean contextIdPrefixTarget = false;
+
+        public boolean isContextIdPrefixTarget() {
+            return contextIdPrefixTarget;
+        }
+
+        public void setContextIdPrefixTarget(boolean contextIdPrefixTarget) {
+            this.contextIdPrefixTarget = contextIdPrefixTarget;
         }
     }
 }
