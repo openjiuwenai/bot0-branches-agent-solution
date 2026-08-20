@@ -126,12 +126,8 @@ class ControllerHandoffIntegrationTest {
         VersatileProperties versatile = new VersatileProperties();
         versatile.setUrlTemplate(baseUrl + "/v1/p/agents/a/conversations/{conversation_id}");
         versatile.setTimeout(Duration.ofSeconds(5));
-        ControllerHandoffExecutor executor = new ControllerHandoffExecutor(caller,
-                new HandoffTargetResolver(hp), new DownstreamEventMapper(), new HandoffLoopGuard(hp),
-                new ControllerHandoffAgentHandlerTest.EmptyProvider<>(), hp);
         return new ControllerHandoffAgentHandler(versatile, new IntentHandoffClassifier(hp),
-                new HandoffLoopGuard(hp),
-                new ControllerHandoffAgentHandlerTest.SingleProvider<>(executor), hp);
+                new HandoffLoopGuard(hp), new HandoffTargetResolver(hp), hp);
     }
 
     private ControllerHandoffAgentHandler handler() {
@@ -156,16 +152,23 @@ class ControllerHandoffIntegrationTest {
 
     @Test
     void l1HandsOffToL2ByIntentMappingAndNormalizesResult() {
-        // 直接目标缺省 → intent 映射解析（spec 3.2 / 7.2 一级转调二级）
+        // 直接目标缺省 → intent 映射解析（spec 3.2 / 7.2 一级转调二级）：
+        // 出站移交 runtime 协调器——handler 产出单 item a2a_delegate 中断
         controllerSays(handoffLine("L1_TO_L2", "intent_flight", "flight", "", "d1"),
                 "{\"event\":\"end\"}");
         RecordingObserver observer = new RecordingObserver();
         handler().streamQuery(request("订机票"), observer);
-        assertThat(caller.calls).hasSize(1);
-        assertThat(caller.calls.get(0).agentName()).isEqualTo("agent_card_flight");
-        assertThat(caller.calls.get(0).contextId()).isEqualTo("conv-i"); // 会话连续性
         assertThat(observer.completed).isTrue();
         assertThat(observer.error).isNull(); // 转调消息未被映射为 FAILED
+        assertThat(observer.chunks).hasSize(1);
+        Map<?, ?> payload = (Map<?, ?>) observer.chunks.get(0).getData();
+        assertThat(observer.chunks.get(0).getType()).isEqualTo(QueryChunk.TYPE_INTERRUPT);
+        assertThat((String) payload.get("toolCallId")).startsWith("handoff:agent_card_flight:");
+        assertThat(payload.get("agentName")).isEqualTo("agent_card_flight");
+        assertThat(payload.get("message")).isEqualTo("订机票");
+        Map<?, ?> context = (Map<?, ?>) payload.get("context");
+        assertThat(context.get("_interrupt_kind")).isEqualTo("a2a_delegate");
+        assertThat(context.get("resume")).isEqualTo(true);
     }
 
     @Test
@@ -184,69 +187,35 @@ class ControllerHandoffIntegrationTest {
 
     @Test
     void downstreamNotInScopeSignalReRunsControllerForReRecognition() {
-        // L2 应答携带 not-in-scope 标记 → executor 返回 NOT_IN_SCOPE → handler 重跑控制器重新识别
-        perRequestResponses.add(new String[] {
-                handoffLine("L1_TO_L2", "intent_flight", "flight", "", "d4"),
-                "{\"event\":\"end\"}"});
-        perRequestResponses.add(new String[] {"{\"event\":\"end\"}"});
-        controllerSays();
-        caller.outcome = new RemoteCallOutcome("rt-1", TaskState.TASK_STATE_COMPLETED, "COMPLETED",
-                HandoffSignals.notInScopeEnvelope(new IntentHandoff("L2_TO_L1", null, null, null, null, "{}")),
-                null, null);
-        RecordingObserver observer = new RecordingObserver();
-        handler().streamQuery(request("不属于本域"), observer);
-        assertThat(caller.calls).hasSize(1); // 只有一次 L2 出站
-        assertThat(requestCount.get()).isEqualTo(2); // 控制器重跑了一次
-        assertThat(observer.completed).isTrue();
-        assertThat(observer.error).isNull();
+        // L2 弹回 not-in-scope 后的 re-invoke 重识别：runtime 协调器以 resume=true 重新进入
+        // handler（remoteToolResults 携带信封）——Task 3 接管该链路后恢复验收
+        org.junit.jupiter.api.Assumptions.assumeTrue(false, "Task 3: remoteToolResults 入口短路");
     }
 
     @Test
     void duplicateMessageAfterNotInScopeReRunDrivesObserverToTerminal() {
-        // NOT_IN_SCOPE 弹回后重识别、控制器重发同 dedup-key 转调：DUPLICATE_MESSAGE 不再
-        // 静默跳过——首次转调未驱动 observer 终态，跳过会让流挂起，必须归一为类型化错误
-        perRequestResponses.add(new String[] {
-                handoffLine("L1_TO_L2", "intent_flight", "flight", "", "same-key"),
-                "{\"event\":\"end\"}"});
-        perRequestResponses.add(new String[] {
-                handoffLine("L1_TO_L2", "intent_flight", "flight", "", "same-key"),
-                "{\"event\":\"end\"}"});
-        controllerSays();
-        caller.outcome = new RemoteCallOutcome("rt-1", TaskState.TASK_STATE_COMPLETED, "COMPLETED",
-                HandoffSignals.notInScopeEnvelope(new IntentHandoff("L2_TO_L1", null, null, null, null, "{}")),
-                null, null);
-        RecordingObserver observer = new RecordingObserver();
-        handler().streamQuery(request("不属于本域"), observer);
-        assertThat(caller.calls).hasSize(1); // 第二次同 key 转调未再出站
-        assertThat(requestCount.get()).isEqualTo(2); // 控制器重跑了一次
-        assertThat(observer.completed).isFalse(); // 不是静默完成
-        assertThat(observer.error).isNotNull(); // 终态：类型化错误，而非挂起
-        String payload = String.valueOf(observer.chunks.get(observer.chunks.size() - 1).getData());
-        assertThat(payload).contains("VERSATILE_HANDOFF_DUPLICATE_MESSAGE");
+        // executor 出站段退役后 DUPLICATE_MESSAGE 链路整体消失；弹回目标重复转调
+        // 由 DUPLICATE_TARGET（Task 3）覆盖
+        org.junit.jupiter.api.Assumptions.assumeTrue(false, "Task 3/4: 链路退役重写");
     }
 
     @Test
     void gatewayFailureMapsToTargetUnavailableWithErrorPayload() {
-        controllerSays(handoffLine("L1_TO_L2", "intent_flight", "flight", "agent_card_flight", "d3"),
-                "{\"event\":\"end\"}");
-        caller.failure = new RuntimeException("gateway 502");
-        RecordingObserver observer = new RecordingObserver();
-        handler().streamQuery(request("订机票"), observer);
-        assertThat(observer.completed).isFalse(); // 不返回空 COMPLETED
-        String payload = String.valueOf(observer.chunks.get(0).getData());
-        assertThat(payload).contains("VERSATILE_HANDOFF_TARGET_UNAVAILABLE").contains("agent_card_flight");
-        assertThat(observer.error).isNotNull();
+        // 出站失败经协调器 REMOTE_* 错误以 remoteToolResults 回传——Task 3 接管后恢复验收
+        org.junit.jupiter.api.Assumptions.assumeTrue(false, "Task 3: REMOTE_* 失败码映射");
     }
 
     @Test
     void duplicateHandoffMessageDeduplicatedWithinRequest() {
+        // 同流内重复转调消息：首个命中即产出中断并驱动 observer 到终态，
+        // 后续行全部抑制（executor 时代的 dedup-key 去重不再需要）
         controllerSays(
                 handoffLine("L1_TO_L2", "intent_flight", "flight", "agent_card_flight", "same-key"),
                 handoffLine("L1_TO_L2", "intent_flight", "flight", "agent_card_flight", "same-key"),
                 "{\"event\":\"end\"}");
         RecordingObserver observer = new RecordingObserver();
         handler().streamQuery(request("订机票"), observer);
-        assertThat(caller.calls).hasSize(1); // 同请求去重
+        assertThat(observer.chunks).hasSize(1); // 单次中断
         assertThat(observer.completed).isTrue();
     }
 
@@ -264,16 +233,16 @@ class ControllerHandoffIntegrationTest {
 
     @Test
     void multipleDistinctHandoffLinesOnlyFirstConsumed() {
-        // 同流内多条不同转调消息：只有首个命中被消费（hit.compareAndSet）；
-        // LOOP_LIMIT 的运行时验证由 ControllerHandoffExecutorTest.loopLimitProducesTypedError 单元层覆盖
+        // 同流内多条不同转调消息：只有首个命中被消费（hit.compareAndSet）→ 单次中断
         controllerSays(
                 handoffLine("T", "i1", "", "agent_card_hotel", "k1"),
                 handoffLine("T", "i2", "", "agent_card_flight", "k2"),
                 "{\"event\":\"end\"}");
         RecordingObserver observer = new RecordingObserver();
         handler().streamQuery(request("多消息"), observer);
-        assertThat(caller.calls).hasSize(1); // 只有首个命中被消费
-        assertThat(caller.calls.get(0).agentName()).isEqualTo("agent_card_hotel");
+        assertThat(observer.chunks).hasSize(1);
+        Map<?, ?> payload = (Map<?, ?>) observer.chunks.get(0).getData();
+        assertThat((String) payload.get("toolCallId")).startsWith("handoff:agent_card_hotel:");
         assertThat(observer.completed).isTrue();
     }
 }

@@ -6,14 +6,13 @@ package com.openjiuwen.service.adapters.versatile.controller.handoff.autoconfigu
 
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
 import com.openjiuwen.service.adapters.versatile.controller.handoff.ControllerHandoffAgentHandler;
-import com.openjiuwen.service.adapters.versatile.controller.handoff.ControllerHandoffExecutor;
 import com.openjiuwen.service.adapters.versatile.controller.handoff.HandoffLoopGuard;
+import com.openjiuwen.service.adapters.versatile.controller.handoff.HandoffTargetResolver;
 import com.openjiuwen.service.adapters.versatile.controller.handoff.IntentHandoffClassifier;
 import com.openjiuwen.service.app.autoconfigure.AgentServiceAutoConfiguration;
 import com.openjiuwen.service.spec.spi.AgentHandler;
 
 import org.springframework.beans.factory.InitializingBean;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -29,11 +28,10 @@ import org.springframework.context.annotation.Bean;
  * and the handoff handler itself claims the same slot the same way. Both conditions are
  * order-sensitive — whichever registers first wins — so this configuration is pinned
  * with {@code before = AgentServiceAutoConfiguration.class} to guarantee the handoff
- * handler (not the placeholder) serves {@code handoff.enabled=true} deployments. The
- * executor stays in {@link ControllerHandoffAutoConfiguration}, which runs after the
- * A2A client auto-configuration so the default {@code RemoteAgentCaller} bean is visible
- * to its {@code @ConditionalOnBean}; the handler resolves the executor lazily via
- * {@link ObjectProvider}, so the split ordering is safe.
+ * handler (not the placeholder) serves {@code handoff.enabled=true} deployments.
+ * The handler no longer depends on any late A2A bean: the outbound call is delegated
+ * to the runtime coordinator via the a2a_delegate interrupt, so the target resolver
+ * is registered here alongside the handler.
  *
  * @since 2026-08-19
  */
@@ -68,14 +66,20 @@ public class ControllerHandoffHandlerAutoConfiguration implements InitializingBe
     }
 
     @Bean
+    @ConditionalOnMissingBean
+    public HandoffTargetResolver handoffTargetResolver(ControllerHandoffProperties props) {
+        return new HandoffTargetResolver(props);
+    }
+
+    @Bean
     @ConditionalOnMissingBean(AgentHandler.class)
     public ControllerHandoffAgentHandler controllerHandoffAgentHandler(
             VersatileProperties versatileProperties,
             IntentHandoffClassifier classifier,
             HandoffLoopGuard loopGuard,
-            ObjectProvider<ControllerHandoffExecutor> executorProvider,
+            HandoffTargetResolver targetResolver,
             ControllerHandoffProperties handoffProperties) {
         return new ControllerHandoffAgentHandler(versatileProperties, classifier, loopGuard,
-                executorProvider, handoffProperties);
+                targetResolver, handoffProperties);
     }
 }

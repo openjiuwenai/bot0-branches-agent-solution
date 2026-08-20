@@ -20,13 +20,13 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 
 /**
- * Late auto-configuration for the handoff executor pipeline. Runs after
+ * Late auto-configuration for the legacy handoff executor pipeline (pending retirement,
+ * migration design 5 阶段 3): no longer referenced by the handler — the outbound call is
+ * delegated to the runtime coordinator via the a2a_delegate interrupt. Runs after
  * {@link A2AAutoConfiguration} so a default {@code RemoteAgentCaller} bean (runtime
- * {@code A2ARemoteAgentClient}) is visible to the executor's
- * {@code @ConditionalOnBean}; deployments registering their own caller bean (user
- * configuration) win the {@code @ConditionalOnMissingBean} slot earlier still.
+ * {@code A2ARemoteAgentClient}) is visible to the executor's {@code @ConditionalOnBean}.
  *
- * <p>The {@code AgentHandler} bean itself lives in
+ * <p>The {@code AgentHandler} bean and the {@link HandoffTargetResolver} live in
  * {@link ControllerHandoffHandlerAutoConfiguration}, which must run before the
  * runtime's {@code AgentServiceAutoConfiguration} placeholder holder — see there
  * for the ordering rationale.
@@ -37,12 +37,6 @@ import org.springframework.context.annotation.Bean;
 @ConditionalOnProperty(prefix = "openjiuwen.service.versatile.handoff", name = "enabled",
         havingValue = "true")
 public class ControllerHandoffAutoConfiguration {
-
-    @Bean
-    @ConditionalOnMissingBean
-    public HandoffTargetResolver handoffTargetResolver(ControllerHandoffProperties props) {
-        return new HandoffTargetResolver(props);
-    }
 
     @Bean
     @ConditionalOnMissingBean

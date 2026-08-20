@@ -19,7 +19,6 @@ import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -28,6 +27,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -35,7 +36,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * AgentHandler that proxies a Versatile controller (FEAT-002 baseline behavior) and
  * additionally consumes controller intent-handoff messages: classification strictly
  * precedes the baseline error mapping; a hit suppresses the line from the baseline
- * extractor and routes through the handoff executor (spec 3.1-3.7/4.2). Never emits
+ * extractor and produces a single-item {@code a2a_delegate} interrupt (resume=true)
+ * instead of an outbound call — the runtime coordinator owns the outbound invocation,
+ * shadow-task persistence and the resume chain (migration design 2). Never emits
  * a "COMPLETED" QueryChunk.
  *
  * @since 2026-08-19
@@ -45,25 +48,28 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
     private static final String INTERRUPT_MESSAGE = "Remote agent requires input";
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    /** runtime 协调器消费的中断种类标记（与基线 buildA2aDelegateInterrupt 契约一致）。 */
+    static final String DELEGATE_INTERRUPT_KIND = "a2a_delegate";
+
     private final VersatileProperties properties;
     private final VersatileHttpClient client;
     private final VersatileRequestExtractor requestExtractor;
     private final IntentHandoffClassifier handoffClassifier;
     private final HandoffLoopGuard loopGuard;
-    private final ObjectProvider<ControllerHandoffExecutor> executorProvider;
+    private final HandoffTargetResolver targetResolver;
     private final ControllerHandoffProperties handoffProperties;
 
     public ControllerHandoffAgentHandler(VersatileProperties versatileProperties,
             IntentHandoffClassifier handoffClassifier,
             HandoffLoopGuard loopGuard,
-            ObjectProvider<ControllerHandoffExecutor> executorProvider,
+            HandoffTargetResolver targetResolver,
             ControllerHandoffProperties handoffProperties) {
         this.properties = Objects.requireNonNull(versatileProperties, "versatileProperties");
         this.client = new VersatileHttpClient(this.properties);
         this.requestExtractor = new VersatileRequestExtractor(this.properties);
         this.handoffClassifier = handoffClassifier;
         this.loopGuard = loopGuard;
-        this.executorProvider = executorProvider;
+        this.targetResolver = targetResolver;
         this.handoffProperties = handoffProperties;
     }
 
@@ -81,17 +87,9 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
             throw new IllegalStateException(handoffErrorCode(inbound)
                     + " inbound rejected conversation_id=" + request.getConversationId());
         }
-        BufferingObserver buffer = new BufferingObserver();
-        List<QueryChunk> finalEvents = runHandoffChain(request, buffer);
-        if (buffer.error != null) {
-            throw new IllegalStateException(String.valueOf(buffer.lastErrorPayload), buffer.error);
-        }
-        if (finalEvents != null) {
-            return new QueryResponse(resolveQueryResult(request, finalEvents),
-                    request.getConversationId());
-        }
-        // 转调/信号路径：executor 或信号已驱动 observer，聚合其内容作为最终应答
-        return new QueryResponse(assistantResult(buffer.joinedContent()), request.getConversationId());
+        List<QueryChunk> finalEvents = runHandoffChain(request, null, Set.of());
+        return new QueryResponse(resolveQueryResult(request, finalEvents),
+                request.getConversationId());
     }
 
     @Override
@@ -107,7 +105,7 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
             return;
         }
         try {
-            List<QueryChunk> finalEvents = runHandoffChain(request, observer);
+            List<QueryChunk> finalEvents = runHandoffChain(request, observer, Set.of());
             if (observer.isCancelled()) {
                 log.warn("controller-handoff streamQuery cancelled conversation_id={}",
                         request.getConversationId());
@@ -200,14 +198,17 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
     }
 
     /**
-     * 转调链驱动：识别 → 信号命中（上行 not-in-scope 应答）或 executor 出站调用；
-     * 下游返回 not-in-scope 标记时重跑本层控制器重新识别（二级退回一级 upstream-signal，
-     * spec 2.2/4.4），重路由受单请求 redirect/去重状态保护（重复目标即 DUPLICATE_TARGET）。
+     * 转调链驱动：识别 → 信号命中（上行 not-in-scope 应答）或产出单 item
+     * {@code a2a_delegate} 中断（resume=true，出站调用移交 runtime 协调器，
+     * 迁移设计稿 2）。{@code observer == null} 表示 query 收集模式：中断/信封
+     * 作为返回值交由 {@link #resolveQueryResult} 归一。
      *
-     * @return 无转调命中时的基线终态事件；{@code null} 表示 observer 已被驱动到终态
+     * @param bouncedTargets 本链已弹回过的目标（re-invoke 重入时来自
+     *        remoteToolResults 解析）；再转调同目标 → DUPLICATE_TARGET
+     * @return 无转调命中时的基线终态事件；流式模式 {@code null} 表示 observer 已被驱动到终态
      */
-    private List<QueryChunk> runHandoffChain(ServeRequest request, QueryStreamObserver observer) {
-        RequestHandoffState state = new RequestHandoffState();
+    private List<QueryChunk> runHandoffChain(ServeRequest request, QueryStreamObserver observer,
+            Set<String> bouncedTargets) {
         ControllerExecution execution = execute(request, observer);
         while (execution.handoffHit() != null) {
             HandoffClassification hit = execution.handoffHit();
@@ -215,19 +216,37 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
                 log.info("handoff not-in-scope signal emitted conversation_id={} type={} intent={} domain={}",
                         request.getConversationId(), hit.handoff().handoffType(),
                         hit.handoff().intentId(), hit.handoff().businessDomain());
-                String envelope = HandoffSignals.notInScopeEnvelope(hit.handoff());
-                observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, envelope));
+                QueryChunk envelope = new QueryChunk(QueryChunk.TYPE_CHUNK,
+                        HandoffSignals.notInScopeEnvelope(hit.handoff()));
+                if (observer != null) {
+                    observer.onNext(envelope);
+                    observer.onComplete();
+                    return null;
+                }
+                return List.of(envelope);
+            }
+            ResolvedTarget target;
+            try {
+                target = targetResolver.resolve(hit.handoff());
+            } catch (HandoffTargetResolutionException ex) {
+                emitHandoffError(observer, ex.getErrorCode(), ex.getMessage());
+                return null;
+            }
+            if (bouncedTargets.contains(target.agentId())) {
+                emitHandoffError(observer, "VERSATILE_HANDOFF_DUPLICATE_TARGET",
+                        "target bounced in this chain: " + target.agentId());
+                return null;
+            }
+            prepareDelegationMetadata(request);
+            QueryChunk interrupt = handoffDelegateInterrupt(target, request);
+            log.info("handoff delegate interrupt emitted conversation_id={} target={}",
+                    request.getConversationId(), target.agentId());
+            if (observer != null) {
+                observer.onNext(interrupt);
                 observer.onComplete();
                 return null;
             }
-            ControllerHandoffExecutor.ExecResult result = dispatchHandoff(hit, request, observer, state);
-            if (result == ControllerHandoffExecutor.ExecResult.NOT_IN_SCOPE) {
-                log.info("handoff downstream not-in-scope, re-running controller conversation_id={}",
-                        request.getConversationId());
-                execution = execute(request, observer);
-                continue;
-            }
-            return null; // executor/错误路径已驱动 observer 到终态
+            return List.of(interrupt);
         }
         return execution.finalEvents();
     }
@@ -241,17 +260,48 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
                 .contains(classification.handoff().handoffType());
     }
 
-    /** 命中转调后的终态分发：executor 直接驱动 observer（spec 4.2）。 */
-    private ControllerHandoffExecutor.ExecResult dispatchHandoff(HandoffClassification classification,
-            ServeRequest request, QueryStreamObserver observer, RequestHandoffState state) {
-        ControllerHandoffExecutor executor = executorProvider == null ? null : executorProvider.getIfAvailable();
-        if (executor == null) {
-            emitHandoffError(observer, "VERSATILE_HANDOFF_CALLER_UNAVAILABLE",
-                    "no RemoteAgentCaller available for handoff conversation_id="
-                            + request.getConversationId());
-            return ControllerHandoffExecutor.ExecResult.TERMINAL;
+    /**
+     * 单 item a2a_delegate 中断（runtime 协调器消费契约）：toolCallId 编码出站目标
+     * （{@code handoff:<agentId>:<uuid>}），re-invoke 时 handler 从 remoteToolResults
+     * 键无状态解析弹回目标（迁移设计稿 3）。
+     */
+    private QueryChunk handoffDelegateInterrupt(ResolvedTarget target, ServeRequest request) {
+        Map<String, Object> context = new LinkedHashMap<>();
+        context.put("_interrupt_kind", DELEGATE_INTERRUPT_KIND);
+        context.put("agentName", target.agentId());
+        context.put("resume", true);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("type", "__interaction__");
+        payload.put("toolCallId", "handoff:" + target.agentId() + ":" + UUID.randomUUID());
+        payload.put("agentName", target.agentId());
+        payload.put("message", request.lastUserQuery());
+        payload.put("responseContent", "");
+        payload.put("resume", true);
+        payload.put("context", context);
+        return new QueryChunk(QueryChunk.TYPE_INTERRUPT, payload);
+    }
+
+    /** 中断产出前把 trace 三键与透传键并入 request.metadata（协调器出站取自此，设计稿 4.2）。 */
+    private void prepareDelegationMetadata(ServeRequest request) {
+        Map<String, Object> metadata = request.getMetadata() == null
+                ? new LinkedHashMap<>() : new LinkedHashMap<>(request.getMetadata());
+        for (String key : handoffProperties.getForwardMetadataKeys()) {
+            Object value = request.getMetadata() == null ? null : request.getMetadata().get(key);
+            if (value != null) {
+                metadata.put(key, value);
+            }
         }
-        return executor.execute(classification.handoff(), request, observer, state);
+        if (request.getTenantId() != null) {
+            metadata.put("tenantId", request.getTenantId());
+        }
+        if (request.getUserId() != null) {
+            metadata.put("userId", request.getUserId());
+        }
+        if (request.getSpaceId() != null) {
+            metadata.put("spaceId", request.getSpaceId());
+        }
+        metadata.putAll(loopGuard.outboundTraceMetadata(request));
+        request.setMetadata(metadata);
     }
 
     private static String handoffErrorCode(HandoffLoopGuard.GuardResult inbound) {
@@ -270,6 +320,9 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
             json = "{\"code\":\"" + code + "\"}";
         }
         log.warn("handoff path failed code={} detail={}", code, detail);
+        if (observer == null) {
+            throw new IllegalStateException(json); // query 收集模式：错误以异常上抛
+        }
         observer.onNext(new QueryChunk(QueryChunk.TYPE_ERROR, json));
         observer.onError(new IllegalStateException(json));
     }
@@ -283,42 +336,6 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
                 return;
             }
             observer.onNext(chunk);
-        }
-    }
-
-    /** 非流式聚合 observer：收集 executor 驱动的 chunk 与终态。 */
-    static final class BufferingObserver implements QueryStreamObserver {
-        final List<QueryChunk> chunks = new ArrayList<>();
-        boolean completed;
-        Throwable error;
-        Object lastErrorPayload;
-
-        @Override
-        public void onNext(QueryChunk chunk) {
-            chunks.add(chunk);
-        }
-
-        @Override
-        public void onError(Throwable error) {
-            this.error = error;
-            if (!chunks.isEmpty()) {
-                lastErrorPayload = chunks.get(chunks.size() - 1).getData();
-            }
-        }
-
-        @Override
-        public void onComplete() {
-            this.completed = true;
-        }
-
-        String joinedContent() {
-            StringBuilder sb = new StringBuilder();
-            for (QueryChunk chunk : chunks) {
-                if (QueryChunk.TYPE_CHUNK.equals(chunk.getType()) && chunk.getData() != null) {
-                    sb.append(chunk.getData());
-                }
-            }
-            return sb.toString();
         }
     }
 
