@@ -187,22 +187,82 @@ class ControllerHandoffIntegrationTest {
 
     @Test
     void downstreamNotInScopeSignalReRunsControllerForReRecognition() {
-        // L2 弹回 not-in-scope 后的 re-invoke 重识别：runtime 协调器以 resume=true 重新进入
-        // handler（remoteToolResults 携带信封）——Task 3 接管该链路后恢复验收
-        org.junit.jupiter.api.Assumptions.assumeTrue(false, "Task 3: remoteToolResults 入口短路");
+        // L2 弹回 not-in-scope 信封 → 协调器 resume=true re-invoke → handler 入口识别信封、
+        // 抑制不透传并重跑控制器重新识别（upstream-signal 语义平移，迁移设计稿 3）
+        perRequestResponses.add(new String[] {"{\"event\":\"end\"}"}); // 重识别后无转调
+        controllerSays();
+        RecordingObserver observer = new RecordingObserver();
+        handler().streamQuery(resumeRequest(Map.of("handoff:agent_card_flight:xx",
+                HandoffSignals.notInScopeEnvelope(new IntentHandoff("L2_TO_L1", null, null, null, null, "{}")))),
+                observer);
+        assertThat(requestCount.get()).isEqualTo(1); // 控制器重跑了一次
+        assertThat(observer.completed).isTrue();
+        String joined = observer.chunks.stream().map(c -> String.valueOf(c.getData()))
+                .collect(java.util.stream.Collectors.joining());
+        assertThat(joined).doesNotContain(HandoffSignals.TYPE_NOT_IN_SCOPE); // 信封不透传
+    }
+
+    @Test
+    void reHandoffToBouncedTargetRejectedAsDuplicateTarget() {
+        // re-invoke 重识别后控制器再次转调同一（已弹回）目标：DUPLICATE_TARGET 保护
+        perRequestResponses.add(new String[] {
+                handoffLine("L1_TO_L2", "intent_flight", "flight", "", "k1"),
+                "{\"event\":\"end\"}"});
+        controllerSays();
+        RecordingObserver observer = new RecordingObserver();
+        handler().streamQuery(resumeRequest(Map.of("handoff:agent_card_flight:xx",
+                HandoffSignals.notInScopeEnvelope(new IntentHandoff("L2_TO_L1", null, null, null, null, "{}")))),
+                observer);
+        assertThat(observer.error).isNotNull();
+        String payload = String.valueOf(observer.chunks.get(observer.chunks.size() - 1).getData());
+        assertThat(payload).contains("VERSATILE_HANDOFF_DUPLICATE_TARGET");
+    }
+
+    @Test
+    void remoteToolResultsWithoutEnvelopeCompleteStream() {
+        // 流式 happy-path re-invoke：内容已由协调器投影为 REMOTE_AGENT_OUTPUT，handler 只收尾
+        controllerSays("{\"event\":\"end\"}"); // 若控制器被调用会拿到 end
+        RecordingObserver observer = new RecordingObserver();
+        handler().streamQuery(resumeRequest(Map.of("handoff:agent_card_flight:abc", "二级答案")), observer);
+        assertThat(observer.completed).isTrue();
+        assertThat(observer.error).isNull();
+        assertThat(observer.chunks).isEmpty();
+        assertThat(requestCount.get()).isEqualTo(0); // 未重跑控制器
+    }
+
+    @Test
+    void remoteToolResultsFailureDrivesTypedError() {
+        Map<String, Object> failure = new java.util.LinkedHashMap<>();
+        failure.put("ok", false);
+        failure.put("code", "REMOTE_UNAVAILABLE");
+        failure.put("message", "connection refused");
+        controllerSays("{\"event\":\"end\"}");
+        RecordingObserver observer = new RecordingObserver();
+        handler().streamQuery(resumeRequest(Map.of("handoff:agent_card_flight:abc", failure)), observer);
+        assertThat(observer.error).isNotNull();
+        String payload = String.valueOf(observer.chunks.get(0).getData());
+        assertThat(payload).contains("VERSATILE_HANDOFF_TARGET_UNAVAILABLE");
+    }
+
+    /** re-invoke 请求：协调器 buildBatchResumeRequest 把 remote 结果注入该 metadata 键。 */
+    private ServeRequest resumeRequest(Map<String, Object> results) {
+        ServeRequest r = request("补充后的输入");
+        r.getMetadata().put("runtime.remoteToolResults", results);
+        return r;
     }
 
     @Test
     void duplicateMessageAfterNotInScopeReRunDrivesObserverToTerminal() {
         // executor 出站段退役后 DUPLICATE_MESSAGE 链路整体消失；弹回目标重复转调
-        // 由 DUPLICATE_TARGET（Task 3）覆盖
-        org.junit.jupiter.api.Assumptions.assumeTrue(false, "Task 3/4: 链路退役重写");
+        // 由 DUPLICATE_TARGET（上述用例）覆盖
+        org.junit.jupiter.api.Assumptions.assumeTrue(false, "Task 4: 链路随 executor 退役删除");
     }
 
     @Test
     void gatewayFailureMapsToTargetUnavailableWithErrorPayload() {
-        // 出站失败经协调器 REMOTE_* 错误以 remoteToolResults 回传——Task 3 接管后恢复验收
-        org.junit.jupiter.api.Assumptions.assumeTrue(false, "Task 3: REMOTE_* 失败码映射");
+        // 出站失败经协调器 REMOTE_* 错误以 remoteToolResults 回传——由
+        // remoteToolResultsFailureDrivesTypedError 覆盖
+        org.junit.jupiter.api.Assumptions.assumeTrue(false, "Task 3 覆盖后删除");
     }
 
     @Test

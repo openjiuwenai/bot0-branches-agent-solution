@@ -87,7 +87,20 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
             throw new IllegalStateException(handoffErrorCode(inbound)
                     + " inbound rejected conversation_id=" + request.getConversationId());
         }
-        List<QueryChunk> finalEvents = runHandoffChain(request, null, Set.of());
+        RemoteToolResults remote = RemoteToolResults.parse(request);
+        if (remote != null) {
+            if (remote.failure() != null) {
+                throw new IllegalStateException(remote.failure().errorCode()
+                        + " remote invocation failed: " + remote.failure().detail());
+            }
+            if (!remote.hasNotInScopeEnvelope()) {
+                // happy-path re-invoke：非流式终答直通；流式内容已由协调器投影
+                return new QueryResponse(assistantResult(remote.joinedResults()),
+                        request.getConversationId());
+            }
+        }
+        List<QueryChunk> finalEvents = runHandoffChain(request, null,
+                remote == null ? Set.of() : remote.bouncedTargets());
         return new QueryResponse(resolveQueryResult(request, finalEvents),
                 request.getConversationId());
     }
@@ -104,8 +117,30 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
                             + " conversation_id=" + request.getConversationId());
             return;
         }
+        RemoteToolResults remote = RemoteToolResults.parse(request);
+        if (remote != null) {
+            if (remote.failure() != null) {
+                emitHandoffError(observer, remote.failure().errorCode(), remote.failure().detail());
+                return;
+            }
+            if (!remote.hasNotInScopeEnvelope()) {
+                if (request.isStream()) {
+                    // 流式：内容已由协调器投影为 REMOTE_AGENT_OUTPUT，handler 只收尾
+                    observer.onComplete();
+                } else {
+                    observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, remote.joinedResults()));
+                    observer.onComplete();
+                }
+                log.info("Completed controller-handoff re-invoke with remote answer conversation_id={}",
+                        request.getConversationId());
+                return;
+            }
+            log.info("handoff remote not-in-scope envelope detected, re-running controller conversation_id={}",
+                    request.getConversationId());
+        }
         try {
-            List<QueryChunk> finalEvents = runHandoffChain(request, observer, Set.of());
+            List<QueryChunk> finalEvents = runHandoffChain(request, observer,
+                    remote == null ? Set.of() : remote.bouncedTargets());
             if (observer.isCancelled()) {
                 log.warn("controller-handoff streamQuery cancelled conversation_id={}",
                         request.getConversationId());
