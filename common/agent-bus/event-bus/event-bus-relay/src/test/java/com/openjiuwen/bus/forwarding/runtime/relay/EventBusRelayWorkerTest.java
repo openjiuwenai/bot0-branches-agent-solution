@@ -13,6 +13,7 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingInboxPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
+import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
@@ -310,6 +311,64 @@ class EventBusRelayWorkerTest {
         assertEquals(1, c.rejected.size());           // hop1 rejected → broker redelivers
         assertEquals(ForwardingFailureCode.RECEIVER_UNAVAILABLE, c.rejected.get(0).getValue());
         assertEquals(0, inbox.consumed.size());      // not CONSUMED (not terminal)
+    }
+
+    @Test
+    void republishHop2ClaimsOwnRecordByReceiptNotAForeignDueRecord() {
+        // Defect A (agent-bus-outbox-claim错配): republishHop2 did enqueue → untargeted claimDue(1),
+        // so on a SHARED outbox where a foreign due record is already naked, claimDue(1) could grab
+        // the foreign record and produce it via THIS relay's own producer (wrong topic suffix),
+        // stranding the relay's own hop2 — the "滞后一位的移位链". The fix claims by receipt.messageId()
+        // (exactly the record just enqueued), so a foreign record is never claimed/produced here.
+        FakeConsumer c = new FakeConsumer();
+        FakeInbox inbox = new FakeInbox();
+        InMemoryForwardingOutbox outbox = new InMemoryForwardingOutbox();
+        FakeRelay relay = new FakeRelay();
+        EventBusRelayWorker w = newWorker(c, inbox, outbox, relay);
+
+        // Pre-enqueue a FOREIGN due record (a gateway hop1 request, source=gateway-1) into the shared
+        // outbox BEFORE the relay's own hop2. Under the old untargeted claimDue(1) this insertion-first
+        // record would be claimed instead of the relay's own eb-m1.
+        outbox.enqueue(foreignGatewayHop1("t1"), "gateway-1", "runtime-1", 50L);
+
+        c.queue.add(hop1Request("t1", "m1", "c1", "route-1", "runtime-1"));
+        w.runOnce("t1", 100L, 5);
+
+        // the relay must produce ITS OWN hop2 (eb-m1) — never the foreign gateway record
+        assertEquals(1, relay.produced.size());
+        assertEquals("eb-m1", relay.produced.get(0).messageId().value());
+        // the foreign record is untouched: still PENDING, never claimed/produced by this relay
+        assertEquals(ForwardingStatus.Outbox.PENDING, outbox.statusOf(
+                new ForwardingMessageId("gw-foreign"), "t1"));
+        // the relay's own hop2 is acked (terminal)
+        assertEquals(ForwardingStatus.Outbox.ACKED, outbox.statusOf(
+                new ForwardingMessageId("eb-m1"), "t1"));
+    }
+
+    /**
+     * A foreign hop1 request envelope (source=gateway-1) — the "裸露记录" a relay must NOT claim
+     * when re-publishing its own hop2 on a shared outbox.
+     *
+     * @param tenant the tenant scope
+     * @return a CLIENT_INVOCATION_REQUESTED envelope with a distinct messageId + source
+     */
+    private static ForwardingEnvelope foreignGatewayHop1(String tenant) {
+        return new ForwardingEnvelope(
+                new ForwardingMessageId("gw-foreign"),
+                AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
+                tenant,
+                "trace-gw-foreign",
+                "corr-foreign",
+                "idem-gw-foreign",
+                new ForwardingRouteHandle("route-1", tenant),
+                "a2a",
+                "gateway-1",
+                "runtime-1",
+                Long.MAX_VALUE,
+                ForwardingEnvelope.PayloadPolicy.DATA_BEARING,
+                "ref://payload/gw-foreign",
+                null,
+                null);
     }
 
     @Test

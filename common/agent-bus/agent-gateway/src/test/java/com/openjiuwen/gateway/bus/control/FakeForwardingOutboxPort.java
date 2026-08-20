@@ -14,8 +14,10 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingReceipt;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Queue;
 
 /**
@@ -134,6 +136,40 @@ public class FakeForwardingOutboxPort implements ForwardingOutboxPort, Forwardin
         List<ForwardingOutboxRecord> out = new ArrayList<>();
         for (int i = 0; i < limit && !claimable.isEmpty(); i++) {
             out.add(claimable.poll());
+        }
+        return out;
+    }
+
+    @Override
+    public Optional<ForwardingOutboxRecord> claim(ForwardingMessageId id, String tenantId,
+                                                    long nowMillisEpoch, String leaseOwner,
+                                                    long leaseUntilMillisEpoch) {
+        // targeted claim by id: pull the matching record off the claimable queue (defect A fix).
+        Iterator<ForwardingOutboxRecord> it = claimable.iterator();
+        while (it.hasNext()) {
+            ForwardingOutboxRecord r = it.next();
+            if (r.messageId().equals(id)) {
+                it.remove();
+                return Optional.of(r);
+            }
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public List<ForwardingOutboxRecord> claimDue(String tenantId, long nowMillisEpoch, int limit,
+                                                 String leaseOwner, long leaseUntilMillisEpoch,
+                                                 String sourceServiceId) {
+        // source-scoped batch claim: drain up to limit, keeping only records whose
+        // sourceServiceId matches (defect A — a sweeper never claims another role's records).
+        List<ForwardingOutboxRecord> out = new ArrayList<>();
+        Iterator<ForwardingOutboxRecord> it = claimable.iterator();
+        while (it.hasNext() && out.size() < limit) {
+            ForwardingOutboxRecord r = it.next();
+            if (sourceServiceId.equals(r.sourceServiceId())) {
+                it.remove();
+                out.add(r);
+            }
         }
         return out;
     }

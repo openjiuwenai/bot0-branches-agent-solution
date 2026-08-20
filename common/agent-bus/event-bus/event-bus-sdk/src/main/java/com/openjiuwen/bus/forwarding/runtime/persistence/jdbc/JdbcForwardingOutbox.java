@@ -23,6 +23,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 import javax.sql.DataSource;
@@ -282,6 +283,93 @@ public final class JdbcForwardingOutbox implements ForwardingOutboxPort, Forward
                     .addValue("now", nowMillisEpoch)
                     .addValue("tenantId", tenantId)
                     .addValue("limit", limit);
+            return jdbc.query(sql, params, ForwardingSqlCodec.OUTBOX_ROW_MAPPER);
+        });
+    }
+
+    @Override
+    public Optional<ForwardingOutboxRecord> claim(ForwardingMessageId id, String tenantId, long nowMillisEpoch,
+                                                  String leaseOwner, long leaseUntilMillisEpoch) {
+        requireNonBlank(tenantId, "tenantId");
+        requireNonBlank(leaseOwner, "leaseOwner");
+        Objects.requireNonNull(id, "id is required");
+        if (leaseUntilMillisEpoch <= nowMillisEpoch) {
+            throw new IllegalArgumentException("leaseUntilMillisEpoch must be > nowMillisEpoch");
+        }
+        return withTenant(tenantId, () -> {
+            // Targeted §7.1 claim: the same due-conditions + DISPATCHING transition + exclusive
+            // lease stamp, but restricted to the single named row. The enqueue-then-produce path
+            // (relay re-publish / runtime response produce) claims exactly the record it just
+            // enqueued (located via the enqueue receipt), so on a shared outbox it never grabs
+            // another role's naked record and re-publishes it through the caller's own producer
+            // (defect A — the wrong-topic "shift chain"). A row under another owner's ACTIVE lease
+            // (DISPATCHING, lease_until > now) does not match the due-condition, so it is not
+            // stolen; an EXPIRED DISPATCHING lease (a prior crashed attempt) matches and is
+            // reclaimed by the caller (HA: any instance may reclaim an expired lease).
+            String sql = "UPDATE " + TABLE + " AS o "
+                    + "SET status = 'DISPATCHING', "
+                    + "    lease_owner = :leaseOwner, "
+                    + "    lease_until = :leaseUntil, "
+                    + "    updated_at = :now "
+                    + "WHERE o.tenant_id = :tenantId AND o.message_id = :messageId "
+                    + "  AND (o.status = 'PENDING' "
+                    + "       OR (o.status = 'RETRY_SCHEDULED' AND o.next_attempt_at <= :now) "
+                    + "       OR (o.status = 'DISPATCHING' AND o.lease_until <= :now)) "
+                    + "RETURNING *";
+            MapSqlParameterSource params = new MapSqlParameterSource()
+                    .addValue("leaseOwner", leaseOwner)
+                    .addValue("leaseUntil", leaseUntilMillisEpoch)
+                    .addValue("now", nowMillisEpoch)
+                    .addValue("tenantId", tenantId)
+                    .addValue("messageId", id.value());
+            List<ForwardingOutboxRecord> rows = jdbc.query(sql, params, ForwardingSqlCodec.OUTBOX_ROW_MAPPER);
+            return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
+        });
+    }
+
+    @Override
+    public List<ForwardingOutboxRecord> claimDue(String tenantId, long nowMillisEpoch, int limit,
+                                                  String leaseOwner, long leaseUntilMillisEpoch,
+                                                  String sourceServiceId) {
+        requireNonBlank(tenantId, "tenantId");
+        requireNonBlank(leaseOwner, "leaseOwner");
+        requireNonBlank(sourceServiceId, "sourceServiceId");
+        if (limit <= 0) {
+            throw new IllegalArgumentException("limit must be > 0");
+        }
+        if (leaseUntilMillisEpoch <= nowMillisEpoch) {
+            throw new IllegalArgumentException("leaseUntilMillisEpoch must be > nowMillisEpoch");
+        }
+        return withTenant(tenantId, () -> {
+            // Source-scoped §7.1 claim: identical to the source-agnostic claimDue but the candidate
+            // subquery adds `source_service_id = :sourceServiceId`. A role-scoped sweeper (e.g. the
+            // gateway outbox dispatcher on the shared outbox) thus never claims another role's
+            // records — the cross-role claim race (defect A) and the release-then-strand residue
+            // both disappear, so the dispatcher's claim-foreign-then-releaseLease branch is dead and
+            // removed. Multi-instance: same-role instances share sourceServiceId and compete for
+            // the scoped rows via FOR UPDATE SKIP LOCKED.
+            String sql = "UPDATE " + TABLE + " AS o "
+                    + "SET status = 'DISPATCHING', "
+                    + "    lease_owner = :leaseOwner, "
+                    + "    lease_until = :leaseUntil, "
+                    + "    updated_at = :now "
+                    + "WHERE (o.tenant_id, o.message_id) IN ("
+                    + "    SELECT tenant_id, message_id FROM " + TABLE
+                    + "    WHERE tenant_id = :tenantId AND source_service_id = :sourceServiceId "
+                    + "      AND (status = 'PENDING' "
+                    + "           OR (status = 'RETRY_SCHEDULED' AND next_attempt_at <= :now) "
+                    + "           OR (status = 'DISPATCHING' AND lease_until <= :now)) "
+                    + "    ORDER BY next_attempt_at NULLS FIRST, created_at, message_id "
+                    + "    LIMIT :limit "
+                    + "    FOR UPDATE SKIP LOCKED"
+                    + ") RETURNING *";
+            MapSqlParameterSource params = new MapSqlParameterSource()
+                    .addValue("leaseOwner", leaseOwner)
+                    .addValue("leaseUntil", leaseUntilMillisEpoch)
+                    .addValue("now", nowMillisEpoch)
+                    .addValue("tenantId", tenantId)
+                    .addValue("limit", limit)
+                    .addValue("sourceServiceId", sourceServiceId);
             return jdbc.query(sql, params, ForwardingSqlCodec.OUTBOX_ROW_MAPPER);
         });
     }

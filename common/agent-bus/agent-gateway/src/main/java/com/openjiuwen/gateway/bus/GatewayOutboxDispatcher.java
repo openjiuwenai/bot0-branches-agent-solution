@@ -28,10 +28,12 @@ import java.util.concurrent.TimeUnit;
  * the durable outbox but nothing republishes to the broker → the relay's forward consumer
  * never sees a request → the gateway times out UNKNOWN.
  *
- * <p>Source-scoped: skips records whose {@code sourceServiceId} is not this gateway (e.g. the
- * relay's own hop2 records in the shared {@code agent_bus_forwarding_outbox} table) — releasing
- * the lease so the rightful owner (the relay's own tick) drives them. The shared table is a
- * durability mechanism; this pump owns only the gateway's rows.
+ * <p>Source-scoped: claims only records whose {@code sourceServiceId} is this gateway (e.g. it
+ * never claims the relay's own hop2 records in the shared {@code agent_bus_forwarding_outbox}
+ * table). The source-scoped claim means there is no foreign row to skip-and-release — the prior
+ * claim-foreign-then-releaseLease branch (which left a stranded {@code lease_owner} residue on
+ * the relay's rows and could squeeze the batch quota) is gone. The shared table is a durability
+ * mechanism; this pump owns only the gateway's rows.
  *
  * <p>SPI-only: depends on {@link ForwardingOutboxClaimPort} / {@link BrokerForwardingProducerPort}
  * / {@link ForwardingOutboxPort} (agent-bus-spi) — never on agent-bus-sdk.
@@ -86,17 +88,16 @@ public class GatewayOutboxDispatcher implements SmartLifecycle {
      */
     public int dispatchOnce(long nowMillisEpoch) {
         long leaseUntil = nowMillisEpoch + leaseDurationMillis;
+        // Source-scoped claim: only this gateway's own hop1 records (sourceServiceId == leaseOwner)
+        // are claimable, so the dispatcher never claims another role's row on the shared outbox.
+        // Defect A: the prior claim-foreign-then-releaseLease branch is gone — there is no foreign
+        // row to release, hence no stranded residue (lease_owner stamped on a relay's row) and no
+        // cross-role shift chain. Multi-instance gateways share this sourceServiceId and compete
+        // for the scoped rows via the SKIP-LOCKED claim.
         List<ForwardingOutboxRecord> claimed =
-                claimPort.claimDue(tenant, nowMillisEpoch, batchSize, leaseOwner, leaseUntil);
+                claimPort.claimDue(tenant, nowMillisEpoch, batchSize, leaseOwner, leaseUntil, leaseOwner);
         int produced = 0;
         for (ForwardingOutboxRecord r : claimed) {
-            if (!leaseOwner.equals(r.sourceServiceId())) {
-                // not ours (e.g. the relay's hop2 records in the shared outbox table) — release the
-                // lease so the rightful owner (the relay's own tick) drives it; never produce another
-                // role's record (the requestProducer suffix "req" would send it to the wrong topic).
-                claimPort.releaseLease(r.messageId(), tenant, leaseOwner);
-                continue;
-            }
             BrokerProduceOutcome outcome = producer.produce(r, nowMillisEpoch);
             if (outcome.outcome() == BrokerProduceOutcome.Outcome.ACCEPTED) {
                 outbox.markAcked(r.messageId(), tenant, leaseOwner);

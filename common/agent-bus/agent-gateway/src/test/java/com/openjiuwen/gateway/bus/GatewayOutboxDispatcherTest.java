@@ -54,12 +54,14 @@ class GatewayOutboxDispatcherTest {
 
     @Test
     void dispatchOnceSkipsNonOwnRecordWithoutProducing() {
-        // a relay hop2 record (source=eventbus-01) in the shared outbox must not be produced
+        // a relay hop2 record (source=eventbus-01) in the shared outbox must not be claimed/produced.
+        // Source-scoped claimDue (source=gateway-01) never returns it, so nothing is claimed, produced,
+        // acked, or released — the cross-role release branch is gone (defect A: no stranded residue).
         outbox.setClaimable(List.of(rec("eventbus-01")));
         int produced = dispatcher.dispatchOnce(1_000L);
         assertThat(produced).isEqualTo(0);
         assertThat(producer.produced()).isEmpty();
-        assertThat(outbox.released()).hasSize(1);
+        assertThat(outbox.released()).isEmpty();
         assertThat(outbox.acked()).isEmpty();
     }
 

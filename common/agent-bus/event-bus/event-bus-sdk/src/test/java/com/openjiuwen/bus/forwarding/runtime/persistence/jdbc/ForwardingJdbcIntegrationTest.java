@@ -31,6 +31,7 @@ import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -231,6 +232,72 @@ class ForwardingJdbcIntegrationTest {
         assertThatThrownBy(() -> outbox.markAcked(id("ghost"), t, "owner-A"))
                 .isInstanceOfSatisfying(ForwardingLeaseException.class, ex ->
                         assertThat(ex.reason()).isEqualTo(ForwardingLeaseException.Reason.RECORD_NOT_FOUND));
+    }
+
+    @Test
+    void claim_by_id_targets_only_the_named_record() {
+        // Defect A fix: claim(id) claims EXACTLY the named row, never a sibling due record (the
+        // untargeted claimDue could grab another role's naked row on the shared outbox).
+        String t = tenant();
+        enqueue(t, "c1");
+        enqueue(t, "c2");                                  // a sibling due record
+        long now = System.currentTimeMillis();
+
+        Optional<ForwardingOutboxRecord> claimed = outbox.claim(id("c1"), t, now, "owner-A", now + 60_000);
+        assertThat(claimed).isPresent();
+        assertThat(claimed.get().messageId().value()).isEqualTo("c1");
+        assertThat(claimed.get().status()).isEqualTo(ForwardingStatus.Outbox.DISPATCHING);
+        assertThat(claimed.get().lease().leaseOwner()).isEqualTo("owner-A");
+        // the sibling is untouched (still PENDING) — never claimed by the targeted claim
+        assertThat(outbox.statusOf(id("c2"), t)).isEqualTo(ForwardingStatus.Outbox.PENDING);
+
+        // terminal / unknown ids are not claimable → empty
+        outbox.markAcked(id("c1"), t, "owner-A");
+        assertThat(outbox.claim(id("c1"), t, now, "owner-B", now + 60_000))
+                .as("terminal record not claimable").isEmpty();
+        assertThat(outbox.claim(id("unknown"), t, now, "owner-B", now + 60_000))
+                .as("unknown id empty").isEmpty();
+    }
+
+    @Test
+    void claim_by_id_reclaims_expired_lease_but_not_a_live_one() {
+        // HA: an expired DISPATCHING lease (a prior crashed attempt) is reclaimed by id; a LIVE lease
+        // held by another owner is NOT stolen (the due-condition requires lease_until <= now).
+        String t = tenant();
+        enqueue(t, "r1");
+        long past = System.currentTimeMillis() - 10_000;
+        outbox.claimDue(t, past, 5, "stalled", past + 1);          // stalled holder, expired lease
+        long now = System.currentTimeMillis();
+        Optional<ForwardingOutboxRecord> reclaimed = outbox.claim(id("r1"), t, now, "owner-B", now + 60_000);
+        assertThat(reclaimed).isPresent();
+        assertThat(reclaimed.get().lease().leaseOwner()).isEqualTo("owner-B");
+        assertThat(outbox.markAcked(id("r1"), t, "owner-B")).isEqualTo(ForwardingStatus.Outbox.ACKED);
+
+        // a LIVE lease is not stolen: owner-A claims r2, then owner-B's claim(id) returns empty.
+        enqueue(t, "r2");
+        outbox.claim(id("r2"), t, now, "owner-A", now + 60_000);
+        assertThat(outbox.claim(id("r2"), t, now, "owner-B", now + 60_000))
+                .as("live lease held by another owner not stolen").isEmpty();
+    }
+
+    @Test
+    void source_scoped_claim_due_only_claims_the_callers_own_rows() {
+        // Defect A fix: the source-scoped claimDue never returns another role's records — the gateway
+        // sweeper thus never claims-and-releases a foreign row. Two sources share the table; only the
+        // scoped source is claimed.
+        String t = tenant();
+        outbox.enqueue(envelope(t, "own-1"), "gateway-01", "tgt", System.currentTimeMillis());
+        outbox.enqueue(envelope(t, "own-2"), "gateway-01", "tgt", System.currentTimeMillis());
+        outbox.enqueue(envelope(t, "foreign-1"), "eventbus-01", "tgt", System.currentTimeMillis());
+        long now = System.currentTimeMillis();
+
+        List<ForwardingOutboxRecord> claimed =
+                outbox.claimDue(t, now, 10, "gateway-01", now + 60_000, "gateway-01");
+        assertThat(claimed).hasSize(2);
+        assertThat(claimed).extracting(r -> r.sourceServiceId())
+                .containsOnly("gateway-01");
+        // the foreign record is untouched (still PENDING)
+        assertThat(outbox.statusOf(id("foreign-1"), t)).isEqualTo(ForwardingStatus.Outbox.PENDING);
     }
 
     @Test
