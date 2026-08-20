@@ -5,11 +5,12 @@
 package com.openjiuwen.client.transport.spi;
 
 /**
- * 凭证提供者 SPI（Feat-Func-011 §4.9 / §5.9 / §6.9）：为每一次到网关的 HTTP 请求提供 Bearer 令牌。
+ * Gateway 凭证提供者 SPI（Feat-Func-011 §4.9 / §5.9 / §6.9）：为每一次到 Gateway 的 HTTP 请求提供 Bearer 令牌。
  *
  * <p>网关对每个 HTTP 请求都强制鉴权（缺失记 {@code AUTH_MISSING}、非法记 {@code AUTH_INVALID}，一律拒绝），
  * 因此 SDK 在"创建调用 / 用户输入续传 / 工具结果续传"的每一次请求上都会附带
- * {@code Authorization: Bearer <token>}。令牌来源与刷新由业务实现，SDK 不解释其内容。
+ * {@code Authorization: Bearer <token>}。Runtime 直连当前忽略本 SPI，不发送 Authorization。
+ * 令牌来源与刷新由业务实现，SDK 不解释其内容。
  *
  * <p>{@code InvocationRequest.credentialToken()} 若显式给出则优先于本提供者（便于单次覆盖）。
  * 返回 {@code null} 表示本次不附带（通常仅用于本地假网关/无鉴权环境）。

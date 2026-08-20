@@ -64,7 +64,10 @@ public final class AgentClients {
         private RetryPolicy retryPolicy = RetryPolicy.defaults();
 
         /**
-         * 设置传输提供者（必填，决定 wire 协议与网关地址）。
+         * 设置外部传输提供者（与 endpointUrl 二选一）。目标所有权契约为默认不转移所有权，
+         * 只有显式声明时才由 AgentClient 关闭。
+         *
+         * <p>当前默认实现尚未区分资源来源，{@link AgentClient#close()} 仍会关闭该实例。
          *
          * @param v 传输提供者
          * @return 本构造器
@@ -168,7 +171,10 @@ public final class AgentClients {
         }
 
         /**
-         * 设置工具执行线程池（默认 4 线程守护池）。
+         * 设置外部工具执行线程池。目标所有权契约为默认不转移所有权，只有显式声明时才由 AgentClient 关闭；
+         * 未设置时由 Builder 创建 4 线程守护池，并由 AgentClient 关闭。
+         *
+         * <p>当前默认实现尚未区分资源来源，{@link AgentClient#close()} 仍会关闭外部注入的线程池。
          *
          * @param v 工具执行线程池
          * @return 本构造器
@@ -207,12 +213,6 @@ public final class AgentClients {
             return new DefaultAgentClient(
                     resolvedTransport, reg, store, guard, approval, exec, mapper, credentialProvider);
         }
-
-        /**
-         * defaultExecutor。
-         *
-         * @return defaultExecutor
-         */
 
         private static ExecutorService defaultExecutor() {
             ThreadFactory tf = new ThreadFactory() {

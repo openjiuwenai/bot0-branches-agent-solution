@@ -86,14 +86,7 @@ final class ToolDispatcher {
         inFlight.remove(toolCallId);
     }
 
-    /**
-     * runPipeline。
-     *
-     * @param call InvocationEvent.ToolCall
-     * @param ctx ToolExecutionContext
-     * @return runPipeline
-     */
-
+    /** 执行完整管道并以 StateStore 中先写入的最终记录为准。 */
     private CompletableFuture<ToolExecutionRecord> runPipeline(InvocationEvent.ToolCall call,
                                                                ToolExecutionContext ctx) {
         String toolCallId = call.toolCallId();
@@ -104,14 +97,7 @@ final class ToolDispatcher {
                 .whenCompleteAsync((r, e) -> inFlight.remove(toolCallId));
     }
 
-    /**
-     * computeRaw。
-     *
-     * @param call InvocationEvent.ToolCall
-     * @param ctx ToolExecutionContext
-     * @return computeRaw
-     */
-
+    /** 在调用 handler 前依次完成快照可见性、注册、参数、策略和审批校验。 */
     private CompletableFuture<ToolExecutionRecord> computeRaw(InvocationEvent.ToolCall call,
                                                               ToolExecutionContext ctx) {
         String toolCallId = call.toolCallId();
@@ -164,15 +150,7 @@ final class ToolDispatcher {
         });
     }
 
-    /**
-     * runTool。
-     *
-     * @param reg LocalTool.Registered
-     * @param invocation ToolInvocation
-     * @param ctx ToolExecutionContext
-     * @return runTool
-     */
-
+    /** 执行 handler，并把协作式超时和异常归一化为唯一最终记录。 */
     private CompletableFuture<ToolExecutionRecord> runTool(LocalTool.Registered reg,
                                                            ToolInvocation invocation,
                                                            ToolExecutionContext ctx) {

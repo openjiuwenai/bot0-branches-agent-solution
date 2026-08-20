@@ -115,7 +115,8 @@ public final class InvocationRequest {
     }
 
     /**
-     * 调用截止时间；为空表示不设截止。
+     * 调用截止时间；从 {@link AgentClient#invoke(InvocationRequest)} 被调用时开始计时，
+     * 为空表示不设置业务截止时间。
      *
      * @return 截止时间
      */
@@ -244,7 +245,7 @@ public final class InvocationRequest {
         }
 
         /**
-         * 设置截止时间。
+         * 设置从 {@code invoke()} 开始计时的调用截止时间。
          *
          * @param v 截止时间
          * @return 本构造器

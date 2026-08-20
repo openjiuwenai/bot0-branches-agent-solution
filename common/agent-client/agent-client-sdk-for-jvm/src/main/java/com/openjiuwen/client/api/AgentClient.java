@@ -29,8 +29,8 @@ public interface AgentClient extends AutoCloseable {
      * <li>{@link InvocationMode#BLOCKING} —— 忽略事件流，直接等 {@link InvocationCall#completion()}。
      * 由传输层走带 {@code returnImmediately=false} 的网关 unary 接口获取结果，<b>不</b>是把流式结果在本地聚合。</li>
      * <li>{@link InvocationMode#ASYNC} —— 拿到 {@link InvocationCall#accepted()} 即返回，
-     * Runtime 直连由 SDK 自动用 GetTask 观察并驱动 {@link InvocationCall#completion()}；
-     * {@link #getInvocation} 仍可用于一次性主动检查。</li>
+     * Gateway 与 Runtime 在受理后均不自动轮询；业务通过 {@link #getInvocation} 按需查询，
+     * 查询到终态或根 {@code INPUT_REQUIRED} 时驱动原调用结算。</li>
      * </ul>
      *
      * @param request 调用请求
@@ -79,6 +79,12 @@ public interface AgentClient extends AutoCloseable {
      */
     LocalToolRegistry tools();
 
+    /**
+     * 关闭客户端拥有的本地观察和基础设施资源，不取消服务端 Task。
+     *
+     * <p>由 Builder 内部创建的 Transport 和工具执行器归客户端所有；外部注入资源默认应由调用方所有，
+     * 除非构建时显式转移所有权。当前默认实现尚未区分资源来源，仍会关闭外部注入资源。
+     */
     @Override
     void close();
 }
