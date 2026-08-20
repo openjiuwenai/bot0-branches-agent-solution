@@ -1,6 +1,6 @@
 # 意图转调出站机制迁移设计：executor 自调 → runtime a2a_delegate 中断续跑
 
-> 状态：设计稿（待评审）。对应 L2 设计
+> 状态：阶段 1 已落地（2026-08-20，见第 5 章）。对应 L2 设计
 > `agent-solution-docs/develop/03-architecture/L2-Low-Level-Design/agent-runtime/Feat-Func-002-versatile-controller-intent-message-routing.md`
 > 的 2.3 / 2.4 / 3.8 / 4.4 / 4.5 / 4.6 章修订。
 > 前置：`DUPLICATE_MESSAGE` 挂死安全修复已先行落地（见 git log）。
@@ -97,15 +97,31 @@ shadow 快照恢复。因此把现有中断改成 a2a_delegate 形状只会让 r
 ## 5. 分阶段落地
 
 - **阶段 0（已完成）**：`DUPLICATE_MESSAGE` 弹回链补驱动终态，现网不挂死。
-- **阶段 1**：executor 产出 a2a_delegate 中断（resume=true），打通第一轮：
+- **阶段 1（已完成 2026-08-20）**：executor 产出 a2a_delegate 中断（resume=true），打通第一轮：
   转调 → L2 INPUT_REQUIRED → 中断呈现客户端；错误码映射对齐。
   demo 场景 8 断言从 `RESUME_UNSUPPORTED` 改为可续接中断。
-- **阶段 2**：第二轮续接旅程：客户端补 input → 协调器 remoteTaskId 续调 L2 →
-  L2 弹回信封 → re-invoke 重识别；handler 入口信封识别 + 弹回 target 记入
-  本轮 state（`DUPLICATE_TARGET` 保护）。
-- **阶段 3**：跨请求 trace 迁移、流式对齐、L2 spec 2.3/2.4/4.5/4.6 改写、
-  `CrossAgentResumePort` 与 executor 出站段退役。
-- **验收**：L2 spec 7.2 场景旅程全量 + 新增「中断→续接→弹回→重识别」旅程。
+  落地内容与计划的偏差：
+  - handler 入口的信封识别/失败映射/终答直通（原计划阶段 2）随入口短路一并落地，
+    `runtime.remoteToolResults` 解析为 `RemoteToolResults` 类；
+  - executor/bridge/mapper/CrossAgentResumePort/RequestHandoffState 退役（原计划阶段 3 的
+    退役项一并完成）；
+  - 计划外的必要修复：re-invoke 轮 metadata 携带自身出站写入的 trace 三键（含 self），
+    `checkInbound` 会误判回环重入——入口以 `remoteToolResults` 在场为标记跳过 inbound
+    guard（该键只在自身委派的续接轮出现）；
+  - `buildBatchResumeRequest` 实际保留原 metadata 全部键（含 trace 三键），多跳轨迹在
+    re-invoke 链上连续累计（原"已知限制"第 1 条不成立，行为优于预期）；
+  - 配置面瘦身：`handoff.timeout`/`cross-agent-resume`/`loop.max-redirects`/
+    `loop.duplicate-target-detection` 删除，超时语义移交 remote-agents
+    `timeout-seconds`；错误码表删去 executor 专属四码（REMOTE_REJECTED/
+    REMOTE_BUSINESS_FAILURE/RESULT_INVALID/CALLER_UNAVAILABLE）。
+  验收：模块全量单测 + demo 十场景 e2e 全过（场景 2/3/8/9/10 断言已对齐新链路）。
+- **阶段 2（已完成，并入阶段 1）**：第二轮续接旅程：客户端补 input → 协调器 remoteTaskId
+  续调 L2 → L2 弹回信封 → re-invoke 重识别；handler 入口信封识别 + 弹回 target 记入
+  本轮 state（`DUPLICATE_TARGET` 保护，toolCallId 无状态解析）。
+- **阶段 3（剩余）**：L2 spec 2.3/2.4/4.5/4.6 改写、流式对齐细化
+  （REMOTE_AGENT_OUTPUT 投影与 TYPE_CHUNK 的客户端渲染差异由 demo 断言钉住）。
+- **验收**：L2 spec 7.2 场景旅程全量 + 新增「中断→续接→弹回→重识别」旅程（demo
+  场景 3/9 覆盖）。
 
 ## 6. 风险
 

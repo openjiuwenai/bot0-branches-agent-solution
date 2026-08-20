@@ -20,7 +20,6 @@ class HandoffLoopGuardTest {
     private ControllerHandoffProperties properties() {
         ControllerHandoffProperties p = new ControllerHandoffProperties();
         p.setSelfAgentId("agent_card_l1");
-        p.getLoop().setMaxRedirects(2);
         return p;
     }
 

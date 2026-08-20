@@ -260,17 +260,7 @@ public class ControllerHandoffProperties {
     }
 
     public static class Loop {
-        private int maxRedirects = 3;
         private int maxRouteTraceHops = 8;
-        private boolean duplicateTargetDetection = true;
-
-        public int getMaxRedirects() {
-            return maxRedirects;
-        }
-
-        public void setMaxRedirects(int maxRedirects) {
-            this.maxRedirects = maxRedirects;
-        }
 
         public int getMaxRouteTraceHops() {
             return maxRouteTraceHops;
@@ -278,14 +268,6 @@ public class ControllerHandoffProperties {
 
         public void setMaxRouteTraceHops(int maxRouteTraceHops) {
             this.maxRouteTraceHops = maxRouteTraceHops;
-        }
-
-        public boolean isDuplicateTargetDetection() {
-            return duplicateTargetDetection;
-        }
-
-        public void setDuplicateTargetDetection(boolean duplicateTargetDetection) {
-            this.duplicateTargetDetection = duplicateTargetDetection;
         }
     }
 
