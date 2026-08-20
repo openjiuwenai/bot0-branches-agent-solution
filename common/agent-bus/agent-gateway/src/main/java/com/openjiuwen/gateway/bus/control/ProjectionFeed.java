@@ -32,13 +32,17 @@ public interface ProjectionFeed {
      * @param body decoded A2A response (RESPONSE/TERMINAL) or reason/error (REJECTED/FAILED)
      *             or input descriptor (INPUT_REQUIRED); {@code null} when the projection
      *             carries no body (ACCEPTED/STREAM_READY)
+     * @param a2aResponsePresent whether body is an embedded validated JSON-RPC response
+     * @param protocolFailure local protocol-failure classification, when decoding failed
      */
     record ProjectionEvent(
             AgentBusEventType eventType,
             String taskId,
             String streamRef,
             String payloadRef,
-            String body) {
+            String body,
+            boolean a2aResponsePresent,
+            String protocolFailure) {
         /**
          * Convenience for projections without a decoded response/reason body.
          *
@@ -48,7 +52,18 @@ public interface ProjectionFeed {
          * @param payloadRef payload ref when present
          */
         public ProjectionEvent(AgentBusEventType eventType, String taskId, String streamRef, String payloadRef) {
-            this(eventType, taskId, streamRef, payloadRef, null);
+            this(eventType, taskId, streamRef, payloadRef, null, false, null);
+        }
+
+        public ProjectionEvent(AgentBusEventType eventType, String taskId, String streamRef, String payloadRef,
+                String body) {
+            this(eventType, taskId, streamRef, payloadRef, body, false, null);
+        }
+
+        /** Creates a local deterministic failure for a malformed broker projection. */
+        public static ProjectionEvent protocolFailure(String failureCode) {
+            return new ProjectionEvent(AgentBusEventType.INVOCATION_FAILED, null, null, null,
+                    failureCode, false, failureCode);
         }
     }
 }
