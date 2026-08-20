@@ -18,6 +18,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -77,7 +78,7 @@ public class HttpAgentRuntimeClient implements AgentRuntimeClient {
             // Throw carrying the body; the DIRECT subscribe handler returns it to the client as-is,
             // unifying DIRECT with the BUS path (which folds the runtime's failure to -32004).
             String contentType = resp.headers().firstValue("Content-Type").orElse("");
-            if (!contentType.toLowerCase().contains("text/event-stream")) {
+            if (!contentType.toLowerCase(Locale.ROOT).contains("text/event-stream")) {
                 String body = resp.body().collect(java.util.stream.Collectors.joining("\n"));
                 log.info("openStream non-SSE 200 body={}", body);
                 throw new GovernanceException(HttpStatus.OK, "RUNTIME_JSONRPC_ERROR", body);
