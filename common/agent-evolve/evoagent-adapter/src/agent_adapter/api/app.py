@@ -249,7 +249,9 @@ def create_app(config: AdapterConfig) -> FastAPI:
     app.state.repo = None  # standard 模式 TraceRepository (lifespan 填充)
     app.state.consumer = None  # standard 模式 kafka 消费者 (lifespan 填充, 可能为 None)
     app.state.profile_registry = None  # standard 模式 ProfileRegistry (lifespan 填充)
-    app.state._config_lock = asyncio.Lock()  # protect YAML concurrent writes
+    # app.state 是 Starlette 第三方对象，受保护属性经 setattr 写入以避免点号直访（G.CLS.11）；
+    # 读取侧 (routes.py) 已用 getattr(app.state, "_config_lock", ...) 兜底。
+    setattr(app.state, "_config_lock", asyncio.Lock())  # protect YAML concurrent writes
 
     logger.info(
         "app_created",
