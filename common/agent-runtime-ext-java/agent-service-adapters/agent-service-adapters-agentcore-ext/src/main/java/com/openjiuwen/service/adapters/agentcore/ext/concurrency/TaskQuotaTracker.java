@@ -8,6 +8,7 @@ import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
 import com.openjiuwen.service.spec.concurrency.ActiveTaskInfo;
 import com.openjiuwen.service.spec.concurrency.ConcurrencyLoadSnapshot;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -44,7 +45,7 @@ public class TaskQuotaTracker implements ActiveTaskQuery {
      */
     public void onTaskWorking(String conversationId, String taskId) {
         ActiveTaskInfo info = new ActiveTaskInfo(taskId, conversationId, "WORKING",
-                System.currentTimeMillis());
+                Instant.now().toString());
         activeTasks.put(conversationId, info);
     }
 
