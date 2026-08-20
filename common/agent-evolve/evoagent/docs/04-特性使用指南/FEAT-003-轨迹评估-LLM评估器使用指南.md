@@ -512,7 +512,7 @@ uv run python -c "import json; d=json.load(open('workspace/eval-demo/result.json
 }
 ```
 
-命中信号检测器时返回结构类似：
+命中了信号检测器时返回结构类似：
 
 ```json
 {
