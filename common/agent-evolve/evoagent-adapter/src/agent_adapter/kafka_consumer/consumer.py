@@ -102,8 +102,6 @@ class TraceConsumer:
             try:
                 async for msg in self._consumer:
                     await self._handle(msg)
-            except asyncio.CancelledError:
-                raise
             except Exception:
                 logger.exception("kafka_consume_loop_error (退避 1s 后重试)")
                 await asyncio.sleep(1)

@@ -7,6 +7,7 @@ test_postgres_repository.py 覆盖; 此处验证消费者把两者正确串起�
 
 from __future__ import annotations
 
+import asyncio
 import json
 
 import pytest
@@ -89,3 +90,24 @@ async def test_handle_without_start_raises_runtime_error():
     consumer = TraceConsumer(FakeRepo(), "localhost:9092")
     with pytest.raises(RuntimeError, match="未 start"):
         await consumer._handle(None)
+
+
+class _CancelConsumer:
+    """aiokafka-like: async 迭代首条即抛 CancelledError，验证消费循环不吞取消。"""
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        raise asyncio.CancelledError()
+
+    async def stop(self) -> None:  # pragma: no cover
+        pass
+
+
+async def test_consume_loop_propagates_cancellation():
+    """CancelledError 属 BaseException，须穿透 except Exception 传播而非被吞入重试。"""
+    consumer = TraceConsumer(FakeRepo(), "localhost:9092")
+    consumer._consumer = _CancelConsumer()  # type: ignore[assignment]
+    with pytest.raises(asyncio.CancelledError):
+        await consumer._consume_loop()
