@@ -19,7 +19,9 @@ package com.openjiuwen.edp;
 import com.openjiuwen.edp.config.DeepAgentProperties;
 import com.openjiuwen.edp.config.EdpaSpringBootConfig;
 import com.openjiuwen.edp.handler.EdpaExtHandler;
+import com.openjiuwen.core.singleagent.schema.AgentCard;
 import com.openjiuwen.core.sysop.sandbox.SandboxClient;
+import com.openjiuwen.harness.schema.config.DeepAgentConfig;
 import com.openjiuwen.service.adapters.agentcore.external.AgentCoreSandboxClientFactory;
 import com.openjiuwen.service.spec.spi.AgentHandler;
 
@@ -54,6 +56,9 @@ import java.util.Optional;
 public class EdpEngineConfiguration {
     private static final Logger LOGGER = LoggerFactory.getLogger(EdpEngineConfiguration.class);
 
+    /** Cached InitResult shared between edpaExtHandler and edpAgentFactory beans. */
+    private EdpaExtHandler.InitResult cachedInitResult;
+
     /**
      * 创建并初始化 EDPAgent AgentHandler Bean。
      *
@@ -80,19 +85,41 @@ public class EdpEngineConfiguration {
         SandboxClient decoratedSandboxClient = resolveDecoratedSandboxClient(sandboxClientFactoryProvider).orElse(null);
 
         // Bean 创建阶段先完成全部初始化，获取真实 agent 实例
-        EdpaExtHandler.InitResult initResult = EdpaExtHandler.performInit(config, deepAgentProperties, agentName,
+        cachedInitResult = EdpaExtHandler.performInit(config, deepAgentProperties, agentName,
                 decoratedSandboxClient);
 
         // 用真实 agent 实例构造 Handler，消除反射 hack
-        EdpaExtHandler handler = new EdpaExtHandler(initResult.getAgentInstance());
-        handler.applyInitResult(initResult);
+        EdpaExtHandler handler = new EdpaExtHandler(cachedInitResult.getAgentInstance());
+        handler.applyInitResult(cachedInitResult);
 
         LOGGER.info(
                 "EdpEngineConfiguration: edpaExtHandler bean created, agentId={}, "
                         + "deepAgent initialized={}, sandboxPath={}",
-                agentName, initResult.getDeepAgent().isInitialized(),
+                agentName, cachedInitResult.getDeepAgent().isInitialized(),
                 decoratedSandboxClient != null ? "governed(Path2)" : "direct(Path1)");
         return handler;
+    }
+
+    /**
+     * 暴露 AgentCard Bean，供 DFX-002 per-Task Agent 工厂使用。
+     *
+     * <p>从 {@code edpaExtHandler} 初始化结果中提取，与单例 Agent 共享同一 AgentCard。
+     * 仅在 per-Task 模式激活时被 {@code EdpAgentFactoryAutoConfiguration} 消费。</p>
+     */
+    @Bean
+    AgentCard edpAgentCard() {
+        return cachedInitResult.getDeepAgent().getCard();
+    }
+
+    /**
+     * 暴露 DeepAgentConfig Bean，供 DFX-002 per-Task Agent 工厂使用。
+     *
+     * <p>从 {@code edpaExtHandler} 初始化结果中提取，与单例 Agent 共享同一配置模板。
+     * 仅在 per-Task 模式激活时被 {@code EdpAgentFactoryAutoConfiguration} 消费。</p>
+     */
+    @Bean
+    DeepAgentConfig edpDeepAgentConfig() {
+        return cachedInitResult.getDeepAgent().getConfig();
     }
 
     /**
