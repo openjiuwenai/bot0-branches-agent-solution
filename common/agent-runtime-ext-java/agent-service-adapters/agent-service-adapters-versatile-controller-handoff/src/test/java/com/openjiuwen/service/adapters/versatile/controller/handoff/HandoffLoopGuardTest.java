@@ -9,6 +9,7 @@ import com.openjiuwen.service.spec.dto.ServeRequest;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -106,5 +107,28 @@ class HandoffLoopGuardTest {
         guard.prepareOutbound("a", "k1", req, state);
         HandoffLoopGuard.OutboundDecision d = guard.prepareOutbound("a", "k2", req, state);
         assertThat(d.result()).isEqualTo(HandoffLoopGuard.GuardResult.DUPLICATE_TARGET);
+    }
+
+    @Test
+    void outboundTraceMetadataIncrementsHopAndAppendsSelf() {
+        HandoffLoopGuard guard = new HandoffLoopGuard(properties());
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("handoffHopCount", 2);
+        metadata.put("handoffRouteTrace", List.of("agent_x", "agent_y"));
+        metadata.put("sourceAgentId", "agent_x");
+        Map<String, Object> outbound = guard.outboundTraceMetadata(request(metadata));
+        assertThat(outbound.get("handoffHopCount")).isEqualTo(3);
+        assertThat((List<Object>) outbound.get("handoffRouteTrace"))
+                .containsExactly("agent_x", "agent_y", "agent_card_l1");
+        assertThat(outbound.get("sourceAgentId")).isEqualTo("agent_x");
+    }
+
+    @Test
+    void outboundTraceMetadataInitializesWhenAbsent() {
+        HandoffLoopGuard guard = new HandoffLoopGuard(properties());
+        Map<String, Object> outbound = guard.outboundTraceMetadata(request(null));
+        assertThat(outbound.get("handoffHopCount")).isEqualTo(1);
+        assertThat((List<Object>) outbound.get("handoffRouteTrace")).containsExactly("agent_card_l1");
+        assertThat(outbound.get("sourceAgentId")).isEqualTo("agent_card_l1");
     }
 }

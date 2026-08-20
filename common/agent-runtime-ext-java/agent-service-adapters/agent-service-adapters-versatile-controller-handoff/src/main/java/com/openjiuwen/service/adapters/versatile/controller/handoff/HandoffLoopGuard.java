@@ -112,6 +112,28 @@ public class HandoffLoopGuard {
         return OutboundDecision.allow(metadata);
     }
 
+    /**
+     * 构造下一出站跳的跨请求循环 trace 三键：hop+1、trace 追加 self（去重）、
+     * sourceAgentId 保留或初始化为 self。handler 产出 a2a_delegate 中断前把它并入
+     * request.metadata；runtime 协调器 outboundMetadata 对非 RESERVED 键原样透传到
+     * RemoteCall.metadata（迁移设计稿 4.2）。
+     */
+    public Map<String, Object> outboundTraceMetadata(ServeRequest request) {
+        ControllerHandoffProperties.LoopTraceMetadata keys = properties.getLoopTraceMetadata();
+        Map<String, Object> inbound = request.getMetadata() == null ? Map.of() : request.getMetadata();
+        List<String> trace = new ArrayList<>(toStringList(inbound.get(keys.getRouteTraceKey())));
+        String self = properties.getSelfAgentId();
+        if (self != null && !self.isBlank() && !trace.contains(self)) {
+            trace.add(self);
+        }
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put(keys.getHopCountKey(), toInt(inbound.get(keys.getHopCountKey()), 0) + 1);
+        metadata.put(keys.getRouteTraceKey(), trace);
+        Object source = inbound.get(keys.getSourceAgentKey());
+        metadata.put(keys.getSourceAgentKey(), source != null ? source : self);
+        return metadata;
+    }
+
     private static int toInt(Object value, int fallback) {
         if (value instanceof Number n) {
             return n.intValue();
