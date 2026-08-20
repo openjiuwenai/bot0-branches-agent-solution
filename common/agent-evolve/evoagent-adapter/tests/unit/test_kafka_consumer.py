@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from agent_adapter.kafka_consumer.consumer import process_envelope
+from agent_adapter.kafka_consumer.consumer import TraceConsumer, process_envelope
 from agent_adapter.kafka_consumer.otlp_parser import parse_otlp_envelope
 
 
@@ -75,3 +75,17 @@ async def test_process_envelope_bad_json_raises():
     with pytest.raises(Exception):
         await process_envelope(repo, b"not json")
     assert repo.bulks == []  # 失败前未入库
+
+
+async def test_consume_loop_without_start_raises_runtime_error():
+    """start() 未调用前 _consumer 为 None，启动前置校验须抛 RuntimeError 而非 AssertionError。"""
+    consumer = TraceConsumer(FakeRepo(), "localhost:9092")
+    with pytest.raises(RuntimeError, match="未 start"):
+        await consumer._consume_loop()
+
+
+async def test_handle_without_start_raises_runtime_error():
+    """_handle 在 start() 前调用须抛 RuntimeError（msg 在校验通过后才被访问）。"""
+    consumer = TraceConsumer(FakeRepo(), "localhost:9092")
+    with pytest.raises(RuntimeError, match="未 start"):
+        await consumer._handle(None)

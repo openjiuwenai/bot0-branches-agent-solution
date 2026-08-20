@@ -94,7 +94,8 @@ class TraceConsumer:
         logger.info("kafka_consumer_stopped topic=%s", self._topic)
 
     async def _consume_loop(self) -> None:
-        assert self._consumer is not None
+        if self._consumer is None:  # 启动前置校验: start() 未调用则消费循环不可运行
+            raise RuntimeError("TraceConsumer 未 start()")
         # 外层 try: fetch/解码层异常 (如 kafka 断连、消息体损坏) 不能让消费循环静默挂掉 ——
         # 记日志 + 退避重试, 避免无声停摆 (曾因 snappy codec 缺失致 task 静默死, 无日志无 commit)。
         while True:
@@ -109,7 +110,8 @@ class TraceConsumer:
 
     async def _handle(self, msg: Any) -> None:
         """处理一条消息: 解析 → 按 profile 过滤 → 入库 → 提交。"""
-        assert self._consumer is not None
+        if self._consumer is None:  # 启动前置校验: start() 未调用则无法提交
+            raise RuntimeError("TraceConsumer 未 start()")
         try:
             spans = parse_otlp_envelope(msg.value)
         except Exception:
