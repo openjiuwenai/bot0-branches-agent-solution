@@ -57,8 +57,10 @@ final class Feat017BusIntegrationSupport {
     static final String TRACE = "0123456789abcdef0123456789abcdef";
     static final String ROUTE = "route-feat017";
     static final long NOW = 1_800_000_000_000L;
-    static final byte[] REQUEST_PAYLOAD = "{\"jsonrpc\":\"2.0\",\"method\":\"SendMessage\"}"
-            .getBytes(StandardCharsets.UTF_8);
+    static final byte[] REQUEST_PAYLOAD = ("{\"jsonrpc\":\"2.0\",\"id\":\"fixture-request\","
+            + "\"method\":\"SendMessage\",\"params\":{\"tenant\":\"tenant-a\",\"message\":{"
+            + "\"messageId\":\"fixture-message\",\"role\":\"ROLE_USER\","
+            + "\"parts\":[{\"text\":\"hello\"}]}}}").getBytes(StandardCharsets.UTF_8);
 
     private Feat017BusIntegrationSupport() {
     }
@@ -148,6 +150,7 @@ final class Feat017BusIntegrationSupport {
         return """
                 {
                   "jsonrpc": "2.0",
+                  "id": "query-request",
                   "method": "GetTask",
                   "params": {
                     "id": "%s",

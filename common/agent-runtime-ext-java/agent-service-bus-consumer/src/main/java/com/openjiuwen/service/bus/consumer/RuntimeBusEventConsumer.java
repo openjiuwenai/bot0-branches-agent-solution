@@ -174,8 +174,9 @@ public final class RuntimeBusEventConsumer {
         if (invalid.isPresent()) {
             return invalidEnvelope(envelope, invalid.get());
         }
+        byte[] payload = null;
         try {
-            byte[] payload = envelope.inlinePayload() != null
+            payload = envelope.inlinePayload() != null
                     ? envelope.inlinePayload()
                     : concurrency.call(BusConcurrencyGuard.Lane.PAYLOAD, () -> payloadResolver.apply(envelope));
             if (payload == null || payload.length == 0) {
@@ -191,8 +192,8 @@ public final class RuntimeBusEventConsumer {
             return failed(envelope, null, "TASK_NOT_FOUND", false);
         } catch (UnsupportedOperationError unavailable) {
             // Terminal / not-subscribable task (e.g. SubscribeToTask on a COMPLETED task). Build the
-            // -32004 (UNSUPPORTED_OPERATION) JSON-RPC error ¡ª with the client's request id decoded from
-            // the inline payload ¡ª and attach it as the projection's a2aResponse, so the gateway passes
+            // -32004 (UNSUPPORTED_OPERATION) JSON-RPC error with the client's request id decoded from
+            // the inline payload and attach it as the projection's a2aResponse, so the gateway passes
             // it through verbatim, byte-identical to DIRECT (where the runtime's HTTP SubscribeToTask
             // returns -32004 as-is).
             return failedWithResponse(envelope, null, "UNSUPPORTED_OPERATION",
@@ -202,7 +203,8 @@ public final class RuntimeBusEventConsumer {
         } catch (IllegalArgumentException invalidPayload) {
             return failed(envelope, null, normalize(invalidPayload.getMessage(), "PAYLOAD_INVALID"), false);
         } catch (A2AError protocolError) {
-            return failed(envelope, null, "A2A_ERROR_" + protocolError.getCode(), false);
+            return failedWithResponse(envelope, null, "A2A_ERROR_" + protocolError.getCode(),
+                    bridge.errorResponseJson(protocolError.getCode(), protocolError.getMessage(), payload), false);
         } catch (IllegalStateException failure) {
             LOG.warn("Bus event processing failed, messageId={}", envelope.messageId(), failure);
             return BusConsumptionDecision.retry("PROCESSING_FAILED");
@@ -329,7 +331,7 @@ public final class RuntimeBusEventConsumer {
      * Emits a FAILED projection that carries a complete a2aResponse JSON-RPC body (e.g. the -32004
      * error built for a terminal / not-subscribable SubscribeToTask), in addition to the errorCode.
      * The gateway's projection feed reads a2aResponse first and passes it through verbatim, so the
-     * client sees the runtime's JSON-RPC error ¡ª same as the DIRECT (HTTP) path.
+     * client sees the same Runtime JSON-RPC error as on the DIRECT (HTTP) path.
      *
      * @param envelope bus event envelope
      * @param taskId task id (null when not yet bound)

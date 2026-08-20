@@ -14,6 +14,8 @@ import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCall;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCallOutcome;
+import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteCallSupport;
+import com.openjiuwen.service.bus.consumer.projection.AgentBusProjectionJsonCodec;
 
 import org.a2aproject.sdk.client.ClientEvent;
 import org.a2aproject.sdk.client.TaskEvent;
@@ -44,8 +46,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
 
     private final RuntimeRdcClient registry;
     private final AgentBusRequestSubmitter requestSubmitter;
-    private final RemoteCallOutcomeMapper outcomeMapper;
-    private final BusRemoteCallEventConsumer eventConsumer;
+    private final A2ARemoteCallSupport remoteCallSupport;
     private final AgentBusRequestEncoder requestEncoder = new AgentBusRequestEncoder();
     private final AgentBusProjectionDecoder projectionDecoder = new AgentBusProjectionDecoder();
     private final Map<String, PendingRemoteCall> pending = new ConcurrentHashMap<>();
@@ -100,8 +101,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         this.sourceServiceId = require(sourceServiceId, "sourceServiceId");
         this.responseTimeoutMillis = positive(responseTimeoutMillis, "responseTimeoutMillis");
         this.streamSubscriber = Objects.requireNonNull(streamSubscriber, "streamSubscriber is required");
-        this.outcomeMapper = new RemoteCallOutcomeMapper();
-        this.eventConsumer = new BusRemoteCallEventConsumer();
+        this.remoteCallSupport = new A2ARemoteCallSupport();
     }
 
     @Override
@@ -109,6 +109,10 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
             RemoteAgentCaller.EventObserver eventObserver) {
         Objects.requireNonNull(call, "call is required");
         Objects.requireNonNull(eventObserver, "eventObserver is required");
+        if (remoteCallSupport.isCallbackRequested(call)) {
+            return CompletableFuture.failedFuture(
+                    new UnsupportedOperationException("Agent Bus caller does not support callback mode"));
+        }
         CompletableFuture<RemoteCallOutcome> result = new CompletableFuture<>();
         result.orTimeout(responseTimeoutMillis, TimeUnit.MILLISECONDS);
         executor.execute(() -> startCall(call, eventObserver, result));
@@ -126,8 +130,19 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         if (call == null) {
             return false;
         }
-        AgentBusProjectionDecoder.DecodedProjection projection = projectionDecoder.decode(message.inlinePayload());
-        apply(message.eventType(), call, projection);
+        try {
+            validateResponseEnvelope(message, call);
+            AgentBusProjectionJsonCodec.DecodedProjection projection = projectionDecoder.decode(
+                    message.inlinePayload(), message.eventType().name());
+            validateResponseId(projection, call);
+            if (projection.responseError() != null) {
+                call.result.completeExceptionally(remoteProtocolFailure(projection.responseError()));
+                return true;
+            }
+            apply(message.eventType(), call, projection);
+        } catch (IllegalArgumentException | IllegalStateException failure) {
+            call.result.completeExceptionally(failure);
+        }
         return true;
     }
 
@@ -161,15 +176,15 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
             String idempotencyKey = UUID.randomUUID().toString();
             long now = System.currentTimeMillis();
             long deadline = now + responseTimeoutMillis;
+            ForwardingEnvelope envelope = creationEnvelope(call, route, correlationId, idempotencyKey, deadline);
             PendingRemoteCall pendingCall = new PendingRemoteCall(result, eventObserver, call.isCallerStreaming(),
                     route, resolved == null ? null : resolved.endpointUrl(),
-                    correlationId, idempotencyKey, deadline);
+                    correlationId, idempotencyKey, envelope.messageId().value(), deadline);
             pending.put(correlationId, pendingCall);
             result.whenComplete((outcome, failure) -> {
                 pending.remove(correlationId, pendingCall);
                 pendingCall.closeStream();
             });
-            ForwardingEnvelope envelope = creationEnvelope(call, route, correlationId, idempotencyKey, deadline);
             if (result.isDone()) {
                 pending.remove(correlationId, pendingCall);
                 return;
@@ -201,6 +216,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
     private ForwardingEnvelope subscriptionEnvelope(PendingRemoteCall call) {
         String requestId = "bus-stream-" + UUID.randomUUID();
         String payload = requestEncoder.encodeSubscription(call.taskId, requestId, tenantId);
+        call.expectResponseId(requestId);
         EnvelopeIdentity identity = new EnvelopeIdentity(call.correlationId, call.idempotencyKey,
                 call.correlationId, requestId, call.deadline);
         return envelope(AgentBusEventType.A2A_STREAM_SUBSCRIBE_REQUESTED, call.route, identity, payload);
@@ -224,16 +240,16 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
     }
 
     private void apply(AgentBusEventType eventType, PendingRemoteCall call,
-            AgentBusProjectionDecoder.DecodedProjection projection) {
+            AgentBusProjectionJsonCodec.DecodedProjection projection) {
         if (eventType == null) {
             throw new IllegalArgumentException("Response projection eventType is required");
         }
-        call.captureTaskId(projection.value("taskId"));
+        call.captureTaskId(projection.taskId());
         switch (eventType) {
             case A2A_CALL_ACCEPTED -> {
                 return;
             }
-            case A2A_STREAM_READY -> openStream(call, requiredProjection(projection, "streamRef"));
+            case A2A_STREAM_READY -> openStream(call, requiredProjection(projection.streamRef(), "streamRef"));
             case A2A_CALL_REJECTED -> completeState(call, projection, TaskState.TASK_STATE_REJECTED);
             case A2A_CALL_FAILED -> completeState(call, projection, TaskState.TASK_STATE_FAILED);
             case A2A_CALL_RESPONSE, A2A_CALL_INPUT_REQUIRED, A2A_CALL_TERMINAL ->
@@ -263,7 +279,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
     }
 
     private void acceptStreamEvent(PendingRemoteCall call, ClientEvent event) {
-        eventConsumer.accept(event, call.result, call.eventObserver, true);
+        remoteCallSupport.accept(event, call.result, call.eventObserver, false, true);
     }
 
     private void streamFailed(PendingRemoteCall call, int generation, Throwable failure) {
@@ -297,36 +313,71 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         }
     }
 
-    private void completeA2a(PendingRemoteCall call, AgentBusProjectionDecoder.DecodedProjection projection,
+    private void completeA2a(PendingRemoteCall call, AgentBusProjectionJsonCodec.DecodedProjection projection,
             AgentBusEventType eventType) {
         if (projection.task() != null) {
             call.captureTaskId(projection.task().id());
-            eventConsumer.accept(new TaskEvent(projection.task()), call.result, call.eventObserver, call.streaming);
+            remoteCallSupport.accept(new TaskEvent(projection.task()), call.result, call.eventObserver, false,
+                    call.streaming);
             return;
         }
         if (projection.message() != null) {
             call.captureTaskId(projection.message().taskId());
-            outcomeMapper.mapMessage(projection.message()).ifPresent(call.result::complete);
+            remoteCallSupport.mapMessage(projection.message()).ifPresent(call.result::complete);
             return;
         }
         TaskState fallback = eventType == AgentBusEventType.A2A_CALL_INPUT_REQUIRED
-                ? TaskState.TASK_STATE_INPUT_REQUIRED : state(projection.value("status")).orElse(null);
+                ? TaskState.TASK_STATE_INPUT_REQUIRED : state(projection.status()).orElse(null);
+        if (fallback == null) {
+            throw new IllegalArgumentException("A2A response result is neither a Task nor a Message");
+        }
         completeState(call, projection, fallback);
     }
 
-    private void completeState(PendingRemoteCall call, AgentBusProjectionDecoder.DecodedProjection projection,
+    private void completeState(PendingRemoteCall call, AgentBusProjectionJsonCodec.DecodedProjection projection,
             TaskState state) {
-        String taskId = projection.value("taskId");
-        String reason = firstNonBlank(projection.value("reason"), projection.value("errorCode"));
-        outcomeMapper.mapTask(taskId, state, reason, null, false).ifPresent(call.result::complete);
+        String reason = firstNonBlank(projection.reason(), projection.errorCode());
+        remoteCallSupport.mapTask(projection.taskId(), state, reason, null, null, false)
+                .ifPresent(call.result::complete);
     }
 
-    private static String requiredProjection(AgentBusProjectionDecoder.DecodedProjection projection, String name) {
-        String value = projection.value(name);
+    private static String requiredProjection(String value, String name) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(name + " is required in A2A stream projection");
         }
         return value;
+    }
+
+    private void validateResponseEnvelope(BrokerInboundMessage message, PendingRemoteCall call) {
+        if (!tenantId.equals(message.tenantId())) {
+            throw new IllegalArgumentException("Response tenant does not match pending call");
+        }
+        if (!call.route.serviceId().equals(message.sourceServiceId())) {
+            throw new IllegalArgumentException("Response source does not match pending call");
+        }
+        if (!sourceServiceId.equals(message.targetServiceId())) {
+            throw new IllegalArgumentException("Response target does not match local Runtime");
+        }
+        if (!call.correlationId.equals(message.correlationId())) {
+            throw new IllegalArgumentException("Response correlation does not match pending call");
+        }
+    }
+
+    private static void validateResponseId(AgentBusProjectionJsonCodec.DecodedProjection projection,
+            PendingRemoteCall call) {
+        if (projection.responseId() == null) {
+            return;
+        }
+        if (!projection.responseId().isTextual()
+                || !call.expectedResponseId().equals(projection.responseId().textValue())) {
+            throw new IllegalArgumentException("JSON-RPC response id does not match pending request");
+        }
+    }
+
+    private static IllegalStateException remoteProtocolFailure(com.fasterxml.jackson.databind.JsonNode error) {
+        String code = error.has("code") ? error.get("code").asText() : "unknown";
+        String message = error.has("message") ? error.get("message").asText() : "Remote A2A protocol error";
+        return new IllegalStateException("Remote A2A protocol error code=" + code + " message=" + message);
     }
 
     private static Optional<TaskState> state(String value) {
@@ -413,6 +464,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         private final String endpointUrl;
         private final String correlationId;
         private final String idempotencyKey;
+        private String expectedResponseId;
         private final long deadline;
         private String taskId;
         private String streamReference;
@@ -423,7 +475,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         private PendingRemoteCall(CompletableFuture<RemoteCallOutcome> result,
                 RemoteAgentCaller.EventObserver eventObserver, boolean streaming,
                 RuntimeRdcClient.RouteCandidate route, String endpointUrl, String correlationId,
-                String idempotencyKey, long deadline) {
+                String idempotencyKey, String requestId, long deadline) {
             this.result = result;
             this.eventObserver = eventObserver;
             this.streaming = streaming;
@@ -431,6 +483,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
             this.endpointUrl = endpointUrl;
             this.correlationId = correlationId;
             this.idempotencyKey = idempotencyKey;
+            this.expectedResponseId = requestId;
             this.deadline = deadline;
         }
 
@@ -439,6 +492,14 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
                 return;
             }
             taskId = value;
+        }
+
+        private synchronized void expectResponseId(String value) {
+            expectedResponseId = value;
+        }
+
+        private synchronized String expectedResponseId() {
+            return expectedResponseId;
         }
 
         private synchronized int beginStream(String value) {

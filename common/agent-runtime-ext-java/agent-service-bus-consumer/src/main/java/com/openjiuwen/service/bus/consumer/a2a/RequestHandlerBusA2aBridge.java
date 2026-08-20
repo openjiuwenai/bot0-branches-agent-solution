@@ -4,13 +4,10 @@
 
 package com.openjiuwen.service.bus.consumer.a2a;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.openjiuwen.service.bus.consumer.model.AgentBusEventEnvelope;
 import com.openjiuwen.service.bus.consumer.model.BusDispatchResult;
+import com.openjiuwen.service.app.controller.a2a.A2AJsonRpcSupport;
 
-import org.a2aproject.sdk.jsonrpc.common.json.JsonUtil;
 import org.a2aproject.sdk.jsonrpc.common.wrappers.A2AErrorResponse;
 import org.a2aproject.sdk.server.ServerCallContext;
 import org.a2aproject.sdk.server.auth.UnauthenticatedUser;
@@ -24,7 +21,7 @@ import org.a2aproject.sdk.spec.TaskIdParams;
 import org.a2aproject.sdk.spec.TaskQueryParams;
 import org.a2aproject.sdk.spec.UnsupportedOperationError;
 
-import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -43,11 +40,10 @@ import java.util.function.Supplier;
  * @since 2026-07-22
  */
 public class RequestHandlerBusA2aBridge {
-    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final long FIRST_STREAM_EVENT_TIMEOUT_SECONDS = 30L;
-    private static final String DEFAULT_MESSAGE_ROLE = "ROLE_USER";
 
     private final Supplier<RequestHandler> requestHandler;
+    private final A2AJsonRpcSupport jsonRpcSupport;
 
     /**
      * Creates a new instance.
@@ -66,6 +62,7 @@ public class RequestHandlerBusA2aBridge {
      */
     public RequestHandlerBusA2aBridge(Supplier<RequestHandler> requestHandler) {
         this.requestHandler = Objects.requireNonNull(requestHandler, "requestHandler resolver is required");
+        this.jsonRpcSupport = new A2AJsonRpcSupport();
     }
 
     /**
@@ -88,17 +85,17 @@ public class RequestHandlerBusA2aBridge {
     public BusDispatchResult handle(AgentBusEventEnvelope envelope, byte[] payload) {
         RequestHandler handler = requireRequestHandler();
         ServerCallContext context = context(envelope);
-        Payload decoded = decode(payload);
+        A2AJsonRpcSupport.ParsedA2ARequest decoded = decode(payload, envelope.tenantId());
         return switch (envelope.eventType()) {
             case "CLIENT_INVOCATION_REQUESTED", "A2A_CALL_REQUESTED" -> send(envelope, decoded, context, handler);
             case "CLIENT_INVOCATION_QUERY_REQUESTED", "A2A_CALL_QUERY_REQUESTED" -> {
                 requireMethod(decoded, "GetTask");
-                TaskQueryParams params = scoped(convert(decoded.params(), TaskQueryParams.class), envelope.tenantId());
+                TaskQueryParams params = params(decoded, TaskQueryParams.class);
                 yield BusDispatchResult.task(handler.onGetTask(params, context));
             }
             case "CLIENT_STREAM_SUBSCRIBE_REQUESTED", "A2A_STREAM_SUBSCRIBE_REQUESTED" -> {
                 requireMethod(decoded, "SubscribeToTask");
-                TaskIdParams params = scoped(convert(decoded.params(), TaskIdParams.class), envelope.tenantId());
+                TaskIdParams params = params(decoded, TaskIdParams.class);
                 ensureSubscribable(params, context, handler);
                 yield BusDispatchResult.stream(params.id());
             }
@@ -124,7 +121,7 @@ public class RequestHandlerBusA2aBridge {
                 && !"A2A_CALL_REQUESTED".equals(envelope.eventType())) {
             return Optional.empty();
         }
-        MessageSendParams params = messageSendParams(decode(payload).params());
+        MessageSendParams params = params(decode(payload, envelope.tenantId()), MessageSendParams.class);
         return Optional.ofNullable(params.message().taskId()).filter(value -> !value.isBlank());
     }
 
@@ -132,10 +129,17 @@ public class RequestHandlerBusA2aBridge {
      * Returns the JSON-RPC request identity carried by an A2A bus payload.
      *
      * @param payload decoded request payload
-     * @return request identity, or {@code null} when the request is a notification
+     * @return exact non-null request identity
      */
     public Object requestId(byte[] payload) {
-        return decode(payload).requestId();
+        if (payload == null || payload.length == 0) {
+            throw new IllegalArgumentException("PAYLOAD_EMPTY");
+        }
+        try {
+            return jsonRpcSupport.parseRequestId(new String(payload, StandardCharsets.UTF_8));
+        } catch (A2AJsonRpcSupport.RequestException failure) {
+            throw failure.getError();
+        }
     }
 
     /**
@@ -146,12 +150,12 @@ public class RequestHandlerBusA2aBridge {
      * @return complete standard A2A JSON-RPC response
      */
     public String response(byte[] payload, BusDispatchResult result) {
-        Payload decoded = decode(payload);
+        A2AJsonRpcSupport.ParsedA2ARequest decoded = decode(payload, null);
         try {
             if (isMethod(decoded, "GetTask")) {
-                return A2aJsonRpcResponseSerializer.queryResult(decoded.requestId(), result.task());
+                return A2aJsonRpcResponseSerializer.queryResult(decoded.originalId(), result.task());
             }
-            return A2aJsonRpcResponseSerializer.sendMessage(decoded.requestId(), result.response());
+            return A2aJsonRpcResponseSerializer.sendMessage(decoded.originalId(), result.response());
         } catch (org.a2aproject.sdk.jsonrpc.common.json.JsonProcessingException failure) {
             throw new IllegalStateException("Failed to serialize A2A bridge response", failure);
         }
@@ -160,20 +164,20 @@ public class RequestHandlerBusA2aBridge {
     /**
      * Serializes an A2A error response (same serializer as the HTTP controller), carrying the client's
      * JSON-RPC request id decoded from the inline payload, so the gateway can pass the runtime's -32004
-     * (or other) error through verbatim ¡ª byte-identical to the DIRECT (HTTP) path.
+     * (or other) error through with the same semantics as the DIRECT (HTTP) path.
      *
      * @param code numeric A2A error code (e.g. A2AErrorCodes.UNSUPPORTED_OPERATION.code() = -32004)
      * @param message human-readable message
-     * @param payload inline A2A JSON-RPC request (to recover the request id); null/blank ¡ú no id
+     * @param payload inline A2A JSON-RPC request (to recover the request id); null/blank means no id
      * @return complete standard A2A JSON-RPC error response
      */
     public String errorResponseJson(int code, String message, byte[] payload) {
         Object requestId = null;
         if (payload != null && payload.length > 0) {
             try {
-                requestId = decode(payload).requestId();
+                requestId = jsonRpcSupport.parseRequestId(new String(payload, StandardCharsets.UTF_8));
             } catch (RuntimeException ignore) {
-                // malformed/un-decodable payload ¡ú emit the error without an id (best effort)
+                // Malformed payload: emit the error without an id as a best effort.
             }
         }
         A2AError error = new A2AError(code, message, null);
@@ -209,10 +213,11 @@ public class RequestHandlerBusA2aBridge {
         throw new IllegalStateException("A2A request handler does not support caller-reserved Task ids");
     }
 
-    private BusDispatchResult send(AgentBusEventEnvelope envelope, Payload decoded, ServerCallContext context,
+    private BusDispatchResult send(AgentBusEventEnvelope envelope, A2AJsonRpcSupport.ParsedA2ARequest decoded,
+            ServerCallContext context,
             RequestHandler handler)
             throws A2AError {
-        MessageSendParams params = scoped(messageSendParams(decoded.params()), envelope.tenantId());
+        MessageSendParams params = params(decoded, MessageSendParams.class);
         if (params.message().taskId() != null) {
             handler.validateRequestedTask(params.message().taskId());
         }
@@ -294,84 +299,33 @@ public class RequestHandlerBusA2aBridge {
         return new ServerCallContext(UnauthenticatedUser.INSTANCE, state, Set.of());
     }
 
-    private static Payload decode(byte[] payload) {
+    private A2AJsonRpcSupport.ParsedA2ARequest decode(byte[] payload, String expectedTenant) {
         if (payload == null || payload.length == 0) {
             throw new IllegalArgumentException("PAYLOAD_EMPTY");
         }
-        JsonNode root;
         try {
-            root = MAPPER.readTree(payload);
-        } catch (IOException failure) {
-            throw new IllegalArgumentException("PAYLOAD_INVALID", failure);
-        }
-        String method = root.hasNonNull("method") ? root.get("method").asText() : null;
-        JsonNode params = root.has("params") ? root.get("params") : root;
-        if (params == null || params.isNull()) {
-            throw new IllegalArgumentException("PAYLOAD_INVALID");
-        }
-        Object requestId = root.has("id") && !root.get("id").isNull()
-                ? MAPPER.convertValue(root.get("id"), Object.class)
-                : null;
-        return new Payload(method, params, requestId);
-    }
-
-    private static <T> T convert(JsonNode params, Class<T> type) {
-        try {
-            return JsonUtil.fromJson(params.toString(), type);
-        } catch (org.a2aproject.sdk.jsonrpc.common.json.JsonProcessingException failure) {
-            throw new IllegalArgumentException("PAYLOAD_INVALID", failure);
-        } catch (RuntimeException failure) {
-            throw new IllegalArgumentException("PAYLOAD_INVALID", failure);
+            return jsonRpcSupport.parseRequest(new String(payload, StandardCharsets.UTF_8), expectedTenant);
+        } catch (A2AJsonRpcSupport.RequestException failure) {
+            throw failure.getError();
         }
     }
 
-    private static MessageSendParams messageSendParams(JsonNode params) {
-        JsonNode normalized = params.deepCopy();
-        JsonNode message = normalized.get("message");
-        if (message instanceof ObjectNode messageObject) {
-            JsonNode role = messageObject.get("role");
-            if (role == null || role.isNull() || role.isTextual() && role.asText().isBlank()) {
-                messageObject.put("role", DEFAULT_MESSAGE_ROLE);
-            }
+    private static <T> T params(A2AJsonRpcSupport.ParsedA2ARequest request, Class<T> type) {
+        if (!type.isInstance(request.params())) {
+            throw new InvalidRequestError("A2A method does not match bus event");
         }
-        return convert(normalized, MessageSendParams.class);
+        return type.cast(request.params());
     }
 
-    private static void requireMethod(Payload payload, String expected) {
-        if (payload.method() == null) {
-            return;
-        }
+    private static void requireMethod(A2AJsonRpcSupport.ParsedA2ARequest payload, String expected) {
         if (isMethod(payload, expected)) {
             return;
         }
         throw new InvalidRequestError("A2A method does not match bus event");
     }
 
-    private static boolean isMethod(Payload payload, String expected) {
+    private static boolean isMethod(A2AJsonRpcSupport.ParsedA2ARequest payload, String expected) {
         return expected.equals(payload.method());
     }
 
-    private static MessageSendParams scoped(MessageSendParams params, String tenantId) {
-        requireTenant(params.tenant(), tenantId);
-        return new MessageSendParams(params.message(), params.configuration(), params.metadata(), tenantId);
-    }
-
-    private static TaskQueryParams scoped(TaskQueryParams params, String tenantId) {
-        requireTenant(params.tenant(), tenantId);
-        return new TaskQueryParams(params.id(), params.historyLength(), tenantId);
-    }
-
-    private static TaskIdParams scoped(TaskIdParams params, String tenantId) {
-        requireTenant(params.tenant(), tenantId);
-        return new TaskIdParams(params.id(), tenantId);
-    }
-
-    private static void requireTenant(String payloadTenant, String envelopeTenant) {
-        if (payloadTenant != null && !envelopeTenant.equals(payloadTenant)) {
-            throw new IllegalArgumentException("TASK_NOT_FOUND");
-        }
-    }
-
-    private record Payload(String method, JsonNode params, Object requestId) {
-    }
 }
