@@ -5,6 +5,7 @@
 package com.openjiuwen.client.runtimeverify;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.openjiuwen.mockruntime.MockRuntimeServer;
@@ -64,7 +65,7 @@ class RuntimeVerificationAppTest {
     }
 
     @Test
-    void asyncScenarioUsesBusinessGetInvocationAndNoAttributesOrTree() throws Exception {
+    void asyncScenarioUsesBusinessGetInvocationAndRuntimeAttributeAllowlist() throws Exception {
         JsonNode run = execute("async-gettask", "ASYNC");
 
         assertEquals("VERIFIED", run.path("status").asText());
@@ -73,9 +74,29 @@ class RuntimeVerificationAppTest {
         assertTrue(run.path("tree").isMissingNode() || run.path("tree").isNull());
         JsonNode requests = runtimeRequests();
         assertTrue(requests.toString().contains("GetTask"));
+        int createRequests = 0;
+        int getTaskRequests = 0;
         for (JsonNode record : requests) {
-            assertTrue(!record.path("body").path("params").path("metadata").has("attributes"));
+            JsonNode body = record.path("body");
+            String method = body.path("method").asText();
+            JsonNode metadata = body.path("params").path("metadata");
+            if ("SendMessage".equals(method)) {
+                createRequests++;
+                JsonNode attributes = metadata.path("attributes");
+                assertEquals(run.path("id").asText(), attributes.path("traceId").asText());
+                assertEquals("runtime-verification-" + run.path("id").asText(),
+                        attributes.path("correlationId").asText());
+                assertEquals(2, attributes.size());
+                assertFalse(attributes.has("tenantId"));
+                assertFalse(attributes.has("routingAgent"));
+                assertFalse(metadata.has("agentId"));
+            } else if ("GetTask".equals(method)) {
+                getTaskRequests++;
+                assertFalse(body.path("params").has("metadata"));
+            }
         }
+        assertEquals(1, createRequests);
+        assertTrue(getTaskRequests >= 1);
     }
 
     @Test

@@ -40,8 +40,11 @@
 - Diagnostics：本地工具执行、GetTask 查询、Publisher 完成和异常信息。
 
 验证 Runtime 隔离时，应确认 Runtime Wire 中没有 `Authorization` 和
-`params.metadata.agentId`。`credentialToken`、保留租户属性和 `agentId` 会由 UI
-故意传给 SDK，以验证 RuntimeEndpointPolicy 确实进行了隔离。
+`params.metadata.agentId`。创建请求只允许非空
+`params.metadata.attributes.traceId/correlationId`；tenant、routing 及其他任意属性
+不得进入 Runtime 请求。`credentialToken`、agentId、tenant 和 routing 属性会由验证应用
+故意传给 SDK，以验证 RuntimeEndpointPolicy 在保留追踪上下文的同时完成敏感字段隔离。
+`GetTask` 和 `SubscribeToTask` 等观察请求不携带创建请求的 metadata。
 
 ## 场景
 
