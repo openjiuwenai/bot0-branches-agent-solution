@@ -6,7 +6,7 @@ import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import java.util.Set;
 
-/** Unified node SPI (FEAT-028 MUST). */
+/** Unified node SPI (FEAT-031 MUST). */
 public interface NodeHandlerFactory {
     String canonicalType();
 

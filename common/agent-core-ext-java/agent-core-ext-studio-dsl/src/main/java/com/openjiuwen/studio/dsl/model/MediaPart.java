@@ -4,7 +4,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 
-/** Multimodal fragment carried between nodes (FEAT-028 MUST). */
+/** Multimodal fragment carried between nodes (FEAT-031 MUST). */
 public final class MediaPart {
     private final String modality;
     private final String mimeType;

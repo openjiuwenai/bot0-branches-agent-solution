@@ -2,7 +2,7 @@ package com.openjiuwen.studio.dsl.spi;
 
 import java.util.Map;
 
-/** Java SPI for jiuwen.code (FEAT-028 MUST). */
+/** Java SPI for jiuwen.code (FEAT-031 MUST). */
 public interface CodeLogic {
     String name();
 

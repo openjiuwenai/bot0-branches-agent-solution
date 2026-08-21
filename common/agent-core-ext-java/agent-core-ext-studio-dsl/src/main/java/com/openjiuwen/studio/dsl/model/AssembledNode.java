@@ -5,7 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
-/** Minimal FEAT-027 assembly product consumed by FEAT-028 (L2 §2.3.2). */
+/** Minimal assembly product consumed by FEAT-031 (L2 §2.4); produced by DSL assembler / host. */
 public final class AssembledNode {
     private final String id;
     private final String irType;

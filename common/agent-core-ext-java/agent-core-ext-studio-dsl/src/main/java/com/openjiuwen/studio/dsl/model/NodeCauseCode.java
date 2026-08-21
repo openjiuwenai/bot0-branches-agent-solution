@@ -1,6 +1,6 @@
 package com.openjiuwen.studio.dsl.model;
 
-/** FEAT-028 / L2 §4.6 distinguishable failure codes. */
+/** FEAT-031 / L2 §7.3 distinguishable failure codes. */
 public enum NodeCauseCode {
     UNKNOWN_NODE_TYPE,
     NODE_CONFIG_INVALID,

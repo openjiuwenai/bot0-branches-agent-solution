@@ -6,7 +6,7 @@ import java.util.Objects;
 
 /**
  * Lightweight branch condition evaluator aligned with Studio branch configs.
- * Engine does not interpret business semantics beyond declared operators (FEAT-028).
+ * Engine does not interpret business semantics beyond declared operators (FEAT-031).
  */
 public final class ConditionEvaluator {
     private ConditionEvaluator() {}

@@ -2,7 +2,7 @@ package com.openjiuwen.studio.dsl.exec;
 
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 
-/** Distinguishable node failure surface (FEAT-028 MUST). */
+/** Distinguishable node failure surface (FEAT-031 MUST). */
 public class NodeExecutionException extends RuntimeException {
     private final String nodeId;
     private final String nodeType;
