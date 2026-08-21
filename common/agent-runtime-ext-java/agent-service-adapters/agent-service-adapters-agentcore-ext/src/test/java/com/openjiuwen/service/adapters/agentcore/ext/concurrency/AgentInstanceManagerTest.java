@@ -33,15 +33,31 @@ class AgentInstanceManagerTest {
     }
 
     @Test
-    void acquire_returnsNewInstance_eachTime() {
+    void acquire_sameConversationConcurrent_rejectsSecond() {
         AgentFactory factory = mock(AgentFactory.class);
         Object agent1 = new Object();
         Object agent2 = new Object();
         when(factory.create()).thenReturn(agent1, agent2);
         AgentInstanceManager manager = new AgentInstanceManager(factory);
-        Object result1 = manager.acquire("conv-1");
-        Object result2 = manager.acquire("conv-1");
-        assertThat(result1).isNotSameAs(result2);
+        manager.acquire("conv-1");
+        assertThatThrownBy(() -> manager.acquire("conv-1"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("conv-1");
+    }
+
+    @Test
+    void acquire_sameConversationConcurrent_destroysRejectedAgent() {
+        AgentFactory factory = mock(AgentFactory.class);
+        Object agent1 = new Object();
+        Object agent2 = new Object();
+        when(factory.create()).thenReturn(agent1, agent2);
+        AgentInstanceManager manager = new AgentInstanceManager(factory);
+        manager.acquire("conv-1");
+        try {
+            manager.acquire("conv-1");
+        } catch (IllegalStateException ignored) {
+        }
+        verify(factory).destroy(agent2);
     }
 
     @Test
@@ -77,11 +93,11 @@ class AgentInstanceManagerTest {
     }
 
     @Test
-    void acquire_sameConversation_returnsNewInstance() {
+    void acquire_differentConversations_bothSucceed() {
         SpyAgentFactory factory = new SpyAgentFactory();
         AgentInstanceManager manager = new AgentInstanceManager(factory);
         Object result1 = manager.acquire("conv-1");
-        Object result2 = manager.acquire("conv-1");
+        Object result2 = manager.acquire("conv-2");
         assertThat(result1).isNotSameAs(result2);
         assertThat(factory.createCount.get()).isEqualTo(2);
     }

@@ -6,10 +6,12 @@ package com.openjiuwen.edp.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.openjiuwen.core.singleagent.schema.AgentCard;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
 import com.openjiuwen.harness.schema.config.DeepAgentConfig;
+import com.openjiuwen.edp.handler.EdpaExtHandler.InitResult;
 
 import org.junit.jupiter.api.Test;
 
@@ -39,6 +41,15 @@ class EdpAgentFactoryConcurrencyTest {
 
     private static final int THREAD_COUNT = 10;
 
+    private static InitResult createInitResult(AgentCard card, DeepAgentConfig config) {
+        DeepAgent mockDeepAgent = mock(DeepAgent.class);
+        when(mockDeepAgent.getCard()).thenReturn(card);
+        when(mockDeepAgent.getConfig()).thenReturn(config);
+        InitResult initResult = new InitResult();
+        initResult.setDeepAgent(mockDeepAgent);
+        return initResult;
+    }
+
     /**
      * Testable factory that overrides createAgent() to track concurrency
      * without relying on MockedStatic.
@@ -51,8 +62,8 @@ class EdpAgentFactoryConcurrencyTest {
         volatile boolean throwOnFirst = false;
         final AtomicInteger callCount = new AtomicInteger(0);
 
-        TestableFactory(AgentCard card, DeepAgentConfig config) {
-            super(card, config);
+        TestableFactory(InitResult initResult) {
+            super(initResult);
         }
 
         @Override
@@ -82,7 +93,7 @@ class EdpAgentFactoryConcurrencyTest {
     void concurrentCreate_allSucceedWithDistinctInstances() throws Exception {
         AgentCard card = AgentCard.builder().id("concurrent-agent").name("Concurrent Agent").build();
         DeepAgentConfig config = new DeepAgentConfig();
-        TestableFactory factory = new TestableFactory(card, config);
+        TestableFactory factory = new TestableFactory(createInitResult(card, config));
 
         CyclicBarrier barrier = new CyclicBarrier(THREAD_COUNT);
         Set<Integer> identityHashCodes = ConcurrentHashMap.newKeySet();
@@ -122,7 +133,7 @@ class EdpAgentFactoryConcurrencyTest {
     void concurrentCreate_serializesCriticalSection() throws Exception {
         AgentCard card = AgentCard.builder().id("serial-agent").name("Serial Agent").build();
         DeepAgentConfig config = new DeepAgentConfig();
-        TestableFactory factory = new TestableFactory(card, config);
+        TestableFactory factory = new TestableFactory(createInitResult(card, config));
         factory.sleepMs = 20; // widen the race window
 
         CyclicBarrier barrier = new CyclicBarrier(THREAD_COUNT);
@@ -156,7 +167,7 @@ class EdpAgentFactoryConcurrencyTest {
     void concurrentCreate_exceptionReleasesLock() {
         AgentCard card = AgentCard.builder().id("error-agent").name("Error Agent").build();
         DeepAgentConfig config = new DeepAgentConfig();
-        TestableFactory factory = new TestableFactory(card, config);
+        TestableFactory factory = new TestableFactory(createInitResult(card, config));
         factory.throwOnFirst = true;
 
         // First call throws — lock must be released via finally
@@ -179,7 +190,7 @@ class EdpAgentFactoryConcurrencyTest {
 
         AtomicReference<Boolean> overlapped = new AtomicReference<>(false);
 
-        TestableFactory factory = new TestableFactory(card, config) {
+        TestableFactory factory = new TestableFactory(createInitResult(card, config)) {
             @Override
             protected DeepAgent createAgent() {
                 try {
