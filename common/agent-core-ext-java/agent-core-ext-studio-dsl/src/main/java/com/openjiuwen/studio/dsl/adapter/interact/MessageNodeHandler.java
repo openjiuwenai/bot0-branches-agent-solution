@@ -1,0 +1,96 @@
+package com.openjiuwen.studio.dsl.adapter.interact;
+
+import com.openjiuwen.core.context.ModelContext;
+import com.openjiuwen.core.session.NodeSessionApi;
+import com.openjiuwen.core.workflow.ComponentExecutable;
+import com.openjiuwen.studio.dsl.adapter.AbstractStudioNode;
+import com.openjiuwen.studio.dsl.adapter.PassthroughStudioNode;
+import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
+import com.openjiuwen.studio.dsl.model.AssembledNode;
+import com.openjiuwen.studio.dsl.model.MediaPart;
+import com.openjiuwen.studio.dsl.model.NodePayload;
+import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
+import com.openjiuwen.studio.dsl.util.TemplateRenderer;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/** jiuwen.message — template render + session.writeStream / writeCustomStream (Studio FlowMessage). */
+public final class MessageNodeHandler implements NodeHandlerFactory {
+    @Override
+    public String canonicalType() {
+        return "jiuwen.message";
+    }
+
+    @Override
+    public Set<String> aliases() {
+        return Set.of();
+    }
+
+    @Override
+    public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
+        return new MessageExecutable(node);
+    }
+
+    static final class MessageExecutable extends AbstractStudioNode {
+        MessageExecutable(AssembledNode node) {
+            super(node);
+        }
+
+        @Override
+        protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
+            Map<String, Object> uf = userFieldsOf(inputs);
+            String template = firstString(
+                    node.configs().get("message"),
+                    node.configs().get("content"),
+                    node.configs().get("text"),
+                    uf.get("message"));
+            String rendered = TemplateRenderer.render(template == null ? "" : template, uf);
+            Map<String, Object> out = new LinkedHashMap<>(uf);
+            out.put("result", rendered);
+            List<Map<String, Object>> outputs = new ArrayList<>();
+            Map<String, Object> rec = new LinkedHashMap<>();
+            rec.put("result", rendered);
+            rec.put("componentType", "message");
+            rec.put("nodeId", node.id());
+            outputs.add(rec);
+            out.put("message_outputs", outputs);
+
+            emit(session, rendered, rec);
+
+            List<MediaPart> media = PassthroughStudioNode.extractMedia(inputs);
+            return NodePayload.userFields(out).withMediaPassthrough(media);
+        }
+
+        private void emit(NodeSessionApi session, String rendered, Map<String, Object> rec) {
+            if (session == null) {
+                return;
+            }
+            try {
+                Map<String, Object> frame = new LinkedHashMap<>();
+                frame.put("type", "jiuwen.message");
+                frame.put("event", "message");
+                frame.put("content", rendered);
+                frame.put("payload", rec);
+                session.writeCustomStream(frame);
+            } catch (RuntimeException ignored) {
+                try {
+                    session.writeStream(rendered);
+                } catch (RuntimeException ignored2) {
+                    // session may be mock in unit tests
+                }
+            }
+        }
+
+        private static String firstString(Object... vals) {
+            for (Object v : vals) {
+                if (v != null && !String.valueOf(v).isBlank()) {
+                    return String.valueOf(v);
+                }
+            }
+            return null;
+        }
+    }
+}

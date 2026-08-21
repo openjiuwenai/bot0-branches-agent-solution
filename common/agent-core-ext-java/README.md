@@ -25,6 +25,7 @@ Agent 适配；运行时相关扩展见 [`../agent-runtime-ext-java`](../agent-r
 | --- | --- | --- |
 | `agent-core-ext-java` | Maven 聚合父工程 | 统一组织 AgentCore 扩展子模块及其公共构建配置 |
 | [`agent-core-ext-react-rails`](agent-core-ext-react-rails/README.md) | Java SDK | 为 AgentCore 的 ReAct Agent 补充认知控制、收敛和可观测能力 |
+| `agent-core-ext-studio-dsl` | Java SDK | Studio DSL 节点类型扩展与节点执行（FEAT-031）：统一 SPI、21 种 `jiuwen.*` 内置节点、Java/Python 代码节点 |
 
 `agent-core-ext-react-rails` 当前覆盖以下功能方向：
 
