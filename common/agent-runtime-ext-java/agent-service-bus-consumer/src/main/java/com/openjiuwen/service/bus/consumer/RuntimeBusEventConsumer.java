@@ -182,10 +182,11 @@ public final class RuntimeBusEventConsumer {
             if (payload == null || payload.length == 0) {
                 return failed(envelope, null, "PAYLOAD_EMPTY", false);
             }
+            byte[] dispatchPayload = payload;
             return isCreation(envelope.eventType())
                     ? concurrency.admission(envelope.tenantId(), envelope.idempotencyKey(),
-                            () -> consumeCreation(envelope, payload, brokerPayload))
-                    : consumeControl(envelope, payload);
+                            () -> consumeCreation(envelope, dispatchPayload, brokerPayload))
+                    : consumeControl(envelope, dispatchPayload);
         } catch (BusConcurrencyGuard.BusyException busy) {
             return BusConsumptionDecision.retry(busy.getMessage());
         } catch (TaskNotFoundError missing) {

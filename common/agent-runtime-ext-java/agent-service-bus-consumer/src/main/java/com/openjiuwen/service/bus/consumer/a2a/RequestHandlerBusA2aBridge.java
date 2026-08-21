@@ -6,7 +6,6 @@ package com.openjiuwen.service.bus.consumer.a2a;
 
 import com.openjiuwen.service.bus.consumer.model.AgentBusEventEnvelope;
 import com.openjiuwen.service.bus.consumer.model.BusDispatchResult;
-import com.openjiuwen.service.app.controller.a2a.A2AJsonRpcSupport;
 
 import org.a2aproject.sdk.jsonrpc.common.wrappers.A2AErrorResponse;
 import org.a2aproject.sdk.server.ServerCallContext;
@@ -43,7 +42,7 @@ public class RequestHandlerBusA2aBridge {
     private static final long FIRST_STREAM_EVENT_TIMEOUT_SECONDS = 30L;
 
     private final Supplier<RequestHandler> requestHandler;
-    private final A2AJsonRpcSupport jsonRpcSupport;
+    private final BusA2AJsonRpcSupport jsonRpcSupport;
 
     /**
      * Creates a new instance.
@@ -62,7 +61,7 @@ public class RequestHandlerBusA2aBridge {
      */
     public RequestHandlerBusA2aBridge(Supplier<RequestHandler> requestHandler) {
         this.requestHandler = Objects.requireNonNull(requestHandler, "requestHandler resolver is required");
-        this.jsonRpcSupport = new A2AJsonRpcSupport();
+        this.jsonRpcSupport = new BusA2AJsonRpcSupport();
     }
 
     /**
@@ -85,7 +84,7 @@ public class RequestHandlerBusA2aBridge {
     public BusDispatchResult handle(AgentBusEventEnvelope envelope, byte[] payload) {
         RequestHandler handler = requireRequestHandler();
         ServerCallContext context = context(envelope);
-        A2AJsonRpcSupport.ParsedA2ARequest decoded = decode(payload, envelope.tenantId());
+        BusA2AJsonRpcSupport.ParsedA2ARequest decoded = decode(payload, envelope.tenantId());
         return switch (envelope.eventType()) {
             case "CLIENT_INVOCATION_REQUESTED", "A2A_CALL_REQUESTED" -> send(envelope, decoded, context, handler);
             case "CLIENT_INVOCATION_QUERY_REQUESTED", "A2A_CALL_QUERY_REQUESTED" -> {
@@ -137,7 +136,7 @@ public class RequestHandlerBusA2aBridge {
         }
         try {
             return jsonRpcSupport.parseRequestId(new String(payload, StandardCharsets.UTF_8));
-        } catch (A2AJsonRpcSupport.RequestException failure) {
+        } catch (BusA2AJsonRpcSupport.RequestException failure) {
             throw failure.getError();
         }
     }
@@ -150,7 +149,7 @@ public class RequestHandlerBusA2aBridge {
      * @return complete standard A2A JSON-RPC response
      */
     public String response(byte[] payload, BusDispatchResult result) {
-        A2AJsonRpcSupport.ParsedA2ARequest decoded = decode(payload, null);
+        BusA2AJsonRpcSupport.ParsedA2ARequest decoded = decode(payload, null);
         try {
             if (isMethod(decoded, "GetTask")) {
                 return A2aJsonRpcResponseSerializer.queryResult(decoded.originalId(), result.task());
@@ -213,7 +212,7 @@ public class RequestHandlerBusA2aBridge {
         throw new IllegalStateException("A2A request handler does not support caller-reserved Task ids");
     }
 
-    private BusDispatchResult send(AgentBusEventEnvelope envelope, A2AJsonRpcSupport.ParsedA2ARequest decoded,
+    private BusDispatchResult send(AgentBusEventEnvelope envelope, BusA2AJsonRpcSupport.ParsedA2ARequest decoded,
             ServerCallContext context,
             RequestHandler handler)
             throws A2AError {
@@ -299,32 +298,32 @@ public class RequestHandlerBusA2aBridge {
         return new ServerCallContext(UnauthenticatedUser.INSTANCE, state, Set.of());
     }
 
-    private A2AJsonRpcSupport.ParsedA2ARequest decode(byte[] payload, String expectedTenant) {
+    private BusA2AJsonRpcSupport.ParsedA2ARequest decode(byte[] payload, String expectedTenant) {
         if (payload == null || payload.length == 0) {
             throw new IllegalArgumentException("PAYLOAD_EMPTY");
         }
         try {
             return jsonRpcSupport.parseRequest(new String(payload, StandardCharsets.UTF_8), expectedTenant);
-        } catch (A2AJsonRpcSupport.RequestException failure) {
+        } catch (BusA2AJsonRpcSupport.RequestException failure) {
             throw failure.getError();
         }
     }
 
-    private static <T> T params(A2AJsonRpcSupport.ParsedA2ARequest request, Class<T> type) {
+    private static <T> T params(BusA2AJsonRpcSupport.ParsedA2ARequest request, Class<T> type) {
         if (!type.isInstance(request.params())) {
             throw new InvalidRequestError("A2A method does not match bus event");
         }
         return type.cast(request.params());
     }
 
-    private static void requireMethod(A2AJsonRpcSupport.ParsedA2ARequest payload, String expected) {
+    private static void requireMethod(BusA2AJsonRpcSupport.ParsedA2ARequest payload, String expected) {
         if (isMethod(payload, expected)) {
             return;
         }
         throw new InvalidRequestError("A2A method does not match bus event");
     }
 
-    private static boolean isMethod(A2AJsonRpcSupport.ParsedA2ARequest payload, String expected) {
+    private static boolean isMethod(BusA2AJsonRpcSupport.ParsedA2ARequest payload, String expected) {
         return expected.equals(payload.method());
     }
 
