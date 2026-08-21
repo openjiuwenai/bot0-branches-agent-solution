@@ -6,6 +6,7 @@ from evo_agent.evaluator.domain.models import (
 )
 from evo_agent.evaluator.domain.result import EvaluationResult
 from evo_agent.evaluator.domain.scoring import EvaluationError
+from evo_agent.evaluator.evaluators.agent import AgentEvaluator
 from evo_agent.evaluator.evaluators.base import EvaluateInputMixin
 from evo_agent.evaluator.evaluators.filtering import FilteringEvaluator
 from evo_agent.evaluator.evaluators.llm import LLMEvaluator
@@ -35,6 +36,7 @@ from evo_agent.evaluator.prompts.policy_v1 import (
 
 __all__ = [
     "DEFAULT_PROMPT_TEMPLATE",
+    "AgentEvaluator",
     "BatchMetric",
     "BatchMetricAggregator",
     "ContainsMetric",
