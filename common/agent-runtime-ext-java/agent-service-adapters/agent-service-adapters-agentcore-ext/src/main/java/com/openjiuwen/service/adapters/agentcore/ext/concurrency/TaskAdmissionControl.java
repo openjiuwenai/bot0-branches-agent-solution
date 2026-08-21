@@ -6,6 +6,9 @@ package com.openjiuwen.service.adapters.agentcore.ext.concurrency;
 
 import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -18,6 +21,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @since 0.1.0
  */
 public class TaskAdmissionControl implements TaskAdmissionGate {
+
+    private static final Logger log = LoggerFactory.getLogger(TaskAdmissionControl.class);
 
     private final int maxConcurrentTasks;
 
@@ -58,7 +63,10 @@ public class TaskAdmissionControl implements TaskAdmissionGate {
         if (maxConcurrentTasks < 0) {
             return;
         }
-        currentCount.updateAndGet(v -> Math.max(0, v - 1));
+        int prev = currentCount.getAndUpdate(v -> Math.max(0, v - 1));
+        if (prev <= 0) {
+            log.warn("Admission release when count already at {}, possible double-release", prev);
+        }
     }
 
     @Override

@@ -77,14 +77,21 @@ public class EdpAgentFactory implements AgentFactory {
      * Creates and initializes a single DeepAgent instance with full business capabilities.
      *
      * <p>Called inside the creation lock; subclasses may override for testing
-     * or to customise the creation pipeline.
+     * or to customise the creation pipeline. If initialization fails after
+     * {@code createDeepAgent()}, the partially-created agent is destroyed to
+     * prevent ResourceMgr entry leaks.</p>
      *
      * @return a fully initialized DeepAgent with skills and business enhancers applied
      */
     protected DeepAgent createAgent() {
         DeepAgent agent = HarnessFactory.createDeepAgent(agentCard, deepAgentConfig, null);
-        agent.ensureInitialized();
-        EdpaExtHandler.initPerTaskAgent(agent, initResult);
+        try {
+            agent.ensureInitialized();
+            EdpaExtHandler.initPerTaskAgent(agent, initResult);
+        } catch (RuntimeException e) {
+            agent.destroy();
+            throw e;
+        }
         return agent;
     }
 

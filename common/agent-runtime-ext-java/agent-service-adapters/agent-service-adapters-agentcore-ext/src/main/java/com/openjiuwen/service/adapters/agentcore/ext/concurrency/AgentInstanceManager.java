@@ -34,14 +34,19 @@ public class AgentInstanceManager {
      * Acquire a new Agent instance for the given conversation.
      *
      * <p>Each call invokes {@link AgentFactory#create()} to produce a fresh
-     * instance. The instance is tracked internally until released.
+     * instance. The instance is tracked internally until released. Concurrent
+     * acquire for the same conversationId is rejected.
      *
      * @param conversationId conversation identifier
      * @return a new Agent object
+     * @throws IllegalStateException if the conversation already has an active agent
      */
     public Object acquire(String conversationId) {
         Object agent = factory.create();
-        activeAgents.put(conversationId, agent);
+        if (activeAgents.putIfAbsent(conversationId, agent) != null) {
+            factory.destroy(agent);
+            throw new IllegalStateException("Conversation already has an active agent: " + conversationId);
+        }
         return agent;
     }
 
