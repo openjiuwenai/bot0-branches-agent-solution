@@ -71,3 +71,20 @@ class TestCombinations:
     def test_empty_name(self):
         f = SpanFilter(include_prefixes=["ai."])
         assert not span_matches_filter(_span(""), f)
+
+
+class TestChainSpanPrefix:
+    """chain span 名 Python='chain.EDP Agent'(含空格) / Java='chain.EDPAgent'(无空格);
+    ingest 白名单用通用前缀 'chain.' 兼容两者, 避免 Python chain span 被漏丢 (response_summary 恒空)。"""
+
+    def test_chain_prefix_matches_both_variants(self):
+        f = SpanFilter(include_prefixes=["llm.", "tool.", "http.request", "chain."])
+        assert span_matches_filter(_span("chain.EDP Agent"), f)  # Python (含空格)
+        assert span_matches_filter(_span("chain.EDPAgent"), f)  # Java (无空格)
+        assert span_matches_filter(_span("chain.EDPAgent.inner"), f)
+
+    def test_specific_prefix_misses_space_variant(self):
+        # 旧配置 'chain.EDPAgent'(无空格) 漏掉 Python 'chain.EDP Agent'(含空格) — 回归钉
+        f = SpanFilter(include_prefixes=["chain.EDPAgent"])
+        assert not span_matches_filter(_span("chain.EDP Agent"), f)
+        assert span_matches_filter(_span("chain.EDPAgent"), f)

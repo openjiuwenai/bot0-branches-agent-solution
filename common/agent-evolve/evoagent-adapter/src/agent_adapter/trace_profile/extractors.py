@@ -41,8 +41,9 @@ def extract_field(attrs: dict[str, Any], spec: FieldExtraction) -> Any:
 def extract_response(span: dict[str, Any], spec: MultiFieldExtraction) -> dict[str, Any] | None:
     """多字段拼接提取 response → assistant message。
 
-    单字段：{"role": "assistant", "content": value}
-    多字段：{"role": "assistant", "content": text, "toolCalls": [...], "reasoning": "..."}
+    单字段：value 已是 message dict (如 EDPAgent 的 outputs) → 原样返回 (不二次包裹, 与 legacy 一致);
+            value 是裸文本 (如单 text 字段) → 包成 {"role":"assistant","content":value}
+    多字段：拼成 {"role": "assistant", "content": text, "toolCalls": [...], "reasoning": "..."}
 
     输出格式兼容 trace_cleaner：role=assistant 在保留列表中，
     额外字段（toolCalls、reasoning）被保留不影响清洗逻辑。
@@ -52,6 +53,10 @@ def extract_response(span: dict[str, Any], spec: MultiFieldExtraction) -> dict[s
         value = extract_field(attrs, spec.fields[0])
         if value is None:
             return None
+        # value 已是 message dict → 原样返回 (避免二次包裹成 {role,content:{role,content:...}});
+        # 裸文本 → 包成 assistant message (兼容 trace_cleaner)。
+        if isinstance(value, dict):
+            return value
         return {"role": "assistant", "content": value}
     parts: dict[str, Any] = {}
     for f in spec.fields:

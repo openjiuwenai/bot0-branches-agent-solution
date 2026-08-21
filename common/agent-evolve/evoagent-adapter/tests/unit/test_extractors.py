@@ -66,6 +66,17 @@ class TestExtractResponse:
         result = extract_response(span, spec)
         assert result == {"role": "assistant", "content": "Hello!"}
 
+    def test_single_field_dict_value_not_double_wrapped(self):
+        # value 已是 message dict (如 EDPAgent outputs) → 原样返回, 不二次包裹 (与 legacy 一致)
+        spec = MultiFieldExtraction(
+            fields=[FieldExtraction(attr="gen_ai.completion", sub_key="outputs", format="json")],
+            combine_as="assistant_message",
+        )
+        msg = {"role": "assistant", "content": "hello"}
+        span = {"attributes": {"gen_ai.completion": json.dumps({"outputs": msg})}}
+        result = extract_response(span, spec)
+        assert result == msg  # 原样, 不包成 {role,content:{role,content:hello}}
+
     def test_multi_field_combine(self):
         spec = MultiFieldExtraction(
             fields=[

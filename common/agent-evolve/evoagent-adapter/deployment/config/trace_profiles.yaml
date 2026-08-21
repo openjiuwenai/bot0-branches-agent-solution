@@ -3,7 +3,7 @@ profiles:
     service_name: "edp_agent"          # 对齐真实 Python EDPAgent 上报的 resource.service.name
     service_language: "python"         # telemetry.sdk.language 消歧（与 Java 版区分）
     ingest_filter:
-      include_prefixes: ["llm.", "tool.", "http.request", "chain.EDPAgent"]
+      include_prefixes: ["llm.", "tool.", "http.request", "chain."]
       exclude_prefixes: []
     query_filter:
       include_prefixes: []
@@ -156,7 +156,7 @@ profiles:
     service_name: "edp-agent"
     service_language: "java"            # telemetry.sdk.language 消歧
     ingest_filter:
-      include_prefixes: ["llm.", "tool.", "http.request", "chain.EDPAgent"]
+      include_prefixes: ["llm.", "tool.", "http.request", "chain."]
       exclude_prefixes: []
     query_filter:
       include_prefixes: []
