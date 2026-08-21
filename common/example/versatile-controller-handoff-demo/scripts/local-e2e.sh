@@ -35,6 +35,8 @@
 #   8  下游请求用户输入          query 补充信息        → 中断呈现（message=请补充入住日期, toolCallId=handoff:agent_card_l2:*）
 #   9  循环保护（弹回后同目标）  query 循环            → re-invoke 仍转调弹回目标 → DUPLICATE_TARGET
 #   10 调用超时                 query 超时            → VERSATILE_HANDOFF_TIMEOUT (timeout-seconds=3, L2 sleeps 10s)
+#   11 /a2a 多轮中断恢复        /a2a SendMessage      → 第二轮 message.taskId 引用 input-required task
+#                                                     → 影子任务恢复直呼 L2（L1 控制器仅一次），终答直通
 #
 # Usage:
 #   ./scripts/local-e2e.sh              # build if needed, run all scenarios
@@ -131,6 +133,15 @@ send_query_sse() {
     -H "X-User-ID: u-42" \
     -H "Accept: text/event-stream" \
     -d "{\"conversation_id\":\"${1}\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"${2}\"}]}" || true
+}
+
+# 发送一轮 A2A JSON-RPC（openjiuwen 变体：method=SendMessage、ROLE_USER、TextPart）。
+# 非流式一次性 JSON 返回；JSON-RPC id 用数值，避免干扰从响应里提取字符串形态的 task id。
+send_a2a() {
+  local port="$1" body="$2"
+  curl -s -X POST "http://127.0.0.1:${port}/a2a" \
+    -H "Content-Type: application/json" \
+    -d "$body" || true
 }
 
 assert_contains() {
@@ -342,6 +353,38 @@ main() {
   echo "    sse: $(echo "$sse" | head -c 500)"
   assert_contains "s10-timeout" "$sse" "VERSATILE_HANDOFF_TIMEOUT"
   assert_log_contains "s10-log-code" "$LOG_DIR/layer1.log" "handoff path failed code=VERSATILE_HANDOFF_TIMEOUT"
+
+  echo
+  echo "==================== 场景11: /a2a 入口多轮中断恢复（第二轮引用 taskId） ===================="
+  # 第一轮：SendMessage（非流式）→ L1 意图转调 → L2 input-required → 中断呈现，
+  # L1 的 A2A task 终态 input-required，影子任务 shadow:<L1>:<taskId> 落库（WAITING_INPUT）
+  local r1 r2 task_id l1_count
+  r1=$(send_a2a "$L1_PORT" '{"jsonrpc":"2.0","id":111,"method":"SendMessage","params":{"message":{"role":"ROLE_USER","contextId":"c11-a2a-resume","parts":[{"text":"补充信息：下游要问用户"}]}}}')
+  echo "    r1: $(echo "$r1" | head -c 800)"
+  assert_contains "s11-r1-input-required" "$r1" "TASK_STATE_INPUT_REQUIRED"
+  assert_contains "s11-r1-input-prompt" "$r1" "请补充入住日期"
+  assert_contains "s11-r1-toolcall-prefix" "$r1" "handoff:agent_card_l2:"
+  # 响应内首个字符串形态的 "id" 即 task id（JSON-RPC id 为数值不匹配该模式）
+  task_id=$(echo "$r1" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4 || true)
+  if [ -z "$task_id" ]; then
+    echo "    FAIL: s11-task-id expected to extract taskId from r1 response" >&2
+    return 1
+  fi
+  echo "    task_id: $task_id"
+  # 第二轮：同 contextId、message.taskId 引用 input-required task → 协调器命中影子任务
+  # 直呼 L2 续调（remoteTaskId），不再重跑 L1 控制器 → 终答经 re-invoke 直通
+  r2=$(send_a2a "$L1_PORT" '{"jsonrpc":"2.0","id":112,"method":"SendMessage","params":{"message":{"role":"ROLE_USER","contextId":"c11-a2a-resume","taskId":"'"$task_id"'","parts":[{"text":"明天入住，两个晚上"}]}}}')
+  echo "    r2: $(echo "$r2" | head -c 800)"
+  assert_contains "s11-r2-final-answer" "$r2" "二级本域业务答案：机票已预订"
+  assert_contains "s11-r2-completed" "$r2" "TASK_STATE_COMPLETED"
+  # runtime 按 taskId 续入既有 task（A2A RESUME 日志），影子任务恢复生效
+  assert_log_contains "s11-a2a-resume-entry" "$LOG_DIR/layer1.log" "A2A RESUME taskId=$task_id"
+  # 核心断言：L1 控制器全程只被调用一次——第二轮恢复直呼 L2，未多余重跑 L1 控制器
+  l1_count=$(grep -c "Mock controller agentId=agent_L1_controller conversationId=c11-a2a-resume" "$LOG_DIR/layer1.log" || true)
+  assert_eq 1 "$l1_count" "s11-l1-controller-single-invocation"
+  # L2 侧：第一轮中断（invocation=1）、第二轮续接同一 task（A2A RESUME + invocation=2）
+  assert_log_contains "s11-l2-task-continuation" "$LOG_DIR/layer2.log" "A2A RESUME.*agent_card_l2-c11-a2a-resume"
+  assert_log_contains "s11-l2-resumed-call" "$LOG_DIR/layer2.log" "Mock controller agentId=agent_L2_controller conversationId=agent_card_l2-c11-a2a-resume invocation=2"
 
   echo
   echo "==> All §7.2 journeys passed."

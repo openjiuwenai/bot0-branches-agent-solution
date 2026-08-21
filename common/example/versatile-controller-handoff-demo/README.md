@@ -54,6 +54,12 @@ FEAT-002「Versatile 控制器意图转调消息路由」的场景旅程验收 e
 | 8 | 补充信息 | L2 INPUT_REQUIRED 经 A2A 回传 → 中断呈现（`请补充入住日期` + `handoff:agent_card_l2:` 前缀 toolCallId），客户端续接走 runtime 中断机制 |
 | 9 | 循环 | L2 弹回后 re-invoke 重识别仍转调同目标 → `VERSATILE_HANDOFF_DUPLICATE_TARGET` |
 | 10 | 超时 | 下游延迟 10s 超 remote-agents `timeout-seconds=3` → REMOTE_TIMEOUT 映射 `VERSATILE_HANDOFF_TIMEOUT` |
+| 11 | /a2a 多轮 | 两轮 `SendMessage`：第一轮 L2 input-required（task=input-required），第二轮 `message.taskId` 引用该 task → 影子任务恢复直呼 L2 续调（L1 控制器全程仅调用一次），终答在同一 task 上 completed |
+
+注意：A2A 入口的中断恢复以 `message.taskId` 引用为键（runtime 影子任务按
+`shadow:<agentId>:<parentTaskId>` 查找，parentTaskId 即 A2A taskId）。客户端只带
+相同 contextId、不带 taskId 时，SDK 会生成新 task，影子任务查不到即静默降级为
+全新执行（多余地重跑 L1 控制器）——续接必须携带第一轮响应里的 task id。
 
 ## 运行
 
