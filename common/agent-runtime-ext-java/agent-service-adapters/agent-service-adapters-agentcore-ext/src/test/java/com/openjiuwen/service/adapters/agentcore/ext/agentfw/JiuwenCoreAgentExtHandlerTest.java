@@ -5,6 +5,7 @@
 package com.openjiuwen.service.adapters.agentcore.ext.agentfw;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -13,10 +14,12 @@ import com.openjiuwen.core.session.Session;
 import com.openjiuwen.core.session.stream.OutputSchema;
 import com.openjiuwen.core.session.stream.StreamMode;
 import com.openjiuwen.service.adapters.agentcore.ext.concurrency.AgentInstanceManager;
+import com.openjiuwen.service.adapters.agentcore.ext.concurrency.ConversationBusyException;
 import com.openjiuwen.service.adapters.agentcore.ext.concurrency.TaskQuotaTracker;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.dto.QueryResponse;
 import com.openjiuwen.service.spec.dto.ServeRequest;
+import com.openjiuwen.service.spec.exception.AgentExecutionException;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
 import org.junit.jupiter.api.Test;
@@ -150,6 +153,43 @@ class JiuwenCoreAgentExtHandlerTest {
         assertThat(handler.currentTaskAgent.get()).isNull();
         assertThat(((Map<String, Object>) chunks2.get(0).getData()).get("payload"))
                 .isEqualTo(Map.of("content", "second"));
+    }
+
+    @Test
+    void streamQuery_conversationBusy_wrapsAsStructuredError() {
+        AgentInstanceManager agentManager = mock(AgentInstanceManager.class);
+        when(agentManager.acquire("c-busy"))
+                .thenThrow(new ConversationBusyException("Conversation already has an active agent: c-busy"));
+
+        JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityStreamAgent("unused"));
+        handler.setAgentManager(agentManager);
+
+        assertThatThrownBy(() -> handler.streamQuery(request("c-busy", "hello"),
+                collectingObserver(new ArrayList<>())))
+                .isInstanceOfSatisfying(AgentExecutionException.class, ex -> {
+                    assertThat(ex.getMessage()).contains("Conversation busy");
+                    assertThat(ex.getDescriptor().code()).isEqualTo("CONVERSATION_BUSY");
+                    assertThat(ex.getDescriptor().isRetryable()).isTrue();
+                    assertThat(ex.getCause()).isInstanceOf(ConversationBusyException.class);
+                });
+    }
+
+    @Test
+    void query_conversationBusy_wrapsAsStructuredError() {
+        AgentInstanceManager agentManager = mock(AgentInstanceManager.class);
+        when(agentManager.acquire("c-busy-q"))
+                .thenThrow(new ConversationBusyException("Conversation already has an active agent: c-busy-q"));
+
+        JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityInvokeAgent("unused"));
+        handler.setAgentManager(agentManager);
+
+        assertThatThrownBy(() -> handler.query(request("c-busy-q", "hello")))
+                .isInstanceOfSatisfying(AgentExecutionException.class, ex -> {
+                    assertThat(ex.getMessage()).contains("Conversation busy");
+                    assertThat(ex.getDescriptor().code()).isEqualTo("CONVERSATION_BUSY");
+                    assertThat(ex.getDescriptor().isRetryable()).isTrue();
+                    assertThat(ex.getCause()).isInstanceOf(ConversationBusyException.class);
+                });
     }
 
     private static ServeRequest request(String conversationId, String content) {

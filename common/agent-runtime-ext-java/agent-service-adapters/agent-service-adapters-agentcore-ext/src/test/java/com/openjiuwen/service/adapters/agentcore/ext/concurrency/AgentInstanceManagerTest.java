@@ -6,12 +6,21 @@ package com.openjiuwen.service.adapters.agentcore.ext.concurrency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
@@ -46,18 +55,87 @@ class AgentInstanceManagerTest {
     }
 
     @Test
-    void acquire_sameConversationConcurrent_destroysRejectedAgent() {
+    void acquire_existingConversation_rejectsBeforeCreate() {
         AgentFactory factory = mock(AgentFactory.class);
         Object agent1 = new Object();
-        Object agent2 = new Object();
-        when(factory.create()).thenReturn(agent1, agent2);
+        when(factory.create()).thenReturn(agent1);
         AgentInstanceManager manager = new AgentInstanceManager(factory);
         manager.acquire("conv-1");
+        assertThatThrownBy(() -> manager.acquire("conv-1"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("conv-1");
+        verify(factory, times(1)).create();
+        verify(factory, never()).destroy(any());
+    }
+
+    @Test
+    void acquire_raceWindowDuringCreate_loserAgentDestroyed() throws Exception {
+        AgentFactory factory = mock(AgentFactory.class);
+        Object slowAgent = new Object();
+        Object fastAgent = new Object();
+        CountDownLatch enteredCreate = new CountDownLatch(1);
+        CountDownLatch releaseSlowCreate = new CountDownLatch(1);
+        when(factory.create()).thenAnswer(invocation -> {
+            enteredCreate.countDown();
+            releaseSlowCreate.await();
+            return slowAgent;
+        }).thenReturn(fastAgent);
+
+        AgentInstanceManager manager = new AgentInstanceManager(factory);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
         try {
-            manager.acquire("conv-1");
-        } catch (IllegalStateException ignored) {
+            Future<Object> slow = executor.submit(() -> manager.acquire("conv-1"));
+            assertThat(enteredCreate.await(5, TimeUnit.SECONDS)).isTrue();
+
+            Object winner = manager.acquire("conv-1");
+            releaseSlowCreate.countDown();
+
+            assertThatThrownBy(slow::get)
+                    .isInstanceOf(ExecutionException.class)
+                    .hasCauseInstanceOf(IllegalStateException.class);
+            assertThat(winner).isSameAs(fastAgent);
+            verify(factory).destroy(slowAgent);
+            verify(factory, never()).destroy(fastAgent);
+        } finally {
+            releaseSlowCreate.countDown();
+            executor.shutdownNow();
         }
-        verify(factory).destroy(agent2);
+    }
+
+    @Test
+    void acquire_concurrentSameConversation_exactlyOneWinnerNoLeak() throws Exception {
+        SpyAgentFactory factory = new SpyAgentFactory();
+        AgentInstanceManager manager = new AgentInstanceManager(factory);
+        int threads = 8;
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        try {
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<Object>> futures = new ArrayList<>();
+            for (int i = 0; i < threads; i++) {
+                futures.add(executor.submit(() -> {
+                    start.await();
+                    return manager.acquire("conv-1");
+                }));
+            }
+            start.countDown();
+
+            int successes = 0;
+            int rejections = 0;
+            for (Future<Object> future : futures) {
+                try {
+                    future.get();
+                    successes++;
+                } catch (ExecutionException e) {
+                    assertThat(e.getCause()).isInstanceOf(IllegalStateException.class);
+                    rejections++;
+                }
+            }
+            assertThat(successes).isEqualTo(1);
+            assertThat(rejections).isEqualTo(threads - 1);
+            assertThat(factory.createCount.get()).isEqualTo(factory.destroyCount.get() + 1);
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     @Test
