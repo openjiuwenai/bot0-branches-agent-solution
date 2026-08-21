@@ -4,6 +4,7 @@
 
 package com.openjiuwen.gateway.bus;
 
+import com.openjiuwen.bus.forwarding.spi.ClaimDueRequest;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxClaimPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxPort;
@@ -95,7 +96,8 @@ public class GatewayOutboxDispatcher implements SmartLifecycle {
         // cross-role shift chain. Multi-instance gateways share this sourceServiceId and compete
         // for the scoped rows via the SKIP-LOCKED claim.
         List<ForwardingOutboxRecord> claimed =
-                claimPort.claimDue(tenant, nowMillisEpoch, batchSize, leaseOwner, leaseUntil, leaseOwner);
+                claimPort.claimDue(new ClaimDueRequest(tenant, nowMillisEpoch, batchSize,
+                        leaseOwner, leaseUntil, leaseOwner));
         int produced = 0;
         for (ForwardingOutboxRecord r : claimed) {
             BrokerProduceOutcome outcome = producer.produce(r, nowMillisEpoch);

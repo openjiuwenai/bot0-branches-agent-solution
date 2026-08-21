@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
+import com.openjiuwen.bus.forwarding.spi.ClaimDueRequest;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingLeaseException;
@@ -292,7 +293,7 @@ class ForwardingJdbcIntegrationTest {
         long now = System.currentTimeMillis();
 
         List<ForwardingOutboxRecord> claimed =
-                outbox.claimDue(t, now, 10, "gateway-01", now + 60_000, "gateway-01");
+                outbox.claimDue(new ClaimDueRequest(t, now, 10, "gateway-01", now + 60_000, "gateway-01"));
         assertThat(claimed).hasSize(2);
         assertThat(claimed).extracting(r -> r.sourceServiceId())
                 .containsOnly("gateway-01");

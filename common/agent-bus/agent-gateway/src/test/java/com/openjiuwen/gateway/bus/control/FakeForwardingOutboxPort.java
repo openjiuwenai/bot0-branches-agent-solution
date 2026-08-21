@@ -4,6 +4,7 @@
 
 package com.openjiuwen.gateway.bus.control;
 
+import com.openjiuwen.bus.forwarding.spi.ClaimDueRequest;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
@@ -157,9 +158,9 @@ public class FakeForwardingOutboxPort implements ForwardingOutboxPort, Forwardin
     }
 
     @Override
-    public List<ForwardingOutboxRecord> claimDue(String tenantId, long nowMillisEpoch, int limit,
-                                                 String leaseOwner, long leaseUntilMillisEpoch,
-                                                 String sourceServiceId) {
+    public List<ForwardingOutboxRecord> claimDue(ClaimDueRequest request) {
+        int limit = request.limit();
+        String sourceServiceId = request.sourceServiceId();
         // source-scoped batch claim: drain up to limit, keeping only records whose
         // sourceServiceId matches (defect A — a sweeper never claims another role's records).
         List<ForwardingOutboxRecord> out = new ArrayList<>();

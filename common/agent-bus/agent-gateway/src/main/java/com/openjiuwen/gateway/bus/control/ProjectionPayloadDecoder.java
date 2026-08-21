@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 import java.util.Set;
 
 /** Strict Gateway decoder for the FEAT-017 JSON projection envelope. */
@@ -56,11 +57,12 @@ final class ProjectionPayloadDecoder {
         }
         validateKnownTypes(root);
         validateKind(root, kind);
-        JsonNode response = validateResponse(root);
-        String body = response == null ? firstNonBlank(text(root, "reason"), text(root, "errorCode"))
-                : write(response);
-        return new DecodedProjection(kind, text(root, "taskId"), text(root, "streamRef"), body,
-                response != null);
+        Optional<ObjectNode> response = validateResponse(root);
+        String body = response.isPresent()
+                ? write(response.get())
+                : firstNonBlank(text(root, "reason"), text(root, "errorCode")).orElse(null);
+        return new DecodedProjection(kind, text(root, "taskId").orElse(null),
+                text(root, "streamRef").orElse(null), body, response.isPresent());
     }
 
     private static void validateKnownTypes(ObjectNode root) {
@@ -78,8 +80,8 @@ final class ProjectionPayloadDecoder {
         if (response != null && !response.isObject()) {
             throw invalid("a2aResponse must be an object");
         }
-        String status = text(root, "status");
-        if (status != null && !STATUS.contains(status)) {
+        Optional<String> status = text(root, "status");
+        if (status.isPresent() && !STATUS.contains(status.get())) {
             throw invalid("status is not a supported wire value");
         }
     }
@@ -121,12 +123,11 @@ final class ProjectionPayloadDecoder {
         }
     }
 
-    private static JsonNode validateResponse(ObjectNode projection) {
+    private static Optional<ObjectNode> validateResponse(ObjectNode projection) {
         JsonNode responseNode = projection.get("a2aResponse");
-        if (responseNode == null) {
-            return null;
+        if (!(responseNode instanceof ObjectNode response)) {
+            return Optional.empty();
         }
-        ObjectNode response = (ObjectNode) responseNode;
         requireText(response, "jsonrpc", "2.0");
         JsonNode id = response.get("id");
         if (id == null || id.isNull() || !(id.isTextual() || id.isNumber())) {
@@ -137,22 +138,24 @@ final class ProjectionPayloadDecoder {
         if (result == error) {
             throw invalid("a2aResponse must contain exactly one of result or error");
         }
-        if (error && !response.get("error").isObject()) {
-            throw invalid("a2aResponse error must be an object");
-        }
         if (error) {
-            validateJsonRpcError((ObjectNode) response.get("error"));
+            JsonNode errorNode = response.get("error");
+            if (!(errorNode instanceof ObjectNode errorObject)) {
+                throw invalid("a2aResponse error must be an object");
+            }
+            validateJsonRpcError(errorObject);
         }
-        String responseTaskId = responseTaskId(response.get("result"));
-        String taskId = text(projection, "taskId");
-        if (responseTaskId != null && taskId != null && !taskId.equals(responseTaskId)) {
+        Optional<String> responseTaskId = responseTaskId(response.get("result"));
+        Optional<String> taskId = text(projection, "taskId");
+        if (responseTaskId.isPresent() && taskId.isPresent()
+                && !taskId.get().equals(responseTaskId.get())) {
             throw invalid("a2aResponse Task id does not match projection taskId");
         }
-        if (responseTaskId != null && taskId == null
-                && "RESPONSE".equals(text(projection, "projectionKind"))) {
+        if (responseTaskId.isPresent() && taskId.isEmpty()
+                && "RESPONSE".equals(text(projection, "projectionKind").orElse(null))) {
             throw invalid("RESPONSE carrying a Task requires taskId");
         }
-        return response;
+        return Optional.of(response);
     }
 
     private static void validateJsonRpcError(ObjectNode error) {
@@ -164,13 +167,16 @@ final class ProjectionPayloadDecoder {
         }
     }
 
-    private static String responseTaskId(JsonNode result) {
+    private static Optional<String> responseTaskId(JsonNode result) {
         if (result == null || !result.isObject()) {
-            return null;
+            return Optional.empty();
         }
         JsonNode task = result.has("task") ? result.get("task") : result;
         JsonNode id = task == null ? null : task.get("id");
-        return id != null && id.isTextual() && !id.textValue().isBlank() ? id.textValue() : null;
+        if (id != null && id.isTextual() && !id.textValue().isBlank()) {
+            return Optional.of(id.textValue());
+        }
+        return Optional.empty();
     }
 
     private static String kindForEvent(AgentBusEventType eventType) {
@@ -187,17 +193,20 @@ final class ProjectionPayloadDecoder {
         throw invalid("unsupported eventType");
     }
 
-    private static String text(ObjectNode root, String name) {
+    private static Optional<String> text(ObjectNode root, String name) {
         JsonNode value = root.get(name);
-        return value == null || value.isNull() ? null : value.textValue();
+        if (value == null || value.isNull()) {
+            return Optional.empty();
+        }
+        return Optional.of(value.textValue());
     }
 
     private static String requiredText(ObjectNode root, String name) {
-        String value = text(root, name);
-        if (value == null || value.isBlank()) {
+        Optional<String> value = text(root, name);
+        if (value.isEmpty() || value.get().isBlank()) {
             throw invalid(name + " is required");
         }
-        return value;
+        return value.get();
     }
 
     private static void requireText(ObjectNode root, String name, String expected) {
@@ -229,12 +238,15 @@ final class ProjectionPayloadDecoder {
     }
 
     private static boolean blank(ObjectNode root, String name) {
-        String value = text(root, name);
-        return value == null || value.isBlank();
+        Optional<String> value = text(root, name);
+        return value.isEmpty() || value.get().isBlank();
     }
 
-    private static String firstNonBlank(String first, String second) {
-        return first == null || first.isBlank() ? second : first;
+    private static Optional<String> firstNonBlank(Optional<String> first, Optional<String> second) {
+        if (first.isPresent() && !first.get().isBlank()) {
+            return first;
+        }
+        return second;
     }
 
     private static String write(JsonNode value) {

@@ -5,6 +5,7 @@
 package com.openjiuwen.bus.forwarding.test;
 
 import com.openjiuwen.bus.forwarding.runtime.ForwardingStateMachine;
+import com.openjiuwen.bus.forwarding.spi.ClaimDueRequest;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingLease;
@@ -189,10 +190,13 @@ public final class InMemoryForwardingOutbox
     }
 
     @Override
-    public synchronized List<ForwardingOutboxRecord> claimDue(String tenantId, long nowMillisEpoch,
-                                                              int limit, String leaseOwner,
-                                                              long leaseUntilMillisEpoch,
-                                                              String sourceServiceId) {
+    public synchronized List<ForwardingOutboxRecord> claimDue(ClaimDueRequest request) {
+        String tenantId = request.tenantId();
+        long nowMillisEpoch = request.nowMillisEpoch();
+        int limit = request.limit();
+        String leaseOwner = request.leaseOwner();
+        long leaseUntilMillisEpoch = request.leaseUntilMillisEpoch();
+        String sourceServiceId = request.sourceServiceId();
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(leaseOwner, "leaseOwner");
         requireNonBlank(sourceServiceId, "sourceServiceId");

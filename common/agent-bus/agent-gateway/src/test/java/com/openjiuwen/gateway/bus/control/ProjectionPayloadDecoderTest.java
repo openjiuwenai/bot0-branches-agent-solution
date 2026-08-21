@@ -11,6 +11,11 @@ import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 
 import org.junit.jupiter.api.Test;
 
+/**
+ * Strict-decode tests for the FEAT-017 JSON projection envelope ({@link ProjectionPayloadDecoder}).
+ *
+ * @since 2026-08-20
+ */
 class ProjectionPayloadDecoderTest {
     private final ProjectionPayloadDecoder decoder = new ProjectionPayloadDecoder();
 

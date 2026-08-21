@@ -114,18 +114,11 @@ public interface ForwardingOutboxClaimPort {
      * compete for the same scoped rows via the {@code SKIP LOCKED} claim — each row is claimed by
      * at most one instance per tick.
      *
-     * @param tenantId             tenant scope of the claim (Rule R-C.c)
-     * @param nowMillisEpoch       the claim instant; used to judge due / lease expiry
-     * @param limit                max records to claim in this call ({@code > 0})
-     * @param leaseOwner           identity of the claiming dispatcher instance
-     * @param leaseUntilMillisEpoch instant until which the claim is exclusive
-     *                              ({@code > nowMillisEpoch})
-     * @param sourceServiceId      only records enqueued by this source service are claimable
+     * @param request the source-scoped claim request (tenant, now, limit, lease owner,
+     *                lease expiry, source service)
      * @return the claimed records (already DISPATCHING, leased to the caller)
      */
-    List<ForwardingOutboxRecord> claimDue(String tenantId, long nowMillisEpoch, int limit,
-                                          String leaseOwner, long leaseUntilMillisEpoch,
-                                          String sourceServiceId);
+    List<ForwardingOutboxRecord> claimDue(ClaimDueRequest request);
 
     /**
      * Extend an active lease the caller already holds. No-op (returns
