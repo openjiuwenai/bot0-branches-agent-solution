@@ -8,6 +8,7 @@ import com.openjiuwen.core.runner.Runner;
 import com.openjiuwen.core.session.stream.StreamMode;
 import com.openjiuwen.service.adapters.agentcore.agentfw.JiuwenCoreAgentHandler;
 import com.openjiuwen.service.adapters.agentcore.ext.concurrency.AgentInstanceManager;
+import com.openjiuwen.service.adapters.agentcore.ext.concurrency.ConversationBusyException;
 import com.openjiuwen.service.adapters.agentcore.ext.concurrency.TaskQuotaTracker;
 import com.openjiuwen.service.adapters.agentcore.ext.external.ClientToolRail;
 import com.openjiuwen.service.adapters.agentcore.ext.external.RemoteA2aToolInstaller;
@@ -16,8 +17,10 @@ import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.OtelRuntime
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub.SkillHubManager;
 import com.openjiuwen.service.adapters.agentcore.external.ExternalSvcAdapterRegistrar;
 import com.openjiuwen.service.adapters.agentcore.middleware.MiddlewareAdapterRegistrar;
+import com.openjiuwen.service.spec.dto.AgentFailureDescriptor;
 import com.openjiuwen.service.spec.dto.QueryResponse;
 import com.openjiuwen.service.spec.dto.ServeRequest;
+import com.openjiuwen.service.spec.exception.AgentExecutionException;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
 import org.slf4j.Logger;
@@ -41,6 +44,9 @@ import java.util.Objects;
  */
 public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     private static final Logger log = LoggerFactory.getLogger(JiuwenCoreAgentExtHandler.class);
+
+    /** Stable failure code surfaced to protocol clients on a busy conversation. */
+    static final String CONVERSATION_BUSY = "CONVERSATION_BUSY";
 
     private RemoteA2aToolInstaller remoteToolInstaller = RemoteA2aToolInstaller.noop();
     private IntentDeepAgentInstaller intentInstaller;
@@ -214,7 +220,13 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
 
     private Object resolveTaskAgent(ServeRequest request) {
         if (agentManager != null) {
-            return agentManager.acquire(request.getConversationId());
+            try {
+                return agentManager.acquire(request.getConversationId());
+            } catch (ConversationBusyException ex) {
+                throw new AgentExecutionException(
+                        "Conversation busy: another task is still running for this conversation",
+                        new AgentFailureDescriptor(CONVERSATION_BUSY, null, true), ex);
+            }
         }
         return getAgent();
     }

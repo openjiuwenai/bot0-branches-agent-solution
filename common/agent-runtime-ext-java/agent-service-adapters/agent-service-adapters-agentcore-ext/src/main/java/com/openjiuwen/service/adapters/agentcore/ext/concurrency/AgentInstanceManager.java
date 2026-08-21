@@ -37,15 +37,25 @@ public class AgentInstanceManager {
      * instance. The instance is tracked internally until released. Concurrent
      * acquire for the same conversationId is rejected.
      *
+     * <p>Because {@link AgentFactory#create()} is expensive (serialized by the
+     * factory's creation lock), a conversation that already has an active agent
+     * is rejected <em>before</em> any instance is created. The
+     * {@code putIfAbsent} re-check after creation guards the race window
+     * between the pre-check and the insertion; a loser of that window has its
+     * freshly created instance destroyed.
+     *
      * @param conversationId conversation identifier
      * @return a new Agent object
-     * @throws IllegalStateException if the conversation already has an active agent
+     * @throws ConversationBusyException if the conversation already has an active agent
      */
     public Object acquire(String conversationId) {
+        if (activeAgents.containsKey(conversationId)) {
+            throw new ConversationBusyException("Conversation already has an active agent: " + conversationId);
+        }
         Object agent = factory.create();
         if (activeAgents.putIfAbsent(conversationId, agent) != null) {
             factory.destroy(agent);
-            throw new IllegalStateException("Conversation already has an active agent: " + conversationId);
+            throw new ConversationBusyException("Conversation already has an active agent: " + conversationId);
         }
         return agent;
     }
