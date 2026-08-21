@@ -134,6 +134,53 @@ class ControllerHandoffAgentHandlerTest {
         assertThat(observer.error).isNotNull(); // 走基线错误映射
     }
 
+    /**
+     * 生产部署形态配置（L2 §7.2 message 格式）：classify 与 business-domain/
+     * target-agent-id 同在 /data/node_name（真实报文无独立目标字段），intent 取
+     * /data/summary，resolution-priority=[intent]。
+     */
+    private ControllerHandoffProperties productionMessageProperties() {
+        ControllerHandoffProperties p = new ControllerHandoffProperties();
+        ControllerHandoffProperties.Classify c = new ControllerHandoffProperties.Classify();
+        c.setEventType("message");
+        c.setFieldPath("/data/node_name");
+        c.setFieldValue(List.of("意图返回", "不在范围"));
+        p.setClassify(c);
+        ControllerHandoffProperties.Fields f = p.getFields();
+        f.setHandoffType("/data/node_name");
+        f.setIntentId("/data/summary");
+        f.setBusinessDomain("/data/node_name");
+        f.setTargetAgentId("/data/node_name");
+        p.setForwardMetadataKeys(List.of());
+        p.getTarget().setResolutionPriority(List.of("intent"));
+        p.getTarget().setAllowedAgents(List.of("agent_card_hotel", "agent_card_flight", "agent_card_l1"));
+        p.getTarget().setIntentMapping(Map.of("3", "agent_card_flight"));
+        return p;
+    }
+
+    @Test
+    void productionEchoFrameIgnoredUntilCompleteFrameCarryingSummary() {
+        // 生产 SSE 同节点两帧：回显帧（node_name 命中、无 summary；business-domain/
+        // target-agent-id 与 classify 同路径但有值）不得凭惰性来源提前命中——
+        // resolution-priority=[intent] 下回显帧 IGNORED，带 summary="3" 的完整帧
+        // 才是唯一命中，intent 正常解析（2026-08-20 生产 TARGET_MISSING 修复）
+        controllerResponds(
+                "{\"event\":\"message\",\"data\":{\"text\":\"3\",\"index\":0,"
+                        + "\"node_name\":\"意图返回\",\"createdTime\":1787224592851}}",
+                "{\"event\":\"message\",\"data\":{\"text\":\"3\",\"summary\":\"3\","
+                        + "\"node_name\":\"意图返回\",\"is_finished\":true,\"createdTime\":1787224592852}}",
+                "{\"event\":\"end\"}");
+        RecordingObserver observer = new RecordingObserver();
+        handler(productionMessageProperties()).streamQuery(request("订机票"), observer);
+        assertThat(observer.completed).isTrue();
+        assertThat(observer.error).isNull();
+        assertThat(observer.chunks).hasSize(1);
+        assertThat(observer.chunks.get(0).getType()).isEqualTo(QueryChunk.TYPE_INTERRUPT);
+        Map<?, ?> payload = (Map<?, ?>) observer.chunks.get(0).getData();
+        assertThat((String) payload.get("toolCallId")).startsWith("handoff:agent_card_flight:");
+        assertThat(payload.get("agentName")).isEqualTo("agent_card_flight");
+    }
+
     @Test
     void handoffLineEmitsA2aDelegateInterruptInsteadOfOutboundCall() {
         controllerResponds(handoffLine("L1_TO_L2", "intent_flight", "flight", ""),

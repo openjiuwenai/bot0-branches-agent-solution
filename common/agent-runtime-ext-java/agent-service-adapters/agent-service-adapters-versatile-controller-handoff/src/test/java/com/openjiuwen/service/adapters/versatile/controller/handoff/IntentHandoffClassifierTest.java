@@ -128,6 +128,26 @@ class IntentHandoffClassifierTest {
     }
 
     @Test
+    void sourcesOutsideResolutionPriorityDoNotQualifyEchoFrame() {
+        // resolution-priority=[intent] 时，intent 为空但 domain/target 有值（部署把
+        // 这两个提取路径配在与 classify 同路径的 /data/node_name，回显帧即有值）
+        // 不算可用来源：回显帧 IGNORED，避免其提前命中抑制掉后续带 summary 的完整帧
+        // （2026-08-20 生产 TARGET_MISSING：intent-null domain=意图返回 directTarget=意图返回）
+        ControllerHandoffProperties p = properties();
+        p.getTarget().setResolutionPriority(List.of("intent"));
+        IntentHandoffClassifier classifier = new IntentHandoffClassifier(p);
+        HandoffClassification echo = classifier.classify(
+                "{\"data\":{\"code\":14000,\"handoff_type\":\"L1_TO_L2\",\"intent_id\":\"\","
+                        + "\"domain\":\"意图返回\",\"target_agent\":{\"id\":\"意图返回\"}}}");
+        assertThat(echo.outcome()).isEqualTo(HandoffClassification.Outcome.IGNORED);
+        HandoffClassification complete = classifier.classify(
+                "{\"data\":{\"code\":14000,\"handoff_type\":\"L1_TO_L2\",\"intent_id\":\"3\","
+                        + "\"domain\":\"意图返回\",\"target_agent\":{\"id\":\"意图返回\"}}}");
+        assertThat(complete.outcome()).isEqualTo(HandoffClassification.Outcome.HANDOFF);
+        assertThat(complete.handoff().intentId()).isEqualTo("3");
+    }
+
+    @Test
     void missingHandoffTypeNoLongerBlocksHandoff() {
         // handoff-type 改为可选：路径缺失置 null，signal.handoff-types 匹配自然不命中
         HandoffClassification result = new IntentHandoffClassifier(properties()).classify(
