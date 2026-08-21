@@ -9,6 +9,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
 import com.openjiuwen.service.spec.lifecycle.AgentReadiness;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.a2aproject.sdk.server.ServerCallContext;
 import org.a2aproject.sdk.server.auth.UnauthenticatedUser;
 import org.a2aproject.sdk.server.requesthandlers.RequestHandler;
@@ -35,6 +38,8 @@ import java.util.concurrent.Flow;
  * @since 0.1.0
  */
 final class CustomRestA2ABridge {
+    private static final Logger log = LoggerFactory.getLogger(CustomRestA2ABridge.class);
+
     static final String STREAM_STATE_KEY = "_a2a_stream";
 
     private final CustomRestProtocolAdapter adapter;
@@ -67,6 +72,7 @@ final class CustomRestA2ABridge {
             throw new CustomRestFailure(503, "agent_not_ready", "The agent is not ready");
         }
         if (isAdmissionOverloaded()) {
+            logRejected(command.params().message().contextId());
             throw new CustomRestFailure(503, "concurrent_limit_reached", "Concurrent task limit reached");
         }
 
@@ -106,6 +112,14 @@ final class CustomRestA2ABridge {
         TaskAdmissionGate admissionGate = admissionGateProvider.getIfAvailable();
         return admissionGate != null && admissionGate.limit() >= 0
                 && admissionGate.currentCount() >= admissionGate.limit();
+    }
+
+    private void logRejected(String conversationId) {
+        TaskAdmissionGate gate = admissionGateProvider != null ? admissionGateProvider.getIfAvailable() : null;
+        if (gate != null) {
+            log.warn("[CONCURRENCY] task_rejected conversationId={} currentActive={} maxConcurrent={} reason=\"limit_reached\"",
+                    conversationId, gate.currentCount(), gate.limit());
+        }
     }
 
     Object executeBlocking(Prepared prepared) {
