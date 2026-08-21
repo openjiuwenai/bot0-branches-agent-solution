@@ -52,8 +52,8 @@ class AgentBusProjectionContractTest {
 
         assertThat(AgentBusResponsePublisher.encodeProjection(projection)).isEqualTo(
                 "{\"schemaVersion\":\"1.0\",\"projectionKind\":\"RESPONSE\",\"revision\":0,"
-                        + "\"taskId\":\"task-1\",\"a2aResponse\":{" +
-                        "\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"result\":{"
+                        + "\"taskId\":\"task-1\",\"a2aResponse\":{"
+                        + "\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"result\":{"
                         + "\"task\":{\"id\":\"task-1\"}}}}" );
     }
 

@@ -113,6 +113,10 @@ class BusA2AJsonRpcSupportTest {
     }
 
     private MessageSendParams messageParams(String request) {
-        return (MessageSendParams) support.parseRequest(request, null).params();
+        Object params = support.parseRequest(request, null).params();
+        if (params instanceof MessageSendParams messageSendParams) {
+            return messageSendParams;
+        }
+        throw new AssertionError("Expected MessageSendParams but got " + params.getClass().getName());
     }
 }

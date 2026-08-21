@@ -23,6 +23,7 @@ import org.a2aproject.sdk.spec.TaskIdParams;
 import org.a2aproject.sdk.spec.TaskQueryParams;
 import org.a2aproject.sdk.spec.TextPart;
 
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -47,26 +48,24 @@ final class BusA2AJsonRpcSupport {
 
     ParsedA2ARequest parseRequest(String rawJson, String expectedTenant) {
         ObjectNode root = parseRoot(rawJson);
-        Object originalId = validateEnvelope(root);
-        String method = root.get("method").textValue();
+        ValidatedEnvelope envelope = validateEnvelope(root);
+        Object originalId = envelope.originalId();
+        String method = envelope.method();
         if (!SUPPORTED_METHODS.contains(method)) {
             throw failure(originalId,
                     new MethodNotFoundError(null, "Method not found: " + method, null));
         }
 
-        normalizeMessageRequest(root, method, originalId);
-        Object params = parseParams((ObjectNode) root.get("params"), method, expectedTenant, originalId);
+        normalizeMessageRequest(envelope.params(), method, originalId);
+        Object params = parseParams(envelope.params(), method, expectedTenant, originalId);
         validateRequiredParams(params, originalId);
         validateTenant(params, expectedTenant, originalId);
         return new ParsedA2ARequest(originalId, method, params);
     }
 
     Object parseRequestId(String rawJson) {
-        Object originalId = originalId(parseRoot(rawJson).get("id"));
-        if (originalId == null) {
-            throw failure(null, new InvalidRequestError("Invalid Request"));
-        }
-        return originalId;
+        return originalId(parseRoot(rawJson).get("id"))
+                .orElseThrow(() -> failure(null, new InvalidRequestError("Invalid Request")));
     }
 
     private static ObjectNode parseRoot(String rawJson) {
@@ -85,49 +84,57 @@ final class BusA2AJsonRpcSupport {
         return object;
     }
 
-    private static Object validateEnvelope(ObjectNode root) {
+    private static ValidatedEnvelope validateEnvelope(ObjectNode root) {
+        Optional<Object> originalId = originalId(root.get("id"));
+        Object errorId = originalId.orElse(null);
         JsonNode version = root.get("jsonrpc");
-        JsonNode method = root.get("method");
-        JsonNode params = root.get("params");
-        Object originalId = originalId(root.get("id"));
-        if (version == null || !version.isTextual() || !JSON_RPC_VERSION.equals(version.textValue())
-                || method == null || !method.isTextual() || method.textValue().isBlank()
-                || params == null || !params.isObject()
-                || originalId == null) {
-            throw failure(originalId, new InvalidRequestError("Invalid Request"));
+        if (version == null || !version.isTextual() || !JSON_RPC_VERSION.equals(version.textValue())) {
+            throw failure(errorId, new InvalidRequestError("Invalid Request"));
         }
-        return originalId;
+        JsonNode method = root.get("method");
+        if (method == null || !method.isTextual() || method.textValue().isBlank()) {
+            throw failure(errorId, new InvalidRequestError("Invalid Request"));
+        }
+        JsonNode params = root.get("params");
+        if (!(params instanceof ObjectNode paramsObject)) {
+            throw failure(errorId, new InvalidRequestError("Invalid Request"));
+        }
+        return new ValidatedEnvelope(
+                originalId.orElseThrow(() -> failure(null, new InvalidRequestError("Invalid Request"))),
+                method.textValue(), paramsObject);
     }
 
-    private static Object originalId(JsonNode id) {
+    private static Optional<Object> originalId(JsonNode id) {
         if (id == null || id.isNull()) {
-            return null;
+            return Optional.empty();
         }
         if (id.isTextual()) {
-            return id.textValue();
+            return Optional.of(id.textValue());
         }
         if (id.isIntegralNumber()) {
-            return id.bigIntegerValue();
+            return Optional.of(id.bigIntegerValue());
         }
         if (id.isFloatingPointNumber()) {
-            return id.decimalValue();
+            return Optional.of(id.decimalValue());
         }
-        return null;
+        return Optional.empty();
     }
 
-    private static void normalizeMessageRequest(ObjectNode root, String method, Object originalId) {
+    private static void normalizeMessageRequest(ObjectNode params, String method, Object originalId) {
         if (!A2AMethods.SEND_MESSAGE_METHOD.equals(method)
                 && !A2AMethods.SEND_STREAMING_MESSAGE_METHOD.equals(method)) {
             return;
         }
-        ObjectNode params = (ObjectNode) root.get("params");
         JsonNode message = params.get("message");
         if (message instanceof ObjectNode messageObject) {
             JsonNode role = messageObject.get("role");
-            if (role == null || role.isNull() || role.isTextual() && role.textValue().isBlank()) {
-                messageObject.put("role", DEFAULT_MESSAGE_ROLE);
-            } else if (!role.isTextual() || !isMessageRole(role.textValue())) {
+            boolean roleMissing = role == null || role.isNull()
+                    || role.isTextual() && role.textValue().isBlank();
+            if (!roleMissing && (!role.isTextual() || !isMessageRole(role.textValue()))) {
                 throw failure(originalId, new InvalidParamsError("Invalid params: message role is invalid"));
+            }
+            if (roleMissing) {
+                messageObject.put("role", DEFAULT_MESSAGE_ROLE);
             }
             normalizeStandardPartKinds(messageObject);
         }
@@ -249,17 +256,27 @@ final class BusA2AJsonRpcSupport {
         if (expectedTenant == null || expectedTenant.isBlank()) {
             return;
         }
-        String actualTenant = null;
-        if (params instanceof MessageSendParams value) {
-            actualTenant = value.tenant();
-        } else if (params instanceof TaskQueryParams value) {
-            actualTenant = value.tenant();
-        } else if (params instanceof TaskIdParams value) {
-            actualTenant = value.tenant();
-        }
-        if (actualTenant == null || actualTenant.isBlank() || !expectedTenant.equals(actualTenant)) {
+        Optional<String> actualTenant = tenant(params);
+        if (actualTenant.filter(expectedTenant::equals).isEmpty()) {
             throw failure(originalId, new InvalidParamsError("Invalid params: tenant does not match runtime"));
         }
+    }
+
+    private static Optional<String> tenant(Object params) {
+        if (params instanceof MessageSendParams value) {
+            return nonBlank(value.tenant());
+        }
+        if (params instanceof TaskQueryParams value) {
+            return nonBlank(value.tenant());
+        }
+        if (params instanceof TaskIdParams value) {
+            return nonBlank(value.tenant());
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<String> nonBlank(String value) {
+        return Optional.ofNullable(value).filter(candidate -> !candidate.isBlank());
     }
 
     private static void validateRequiredParams(Object params, Object originalId) {
@@ -279,13 +296,15 @@ final class BusA2AJsonRpcSupport {
             if (value.id() == null || value.id().isBlank()) {
                 throw failure(originalId, new InvalidParamsError("Invalid params: task id is required"));
             }
-        } else if (params instanceof TaskIdParams value && (value.id() == null || value.id().isBlank())) {
+            return;
+        }
+        if (params instanceof TaskIdParams value && (value.id() == null || value.id().isBlank())) {
             throw failure(originalId, new InvalidParamsError("Invalid params: task id is required"));
         }
     }
 
     private static RequestException failure(Object id, A2AError error) {
-        return new RequestException(id, error, null);
+        return new RequestException(id, error);
     }
 
     private static RequestException failure(Object id, A2AError error, Throwable cause) {
@@ -295,14 +314,23 @@ final class BusA2AJsonRpcSupport {
     record ParsedA2ARequest(Object originalId, String method, Object params) {
     }
 
+    private record ValidatedEnvelope(Object originalId, String method, ObjectNode params) {
+    }
+
     static final class RequestException extends RuntimeException {
         private static final long serialVersionUID = 1L;
 
         private final Object requestId;
         private final A2AError error;
 
+        private RequestException(Object requestId, A2AError error) {
+            super(error.getMessage(), error);
+            this.requestId = requestId;
+            this.error = error;
+        }
+
         private RequestException(Object requestId, A2AError error, Throwable cause) {
-            super(error.getMessage(), cause == null ? error : cause);
+            super(error.getMessage(), cause);
             this.requestId = requestId;
             this.error = error;
         }

@@ -46,10 +46,6 @@
         </dependency>
         <dependency>
             <groupId>org.a2aproject.sdk</groupId>
-            <artifactId>a2a-java-sdk-jsonrpc-common</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.a2aproject.sdk</groupId>
             <artifactId>a2a-java-sdk-client</artifactId>
         </dependency>
         <dependency>

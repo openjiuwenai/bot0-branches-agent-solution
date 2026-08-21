@@ -18,11 +18,19 @@ import org.a2aproject.sdk.spec.Task;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
-/** Strict FEAT-017 JSON response-projection codec shared by the Runtime producer and Caller. */
+/**
+ * Strict FEAT-017 JSON response-projection codec shared by the Runtime producer and Caller.
+ *
+ * @since 2026-08-21
+ */
 public final class AgentBusProjectionJsonCodec {
+    /** Current response-projection schema version. */
     public static final String SCHEMA_VERSION = "1.0";
+
+    /** Maximum number of UTF-8 bytes allowed in an inline response projection. */
     public static final int MAX_INLINE_BYTES = 64 * 1024;
 
     private static final Set<String> KINDS = Set.of("ACCEPTED", "REJECTED", "FAILED", "RESPONSE",
@@ -33,7 +41,13 @@ public final class AgentBusProjectionJsonCodec {
     private static final ObjectMapper MAPPER = new ObjectMapper(JsonFactory.builder()
             .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION).build());
 
-    /** Encodes and validates one canonical projection payload. */
+    /**
+     * Encodes and validates one canonical projection payload.
+     *
+     * @param projection projection to encode
+     * @return canonical JSON projection
+     * @throws IllegalArgumentException when the projection violates the wire contract
+     */
     public String encode(BusResponseProjection projection) {
         ObjectNode root = MAPPER.createObjectNode();
         root.put("schemaVersion", SCHEMA_VERSION);
@@ -46,12 +60,12 @@ public final class AgentBusProjectionJsonCodec {
 
         Map<String, Object> data = projection.data() == null ? Map.of() : projection.data();
         Object state = data.get("taskState");
-        String status = state instanceof String text ? normalizeState(text) : text(data, "status");
+        String status = state instanceof String text ? normalizeState(text) : text(data, "status").orElse(null);
         putText(root, "status", status);
-        putText(root, "idempotencyResult", text(data, "idempotencyResult"));
-        putText(root, "streamRef", text(data, "streamRef"));
-        putText(root, "errorCode", text(data, "errorCode"));
-        putText(root, "reason", text(data, "reason"));
+        putText(root, "idempotencyResult", text(data, "idempotencyResult").orElse(null));
+        putText(root, "streamRef", text(data, "streamRef").orElse(null));
+        putText(root, "errorCode", text(data, "errorCode").orElse(null));
+        putText(root, "reason", text(data, "reason").orElse(null));
         putBoolean(root, "retryable", data.get("retryable"));
         putA2aResponse(root, data.get("a2aResponse"));
 
@@ -63,7 +77,14 @@ public final class AgentBusProjectionJsonCodec {
         return json;
     }
 
-    /** Decodes and validates one JSON projection against its Bus event type. */
+    /**
+     * Decodes and validates one JSON projection against its Bus event type.
+     *
+     * @param inlinePayload inline JSON projection
+     * @param eventType Bus event type carrying the projection
+     * @return validated typed projection
+     * @throws IllegalArgumentException when the payload violates the wire contract
+     */
     public DecodedProjection decode(String inlinePayload, String eventType) {
         if (inlinePayload == null || inlinePayload.isBlank()) {
             throw invalid("projection payload is empty");
@@ -82,16 +103,18 @@ public final class AgentBusProjectionJsonCodec {
         }
         validate(root, eventType);
 
-        JsonNode response = root.get("a2aResponse");
-        JsonNode result = response == null ? null : response.get("result");
-        Task task = decodeTask(result);
-        Message message = task == null ? decodeMessage(result) : null;
-        return new DecodedProjection(text(root, "schemaVersion"), text(root, "projectionKind"),
-                root.get("revision").longValue(), text(root, "taskId"), text(root, "status"),
-                text(root, "idempotencyResult"), text(root, "streamRef"), text(root, "errorCode"),
-                text(root, "reason"), bool(root, "retryable"), response,
-                response == null ? null : response.get("id"),
-                response == null ? null : response.get("error"), task, message);
+        Optional<JsonNode> response = Optional.ofNullable(root.get("a2aResponse"));
+        JsonNode result = response.map(value -> value.get("result")).orElse(null);
+        Optional<Task> task = decodeTask(result);
+        Optional<Message> message = task.isEmpty() ? decodeMessage(result) : Optional.empty();
+        return new DecodedProjection(text(root, "schemaVersion").orElse(null),
+                text(root, "projectionKind").orElse(null), root.get("revision").longValue(),
+                text(root, "taskId").orElse(null), text(root, "status").orElse(null),
+                text(root, "idempotencyResult").orElse(null), text(root, "streamRef").orElse(null),
+                text(root, "errorCode").orElse(null), text(root, "reason").orElse(null),
+                bool(root, "retryable").orElse(null), response.orElse(null),
+                response.map(value -> value.get("id")).orElse(null),
+                response.map(value -> value.get("error")).orElse(null), task.orElse(null), message.orElse(null));
     }
 
     private static void validate(ObjectNode root, String eventType) {
@@ -129,7 +152,7 @@ public final class AgentBusProjectionJsonCodec {
         if (response != null && !response.isObject()) {
             throw invalid("a2aResponse must be a JSON object");
         }
-        String status = text(root, "status");
+        String status = text(root, "status").orElse(null);
         if (status != null && !STATUS.contains(status)) {
             throw invalid("status is not a supported wire value");
         }
@@ -177,7 +200,9 @@ public final class AgentBusProjectionJsonCodec {
         if (responseNode == null) {
             return;
         }
-        ObjectNode response = (ObjectNode) responseNode;
+        if (!(responseNode instanceof ObjectNode response)) {
+            throw invalid("a2aResponse must be a JSON object");
+        }
         requireText(response, "jsonrpc", "2.0");
         JsonNode id = response.get("id");
         if (id == null || id.isNull() || !(id.isTextual() || id.isNumber())) {
@@ -188,19 +213,21 @@ public final class AgentBusProjectionJsonCodec {
         if (hasResult == hasError) {
             throw invalid("a2aResponse must contain exactly one of result or error");
         }
-        if (hasError && !response.get("error").isObject()) {
+        JsonNode errorNode = response.get("error");
+        if (hasError && !(errorNode instanceof ObjectNode)) {
             throw invalid("a2aResponse error must be an object");
         }
-        if (hasError) {
-            validateJsonRpcError((ObjectNode) response.get("error"));
+        if (errorNode instanceof ObjectNode error) {
+            validateJsonRpcError(error);
         }
-        String projectionTaskId = text(projection, "taskId");
-        String responseTaskId = responseTaskId(response.get("result"));
-        if (responseTaskId != null && projectionTaskId != null && !projectionTaskId.equals(responseTaskId)) {
+        Optional<String> projectionTaskId = text(projection, "taskId");
+        Optional<String> responseTaskId = responseTaskId(response.get("result"));
+        if (responseTaskId.isPresent() && projectionTaskId.isPresent()
+                && !projectionTaskId.get().equals(responseTaskId.get())) {
             throw invalid("a2aResponse Task id does not match projection taskId");
         }
-        if (responseTaskId != null && projectionTaskId == null
-                && "RESPONSE".equals(text(projection, "projectionKind"))) {
+        if (responseTaskId.isPresent() && projectionTaskId.isEmpty()
+                && "RESPONSE".equals(text(projection, "projectionKind").orElse(null))) {
             throw invalid("RESPONSE carrying a Task requires taskId");
         }
     }
@@ -214,37 +241,37 @@ public final class AgentBusProjectionJsonCodec {
         }
     }
 
-    private static Task decodeTask(JsonNode result) {
+    private static Optional<Task> decodeTask(JsonNode result) {
         if (result == null || !result.isObject()) {
-            return null;
+            return Optional.empty();
         }
         JsonNode candidate = result.get("task");
         if (candidate == null && result.has("status") && result.has("id")) {
             candidate = result;
         }
         if (candidate == null || candidate.isNull()) {
-            return null;
+            return Optional.empty();
         }
         try {
-            return JsonUtil.fromJson(candidate.toString(), Task.class);
+            return Optional.of(JsonUtil.fromJson(candidate.toString(), Task.class));
         } catch (org.a2aproject.sdk.jsonrpc.common.json.JsonProcessingException exception) {
             throw invalid("invalid A2A Task result", exception);
         }
     }
 
-    private static Message decodeMessage(JsonNode result) {
+    private static Optional<Message> decodeMessage(JsonNode result) {
         if (result == null || !result.isObject()) {
-            return null;
+            return Optional.empty();
         }
         JsonNode candidate = result.get("message");
         if (candidate == null && result.has("role") && result.has("parts")) {
             candidate = result;
         }
         if (candidate == null || candidate.isNull()) {
-            return null;
+            return Optional.empty();
         }
         try {
-            return JsonUtil.fromJson(candidate.toString(), Message.class);
+            return Optional.of(JsonUtil.fromJson(candidate.toString(), Message.class));
         } catch (org.a2aproject.sdk.jsonrpc.common.json.JsonProcessingException exception) {
             throw invalid("invalid A2A Message result", exception);
         }
@@ -269,13 +296,19 @@ public final class AgentBusProjectionJsonCodec {
         root.set("a2aResponse", response);
     }
 
-    private static String responseTaskId(JsonNode result) {
+    private static Optional<String> responseTaskId(JsonNode result) {
         if (result == null || !result.isObject()) {
-            return null;
+            return Optional.empty();
         }
         JsonNode task = result.has("task") ? result.get("task") : result;
-        JsonNode id = task == null ? null : task.get("id");
-        return id != null && id.isTextual() && !id.textValue().isBlank() ? id.textValue() : null;
+        if (task == null) {
+            return Optional.empty();
+        }
+        JsonNode id = task.get("id");
+        if (id == null || !id.isTextual() || id.textValue().isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(id.textValue());
     }
 
     private static String kindForEvent(String eventType) {
@@ -320,33 +353,36 @@ public final class AgentBusProjectionJsonCodec {
         root.put(name, bool);
     }
 
-    private static String text(Map<String, Object> values, String name) {
+    private static Optional<String> text(Map<String, Object> values, String name) {
         Object value = values.get(name);
         if (value == null) {
-            return null;
+            return Optional.empty();
         }
         if (!(value instanceof String text)) {
             throw invalid(name + " must be a string");
         }
-        return text;
+        return Optional.of(text);
     }
 
-    private static String text(ObjectNode root, String name) {
+    private static Optional<String> text(ObjectNode root, String name) {
         JsonNode value = root.get(name);
-        return value == null || value.isNull() ? null : value.textValue();
+        if (value == null || value.isNull()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(value.textValue());
     }
 
-    private static Boolean bool(ObjectNode root, String name) {
+    private static Optional<Boolean> bool(ObjectNode root, String name) {
         JsonNode value = root.get(name);
-        return value == null || value.isNull() ? null : value.booleanValue();
+        if (value == null || value.isNull()) {
+            return Optional.empty();
+        }
+        return Optional.of(value.booleanValue());
     }
 
     private static String requiredText(ObjectNode root, String name) {
-        String value = text(root, name);
-        if (value == null || value.isBlank()) {
-            throw invalid(name + " is required");
-        }
-        return value;
+        return text(root, name).filter(value -> !value.isBlank())
+                .orElseThrow(() -> invalid(name + " is required"));
     }
 
     private static void requireText(ObjectNode root, String name, String expected) {
@@ -378,8 +414,7 @@ public final class AgentBusProjectionJsonCodec {
     }
 
     private static boolean blank(ObjectNode root, String name) {
-        String value = text(root, name);
-        return value == null || value.isBlank();
+        return text(root, name).filter(value -> !value.isBlank()).isEmpty();
     }
 
     private static String write(ObjectNode root) {

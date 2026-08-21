@@ -175,7 +175,7 @@ public class RequestHandlerBusA2aBridge {
         if (payload != null && payload.length > 0) {
             try {
                 requestId = jsonRpcSupport.parseRequestId(new String(payload, StandardCharsets.UTF_8));
-            } catch (RuntimeException ignore) {
+            } catch (BusA2AJsonRpcSupport.RequestException ignore) {
                 // Malformed payload: emit the error without an id as a best effort.
             }
         }
@@ -326,5 +326,4 @@ public class RequestHandlerBusA2aBridge {
     private static boolean isMethod(BusA2AJsonRpcSupport.ParsedA2ARequest payload, String expected) {
         return expected.equals(payload.method());
     }
-
 }

@@ -194,6 +194,8 @@ class AgentBusRemoteAgentCallerTest {
      * response observed on the Bus never carries the callee's serviceId — pinning the responder
      * on that field rejects every real BUS remote call. The responder identity lives in the
      * pass-through {@code routeHandle} instead.
+     *
+     * @throws Exception when the relayed response fixture cannot be serialized
      */
     @Test
     void acceptsResponseRelayedWithRewrittenSourceServiceId() throws Exception {

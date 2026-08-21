@@ -13,7 +13,6 @@ import com.openjiuwen.service.bus.consumer.model.AgentBusEventEnvelope;
 
 import org.a2aproject.sdk.server.ServerCallContext;
 import org.a2aproject.sdk.server.requesthandlers.RequestHandler;
-import org.a2aproject.sdk.spec.InvalidRequestError;
 import org.a2aproject.sdk.spec.Message;
 import org.a2aproject.sdk.spec.StreamingEventKind;
 import org.a2aproject.sdk.spec.Task;
@@ -294,8 +293,10 @@ class RequestHandlerBusA2aBridgeTest {
     private static byte[] bytes(String value) {
         try {
             com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            com.fasterxml.jackson.databind.node.ObjectNode request =
-                    (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(value);
+            com.fasterxml.jackson.databind.JsonNode document = mapper.readTree(value);
+            if (!(document instanceof com.fasterxml.jackson.databind.node.ObjectNode request)) {
+                throw new AssertionError("Request fixture must be a JSON object");
+            }
             if (!request.has("jsonrpc")) {
                 request.put("jsonrpc", "2.0");
             }
