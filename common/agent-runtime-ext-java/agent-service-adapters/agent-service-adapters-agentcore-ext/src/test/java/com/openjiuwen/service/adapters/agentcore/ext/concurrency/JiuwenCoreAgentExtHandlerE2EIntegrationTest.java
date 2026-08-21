@@ -231,6 +231,94 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
         slow.join(5000);
     }
 
+    @Test
+    @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
+    void agentCreationFailure_doesNotLeakAdmission() {
+        HttpHeaders headers = jsonHeaders();
+        agentFactory.failNextCreate();
+
+        ResponseEntity<String> response = rest.postForEntity(
+                "http://localhost:" + port + "/a2a/",
+                new HttpEntity<>(jsonRpc("SendMessage", "ext-create-fail", "hello"), headers), String.class);
+
+        // G+ design: creation failure → SDK error path → FAILED Task (HTTP 200), not HTTP 500.
+        // The critical invariant is: admission count returns to zero.
+        assertThat(admissionGate.currentCount())
+                .as("admission count must be zero after agent creation failure")
+                .isZero();
+
+        ResponseEntity<String> next = rest.postForEntity(
+                "http://localhost:" + port + "/a2a/",
+                new HttpEntity<>(jsonRpc("SendMessage", "ext-after-create-fail", "hello"), headers), String.class);
+
+        assertThat(next.getStatusCode().is2xxSuccessful())
+                .as("subsequent request must be admitted after creation failure")
+                .isTrue();
+    }
+
+    @Test
+    @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
+    void inputRequired_releasesAdmission_newRequestAdmitted() {
+        HttpHeaders headers = jsonHeaders();
+
+        ResponseEntity<String> response = rest.postForEntity(
+                "http://localhost:" + port + "/a2a/",
+                new HttpEntity<>(jsonRpc("SendStreamingMessage", "ext-input-req", "require input"), headers),
+                String.class);
+
+        // Task enters INPUT_REQUIRED → handler finally releases admission
+        assertThat(admissionGate.currentCount())
+                .as("admission count must be zero after INPUT_REQUIRED")
+                .isZero();
+        assertThat(agentFactory.getDestroyedCount())
+                .as("agent must be destroyed after INPUT_REQUIRED")
+                .isEqualTo(1);
+
+        ResponseEntity<String> next = rest.postForEntity(
+                "http://localhost:" + port + "/a2a/",
+                new HttpEntity<>(jsonRpc("SendMessage", "ext-after-input-req", "hello"), headers), String.class);
+
+        assertThat(next.getStatusCode().is2xxSuccessful())
+                .as("subsequent request must be admitted after INPUT_REQUIRED release")
+                .isTrue();
+    }
+
+    @Test
+    @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
+    void inputRequired_resumeRejected_whenQuotaFull() throws InterruptedException {
+        HttpHeaders headers = jsonHeaders();
+
+        // Step 1: trigger INPUT_REQUIRED → task enters INPUT_REQUIRED, admission released
+        rest.postForEntity(
+                "http://localhost:" + port + "/a2a/",
+                new HttpEntity<>(jsonRpc("SendStreamingMessage", "ext-ir-conv", "require input"), headers),
+                String.class);
+
+        assertThat(admissionGate.currentCount())
+                .as("admission must be zero after INPUT_REQUIRED")
+                .isZero();
+
+        // Step 2: start a blocking task with different contextId → fills quota (limit=1)
+        Thread blocker = new Thread(() -> {
+            rest.postForEntity("http://localhost:" + port + "/a2a/",
+                    new HttpEntity<>(jsonRpc("SendMessage", "ext-blocker", "block"), headers), String.class);
+        });
+        blocker.start();
+        assertThat(TrackingAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
+
+        // Step 3: resume the INPUT_REQUIRED task → admission full → rejected
+        ResponseEntity<String> resume = rest.postForEntity(
+                "http://localhost:" + port + "/a2a/",
+                new HttpEntity<>(jsonRpc("SendMessage", "ext-ir-conv", "continue please"), headers), String.class);
+
+        assertThat(resume.getStatusCode().value())
+                .as("INPUT_REQUIRED resume must be rejected when quota is full")
+                .isEqualTo(503);
+
+        TrackingAgent.releaseBlock();
+        blocker.join(5000);
+    }
+
     @SpringBootConfiguration
     @EnableAutoConfiguration
     static class ExtHandlerE2ETestApp {
@@ -256,9 +344,18 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
         private final AtomicInteger counter = new AtomicInteger(0);
         private final List<String> createdIdentities = Collections.synchronizedList(new ArrayList<>());
         private final List<Object> destroyedAgents = Collections.synchronizedList(new ArrayList<>());
+        private volatile boolean failNext = false;
+
+        void failNextCreate() {
+            failNext = true;
+        }
 
         @Override
         public Object create() {
+            if (failNext) {
+                failNext = false;
+                throw new IllegalStateException("Simulated agent creation failure");
+            }
             String identity = "agent-" + counter.incrementAndGet();
             TrackingAgent agent = new TrackingAgent(identity);
             createdIdentities.add(identity);
@@ -286,6 +383,7 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
             counter.set(0);
             createdIdentities.clear();
             destroyedAgents.clear();
+            failNext = false;
         }
     }
 
@@ -327,6 +425,9 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
         }
 
         public Iterator<Object> stream(Object inputs, Session session, List<StreamMode> streamModes) {
+            if (inputs instanceof Map<?, ?> map && "require input".equals(map.get("query"))) {
+                return List.<Object>of(Map.of("type", "__interaction__", "message", "Need more info")).iterator();
+            }
             return List.<Object>of(new OutputSchema("llm_output", 0, Map.of("content", identity))).iterator();
         }
 

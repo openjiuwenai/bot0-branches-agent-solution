@@ -6,6 +6,11 @@ package com.openjiuwen.service.adapters.agentcore.ext.concurrency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+
 import com.openjiuwen.service.app.controller.probe.ActiveTaskController;
 import com.openjiuwen.service.adapters.agentcore.ext.autoconfigure.ConcurrencyAutoConfiguration;
 import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
@@ -34,6 +39,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.annotation.DirtiesContext;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -192,6 +198,70 @@ class ConcurrencyE2EIntegrationTest {
 
         assertThat(next.getStatusCode().is2xxSuccessful()).isTrue();
         assertThat(admissionGate.currentCount()).isZero();
+    }
+
+    @Test
+    @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
+    void concurrencyLogs_emittedOnAdmitAndRelease() {
+        Logger rootLogger = (Logger) org.slf4j.LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        rootLogger.addAppender(appender);
+
+        try {
+            HttpHeaders headers = jsonHeaders();
+            rest.postForEntity("http://localhost:" + port + "/a2a/",
+                    new HttpEntity<>(jsonRpc("SendMessage", "e2e-log-test", "hello"), headers), String.class);
+
+            List<String> messages = appender.list.stream()
+                    .map(ILoggingEvent::getFormattedMessage)
+                    .filter(m -> m.contains("[CONCURRENCY]"))
+                    .toList();
+
+            assertThat(messages)
+                    .as("should contain task_admitted and task_released logs, total captured=%d", appender.list.size())
+                    .anyMatch(m -> m.contains("task_admitted"))
+                    .anyMatch(m -> m.contains("task_released"));
+        } finally {
+            rootLogger.detachAppender(appender);
+        }
+    }
+
+    @Test
+    @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
+    void concurrencyLogs_emittedOnRejection() throws InterruptedException {
+        Logger rootLogger = (Logger) org.slf4j.LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        rootLogger.addAppender(appender);
+
+        try {
+            HttpHeaders headers = jsonHeaders();
+
+            Thread slow = new Thread(() -> {
+                rest.postForEntity("http://localhost:" + port + "/a2a/",
+                        new HttpEntity<>(jsonRpc("SendStreamingMessage", "e2e-log-slow", "slow"), headers), String.class);
+            });
+            slow.start();
+            assertThat(SlowAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
+
+            rest.postForEntity("http://localhost:" + port + "/a2a/",
+                    new HttpEntity<>(jsonRpc("SendMessage", "e2e-log-reject", "reject"), headers), String.class);
+
+            List<String> messages = appender.list.stream()
+                    .map(ILoggingEvent::getFormattedMessage)
+                    .filter(m -> m.contains("[CONCURRENCY]"))
+                    .toList();
+
+            assertThat(messages)
+                    .as("should contain task_rejected log, total captured=%d", appender.list.size())
+                    .anyMatch(m -> m.contains("task_rejected"));
+
+            slow.interrupt();
+            slow.join(2000);
+        } finally {
+            rootLogger.detachAppender(appender);
+        }
     }
 
     @SpringBootConfiguration
