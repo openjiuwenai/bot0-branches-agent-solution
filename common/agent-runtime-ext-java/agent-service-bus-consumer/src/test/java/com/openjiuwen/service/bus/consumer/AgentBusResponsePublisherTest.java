@@ -117,7 +117,7 @@ class AgentBusResponsePublisherTest {
         assertThatThrownBy(() -> publisher.publish(projection))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("64 KiB");
-        assertThat(captured).hasNullValue();
+        assertThat(captured.get()).isNull();
     }
 
     private static BrokerForwardingProducerPort recordingProducer(AtomicReference<BrokerOutboundMessage> captured) {
