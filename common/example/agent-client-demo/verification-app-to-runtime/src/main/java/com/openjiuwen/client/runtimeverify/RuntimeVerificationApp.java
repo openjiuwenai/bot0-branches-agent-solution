@@ -242,7 +242,10 @@ public final class RuntimeVerificationApp {
             client.exposeInConversation(conversationId, ToolExposurePolicy.allow("local.echo"));
             InvocationRequest request = InvocationRequest.builder()
                     .conversationId(conversationId).mode(run.request.mode()).input(run.request.input())
-                    .attribute("traceId", run.id).credentialToken("must-not-reach-runtime")
+                    .traceId(run.id).correlationId("runtime-verification-" + run.id)
+                    .attribute("tenantId", "must-not-reach-runtime")
+                    .attribute("routingAgent", "must-not-reach-runtime")
+                    .credentialToken("must-not-reach-runtime")
                     .agentId("must-not-reach-runtime").build();
             InvocationCall call = client.invoke(request);
             run.invocationRef = call.invocationRef();
@@ -452,6 +455,10 @@ public final class RuntimeVerificationApp {
             AtomicInteger toolExecutions, boolean observedIncompleteInput)
             throws IOException, InterruptedException {
         run.snapshot = JSON.convertValue(snapshot, Object.class);
+        if (snapshot.callTree() != null) {
+            run.treeSnapshot = snapshot.callTree();
+            run.tree = JSON.convertValue(snapshot.callTree(), Object.class);
+        }
         run.toolExecutions = toolExecutions.get();
         verifyRecoveryContract(run);
         verifyMockWireContract(run);

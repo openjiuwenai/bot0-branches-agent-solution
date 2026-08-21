@@ -8,6 +8,7 @@ import structlog
 from fastapi import FastAPI
 
 from agent_adapter.agent_client import AgentClient
+from agent_adapter.attribution_runner import AttributionRunner
 from agent_adapter.config import AdapterConfig
 from agent_adapter.kafka_consumer.consumer import TraceConsumer
 from agent_adapter.managed_doc.registry import ManagedDocRegistry
@@ -90,6 +91,27 @@ async def _start_trace_backend(app: FastAPI, config: AdapterConfig) -> None:
         )
         app.state.consumer = None
 
+    # AttributionRunner: trace 完整后异步算 skill 归属写回 spans.attribution。
+    # kafka 消费不可达时仍可起 (归属只依赖 repo + skill_store, 不依赖 kafka); 失败仅告警。
+    if config.attribution_runner_enabled:
+        runner = AttributionRunner(
+            repo,
+            app.state.skill_store,
+            config,
+        )
+        try:
+            await runner.start()
+            app.state.attribution_runner = runner
+            logger.info(
+                "attribution_runner_started",
+                poll_interval=config.attribution_poll_interval,
+            )
+        except Exception:
+            logger.exception("attribution_runner_start_failed")
+            app.state.attribution_runner = None
+    else:
+        app.state.attribution_runner = None
+
 
 def _resolve_profiles_path(config: AdapterConfig) -> Path:
     """解析 trace_profiles.yaml 路径。
@@ -112,6 +134,10 @@ def _resolve_profiles_path(config: AdapterConfig) -> Path:
 
 async def _stop_trace_backend(app: FastAPI) -> None:
     """shutdown: 停 kafka 消费者 + 关 repo 连接池 (standard 模式)。"""
+    runner = getattr(app.state, "attribution_runner", None)
+    if runner is not None:
+        await runner.stop()
+        app.state.attribution_runner = None
     consumer = getattr(app.state, "consumer", None)
     if consumer is not None:
         await consumer.stop()
@@ -219,6 +245,16 @@ def create_app(config: AdapterConfig) -> FastAPI:
     pipelines = _build_pipelines(config)
     agent_clients = _build_agent_clients(config)
     skill_store = build_skill_store(config)
+    skillhub_service = None
+    if config.skillhub_enabled:
+        from agent_adapter.skillhub import SkillHubService
+
+        skillhub_service = SkillHubService(config=config, skill_store=skill_store)
+        logger.info(
+            "skillhub_integration_enabled",
+            base_url=config.skillhub_base_url,
+            auth_mode=config.skillhub_auth_mode,
+        )
 
     # Managed-doc service: registry validates restart configs at build time
     # (raises on misconfigured restart doc without health_url/agent_url — spec D4).
@@ -237,6 +273,7 @@ def create_app(config: AdapterConfig) -> FastAPI:
     app.state.pipelines = pipelines
     app.state.agent_clients = agent_clients
     app.state.skill_store = skill_store
+    app.state.skillhub_service = skillhub_service
     app.state.managed_doc_service = managed_doc_service
     app.state.pipeline = next(iter(pipelines.values())) if pipelines else None  # backward compat
     app.state.poll_task: asyncio.Task | None = None
@@ -249,6 +286,7 @@ def create_app(config: AdapterConfig) -> FastAPI:
     app.state.repo = None  # standard 模式 TraceRepository (lifespan 填充)
     app.state.consumer = None  # standard 模式 kafka 消费者 (lifespan 填充, 可能为 None)
     app.state.profile_registry = None  # standard 模式 ProfileRegistry (lifespan 填充)
+    app.state.attribution_runner = None  # standard 模式归属轮询 (lifespan 填充, 可能为 None)
     # app.state 是 Starlette 第三方对象，受保护属性经 setattr 写入以避免点号直访（G.CLS.11）；
     # 读取侧 (routes.py) 已用 getattr(app.state, "_config_lock", ...) 兜底。
     setattr(app.state, "_config_lock", asyncio.Lock())  # protect YAML concurrent writes

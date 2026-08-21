@@ -17,7 +17,8 @@ import java.util.concurrent.Flow;
  * 传输层 SPI：把 SDK 的中立调用语义映射到具体 wire 协议（默认实现为 A2A JSON-RPC over HTTP + SSE）。
  *
  * <p>该接口是 SDK 内核与"协议/网络"之间的抽象缝，便于替换真实网关传输与进程内假网关（测试用）。
- * 传输层只处理"单次调用/单个 Task"的 wire 交互，不承担幂等去重、治理、多轮编排——那些在 internal 内核。
+ * Transport 负责 EndpointPolicy、wire 级幂等与恢复、重试以及既有 Task 的续跑承载；
+ * 不拥有业务侧多轮决策、本地工具治理或服务端 Task 权威状态。
  *
  * @since 2026-07-27
  */
@@ -33,8 +34,8 @@ public interface TransportProvider extends AutoCloseable {
     /**
      * 查询某个 Task 的权威状态快照（wire 方法 {@code GetTask}）。
      *
-     * <p>凭据必须逐次传入：每一次出站 HTTP 都要带 {@code Authorization: Bearer}
-     * （L2 Feat-Func-006 §3.5.0），查询也不例外。
+     * <p>凭据逐次传入并由 EndpointPolicy 决定是否发送：Gateway 请求按其鉴权契约携带
+     * {@code Authorization: Bearer}，Runtime 直连当前不发送 Authorization。
      *
      * <p>v0730 网关北向已开放 {@code GetTask}；{@code CancelTask} 与 {@code SubscribeToTask}
      * 延至后续版本，故本 SPI <b>不提供</b> cancel / resubscribe（交付面即能力面）。

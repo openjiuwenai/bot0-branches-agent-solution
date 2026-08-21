@@ -1,0 +1,136 @@
+name: openai_compatible
+display_name: OpenAI 兼容接口
+description: 支持 OpenAI API 风格的 chat completions 接口，如 OpenAI、Azure OpenAI、部分国产兼容接口等。
+version: "1.0"
+
+ui:
+  form:
+    - key: name
+      label: 名称
+      type: text
+      placeholder: 我的 GPT-4o
+      required: true
+      help: 给这个 LLM 配置起个名字，便于在业务界面选择。
+
+    - key: connection.base_url
+      label: 基础 URL
+      type: text
+      placeholder: https://api.openai.com/v1
+      required: true
+      help: LLM 服务的基础地址，不要以斜杠结尾。
+
+    - key: connection.api_key
+      label: API Key
+      type: password
+      placeholder: sk-xxxxxxxxxxxxxxxxxxxxxxxx
+      required: true
+      sensitive: true
+      help: 你的 API Key，将被明文保存在 YAML 文件中。
+
+    - key: connection.timeout
+      label: 超时时间（秒）
+      type: int
+      default: 600
+      required: true
+
+    - key: request.data.model
+      label: 模型名称
+      type: text
+      placeholder: gpt-4o
+      required: true
+
+    - key: request.data.temperature
+      label: 温度
+      type: number
+      min: 0
+      max: 2
+      step: 0.1
+      default: 0.7
+
+    - key: request.data.max_tokens
+      label: 最大 Token 数
+      type: int
+      placeholder: 4096
+      default: 4096
+      required: true
+
+    - key: runtime.stream_enabled
+      label: 默认流式输出
+      type: checkbox
+      default: false
+
+defaults:
+  connection:
+    base_url: https://api.openai.com/v1
+    api_key: YOUR_API_KEY_HERE
+    timeout: 600
+  request:
+    method: POST
+    url_suffix: /chat/completions
+    headers:
+      Content-Type: application/json
+      Authorization: Bearer ${connection.api_key}
+    data:
+      model: gpt-4o
+      temperature: 0.7
+      max_tokens: 4096
+      messages: []
+  runtime:
+    stream_enabled: false
+
+schema:
+  sections:
+    connection:
+      required: true
+      fields:
+        base_url:
+          type: string
+          required: true
+        api_key:
+          type: string
+          required: true
+          sensitive: true
+        timeout:
+          type: int
+          default: 600
+    request:
+      required: true
+      fields:
+        method:
+          type: string
+          default: POST
+        url_suffix:
+          type: string
+          required: true
+        headers:
+          type: dict
+          default: {}
+          fields:
+            Content-Type:
+              type: string
+              default: application/json
+            Authorization:
+              type: string
+              required: true
+        data:
+          type: dict
+          required: true
+          fields:
+            model:
+              type: string
+              required: true
+            messages:
+              type: list
+              required: true
+            temperature:
+              type: float
+              default: 0.7
+            max_tokens:
+              type: int
+              required: true
+    runtime:
+      required: false
+      fields:
+        stream_enabled:
+          type: bool
+          default: false

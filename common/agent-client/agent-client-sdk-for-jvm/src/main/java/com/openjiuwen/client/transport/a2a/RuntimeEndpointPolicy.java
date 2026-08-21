@@ -8,6 +8,7 @@ import com.openjiuwen.client.api.EndpointType;
 import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.transport.spi.TransportProvider;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -32,7 +33,21 @@ final class RuntimeEndpointPolicy implements EndpointPolicy {
     public TransportProvider.CreateCommand createCommand(TransportProvider.CreateCommand command) {
         return new TransportProvider.CreateCommand(command.invocationRef(), command.invocationId(),
                 command.idempotencyKey(), command.conversationId(), null, command.mode(), command.input(),
-                command.clientTools(), null, command.relatedTaskRef(), Map.of());
+                command.clientTools(), null, command.relatedTaskRef(), runtimeAttributes(command.attributes()));
+    }
+
+    private static Map<String, String> runtimeAttributes(Map<String, String> source) {
+        Map<String, String> projected = new LinkedHashMap<>();
+        copyNonBlank(source, projected, "traceId");
+        copyNonBlank(source, projected, "correlationId");
+        return Map.copyOf(projected);
+    }
+
+    private static void copyNonBlank(Map<String, String> source, Map<String, String> target, String key) {
+        String value = source.get(key);
+        if (value != null && !value.isBlank()) {
+            target.put(key, value);
+        }
     }
 
     @Override

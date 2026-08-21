@@ -69,6 +69,8 @@ def _llm_to_generation(span: dict[str, Any]) -> dict[str, Any] | None:
         "end_time": span.get("end_time"),
         "input": {"messages": messages},
         "output": output,
+        "parent_span_id": span.get("parent_span_id"),
+        "attribution": span.get("attribution"),
     }
 
 
@@ -82,6 +84,8 @@ def _tool_to_tool_record(span: dict[str, Any]) -> dict[str, Any]:
         "name": span.get("name"),
         "start_time": span.get("start_time"),
         "end_time": span.get("end_time"),
+        "parent_span_id": span.get("parent_span_id"),
+        "attribution": span.get("attribution"),
     }
 
 
@@ -105,6 +109,8 @@ def _llm_to_generation_with_profile(
         "end_time": span.get("end_time"),
         "input": {"messages": messages},
         "output": output,
+        "parent_span_id": span.get("parent_span_id"),
+        "attribution": span.get("attribution"),
     }
 
 
@@ -119,6 +125,8 @@ def _tool_to_record_with_profile(span: dict[str, Any], profile: TraceProfile) ->
         "name": span.get("name"),
         "start_time": span.get("start_time"),
         "end_time": span.get("end_time"),
+        "parent_span_id": span.get("parent_span_id"),
+        "attribution": span.get("attribution"),
     }
     if profile.tool_args_extraction.attr:
         args = extract_field(attrs, profile.tool_args_extraction)
@@ -178,6 +186,8 @@ def _http_to_trace_record(span: dict[str, Any]) -> dict[str, Any]:
         "timestamp": span.get("start_time"),
         "start_time": span.get("start_time"),
         "end_time": span.get("end_time"),
+        "parent_span_id": span.get("parent_span_id"),
+        "attribution": span.get("attribution"),
     }
 
 

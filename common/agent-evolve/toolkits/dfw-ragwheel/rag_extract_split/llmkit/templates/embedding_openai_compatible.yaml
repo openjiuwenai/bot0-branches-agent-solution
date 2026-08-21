@@ -1,0 +1,211 @@
+name: embedding_openai_compatible
+display_name: Embedding 模型（OpenAI 兼容）
+description: 支持 OpenAI API 风格的 embeddings 接口，如 OpenAI、Azure OpenAI、部分国产兼容接口，或本地模型路径。
+version: "1.0"
+
+ui:
+  form:
+    - key: name
+      label: 配置名称
+      type: text
+      placeholder: 我的 Embedding 模型
+      required: true
+      help: 给这个 Embedding 配置起个名字，便于在业务界面选择。
+
+    - key: connection.mode
+      label: 模式
+      type: select
+      options:
+        - value: openai
+          label: OpenAI 兼容接口
+        - value: local
+          label: 本地模型路径
+        - value: http
+          label: HTTP 接口
+      default: openai
+      required: true
+      help: 选择 Embedding 服务类型。local 用于 sentence-transformers 本地模型目录；http 用于直接 POST 的自定义接口。
+
+    - key: connection.base_url
+      label: 基础 URL / 本地模型目录
+      type: text
+      placeholder: https://api.openai.com/v1 或 models/bge-small-zh-v1.5
+      required: true
+      help: OpenAI 兼容接口填基础 URL；local 模式填本地模型目录绝对或相对路径；http 模式可留空。
+
+    - key: connection.api_key
+      label: API Key
+      type: password
+      placeholder: sk-xxxxxxxxxxxxxxxxxxxxxxxx
+      sensitive: true
+      help: OpenAI 兼容接口需要。local / http 模式可留空。
+
+    - key: connection.timeout
+      label: 超时时间（秒）
+      type: int
+      default: 120
+      required: true
+
+    - key: request.data.model
+      label: 模型名称
+      type: text
+      placeholder: text-embedding-3-small
+      help: OpenAI 兼容接口需要。local 模式可留空。
+
+    - key: request.data.dimensions
+      label: 向量维度
+      type: int
+      placeholder: 1536
+      help: 部分 OpenAI 接口支持指定输出维度；local / http 模式可留空。
+
+    - key: runtime.batch_size
+      label: 批大小
+      type: int
+      default: 32
+      help: 每次向 Embedding 服务请求的文本条数。
+
+    - key: runtime.normalize_embeddings
+      label: 归一化向量
+      type: checkbox
+      default: false
+      help: local 模式下生效，是否对 Embedding 结果做 L2 归一化。
+
+    - key: runtime.http_post_url
+      label: HTTP POST URL
+      type: text
+      placeholder: http://localhost:8000/embed
+      help: HTTP 模式下使用的完整 POST 地址，留空则使用基础 URL。
+
+    - key: runtime.http_post_auth_header
+      label: HTTP 认证头
+      type: text
+      default: Authorization
+      help: HTTP 模式下认证头字段名。
+
+    - key: runtime.http_post_auth_scheme
+      label: HTTP 认证 Scheme
+      type: text
+      default: Bearer
+      help: HTTP 模式下认证头前缀，留空则只发送 api_key。
+
+    - key: runtime.http_post_vectors_path
+      label: 向量列表响应路径
+      type: text
+      default: data
+      help: HTTP 模式下从响应 JSON 中提取向量列表的 dot path。
+
+    - key: runtime.http_post_vector_field
+      label: 向量字段名
+      type: text
+      default: embedding
+      help: HTTP 模式下每条结果中向量所在的字段名。
+
+    - key: runtime.http_post_index_field
+      label: 索引字段名
+      type: text
+      default: index
+      help: HTTP 模式下每条结果中顺序索引的字段名。
+
+defaults:
+  connection:
+    mode: openai
+    base_url: https://api.openai.com/v1
+    api_key: YOUR_API_KEY_HERE
+    timeout: 120
+  request:
+    method: POST
+    url_suffix: /embeddings
+    headers:
+      Content-Type: application/json
+      Authorization: Bearer ${connection.api_key}
+    data:
+      model: text-embedding-3-small
+      input: []
+  runtime:
+    batch_size: 32
+    normalize_embeddings: false
+    http_post_url: ""
+    http_post_auth_header: Authorization
+    http_post_auth_scheme: Bearer
+    http_post_extra_headers: {}
+    http_post_extra_body: {}
+    http_post_vectors_path: data
+    http_post_vector_field: embedding
+    http_post_index_field: index
+
+schema:
+  sections:
+    connection:
+      required: true
+      fields:
+        mode:
+          type: string
+          required: true
+        base_url:
+          type: string
+          required: true
+        api_key:
+          type: string
+          required: false
+          sensitive: true
+        timeout:
+          type: int
+          default: 120
+    request:
+      required: true
+      fields:
+        method:
+          type: string
+          default: POST
+        url_suffix:
+          type: string
+          required: true
+        headers:
+          type: dict
+          default: {}
+        data:
+          type: dict
+          required: true
+          fields:
+            model:
+              type: string
+              required: false
+            input:
+              type: list
+              required: true
+            dimensions:
+              type: int
+              required: false
+    runtime:
+      required: false
+      fields:
+        batch_size:
+          type: int
+          default: 32
+        normalize_embeddings:
+          type: bool
+          default: false
+        http_post_url:
+          type: string
+          default: ""
+        http_post_auth_header:
+          type: string
+          default: Authorization
+        http_post_auth_scheme:
+          type: string
+          default: Bearer
+        http_post_extra_headers:
+          type: dict
+          default: {}
+        http_post_extra_body:
+          type: dict
+          default: {}
+        http_post_vectors_path:
+          type: string
+          default: data
+        http_post_vector_field:
+          type: string
+          default: embedding
+        http_post_index_field:
+          type: string
+          default: index

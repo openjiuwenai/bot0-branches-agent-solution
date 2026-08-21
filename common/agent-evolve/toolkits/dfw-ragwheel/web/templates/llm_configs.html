@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% set active_page = 'llm-configs' %}
+{% block title %}LLM 配置管理 - DFW-RAG 知识处理平台{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="static/css/llm-config.css">
+{% endblock %}
+
+{% block body_attrs %}class="llm-config-page"{% endblock %}
+
+{% block sidebar %}
+<aside class="extract-sidebar" id="llmConfigSidebar">
+    <div class="sidebar-brand">
+        <svg class="sidebar-brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="4" width="16" height="16" rx="2" ry="2"/>
+            <rect x="9" y="9" width="6" height="6"/>
+            <line x1="9" y1="1" x2="9" y2="4"/>
+            <line x1="15" y1="1" x2="15" y2="4"/>
+            <line x1="9" y1="20" x2="9" y2="23"/>
+            <line x1="15" y1="20" x2="15" y2="23"/>
+        </svg>
+        <span>LLM 配置</span>
+    </div>
+    <nav class="sidebar-nav">
+        <a href="llm-configs/" class="sidebar-link active" data-panel="profiles">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="8" y1="6" x2="21" y2="6"/>
+                <line x1="8" y1="12" x2="21" y2="12"/>
+                <line x1="8" y1="18" x2="21" y2="18"/>
+                <line x1="3" y1="6" x2="3.01" y2="6"/>
+                <line x1="3" y1="12" x2="3.01" y2="12"/>
+                <line x1="3" y1="18" x2="3.01" y2="18"/>
+            </svg>
+            <span>LLM 配置列表</span>
+        </a>
+        <a href="embedding-configs/" class="sidebar-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+            </svg>
+            <span>Embedding 配置列表</span>
+        </a>
+        <a href="#" class="sidebar-link" data-panel="templates">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+                <polyline points="10 9 9 9 8 9"/>
+            </svg>
+            <span>配置模板管理</span>
+        </a>
+    </nav>
+</aside>
+{% endblock %}
+
+{% block content %}
+<div class="extract-layout">
+    <main class="extract-main">
+        <div class="page-header" style="margin-bottom: var(--space-lg); flex-shrink: 0;">
+            <h1 class="page-header__title">LLM 配置管理</h1>
+            <p class="page-header__description" style="color: var(--color-text-secondary); margin-top: var(--space-xs);">管理大语言模型接口配置，支持基于模板快速创建</p>
+        </div>
+
+        <div id="panel-profiles" class="config-panel active">
+            <div class="card llm-config-list-card" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+                <div class="card-header" style="flex-shrink: 0;">
+                    <span class="card-title">已保存配置</span>
+                    <button class="btn btn-primary btn-sm" id="btnOpenAddModal">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"/>
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        新增配置
+                    </button>
+                </div>
+                <div class="card-body" style="flex: 1; min-height: 0; overflow: auto;">
+                    <div id="profileListContainer">
+                        <div class="empty-cell">加载中...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="panel-templates" class="config-panel">
+            <div class="card llm-config-list-card" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+                <div class="card-header" style="flex-shrink: 0;">
+                    <span class="card-title">配置模板管理</span>
+                    <button class="btn btn-secondary btn-sm" id="btnOpenTemplateModal">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="12" y1="18" x2="12" y2="12"/>
+                            <line x1="9" y1="15" x2="15" y2="15"/>
+                        </svg>
+                        新增模板
+                    </button>
+                </div>
+                <div class="card-body" style="flex: 1; min-height: 0; overflow: auto;">
+                    <div id="templateListContainer">
+                        <div class="empty-cell">加载中...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Add/Edit Profile Modal -->
+<div class="llm-modal-overlay" id="profileModal" aria-hidden="true">
+    <div class="llm-modal" role="dialog" aria-modal="true">
+        <div class="llm-modal-header">
+            <span class="llm-modal-title" id="modalTitle">新增 LLM 配置</span>
+            <span class="llm-modal-close" id="btnCloseModal" aria-label="关闭">&times;</span>
+        </div>
+        <div class="llm-modal-body">
+            <input type="hidden" id="profileId">
+            <input type="hidden" id="originalName">
+
+            <div class="form-row" style="grid-template-columns: repeat(2, 1fr);">
+                <div class="form-group">
+                    <label class="form-label">配置名称 <span style="color: var(--color-danger)">*</span></label>
+                    <input type="text" class="form-input" id="profileName" placeholder="例如：公司 GPT-4o">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">选择模板 <span style="color: var(--color-danger)">*</span></label>
+                    <select class="form-select" id="templateSelect">
+                        <option value="">请选择模板</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="templateFormContainer">
+                <div class="empty-cell">请先选择模板</div>
+            </div>
+
+            <div class="llm-test-result" id="testResult" style="display: none;"></div>
+        </div>
+        <div class="llm-modal-footer">
+            <button class="btn btn-secondary" id="btnCancelModal">取消</button>
+            <button class="btn btn-success" id="btnTestDraft">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+                测试连接
+            </button>
+            <button class="btn btn-primary" id="btnSaveProfile">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                </svg>
+                保存配置
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Add Template Modal -->
+<div class="llm-modal-overlay" id="templateModal" aria-hidden="true">
+    <div class="llm-modal" role="dialog" aria-modal="true" style="max-width: 800px;">
+        <div class="llm-modal-header">
+            <span class="llm-modal-title" id="templateModalTitle">新增模板</span>
+            <span class="llm-modal-close" id="btnCloseTemplateModal" aria-label="关闭">&times;</span>
+        </div>
+        <div class="llm-modal-body">
+            <div class="form-group">
+                <label class="form-label">模板 YAML</label>
+                <textarea class="form-textarea" id="templateYaml" rows="16" placeholder="# 在此粘贴模板 YAML 内容"></textarea>
+            </div>
+            <div class="llm-test-result" id="templateResult" style="display: none;"></div>
+        </div>
+        <div class="llm-modal-footer">
+            <button class="btn btn-secondary" id="btnCancelTemplateModal">取消</button>
+            <button class="btn btn-primary" id="btnSaveTemplate">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                </svg>
+                保存模板
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- View Template Modal -->
+<div class="llm-modal-overlay" id="viewTemplateModal" aria-hidden="true">
+    <div class="llm-modal" role="dialog" aria-modal="true" style="max-width: 700px;">
+        <div class="llm-modal-header">
+            <span class="llm-modal-title" id="viewTemplateTitle">模板详情</span>
+            <span class="llm-modal-close" id="btnCloseViewTemplateModal" aria-label="关闭">&times;</span>
+        </div>
+        <div class="llm-modal-body">
+            <pre class="llm-result-content" id="viewTemplateContent" style="white-space: pre-wrap; word-break: break-word;"></pre>
+        </div>
+        <div class="llm-modal-footer">
+            <button class="btn btn-secondary" id="btnCloseViewTemplate">关闭</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="static/js/llm-config.js"></script>
+{% endblock %}

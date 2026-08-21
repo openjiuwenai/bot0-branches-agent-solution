@@ -1,0 +1,80 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/*.log
+logs/*.log.*
+*.log
+
+# Data and uploads
+web/uploads/*
+!web/uploads/.gitkeep
+data/
+!data/.gitkeep
+
+# Environment variables
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
+
+# local models
+models
+
+# videos_doc
+doc/videos.zip
+doc/videos/*
+doc/videos_url.txt
+
+# Runtime outputs and local samples (do not commit)
+outputs/
+test_files/
+csv_cases/
+ppt-takeaway-rag-flywheel/
+*.pptx
+
+# Tooling / coverage
+.cursor/
+.pytest_cache/
+.mypy_cache/
+htmlcov/
+coverage.xml
+*.cover

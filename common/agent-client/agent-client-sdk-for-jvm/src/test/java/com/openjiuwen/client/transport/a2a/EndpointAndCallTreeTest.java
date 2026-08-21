@@ -20,6 +20,7 @@ import com.openjiuwen.client.api.InvocationCall;
 import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.api.InvocationRequest;
 import com.openjiuwen.client.api.InvocationSnapshot;
+import com.openjiuwen.client.api.RetryPolicy;
 import com.openjiuwen.client.api.calltree.Completeness;
 import com.openjiuwen.client.api.calltree.SpeakingPhase;
 import com.openjiuwen.client.transport.spi.CredentialProvider;
@@ -52,16 +53,18 @@ class EndpointAndCallTreeTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Test
-    void runtimePolicyDropsAllAttributesButKeepsClientTools() {
+    void runtimePolicyKeepsTraceAttributesAndDropsOtherAttributes() {
         ToolWireSpec tool = new ToolWireSpec("lookup", "lookup data", "{\"type\":\"object\"}");
         TransportProvider.CreateCommand source = new TransportProvider.CreateCommand(
                 "inv", "inv", "key", "ctx", "agent-a", InvocationMode.ASYNC, "hello",
                 List.of(tool), "secret", null,
-                Map.of("traceId", "trace-1", "tenant_id", "tenant-a", "routingAgent", "agent-b"));
+                Map.of("traceId", "trace-1", "correlationId", "correlation-1",
+                        "tenant_id", "tenant-a", "routingAgent", "agent-b"));
 
         TransportProvider.CreateCommand projected = RuntimeEndpointPolicy.INSTANCE.createCommand(source);
 
-        assertTrue(projected.attributes().isEmpty());
+        assertEquals(Map.of("traceId", "trace-1", "correlationId", "correlation-1"),
+                projected.attributes());
         assertEquals(List.of(tool), projected.clientTools());
         assertNull(projected.agentId());
         assertNull(projected.credentialToken());
@@ -86,7 +89,8 @@ class EndpointAndCallTreeTest {
                     .conversationId("runtime-policy")
                     .mode(InvocationMode.BLOCKING)
                     .credentialToken("request-secret")
-                    .attribute("traceId", "trace-1")
+                    .traceId("trace-1")
+                    .correlationId("correlation-1")
                     .attribute("tenantId", "must-not-leak")
                     .attribute("Authorization", "must-not-leak")
                     .input("hello")
@@ -94,8 +98,11 @@ class EndpointAndCallTreeTest {
 
             assertNull(authorization.get());
             assertFalse(request.get().path("params").path("metadata").has("agentId"));
-            assertFalse(request.get().path("params").path("metadata").has("attributes"),
-                    "Runtime direct mode must not forward arbitrary request attributes");
+            JsonNode attributes = request.get().path("params").path("metadata").path("attributes");
+            assertEquals("trace-1", attributes.path("traceId").asText());
+            assertEquals("correlation-1", attributes.path("correlationId").asText());
+            assertFalse(attributes.has("tenantId"));
+            assertFalse(attributes.has("Authorization"));
             assertEquals("root answer", snapshot.outputText());
             assertNull(snapshot.callTree(), "BLOCKING must not construct a call tree");
         } finally {
@@ -117,11 +124,15 @@ class EndpointAndCallTreeTest {
                 .credentialProvider(CredentialProvider.staticToken("secret"))
                 .build()) {
             client.invoke(InvocationRequest.builder().agentId("agent-a").conversationId("gateway-policy")
-                    .mode(InvocationMode.BLOCKING).input("hello").build())
+                    .mode(InvocationMode.BLOCKING).traceId("trace-gateway")
+                    .correlationId("correlation-gateway").input("hello").build())
                     .completion().toCompletableFuture().get(3, TimeUnit.SECONDS);
 
             assertEquals("Bearer secret", authorization.get());
             assertEquals("agent-a", request.get().path("params").path("metadata").path("agentId").asText());
+            JsonNode attributes = request.get().path("params").path("metadata").path("attributes");
+            assertEquals("trace-gateway", attributes.path("traceId").asText());
+            assertEquals("correlation-gateway", attributes.path("correlationId").asText());
         } finally {
             server.stop(0);
         }
@@ -378,6 +389,84 @@ class EndpointAndCallTreeTest {
             assertEquals("RECOVERY_RETRY_EXHAUSTED",
                     failure.getCause() instanceof com.openjiuwen.client.api.ClassifiedError classified
                             ? classified.code() : null);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void builderPropagatesConfiguredRecoveryFailureLimit() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        HttpServer server = server(exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            if (calls.getAndIncrement() == 0) {
+                sse(exchange, frame("1", delegation("root-configured", "agent-a", "root-configured",
+                        "agent-b", "task-b")));
+            } else {
+                serviceUnavailable(exchange);
+            }
+        });
+        RetryPolicy retryPolicy = RetryPolicy.builder()
+                .initialDelay(java.time.Duration.ofMillis(5))
+                .maxDelay(java.time.Duration.ofMillis(10))
+                .maxConsecutiveFailures(1)
+                .build();
+        try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
+                .endpointUrl(url(server)).retryPolicy(retryPolicy).build()) {
+            InvocationCall call = client.invoke(InvocationRequest.builder().conversationId("configured")
+                    .mode(InvocationMode.STREAMING).input("hello").build());
+            ExecutionException failure = assertThrows(ExecutionException.class,
+                    () -> call.completion().toCompletableFuture().get(5, TimeUnit.SECONDS));
+
+            assertEquals(2, calls.get());
+            assertTrue(failure.getCause().getMessage().contains("recovery failed 1 times"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void builderPropagatesConfiguredRecoveryInterval() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        java.util.concurrent.atomic.AtomicLong workingResponseNanos = new java.util.concurrent.atomic.AtomicLong();
+        java.util.concurrent.atomic.AtomicLong nextRetryNanos = new java.util.concurrent.atomic.AtomicLong();
+        HttpServer server = server(exchange -> {
+            JsonNode request = MAPPER.readTree(exchange.getRequestBody().readAllBytes());
+            String method = request.path("method").asText();
+            int call = calls.getAndIncrement();
+            if (call == 0) {
+                sse(exchange, frame("1", delegation("root-interval", "agent-a", "root-interval",
+                        "agent-b", "task-b")));
+            } else if (call == 1) {
+                serviceUnavailable(exchange);
+            } else if (call == 2) {
+                workingResponseNanos.set(System.nanoTime());
+                json(exchange, directTaskResponse("root-interval", "TASK_STATE_WORKING", "working"));
+            } else if (call == 3) {
+                nextRetryNanos.set(System.nanoTime());
+                serviceUnavailable(exchange);
+            } else if ("GetTask".equals(method)) {
+                json(exchange, directTaskResponse("root-interval", "TASK_STATE_COMPLETED", "done"));
+            } else {
+                serviceUnavailable(exchange);
+            }
+        });
+        RetryPolicy retryPolicy = RetryPolicy.builder()
+                .initialDelay(java.time.Duration.ofMillis(400))
+                .maxDelay(java.time.Duration.ofMillis(800))
+                .maxConsecutiveFailures(3)
+                .build();
+        try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
+                .endpointUrl(url(server)).retryPolicy(retryPolicy).build()) {
+            InvocationSnapshot snapshot = client.invoke(InvocationRequest.builder().conversationId("interval")
+                    .mode(InvocationMode.STREAMING).input("hello").build())
+                    .completion().toCompletableFuture().get(5, TimeUnit.SECONDS);
+
+            long retryDelayMillis = TimeUnit.NANOSECONDS.toMillis(
+                    nextRetryNanos.get() - workingResponseNanos.get());
+            assertEquals("done", snapshot.outputText());
+            assertTrue(retryDelayMillis >= 300L,
+                    "configured 400ms recovery interval must reach the transport; actual=" + retryDelayMillis);
         } finally {
             server.stop(0);
         }

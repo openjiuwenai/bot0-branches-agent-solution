@@ -211,6 +211,7 @@ def _row_to_span(row: asyncpg.Record) -> dict[str, Any]:
         "events": json.loads(row["events"]) if row["events"] else [],
         "links": json.loads(row["links"]) if row["links"] else [],
         "session_id": row["session_id"],
+        "attribution": json.loads(row["attribution"]) if row["attribution"] else None,
     }
 
 
@@ -381,7 +382,10 @@ class PostgresTraceRepository:
         if self.pool is None:
             raise RuntimeError("start() 未调用")
         rows = await self.pool.fetch(
-            "SELECT * FROM spans WHERE session_id=$1 ORDER BY start_time", session_id
+            "SELECT * FROM spans WHERE session_id=$1 "
+            "OR session_id LIKE $2 ORDER BY start_time",
+            session_id,
+            f"{session_id}-sub-%",
         )
         return [_row_to_span(r) for r in rows]
 
@@ -410,3 +414,56 @@ class PostgresTraceRepository:
         else:
             rows = await self.pool.fetch("SELECT * FROM traces ORDER BY start_time DESC")
         return [_trace_row_to_dict(r) for r in rows]
+
+    # ---- 归属 (AttributionRunner 调; 入库路径不写 attribution, 此处写回) ----
+
+    async def list_unattributed_completed_traces(self) -> list[dict[str, Any]]:
+        """sweep: 已完整 (traces.end_time 已设) 但仍有 attribution IS NULL span 的 trace。
+
+        返回 ``[{trace_id, session_id, service_name}, ...]`` (按 trace 去重)。
+        service_name 即 agent 名, AttributionRunner 据此取 per-agent 归属配置 + skill 文档。
+        """
+        if self.pool is None:
+            raise RuntimeError("start() 未调用")
+        rows = await self.pool.fetch(
+            """
+            SELECT DISTINCT t.trace_id AS trace_id, t.session_id AS session_id,
+                  t.service_name AS service_name
+            FROM traces t
+            JOIN spans s ON s.trace_id = t.trace_id
+            WHERE t.end_time IS NOT NULL AND s.attribution IS NULL
+            ORDER BY t.trace_id
+            """
+        )
+        return [
+            {
+                "trace_id": r["trace_id"],
+                "session_id": r["session_id"],
+                "service_name": r["service_name"],
+            }
+            for r in rows
+        ]
+
+    async def update_span_attribution(
+        self, trace_id: str, attributions: dict[str, dict[str, Any]]
+    ) -> int:
+        """批量写回一条 trace 内各 span 的归属 (trace 完整后算完一次写回)。
+
+        attributions: ``span_id -> attribution dict``。空 dict 返回 0。
+        返回发出的 UPDATE 条数 (即 len(attributions)); 重入库的 ON CONFLICT 不含 attribution 列,
+        故后续重复摄取不会覆盖此处写回的归属。
+        """
+        if self.pool is None:
+            raise RuntimeError("start() 未调用")
+        if not attributions:
+            return 0
+        params = [
+            (json.dumps(attr, ensure_ascii=False), trace_id, span_id)
+            for span_id, attr in attributions.items()
+        ]
+        async with self.pool.acquire() as conn, conn.transaction():
+            await conn.executemany(
+                "UPDATE spans SET attribution = $1::jsonb WHERE trace_id = $2 AND span_id = $3",
+                params,
+            )
+        return len(params)
