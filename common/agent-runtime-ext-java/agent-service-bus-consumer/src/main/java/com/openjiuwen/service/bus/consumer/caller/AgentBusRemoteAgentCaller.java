@@ -348,12 +348,29 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         return value;
     }
 
+    /**
+     * Validates that an inbound response envelope really belongs to {@code call}.
+     *
+     * <p>The responder identity is checked against {@code routeHandle}, NOT
+     * {@code sourceServiceId}: the relay overwrites {@code sourceServiceId} with its own
+     * serviceId on every hop (see {@code EventBusRelayWorker#buildHop2Envelope} and the
+     * {@code BrokerInboundMessage#originalCaller} javadoc), so on the Bus it always reads
+     * {@code eventbus-*} and can never equal the callee's serviceId. {@code routeHandle} is
+     * passed through unchanged and encodes the resolved target ({@code tenantId} /
+     * {@code agentId} / {@code serviceId} / {@code instanceId}), which is exactly the
+     * responder identity we want to pin. It is nullable for control-only / legacy messages,
+     * in which case the check is skipped — the tenant / target / correlation triple below
+     * still bounds the match.
+     *
+     * @param message inbound response envelope
+     * @param call the pending call the response was matched to by correlationId
+     */
     private void validateResponseEnvelope(BrokerInboundMessage message, PendingRemoteCall call) {
         if (!tenantId.equals(message.tenantId())) {
             throw new IllegalArgumentException("Response tenant does not match pending call");
         }
-        if (!call.route.serviceId().equals(message.sourceServiceId())) {
-            throw new IllegalArgumentException("Response source does not match pending call");
+        if (message.routeHandle() != null && !call.route.routeHandle().equals(message.routeHandle())) {
+            throw new IllegalArgumentException("Response route does not match pending call");
         }
         if (!sourceServiceId.equals(message.targetServiceId())) {
             throw new IllegalArgumentException("Response target does not match local Runtime");

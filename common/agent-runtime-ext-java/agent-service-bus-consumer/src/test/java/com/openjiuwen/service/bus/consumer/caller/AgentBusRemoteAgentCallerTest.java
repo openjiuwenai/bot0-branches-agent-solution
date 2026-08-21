@@ -172,20 +172,47 @@ class AgentBusRemoteAgentCallerTest {
     }
 
     @Test
-    void rejectsResponseFromUnexpectedTenantOrSource() throws Exception {
+    void rejectsResponseFromUnexpectedTenantOrRoute() throws Exception {
         var future = caller.callOutcome(new RemoteCall("agent-b", "hello", "context-a", null, Map.of()),
                 observer(new ArrayList<>()));
         ForwardingEnvelope request = submittedSingle();
         String accepted = projection(request, AgentBusEventType.A2A_CALL_ACCEPTED, "task-b",
                 Map.of("idempotencyResult", "NEW"));
-        BrokerInboundMessage wrongSource = new BrokerInboundMessage("tenant-a", "response-wrong", "runtime-x",
+        BrokerInboundMessage wrongRoute = new BrokerInboundMessage("tenant-a", "response-wrong", "eventbus-01",
                 "runtime-a", "runtime-caller-runtime-a", null, request.correlationId(),
                 AgentBusEventType.A2A_CALL_ACCEPTED, request.traceId(), request.idempotencyKey(),
-                request.routeHandle().value(), "agent-runtime-response", request.deadlineMillisEpoch(), accepted, null);
+                "route-x", "agent-runtime-response", request.deadlineMillisEpoch(), accepted, null);
 
-        assertThat(caller.accept(wrongSource)).isTrue();
+        assertThat(caller.accept(wrongRoute)).isTrue();
         assertThatThrownBy(future::join).hasCauseInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("source");
+                .hasMessageContaining("route");
+        assertThat(caller.pendingCount()).isZero();
+    }
+
+    /**
+     * The relay overwrites {@code sourceServiceId} with its own serviceId on every hop, so a
+     * response observed on the Bus never carries the callee's serviceId — pinning the responder
+     * on that field rejects every real BUS remote call. The responder identity lives in the
+     * pass-through {@code routeHandle} instead.
+     */
+    @Test
+    void acceptsResponseRelayedWithRewrittenSourceServiceId() throws Exception {
+        var future = caller.callOutcome(new RemoteCall("agent-b", "hello", "context-a", null, Map.of()),
+                observer(new ArrayList<>()));
+        ForwardingEnvelope request = submittedSingle();
+        String json = A2aJsonRpcResponseSerializer.streamingEvent(request.messageId().value(),
+                task("task-b", TaskState.TASK_STATE_COMPLETED));
+        String terminal = projection(request, AgentBusEventType.A2A_CALL_TERMINAL, "task-b",
+                Map.of("taskState", "TASK_STATE_COMPLETED", "a2aResponse", json));
+        BrokerInboundMessage relayed = new BrokerInboundMessage("tenant-a", "response-relayed", "eventbus-01",
+                "runtime-a", "runtime-caller-runtime-a", null, request.correlationId(),
+                AgentBusEventType.A2A_CALL_TERMINAL, request.traceId(), request.idempotencyKey(),
+                request.routeHandle().value(), "agent-runtime-response", request.deadlineMillisEpoch(),
+                terminal, null);
+
+        assertThat(caller.accept(relayed)).isTrue();
+        assertThat(future.join().resultCategory()).isEqualTo("COMPLETED");
+        assertThat(future.join().remoteTaskId()).isEqualTo("task-b");
         assertThat(caller.pendingCount()).isZero();
     }
 
