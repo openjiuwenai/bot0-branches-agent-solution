@@ -20,8 +20,8 @@ import java.util.concurrent.locks.ReentrantLock;
  * Per-Task Agent factory for DFX-002 concurrency mode.
  *
  * <p>Creates fresh {@link DeepAgent} instances using {@link HarnessFactory},
- * with shared configuration extracted from the startup-time global initialization
- * performed by {@link EdpaExtHandler#performInit}.
+ * then applies the same business initialization (skills, enhancers, scripts)
+ * as the singleton agent via {@link EdpaExtHandler#initPerTaskAgent}.
  *
  * <p><strong>V1 thread safety</strong>: {@code create()} is serialized via
  * {@link ReentrantLock} because {@code HarnessFactory.createDeepAgent()} and
@@ -44,19 +44,22 @@ public class EdpAgentFactory implements AgentFactory {
     /** V1: serializes agent creation to prevent concurrent writes to global ResourceMgr HashMaps. */
     private final Lock creationLock = new ReentrantLock();
 
+    private final EdpaExtHandler.InitResult initResult;
+
     private final AgentCard agentCard;
 
     private final DeepAgentConfig deepAgentConfig;
 
     /**
-     * Creates a factory with the shared agent card and config template.
+     * Creates a factory with the startup initialization result.
      *
-     * @param agentCard the deterministic agent card (id/name from startup config)
-     * @param deepAgentConfig the DeepAgent configuration template
+     * @param initResult the InitResult from {@link EdpaExtHandler#performInit},
+     *                   containing shared config and pre-computed enhancement data
      */
-    public EdpAgentFactory(AgentCard agentCard, DeepAgentConfig deepAgentConfig) {
-        this.agentCard = agentCard;
-        this.deepAgentConfig = deepAgentConfig;
+    public EdpAgentFactory(EdpaExtHandler.InitResult initResult) {
+        this.initResult = initResult;
+        this.agentCard = initResult.getDeepAgent().getCard();
+        this.deepAgentConfig = initResult.getDeepAgent().getConfig();
     }
 
     @Override
@@ -71,16 +74,17 @@ public class EdpAgentFactory implements AgentFactory {
     }
 
     /**
-     * Creates and initializes a single DeepAgent instance.
+     * Creates and initializes a single DeepAgent instance with full business capabilities.
      *
      * <p>Called inside the creation lock; subclasses may override for testing
      * or to customise the creation pipeline.
      *
-     * @return a fully initialized DeepAgent
+     * @return a fully initialized DeepAgent with skills and business enhancers applied
      */
     protected DeepAgent createAgent() {
         DeepAgent agent = HarnessFactory.createDeepAgent(agentCard, deepAgentConfig, null);
         agent.ensureInitialized();
+        EdpaExtHandler.initPerTaskAgent(agent, initResult);
         return agent;
     }
 

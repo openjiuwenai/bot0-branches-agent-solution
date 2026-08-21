@@ -4,9 +4,8 @@
 
 package com.openjiuwen.edp.autoconfigure;
 
-import com.openjiuwen.core.singleagent.schema.AgentCard;
 import com.openjiuwen.edp.handler.EdpAgentFactory;
-import com.openjiuwen.harness.schema.config.DeepAgentConfig;
+import com.openjiuwen.edp.handler.EdpaExtHandler;
 import com.openjiuwen.service.adapters.agentcore.ext.concurrency.AgentFactory;
 
 import org.slf4j.Logger;
@@ -27,9 +26,9 @@ import org.springframework.context.annotation.Bean;
  *         includes DFX-002 concurrency support (agent-runtime ≥ DFX-002 version).
  *         When running on an older agent-runtime without DFX-002, this auto-configuration
  *         is silently skipped and the system falls back to singleton mode.</li>
- *     <li>{@link AgentCard} and {@link DeepAgentConfig} Beans are available —
+ *     <li>{@link EdpaExtHandler.InitResult} Bean is available —
  *         registered by {@code EdpEngineConfiguration} from the singleton Agent's
- *         initialization result.</li>
+ *         initialization result. Contains all shared config needed for per-Task agent creation.</li>
  *     <li>No other {@link AgentFactory} Bean exists — business projects may provide
  *         their own implementation, which takes precedence.</li>
  * </ol>
@@ -51,10 +50,10 @@ public class EdpAgentFactoryAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(AgentFactory.class)
-    @ConditionalOnBean({AgentCard.class, DeepAgentConfig.class})
-    AgentFactory edpAgentFactory(AgentCard agentCard, DeepAgentConfig deepAgentConfig) {
+    @ConditionalOnBean(EdpaExtHandler.InitResult.class)
+    AgentFactory edpAgentFactory(EdpaExtHandler.InitResult initResult) {
         LOGGER.info("DFX-002: registering EdpAgentFactory for per-Task Agent mode, agentId={}",
-                agentCard.getId());
-        return new EdpAgentFactory(agentCard, deepAgentConfig);
+                initResult.getDeepAgent().getCard().getId());
+        return new EdpAgentFactory(initResult);
     }
 }

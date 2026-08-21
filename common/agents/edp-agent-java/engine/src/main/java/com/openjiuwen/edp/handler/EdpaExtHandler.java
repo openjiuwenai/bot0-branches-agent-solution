@@ -194,6 +194,10 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
          */
         private SandboxClient decoratedSandboxClient;
 
+        private Path skillsDir;
+
+        private SysScriptsConfig sysScriptsConfig;
+
         /**
          * Gets the agent instance.
          *
@@ -373,6 +377,22 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         public void setDecoratedSandboxClient(SandboxClient decoratedSandboxClient) {
             this.decoratedSandboxClient = decoratedSandboxClient;
         }
+
+        public Path getSkillsDir() {
+            return skillsDir;
+        }
+
+        public void setSkillsDir(Path skillsDir) {
+            this.skillsDir = skillsDir;
+        }
+
+        public SysScriptsConfig getSysScriptsConfig() {
+            return sysScriptsConfig;
+        }
+
+        public void setSysScriptsConfig(SysScriptsConfig sysScriptsConfig) {
+            this.sysScriptsConfig = sysScriptsConfig;
+        }
     }
 
     /**
@@ -431,6 +451,10 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
 
         // 第十一步：加载框架级、场景级、Skill 级话术。
         SysScriptsConfig sysScriptsConfig = loadSysScripts(result, yamlDir, skillsDir);
+
+        // 保存 per-Task agent 工厂所需的初始化产物。
+        result.setSkillsDir(skillsDir);
+        result.setSysScriptsConfig(sysScriptsConfig);
 
         // 第十二、十三步：注册内置业务工具和 Rails，并强制完成 DeepAgent 初始化。
         setupEnhanceContext(result, new EnhanceSetupParams(config, actrule, skillsDir, edpaTodolist,
@@ -673,6 +697,42 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         this.governanceConfig = result.getGovernanceConfig();
         this.springBootConfig = result.getSpringBootConfig();
         this.scenarioHomePath = result.getScenarioHomePath();
+    }
+
+    /**
+     * 对 per-Task DeepAgent 应用与单例相同的业务初始化（Skill 注册 + 业务增强）。
+     *
+     * <p>由 {@code EdpAgentFactory} 在 {@code createAgent()} 中调用，
+     * 确保 per-Task agent 拥有与单例 agent 相同的业务能力。</p>
+     *
+     * @param agent 已通过 {@code ensureInitialized()} 完成核心初始化的 DeepAgent
+     * @param initResult 单例初始化产物（含 skillsDir、sysScriptsConfig、Governance 等）
+     */
+    public static void initPerTaskAgent(DeepAgent agent, InitResult initResult) {
+        String agentName = agent.getCard().getId();
+
+        // 注册 Skill 目录（步骤 10）
+        registerSkills(agent, initResult.getSkillsDir(), agentName);
+
+        // 业务增强（步骤 12）
+        ActRuleConfig actrule = initResult.getGovernanceConfig() != null
+                ? initResult.getGovernanceConfig().getActrule() : null;
+        EdpaTodolist edpaTodolist = loadTodoDataLayer(actrule);
+
+        EdpaAgentEnhancer.EnhanceContext enhanceCtx = new EdpaAgentEnhancer.EnhanceContext();
+        enhanceCtx.setEdpConfig(initResult.getEdpConfig());
+        enhanceCtx.setSpringBootConfig(initResult.getSpringBootConfig());
+        enhanceCtx.setActrule(actrule);
+        enhanceCtx.setToolDataChannel(new ToolDataChannel());
+        enhanceCtx.setSkillsDir(initResult.getSkillsDir());
+        enhanceCtx.setDeepAgent(agent);
+        enhanceCtx.setEdpaTodolist(edpaTodolist);
+        enhanceCtx.setScripts(initResult.getSysScriptsConfig());
+        enhanceCtx.setAgentName(agentName);
+        enhanceCtx.setSysOp(initResult.getSysOperation());
+        enhanceCtx.setGatewayConfig(initResult.getSandboxGatewayConfig());
+        enhanceCtx.setDecoratedSandboxClient(initResult.getDecoratedSandboxClient());
+        EdpaAgentEnhancer.enhance(agent, enhanceCtx);
     }
 
     // ===== 适配版 SPI 覆写方法 =====

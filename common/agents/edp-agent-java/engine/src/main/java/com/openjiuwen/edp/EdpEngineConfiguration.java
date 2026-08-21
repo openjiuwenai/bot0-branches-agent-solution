@@ -101,13 +101,24 @@ public class EdpEngineConfiguration {
     }
 
     /**
+     * 暴露 InitResult Bean，供 DFX-002 per-Task Agent 工厂使用。
+     *
+     * <p>包含 AgentCard、DeepAgentConfig 以及业务增强所需的全部初始化产物。
+     * 依赖 {@code edpaExtHandler} 确保 {@code performInit} 先于本 Bean 执行。</p>
+     */
+    @Bean
+    EdpaExtHandler.InitResult edpInitResult(AgentHandler edpaExtHandler) {
+        return cachedInitResult;
+    }
+
+    /**
      * 暴露 AgentCard Bean，供 DFX-002 per-Task Agent 工厂使用。
      *
      * <p>从 {@code edpaExtHandler} 初始化结果中提取，与单例 Agent 共享同一 AgentCard。
      * 仅在 per-Task 模式激活时被 {@code EdpAgentFactoryAutoConfiguration} 消费。</p>
      */
     @Bean
-    AgentCard edpAgentCard() {
+    AgentCard edpAgentCard(AgentHandler edpaExtHandler) {
         return cachedInitResult.getDeepAgent().getCard();
     }
 
@@ -118,7 +129,7 @@ public class EdpEngineConfiguration {
      * 仅在 per-Task 模式激活时被 {@code EdpAgentFactoryAutoConfiguration} 消费。</p>
      */
     @Bean
-    DeepAgentConfig edpDeepAgentConfig() {
+    DeepAgentConfig edpDeepAgentConfig(AgentHandler edpaExtHandler) {
         return cachedInitResult.getDeepAgent().getConfig();
     }
 
