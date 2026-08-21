@@ -245,6 +245,14 @@ class PostgresTraceRepository:
         self._min_size = min_size
         self._max_size = max_size
         self.pool: asyncpg.Pool | None = None
+        # trace_profile ProfileRegistry (可选, app 启动期 load_profiles 后经 set_profile_registry 注入)。
+        # _reupsert_trace 据此按 trace 的 service_name(+telemetry.sdk.language) 解析 profile,
+        # 传给 compute_trace_summary 使 traces 表 summary 按配置字段提取; 未注入→legacy 硬编码。
+        self._profile_registry = None
+
+    def set_profile_registry(self, registry: object) -> None:
+        """注入 ProfileRegistry (app 启动期 load_profiles 后调, 供 _reupsert_trace 解析 profile)。"""
+        self._profile_registry = registry
 
     async def start(self) -> None:
         """建连接池。"""
@@ -312,14 +320,44 @@ class PostgresTraceRepository:
             await conn.execute(_TRACE_SQL, *_trace_params(trace))
 
     async def _reupsert_trace(self, conn: asyncpg.Connection, trace_id: str) -> None:
-        """从 DB 现有 spans 重算 trace 汇总并 upsert (insert_span/bulk 用, 单源真相)。"""
+        """从 DB 现有 spans 重算 trace 汇总并 upsert (insert_span/bulk 用, 单源真相)。
+
+        若注入了 profile_registry, 按 trace 的 service_name(+telemetry.sdk.language) 解析 profile
+        传给 compute_trace_summary, 使 request/response_summary 按配置字段提取 (非 EDPAgent 也能取对);
+        无注入或无匹配 → profile=None 走 legacy 硬编码 (EDPAgent 兼容)。
+        """
         rows = await conn.fetch(
             "SELECT * FROM spans WHERE trace_id=$1 ORDER BY start_time", trace_id
         )
         if not rows:
             return
-        summary = compute_trace_summary(trace_id, [_row_to_span(r) for r in rows])
+        spans = [_row_to_span(r) for r in rows]
+        profile = self._resolve_profile(spans)
+        summary = compute_trace_summary(trace_id, spans, profile=profile)
         await conn.execute(_TRACE_SQL, *_trace_params(summary))
+
+    def _resolve_profile(self, spans: list[dict[str, Any]]) -> object | None:
+        """按 trace 的 service_name + resource_attributes.telemetry.sdk.language 解析 profile。
+
+        service_name 取首个非空 (root 优先于乱序到达); language 同理。
+        无 registry / 无 service_name / 无匹配 → None (调用方走 legacy)。
+        """
+        reg = self._profile_registry
+        if reg is None:
+            return None
+        svc = None
+        lang = None
+        for s in spans:
+            if not svc and s.get("service_name"):
+                svc = s["service_name"]
+            ra = s.get("resource_attributes") or {}
+            if not lang and ra.get("telemetry.sdk.language"):
+                lang = ra["telemetry.sdk.language"]
+            if svc and lang:
+                break
+        if not svc:
+            return None
+        return reg.get_by_service_name(svc, language=lang or None)
 
     async def _backfill_session_id_for_trace(self, conn: asyncpg.Connection, trace_id: str) -> None:
         """同 trace 内用首个非空 session_id 回填空 session_id 行 (跨批兜底, B 段, 幂等)。

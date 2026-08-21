@@ -54,25 +54,27 @@ class TestIngestLayer:
         names = {s["name"] for s in result}
         assert names == {"ai.streamText", "ai.toolCall"}
 
-    def test_unknown_service_skipped(self):
+    def test_unknown_service_kept_failopen(self):
+        # 未知 service 无匹配 profile → fail-open 保留 (升级后不静默丢未知 agent)
         reg = _make_registry()
         spans = [
             {"name": "some.span", "service_name": "unknown"},
             {"name": "llm.gpt-4", "service_name": "EDPAgent"},
         ]
         result = filter_spans_by_service(spans, reg, "ingest")
-        assert len(result) == 1
-        assert result[0]["name"] == "llm.gpt-4"
+        assert len(result) == 2
+        assert {s["name"] for s in result} == {"some.span", "llm.gpt-4"}
 
-    def test_missing_service_name_skipped(self):
+    def test_missing_service_name_kept_failopen(self):
+        # 空 service_name 无 profile → fail-open 保留 (孤儿 span 不丢)
         reg = _make_registry()
         spans = [
             {"name": "orphan.span", "service_name": ""},
             {"name": "llm.gpt-4", "service_name": "EDPAgent"},
         ]
         result = filter_spans_by_service(spans, reg, "ingest")
-        assert len(result) == 1
-        assert result[0]["name"] == "llm.gpt-4"
+        assert len(result) == 2
+        assert {s["name"] for s in result} == {"orphan.span", "llm.gpt-4"}
 
 
 class TestQueryLayer:
@@ -154,8 +156,8 @@ class TestLanguageRouting:
              "resource_attributes": {"telemetry.sdk.language": "rust"}},
         ]
         result = filter_spans_by_service(spans, reg, "ingest")
-        # rust 不匹配任何 profile → ingest 跳过；python/java 各自命中
-        assert {s["name"] for s in result} == {"llm.py-span", "llm.java-span"}
+        # python/java 各自命中 profile；rust 无匹配语言 → fail-open 保留 (不丢)
+        assert {s["name"] for s in result} == {"llm.py-span", "llm.java-span", "llm.rust-span"}
 
     def test_query_keeps_unmatched_language(self):
         reg = self._reg()

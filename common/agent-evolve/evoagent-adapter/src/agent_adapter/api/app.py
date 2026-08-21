@@ -62,12 +62,22 @@ async def _start_trace_backend(app: FastAPI, config: AdapterConfig) -> None:
     await repo.init_schema()
     app.state.repo = repo
 
-    # 加载 trace_profiles.yaml（若存在）
+    # 加载 trace_profiles.yaml（若存在; 解析失败降级走 legacy 硬编码, 不崩启动）
     from agent_adapter.trace_profile.loader import load_profiles
 
     profiles_path = _resolve_profiles_path(config)
-    registry = load_profiles(profiles_path) if profiles_path.exists() else None
+    registry = None
+    if profiles_path.exists():
+        try:
+            registry = load_profiles(profiles_path)
+        except Exception:
+            logger.exception(
+                "trace_profiles_load_failed path=%s (降级走 legacy 硬编码)", profiles_path
+            )
     app.state.profile_registry = registry
+    # P2: 注入 registry, 使 _reupsert_trace 算 profile-aware 的 traces 表 summary
+    if hasattr(repo, "set_profile_registry"):
+        repo.set_profile_registry(registry)
 
     app.state.trace_source = make_trace_source(config, repo=repo, registry=registry, agents=config.agents)
     consumer = TraceConsumer(

@@ -124,7 +124,14 @@ class TestProfileMode:
         assert records[0]["id"] == "t1"
 
     def test_no_root_span_when_empty(self):
-        profile = _make_opencode_profile()
+        # 隔离 root_span_name="" 的行为: 用 allow-all query_filter (不混淆 query 过滤),
+        # http.request SERVER span 因 root_span_name 空 → 不成 TRACE record
+        profile = TraceProfile(
+            name="nocfg",
+            service_name="svc",
+            query_filter=SpanFilter(),  # allow-all, 排除 query_filter 干扰
+            root_span_name="",         # 空 → 不提取 TRACE record
+        )
         spans = [
             {
                 "name": "http.request",
@@ -163,7 +170,8 @@ class TestProfileMode:
         assert len(records) == 1
         assert records[0]["type"] == "GENERATION"
 
-    def test_multiple_llm_spans_last_wins(self):
+    def test_multiple_llm_spans_each_recorded_with_context(self):
+        # 两个 llm span 各成 GENERATION record (无 last-wins 覆盖); 第 2 个 prompt 携带第 1 轮上文
         profile = _make_opencode_profile()
         spans = [
             {

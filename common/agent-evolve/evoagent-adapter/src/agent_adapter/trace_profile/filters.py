@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Literal
 
 from agent_adapter.trace_profile.models import SpanFilter, TraceProfile
 
 if __debug__:
     from agent_adapter.trace_profile.loader import ProfileRegistry
+
+logger = logging.getLogger(__name__)
 
 
 def span_matches_filter(span: dict[str, Any], flt: SpanFilter) -> bool:
@@ -42,11 +45,12 @@ def filter_spans_by_service(
     """按 service.name 自动路由到对应 profile，执行过滤。
 
     一条 Kafka 消息可能含多 Agent span：
-    - 每个 span 按 service_name 查找对应 profile
-    - 无匹配 profile 的 span：ingest 层跳过（不入库），query 层保留（兜底）
-    - 有匹配 profile 的 span：按对应 profile 的 filter 过滤
+    - 有匹配 profile 的 span：按对应 profile 的 filter 过滤（被 exclude 命中才丢）。
+    - 无匹配 profile 的 span（未知 agent / 未配 profile / 语言不匹配）：fail-open 保留
+      (ingest 也不丢，避免升级后静默丢未知 agent 的数据；query 同样保留)，仅记 warning。
     """
     result: list[dict[str, Any]] = []
+    warned: set[str] = set()
     for span in spans:
         service_name = span.get("service_name", "")
         # telemetry.sdk.language（扁平化后在 resource_attributes）做 Python/Java 消歧；
@@ -54,8 +58,14 @@ def filter_spans_by_service(
         language = (span.get("resource_attributes") or {}).get("telemetry.sdk.language")
         profile = registry.get_by_service_name(service_name, language=language or None)
         if profile is None:
-            if layer == "query":
-                result.append(span)
+            # fail-open：无匹配 profile 的 span 保留（ingest 也不丢），避免升级后静默丢未知 agent；
+            # 仅"有 profile 但被 exclude 规则过滤"的 span 才丢。空 service_name 不告警（避免噪声）。
+            if layer == "ingest" and service_name and service_name not in warned:
+                warned.add(service_name)
+                logger.warning(
+                    "ingest_span_no_profile_kept_failopen service_name=%s", service_name
+                )
+            result.append(span)
             continue
         flt = profile.ingest_filter if layer == "ingest" else profile.query_filter
         if span_matches_filter(span, flt):
