@@ -62,6 +62,10 @@ public interface ProjectionFeed {
 
         /**
          * Creates a local deterministic failure for a malformed broker projection.
+         *
+         * @param failureCode the failure code carried as both the body and the
+         *                    protocol-failure classification
+         * @return an {@code INVOCATION_FAILED} projection event with no task / stream refs
          */
         public static ProjectionEvent protocolFailure(String failureCode) {
             return new ProjectionEvent(AgentBusEventType.INVOCATION_FAILED, null, null, null,

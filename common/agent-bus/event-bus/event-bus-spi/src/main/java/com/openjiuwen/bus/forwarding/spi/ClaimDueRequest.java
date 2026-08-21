@@ -24,7 +24,11 @@ package com.openjiuwen.bus.forwarding.spi;
  * @param sourceServiceId      only records enqueued by this source service are claimable
  * @since 0.1.0
  */
-public record ClaimDueRequest(String tenantId, long nowMillisEpoch, int limit,
-                              String leaseOwner, long leaseUntilMillisEpoch,
-                              String sourceServiceId) {
+public record ClaimDueRequest(
+        String tenantId,
+        long nowMillisEpoch,
+        int limit,
+        String leaseOwner,
+        long leaseUntilMillisEpoch,
+        String sourceServiceId) {
 }
