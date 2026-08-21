@@ -14,7 +14,6 @@ import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCall;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCallOutcome;
-import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteCallSupport;
 import com.openjiuwen.service.bus.consumer.projection.AgentBusProjectionJsonCodec;
 
 import org.a2aproject.sdk.client.ClientEvent;
@@ -43,10 +42,12 @@ import java.util.function.Consumer;
 public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
     private static final String CAPABILITY = "a2a-call";
     private static final int MAX_STREAM_REFERENCE_REFRESHES = 1;
+    private static final String CALLBACK_URL_METADATA = "runtime.a2a.callbackUrl";
 
     private final RuntimeRdcClient registry;
     private final AgentBusRequestSubmitter requestSubmitter;
-    private final A2ARemoteCallSupport remoteCallSupport;
+    private final RemoteCallOutcomeMapper outcomeMapper;
+    private final BusRemoteCallEventConsumer eventConsumer;
     private final AgentBusRequestEncoder requestEncoder = new AgentBusRequestEncoder();
     private final AgentBusProjectionDecoder projectionDecoder = new AgentBusProjectionDecoder();
     private final Map<String, PendingRemoteCall> pending = new ConcurrentHashMap<>();
@@ -101,7 +102,8 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         this.sourceServiceId = require(sourceServiceId, "sourceServiceId");
         this.responseTimeoutMillis = positive(responseTimeoutMillis, "responseTimeoutMillis");
         this.streamSubscriber = Objects.requireNonNull(streamSubscriber, "streamSubscriber is required");
-        this.remoteCallSupport = new A2ARemoteCallSupport();
+        this.outcomeMapper = new RemoteCallOutcomeMapper();
+        this.eventConsumer = new BusRemoteCallEventConsumer();
     }
 
     @Override
@@ -109,7 +111,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
             RemoteAgentCaller.EventObserver eventObserver) {
         Objects.requireNonNull(call, "call is required");
         Objects.requireNonNull(eventObserver, "eventObserver is required");
-        if (remoteCallSupport.isCallbackRequested(call)) {
+        if (isCallbackRequested(call)) {
             return CompletableFuture.failedFuture(
                     new UnsupportedOperationException("Agent Bus caller does not support callback mode"));
         }
@@ -279,7 +281,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
     }
 
     private void acceptStreamEvent(PendingRemoteCall call, ClientEvent event) {
-        remoteCallSupport.accept(event, call.result, call.eventObserver, false, true);
+        eventConsumer.accept(event, call.result, call.eventObserver, true);
     }
 
     private void streamFailed(PendingRemoteCall call, int generation, Throwable failure) {
@@ -317,13 +319,12 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
             AgentBusEventType eventType) {
         if (projection.task() != null) {
             call.captureTaskId(projection.task().id());
-            remoteCallSupport.accept(new TaskEvent(projection.task()), call.result, call.eventObserver, false,
-                    call.streaming);
+            eventConsumer.accept(new TaskEvent(projection.task()), call.result, call.eventObserver, call.streaming);
             return;
         }
         if (projection.message() != null) {
             call.captureTaskId(projection.message().taskId());
-            remoteCallSupport.mapMessage(projection.message()).ifPresent(call.result::complete);
+            outcomeMapper.mapMessage(projection.message()).ifPresent(call.result::complete);
             return;
         }
         TaskState fallback = eventType == AgentBusEventType.A2A_CALL_INPUT_REQUIRED
@@ -337,8 +338,13 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
     private void completeState(PendingRemoteCall call, AgentBusProjectionJsonCodec.DecodedProjection projection,
             TaskState state) {
         String reason = firstNonBlank(projection.reason(), projection.errorCode());
-        remoteCallSupport.mapTask(projection.taskId(), state, reason, null, null, false)
+        outcomeMapper.mapTask(projection.taskId(), state, reason, null, false)
                 .ifPresent(call.result::complete);
+    }
+
+    private static boolean isCallbackRequested(RemoteCall call) {
+        Object rawUrl = call.metadata().get(CALLBACK_URL_METADATA);
+        return rawUrl instanceof String url && !url.isBlank();
     }
 
     private static String requiredProjection(String value, String name) {
