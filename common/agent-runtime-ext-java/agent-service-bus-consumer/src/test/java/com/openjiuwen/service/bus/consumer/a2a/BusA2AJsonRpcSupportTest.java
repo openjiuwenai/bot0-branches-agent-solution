@@ -31,15 +31,25 @@ class BusA2AJsonRpcSupportTest {
     }
 
     @Test
-    void preservesFractionalAndLargeNumericIdsOutsideSdkRequest() {
+    void normalizesNullAndBlankRolesToUser() {
+        String missingRole = sendRequest("\"request-1\"", "");
+        String nullRole = missingRole.replace("\"messageId\":\"message-1\"",
+                "\"messageId\":\"message-1\",\"role\":null");
+        String blankRole = missingRole.replace("\"messageId\":\"message-1\"",
+                "\"messageId\":\"message-1\",\"role\":\"  \"");
+
+        assertThat(messageParams(nullRole).message().role()).isEqualTo(Message.Role.ROLE_USER);
+        assertThat(messageParams(blankRole).message().role()).isEqualTo(Message.Role.ROLE_USER);
+    }
+
+    @Test
+    void preservesFractionalAndLargeNumericIds() {
         BusA2AJsonRpcSupport.ParsedA2ARequest fractional = support.parseRequest(sendRequest("1.5", ""), null);
         BusA2AJsonRpcSupport.ParsedA2ARequest large = support.parseRequest(
                 sendRequest("4294967297", ""), null);
 
         assertThat(fractional.originalId()).isEqualTo(new BigDecimal("1.5"));
         assertThat(large.originalId()).isEqualTo(new BigInteger("4294967297"));
-        assertThat(fractional.sdkRequest().getId()).isEqualTo(1);
-        assertThat(large.sdkRequest().getId()).isEqualTo(1);
     }
 
     @Test
@@ -100,5 +110,9 @@ class BusA2AJsonRpcSupportTest {
                   %s
                 }}
                 """.formatted(id, extraParams);
+    }
+
+    private MessageSendParams messageParams(String request) {
+        return (MessageSendParams) support.parseRequest(request, null).params();
     }
 }

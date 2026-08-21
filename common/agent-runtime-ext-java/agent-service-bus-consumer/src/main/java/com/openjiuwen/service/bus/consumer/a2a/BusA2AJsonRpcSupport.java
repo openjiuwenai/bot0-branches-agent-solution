@@ -10,11 +10,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import org.a2aproject.sdk.grpc.utils.JSONRPCUtils;
-import org.a2aproject.sdk.jsonrpc.common.json.InvalidParamsJsonMappingException;
-import org.a2aproject.sdk.jsonrpc.common.json.JsonMappingException;
-import org.a2aproject.sdk.jsonrpc.common.json.MethodNotFoundJsonMappingException;
-import org.a2aproject.sdk.jsonrpc.common.wrappers.A2ARequest;
+import org.a2aproject.sdk.jsonrpc.common.json.JsonProcessingException;
+import org.a2aproject.sdk.jsonrpc.common.json.JsonUtil;
 import org.a2aproject.sdk.spec.A2AError;
 import org.a2aproject.sdk.spec.A2AMethods;
 import org.a2aproject.sdk.spec.InvalidParamsError;
@@ -32,8 +29,8 @@ import java.util.Set;
  * Strict JSON-RPC request boundary owned by the Agent Bus Runtime extension.
  *
  * <p>The Runtime HTTP controller deliberately keeps its existing parser. This component validates only
- * Bus-delivered A2A requests, retains their exact request id and delegates SDK parameter conversion to
- * {@link JSONRPCUtils}.
+ * Bus-delivered A2A requests, retains their exact request id and converts method parameters with the
+ * transport-neutral JSON utilities from the A2A SDK.
  */
 final class BusA2AJsonRpcSupport {
     private static final String JSON_RPC_VERSION = "2.0";
@@ -57,25 +54,11 @@ final class BusA2AJsonRpcSupport {
                     new MethodNotFoundError(null, "Method not found: " + method, null));
         }
 
-        normalizeMessageRequest(root, method);
-        A2ARequest<?> sdkRequest;
-        try {
-            sdkRequest = JSONRPCUtils.parseRequestBody(write(root), expectedTenant);
-        } catch (MethodNotFoundJsonMappingException exception) {
-            throw failure(originalId,
-                    new MethodNotFoundError(null, "Method not found: " + method, null), exception);
-        } catch (InvalidParamsJsonMappingException exception) {
-            throw failure(originalId, new InvalidParamsError("Invalid params"), exception);
-        } catch (JsonMappingException exception) {
-            throw failure(originalId, new InvalidRequestError("Invalid Request"), exception);
-        } catch (org.a2aproject.sdk.jsonrpc.common.json.JsonProcessingException exception) {
-            throw failure(originalId, new InvalidParamsError("Invalid params"), exception);
-        }
-
-        Object params = sdkRequest.getParams();
+        normalizeMessageRequest(root, method, originalId);
+        Object params = parseParams((ObjectNode) root.get("params"), method, expectedTenant, originalId);
         validateRequiredParams(params, originalId);
         validateTenant(params, expectedTenant, originalId);
-        return new ParsedA2ARequest(originalId, method, sdkRequest, params);
+        return new ParsedA2ARequest(originalId, method, params);
     }
 
     Object parseRequestId(String rawJson) {
@@ -132,7 +115,7 @@ final class BusA2AJsonRpcSupport {
         return null;
     }
 
-    private static void normalizeMessageRequest(ObjectNode root, String method) {
+    private static void normalizeMessageRequest(ObjectNode root, String method, Object originalId) {
         if (!A2AMethods.SEND_MESSAGE_METHOD.equals(method)
                 && !A2AMethods.SEND_STREAMING_MESSAGE_METHOD.equals(method)) {
             return;
@@ -143,10 +126,73 @@ final class BusA2AJsonRpcSupport {
             JsonNode role = messageObject.get("role");
             if (role == null || role.isNull() || role.isTextual() && role.textValue().isBlank()) {
                 messageObject.put("role", DEFAULT_MESSAGE_ROLE);
+            } else if (!role.isTextual() || !isMessageRole(role.textValue())) {
+                throw failure(originalId, new InvalidParamsError("Invalid params: message role is invalid"));
             }
             normalizeStandardPartKinds(messageObject);
         }
         normalizeInlinePushNotificationConfig(params);
+    }
+
+    private static boolean isMessageRole(String role) {
+        return "ROLE_USER".equals(role) || "ROLE_AGENT".equals(role) || "ROLE_UNSPECIFIED".equals(role);
+    }
+
+    private static Object parseParams(ObjectNode params, String method, String expectedTenant, Object originalId) {
+        validateKnownFields(params, method, originalId);
+        try {
+            return switch (method) {
+                case A2AMethods.SEND_MESSAGE_METHOD, A2AMethods.SEND_STREAMING_MESSAGE_METHOD ->
+                    withTenant(JsonUtil.fromJson(write(params), MessageSendParams.class), expectedTenant);
+                case A2AMethods.GET_TASK_METHOD ->
+                    withTenant(JsonUtil.fromJson(write(params), TaskQueryParams.class), expectedTenant);
+                case A2AMethods.SUBSCRIBE_TO_TASK_METHOD ->
+                    withTenant(JsonUtil.fromJson(write(params), TaskIdParams.class), expectedTenant);
+                default -> throw failure(originalId,
+                        new MethodNotFoundError(null, "Method not found: " + method, null));
+            };
+        } catch (JsonProcessingException | IllegalArgumentException exception) {
+            throw failure(originalId, new InvalidParamsError("Invalid params"), exception);
+        }
+    }
+
+    private static void validateKnownFields(ObjectNode params, String method, Object originalId) {
+        Set<String> allowedFields = switch (method) {
+            case A2AMethods.SEND_MESSAGE_METHOD, A2AMethods.SEND_STREAMING_MESSAGE_METHOD ->
+                Set.of("message", "configuration", "metadata", "tenant");
+            case A2AMethods.GET_TASK_METHOD -> Set.of("id", "historyLength", "tenant");
+            case A2AMethods.SUBSCRIBE_TO_TASK_METHOD -> Set.of("id", "tenant");
+            default -> Set.of();
+        };
+        params.fieldNames().forEachRemaining(field -> {
+            if (!allowedFields.contains(field)) {
+                throw failure(originalId, new InvalidParamsError("Invalid params: unknown field " + field));
+            }
+        });
+    }
+
+    private static MessageSendParams withTenant(MessageSendParams params, String expectedTenant) {
+        if (expectedTenant == null || expectedTenant.isBlank()
+                || params.tenant() != null && !params.tenant().isBlank()) {
+            return params;
+        }
+        return new MessageSendParams(params.message(), params.configuration(), params.metadata(), expectedTenant);
+    }
+
+    private static TaskQueryParams withTenant(TaskQueryParams params, String expectedTenant) {
+        if (expectedTenant == null || expectedTenant.isBlank()
+                || params.tenant() != null && !params.tenant().isBlank()) {
+            return params;
+        }
+        return new TaskQueryParams(params.id(), params.historyLength(), expectedTenant);
+    }
+
+    private static TaskIdParams withTenant(TaskIdParams params, String expectedTenant) {
+        if (expectedTenant == null || expectedTenant.isBlank()
+                || params.tenant() != null && !params.tenant().isBlank()) {
+            return params;
+        }
+        return new TaskIdParams(params.id(), expectedTenant);
     }
 
     private static void normalizeStandardPartKinds(ObjectNode message) {
@@ -246,7 +292,7 @@ final class BusA2AJsonRpcSupport {
         return new RequestException(id, error, cause);
     }
 
-    record ParsedA2ARequest(Object originalId, String method, A2ARequest<?> sdkRequest, Object params) {
+    record ParsedA2ARequest(Object originalId, String method, Object params) {
     }
 
     static final class RequestException extends RuntimeException {
