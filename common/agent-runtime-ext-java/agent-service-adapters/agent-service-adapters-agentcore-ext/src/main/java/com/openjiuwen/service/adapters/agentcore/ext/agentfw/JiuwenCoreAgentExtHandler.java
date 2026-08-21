@@ -16,7 +16,6 @@ import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.OtelRuntime
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub.SkillHubManager;
 import com.openjiuwen.service.adapters.agentcore.external.ExternalSvcAdapterRegistrar;
 import com.openjiuwen.service.adapters.agentcore.middleware.MiddlewareAdapterRegistrar;
-import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
 import com.openjiuwen.service.spec.dto.QueryResponse;
 import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
@@ -46,9 +45,6 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     private RemoteA2aToolInstaller remoteToolInstaller = RemoteA2aToolInstaller.noop();
     private IntentDeepAgentInstaller intentInstaller;
     private SkillHubManager skillHubManager;
-
-    @Autowired(required = false)
-    private TaskAdmissionGate admissionGate;
 
     @Autowired(required = false)
     private AgentInstanceManager agentManager;
@@ -95,10 +91,6 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     @Autowired(required = false)
     void setSkillHubManager(SkillHubManager skillHubManager) {
         this.skillHubManager = skillHubManager;
-    }
-
-    void setAdmissionGate(TaskAdmissionGate admissionGate) {
-        this.admissionGate = admissionGate;
     }
 
     void setAgentManager(AgentInstanceManager agentManager) {
@@ -241,9 +233,6 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
         }
         if (agentManager != null) {
             agentManager.release(request.getConversationId(), agent);
-        }
-        if (admissionGate != null) {
-            admissionGate.release();
         }
     }
 

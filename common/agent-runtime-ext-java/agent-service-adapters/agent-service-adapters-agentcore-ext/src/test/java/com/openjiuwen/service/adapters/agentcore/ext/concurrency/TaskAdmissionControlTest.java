@@ -130,4 +130,14 @@ class TaskAdmissionControlTest {
         gate.release();
         assertThat(gate.currentCount()).isEqualTo(1);
     }
+
+    @Test
+    void limit_returnsConfiguredMax() {
+        assertThat(new TaskAdmissionControl(7).limit()).isEqualTo(7);
+    }
+
+    @Test
+    void limit_returnsMinusOne_whenUnlimited() {
+        assertThat(new TaskAdmissionControl(-1).limit()).isEqualTo(-1);
+    }
 }

@@ -14,7 +14,6 @@ import com.openjiuwen.core.session.stream.OutputSchema;
 import com.openjiuwen.core.session.stream.StreamMode;
 import com.openjiuwen.service.adapters.agentcore.ext.concurrency.AgentInstanceManager;
 import com.openjiuwen.service.adapters.agentcore.ext.concurrency.TaskQuotaTracker;
-import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.dto.QueryResponse;
 import com.openjiuwen.service.spec.dto.ServeRequest;
@@ -28,8 +27,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Unit tests for {@link JiuwenCoreAgentExtHandler} per-Task Agent lifecycle,
- * admission gate release, and quota tracker integration (DFX-002 U-46~U-53).
+ * Unit tests for {@link JiuwenCoreAgentExtHandler} per-Task Agent lifecycle
+ * and quota tracker integration (DFX-002 U-46~U-53). Admission quota release
+ * is owned by {@code A2AAgentExecutor} in the runtime module — the handler no
+ * longer touches the admission gate.
  *
  * @since 0.1.2
  */
@@ -73,57 +74,30 @@ class JiuwenCoreAgentExtHandlerTest {
     }
 
     @Test
-    void streamQuery_finally_releasesAdmissionGate() {
-        TaskAdmissionGate admissionGate = mock(TaskAdmissionGate.class);
-        JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityStreamAgent("ok"));
-        handler.setAdmissionGate(admissionGate);
-
-        handler.streamQuery(request("c-admission", "hello"), collectingObserver(new ArrayList<>()));
-
-        verify(admissionGate).release();
-    }
-
-    @Test
-    void query_finally_releasesAdmissionGate() {
-        TaskAdmissionGate admissionGate = mock(TaskAdmissionGate.class);
-        JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityInvokeAgent("ok"));
-        handler.setAdmissionGate(admissionGate);
-
-        handler.query(request("c-admission-query", "hello"));
-
-        verify(admissionGate).release();
-    }
-
-    @Test
     void streamQuery_exception_finally_releasesAll() {
-        TaskAdmissionGate admissionGate = mock(TaskAdmissionGate.class);
         TaskQuotaTracker quotaTracker = mock(TaskQuotaTracker.class);
         AgentInstanceManager agentManager = mock(AgentInstanceManager.class);
         ThrowingStreamAgent throwingAgent = new ThrowingStreamAgent();
         when(agentManager.acquire("c-except")).thenReturn(throwingAgent);
 
         JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityStreamAgent("unused"));
-        handler.setAdmissionGate(admissionGate);
         handler.setQuotaTracker(quotaTracker);
         handler.setAgentManager(agentManager);
 
         handler.streamQuery(request("c-except", "fail"), collectingObserver(new ArrayList<>()));
 
-        verify(admissionGate).release();
         verify(quotaTracker).onTaskReleased("c-except");
         verify(agentManager).release("c-except", throwingAgent);
     }
 
     @Test
     void query_exception_finally_releasesAll() {
-        TaskAdmissionGate admissionGate = mock(TaskAdmissionGate.class);
         TaskQuotaTracker quotaTracker = mock(TaskQuotaTracker.class);
         AgentInstanceManager agentManager = mock(AgentInstanceManager.class);
         ThrowingInvokeAgent throwingAgent = new ThrowingInvokeAgent();
         when(agentManager.acquire("c-except-q")).thenReturn(throwingAgent);
 
         JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityInvokeAgent("unused"));
-        handler.setAdmissionGate(admissionGate);
         handler.setQuotaTracker(quotaTracker);
         handler.setAgentManager(agentManager);
 
@@ -133,7 +107,6 @@ class JiuwenCoreAgentExtHandlerTest {
             // Expected — agent.invoke() throws
         }
 
-        verify(admissionGate).release();
         verify(quotaTracker).onTaskReleased("c-except-q");
         verify(agentManager).release("c-except-q", throwingAgent);
     }

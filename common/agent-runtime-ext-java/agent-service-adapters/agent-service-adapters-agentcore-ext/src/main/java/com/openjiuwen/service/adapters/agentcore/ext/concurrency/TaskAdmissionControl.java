@@ -67,6 +67,11 @@ public class TaskAdmissionControl implements TaskAdmissionGate {
     }
 
     @Override
+    public int limit() {
+        return maxConcurrentTasks;
+    }
+
+    @Override
     public void shutdown() {
         this.shutdown = true;
     }

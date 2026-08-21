@@ -9,7 +9,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -35,8 +34,10 @@ import java.util.Map;
 import java.util.concurrent.Flow;
 
 /**
- * Unit tests for admission gate integration in {@link CustomRestA2ABridge}
- * (DFX-002 U-40~U-45).
+ * Unit tests for the read-only admission pre-check in
+ * {@link CustomRestA2ABridge}. The bridge never acquires or releases a
+ * permit — authoritative admission happens in
+ * {@code A2AAgentExecutor.executeRequest()}.
  *
  * @since 0.1.2
  */
@@ -45,56 +46,120 @@ class CustomRestA2ABridgeAdmissionTest {
     @Test
     void prepare_rejectedWith503_whenLimitReached() {
         TaskAdmissionGate gate = mock(TaskAdmissionGate.class);
-        when(gate.tryAcquire()).thenReturn(false);
+        when(gate.limit()).thenReturn(1);
+        when(gate.currentCount()).thenReturn(1);
         CustomRestA2ABridge bridge = newBridge(mock(RequestHandler.class), gate);
 
         assertThatThrownBy(() -> bridge.prepare(context(), true))
                 .isInstanceOfSatisfying(CustomRestFailure.class,
                         f -> assertThat(f.getHttpStatus()).isEqualTo(503));
+        verify(gate, never()).release();
     }
 
     @Test
-    void prepare_acquired_releasedOnSuccess() {
+    void prepare_underLimit_executesWithoutGateRelease() {
         RequestHandler handler = mock(RequestHandler.class);
+        when(handler.onMessageSend(any(), any())).thenAnswer(invocation -> completedTask());
         TaskAdmissionGate gate = mock(TaskAdmissionGate.class);
-        when(gate.tryAcquire()).thenReturn(true);
-        when(handler.onMessageSend(any(), any())).thenAnswer(invocation -> {
-            gate.release();
-            return completedTask();
-        });
+        when(gate.limit()).thenReturn(5);
         CustomRestA2ABridge bridge = newBridge(handler, gate);
 
-        bridge.executeBlocking(bridge.prepare(context(), true));
+        Object result = bridge.executeBlocking(bridge.prepare(context(), true));
 
-        verify(gate).release();
+        assertThat(result).isEqualTo(Map.of("ok", true));
+        verify(gate, never()).release();
     }
 
     @Test
-    void prepare_compensatingRelease_onExecuteException() {
+    void prepare_unlimitedLimit_skipsPreCheck() {
+        RequestHandler handler = mock(RequestHandler.class);
+        when(handler.onMessageSend(any(), any())).thenAnswer(invocation -> completedTask());
+        TaskAdmissionGate gate = mock(TaskAdmissionGate.class);
+        when(gate.limit()).thenReturn(-1);
+        when(gate.currentCount()).thenReturn(Integer.MAX_VALUE);
+        CustomRestA2ABridge bridge = newBridge(handler, gate);
+
+        CustomRestA2ABridge.Prepared prepared = bridge.prepare(context(), true);
+
+        assertThat(prepared).isNotNull();
+    }
+
+    @Test
+    void prepare_failure_noGateRelease() {
         RequestHandler handler = mock(RequestHandler.class);
         TaskAdmissionGate gate = mock(TaskAdmissionGate.class);
-        when(gate.tryAcquire()).thenReturn(true);
-        when(handler.onMessageSend(any(), any())).thenThrow(new RuntimeException("handler failed"));
+        when(gate.limit()).thenReturn(5);
+        CustomRestProtocolAdapter adapter = mock(CustomRestProtocolAdapter.class);
+        TaskStore store = mock(TaskStore.class);
+        when(store.list(any())).thenThrow(new RuntimeException("store unavailable"));
+        when(adapter.toA2ARequest(any())).thenReturn(command(false));
+        CustomRestA2ABridge bridge = new CustomRestA2ABridge(adapter, handler, store, null);
+        ObjectProvider<TaskAdmissionGate> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(gate);
+        bridge.setAdmissionGateProvider(provider);
+
+        assertThatThrownBy(() -> bridge.prepare(context(), true))
+                .isInstanceOf(RuntimeException.class);
+
+        verify(gate, never()).release();
+    }
+
+    @Test
+    void executeBlocking_a2aError_mappedWithoutGateRelease() {
+        RequestHandler handler = mock(RequestHandler.class);
+        when(handler.onMessageSend(any(), any())).thenThrow(new A2AError(-32000, "task not found", null));
+        TaskAdmissionGate gate = mock(TaskAdmissionGate.class);
+        when(gate.limit()).thenReturn(5);
         CustomRestA2ABridge bridge = newBridge(handler, gate);
 
         assertThatThrownBy(() -> bridge.executeBlocking(bridge.prepare(context(), true)))
                 .isInstanceOf(CustomRestFailure.class);
 
-        verify(gate).release();
+        verify(gate, never()).release();
     }
 
     @Test
-    void prepare_compensatingRelease_onStreamException() {
+    void executeBlocking_invalidResult_throws502_withoutGateRelease() {
         RequestHandler handler = mock(RequestHandler.class);
+        when(handler.onMessageSend(any(), any())).thenReturn(mock(EventKind.class));
         TaskAdmissionGate gate = mock(TaskAdmissionGate.class);
-        when(gate.tryAcquire()).thenReturn(true);
+        when(gate.limit()).thenReturn(5);
+        CustomRestA2ABridge bridge = newBridge(handler, gate);
+
+        assertThatThrownBy(() -> bridge.executeBlocking(bridge.prepare(context(), true)))
+                .isInstanceOfSatisfying(CustomRestFailure.class,
+                        f -> assertThat(f.getHttpStatus()).isEqualTo(502));
+
+        verify(gate, never()).release();
+    }
+
+    @Test
+    void executeStream_exception_withoutGateRelease() {
+        RequestHandler handler = mock(RequestHandler.class);
         when(handler.onMessageSendStream(any(), any())).thenThrow(new RuntimeException("stream failed"));
+        TaskAdmissionGate gate = mock(TaskAdmissionGate.class);
+        when(gate.limit()).thenReturn(5);
         CustomRestA2ABridge bridge = newStreamingBridge(handler, gate);
 
         assertThatThrownBy(() -> bridge.executeStream(bridge.prepare(context(), true)))
                 .isInstanceOf(CustomRestFailure.class);
 
-        verify(gate).release();
+        verify(gate, never()).release();
+    }
+
+    @Test
+    void executeStream_success_returnsPublisher_withoutGateRelease() {
+        RequestHandler handler = mock(RequestHandler.class);
+        Flow.Publisher<StreamingEventKind> publisher = subscriber -> { };
+        when(handler.onMessageSendStream(any(), any())).thenReturn(publisher);
+        TaskAdmissionGate gate = mock(TaskAdmissionGate.class);
+        when(gate.limit()).thenReturn(5);
+        CustomRestA2ABridge bridge = newStreamingBridge(handler, gate);
+
+        Flow.Publisher<StreamingEventKind> result = bridge.executeStream(bridge.prepare(context(), true));
+
+        assertThat(result).isSameAs(publisher);
+        verify(gate, never()).release();
     }
 
     @Test
@@ -108,113 +173,6 @@ class CustomRestA2ABridgeAdmissionTest {
 
         CustomRestA2ABridge.Prepared prepared = bridge.prepare(context(), true);
         assertThat(prepared).isNotNull();
-    }
-
-    @Test
-    void prepare_acquiredFlag_preventsDoubleRelease() {
-        RequestHandler handler = mock(RequestHandler.class);
-        TaskAdmissionGate gate = mock(TaskAdmissionGate.class);
-        when(gate.tryAcquire()).thenReturn(true);
-        when(handler.onMessageSend(any(), any())).thenAnswer(invocation -> {
-            gate.release();
-            return completedTask();
-        });
-        CustomRestA2ABridge bridge = newBridge(handler, gate);
-
-        bridge.executeBlocking(bridge.prepare(context(), true));
-
-        verify(gate, times(1)).release();
-    }
-
-    @Test
-    void executeBlocking_a2aError_compensatingRelease() {
-        RequestHandler handler = mock(RequestHandler.class);
-        TaskAdmissionGate gate = mock(TaskAdmissionGate.class);
-        when(gate.tryAcquire()).thenReturn(true);
-        when(handler.onMessageSend(any(), any())).thenThrow(new A2AError(-32000, "task not found", null));
-        CustomRestA2ABridge bridge = newBridge(handler, gate);
-
-        assertThatThrownBy(() -> bridge.executeBlocking(bridge.prepare(context(), true)))
-                .isInstanceOf(CustomRestFailure.class);
-
-        verify(gate).release();
-    }
-
-    @Test
-    void executeBlocking_invalidResult_throws502() {
-        RequestHandler handler = mock(RequestHandler.class);
-        TaskAdmissionGate gate = mock(TaskAdmissionGate.class);
-        when(gate.tryAcquire()).thenReturn(true);
-        when(handler.onMessageSend(any(), any())).thenAnswer(invocation -> {
-            gate.release();
-            return mock(EventKind.class);
-        });
-        CustomRestA2ABridge bridge = newBridge(handler, gate);
-
-        assertThatThrownBy(() -> bridge.executeBlocking(bridge.prepare(context(), true)))
-                .isInstanceOfSatisfying(CustomRestFailure.class,
-                        f -> assertThat(f.getHttpStatus()).isEqualTo(502));
-
-        verify(gate, times(1)).release();
-    }
-
-    @Test
-    void executeStream_a2aError_compensatingRelease() {
-        RequestHandler handler = mock(RequestHandler.class);
-        TaskAdmissionGate gate = mock(TaskAdmissionGate.class);
-        when(gate.tryAcquire()).thenReturn(true);
-        when(handler.onMessageSendStream(any(), any())).thenThrow(new A2AError(-32000, "task not found", null));
-        CustomRestA2ABridge bridge = newStreamingBridge(handler, gate);
-
-        assertThatThrownBy(() -> bridge.executeStream(bridge.prepare(context(), true)))
-                .isInstanceOf(CustomRestFailure.class);
-
-        verify(gate).release();
-    }
-
-    @Test
-    void executeStream_success_returnsPublisher() {
-        RequestHandler handler = mock(RequestHandler.class);
-        TaskAdmissionGate gate = mock(TaskAdmissionGate.class);
-        when(gate.tryAcquire()).thenReturn(true);
-        Flow.Publisher<StreamingEventKind> publisher = subscriber -> { };
-        when(handler.onMessageSendStream(any(), any())).thenReturn(publisher);
-        CustomRestA2ABridge bridge = newStreamingBridge(handler, gate);
-
-        Flow.Publisher<StreamingEventKind> result = bridge.executeStream(bridge.prepare(context(), true));
-
-        assertThat(result).isSameAs(publisher);
-        verify(gate, never()).release();
-    }
-
-    @Test
-    void prepare_failure_compensatingRelease() {
-        RequestHandler handler = mock(RequestHandler.class);
-        TaskAdmissionGate gate = mock(TaskAdmissionGate.class);
-        when(gate.tryAcquire()).thenReturn(true);
-        CustomRestProtocolAdapter adapter = mock(CustomRestProtocolAdapter.class);
-        TaskStore store = mock(TaskStore.class);
-        when(store.list(any())).thenThrow(new RuntimeException("store unavailable"));
-        when(adapter.toA2ARequest(any())).thenReturn(command(false));
-        CustomRestA2ABridge bridge = new CustomRestA2ABridge(adapter, handler, store, null);
-        ObjectProvider<TaskAdmissionGate> provider = mock(ObjectProvider.class);
-        when(provider.getIfAvailable()).thenReturn(gate);
-        bridge.setAdmissionGateProvider(provider);
-
-        assertThatThrownBy(() -> bridge.prepare(context(), true))
-                .isInstanceOf(RuntimeException.class);
-
-        verify(gate).release();
-    }
-
-    @Test
-    void executeStream_exception_nullGate_releaseAdmissionNoOp() {
-        RequestHandler handler = mock(RequestHandler.class);
-        when(handler.onMessageSendStream(any(), any())).thenThrow(new RuntimeException("stream failed"));
-        CustomRestA2ABridge bridge = configureBridge(handler, null, true);
-
-        assertThatThrownBy(() -> bridge.executeStream(bridge.prepare(context(), true)))
-                .isInstanceOf(CustomRestFailure.class);
     }
 
     private static CustomRestA2ABridge newBridge(RequestHandler handler, TaskAdmissionGate gate) {

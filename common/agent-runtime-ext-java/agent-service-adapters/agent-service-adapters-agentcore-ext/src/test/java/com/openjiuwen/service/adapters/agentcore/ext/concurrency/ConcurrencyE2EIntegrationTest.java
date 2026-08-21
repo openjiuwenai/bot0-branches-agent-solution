@@ -200,8 +200,8 @@ class ConcurrencyE2EIntegrationTest {
 
         @Bean
         @Primary
-        AgentHandler slowAgentHandler(TaskAdmissionGate admissionGate, TaskQuotaTracker quotaTracker) {
-            return new SlowAgent(admissionGate, quotaTracker);
+        AgentHandler slowAgentHandler(TaskQuotaTracker quotaTracker) {
+            return new SlowAgent(quotaTracker);
         }
 
         @Bean
@@ -213,11 +213,9 @@ class ConcurrencyE2EIntegrationTest {
     static final class SlowAgent implements AgentHandler {
         private static volatile CountDownLatch startedLatch = new CountDownLatch(1);
 
-        private final TaskAdmissionGate admissionGate;
         private final TaskQuotaTracker quotaTracker;
 
-        SlowAgent(TaskAdmissionGate admissionGate, TaskQuotaTracker quotaTracker) {
-            this.admissionGate = admissionGate;
+        SlowAgent(TaskQuotaTracker quotaTracker) {
             this.quotaTracker = quotaTracker;
         }
 
@@ -240,7 +238,6 @@ class ConcurrencyE2EIntegrationTest {
                         request.getConversationId());
             } finally {
                 quotaTracker.onTaskReleased(request.getConversationId());
-                admissionGate.release();
             }
         }
 
@@ -258,7 +255,6 @@ class ConcurrencyE2EIntegrationTest {
                 Thread.currentThread().interrupt();
             } finally {
                 quotaTracker.onTaskReleased(request.getConversationId());
-                admissionGate.release();
             }
         }
     }
