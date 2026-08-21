@@ -8,6 +8,7 @@ import structlog
 from fastapi import FastAPI
 
 from agent_adapter.agent_client import AgentClient
+from agent_adapter.attribution_runner import AttributionRunner
 from agent_adapter.config import AdapterConfig
 from agent_adapter.kafka_consumer.consumer import TraceConsumer
 from agent_adapter.managed_doc.registry import ManagedDocRegistry
@@ -81,9 +82,34 @@ async def _start_trace_backend(app: FastAPI, config: AdapterConfig) -> None:
         )
         app.state.consumer = None
 
+    # AttributionRunner: trace 完整后异步算 skill 归属写回 spans.attribution。
+    # kafka 消费不可达时仍可起 (归属只依赖 repo + skill_store, 不依赖 kafka); 失败仅告警。
+    if config.attribution_runner_enabled:
+        runner = AttributionRunner(
+            repo,
+            app.state.skill_store,
+            config,
+        )
+        try:
+            await runner.start()
+            app.state.attribution_runner = runner
+            logger.info(
+                "attribution_runner_started",
+                poll_interval=config.attribution_poll_interval,
+            )
+        except Exception:
+            logger.exception("attribution_runner_start_failed")
+            app.state.attribution_runner = None
+    else:
+        app.state.attribution_runner = None
+
 
 async def _stop_trace_backend(app: FastAPI) -> None:
     """shutdown: 停 kafka 消费者 + 关 repo 连接池 (standard 模式)。"""
+    runner = getattr(app.state, "attribution_runner", None)
+    if runner is not None:
+        await runner.stop()
+        app.state.attribution_runner = None
     consumer = getattr(app.state, "consumer", None)
     if consumer is not None:
         await consumer.stop()
@@ -231,6 +257,7 @@ def create_app(config: AdapterConfig) -> FastAPI:
     )
     app.state.repo = None  # standard 模式 TraceRepository (lifespan 填充)
     app.state.consumer = None  # standard 模式 kafka 消费者 (lifespan 填充, 可能为 None)
+    app.state.attribution_runner = None  # standard 模式归属轮询 (lifespan 填充, 可能为 None)
     setattr(app.state, "_config_lock", asyncio.Lock())  # protect YAML concurrent writes
 
     logger.info(
