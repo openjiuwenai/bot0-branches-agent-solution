@@ -1,6 +1,6 @@
-"""PostgresTraceRepository._resolve_profile 单测 (P2: profile-aware trace summary 接线)。
+"""PostgresTraceRepository.resolve_profile 单测 (P2: profile-aware trace summary 接线)。
 
-无需 PG: _resolve_profile 是纯方法 (读 self._profile_registry + spans), 不触连接池,
+无需 PG: resolve_profile 是纯方法 (读 self._profile_registry + spans), 不触连接池,
 验证 _reupsert_trace 据 service_name + telemetry.sdk.language 解析 profile 的接线逻辑。
 """
 
@@ -12,14 +12,14 @@ from agent_adapter.trace_profile.models import TraceProfile
 
 
 def _repo() -> PostgresTraceRepository:
-    # 不 start(), 不连 PG; _resolve_profile 不依赖连接池
+    # 不 start(), 不连 PG; resolve_profile 不依赖连接池
     return PostgresTraceRepository("postgres://u:p@127.0.0.1/db")
 
 
 def test_no_registry_returns_none():
     """未注入 registry → None (调用方走 legacy 硬编码)。"""
     r = _repo()
-    assert r._resolve_profile([{"service_name": "edp-agent"}]) is None
+    assert r.resolve_profile([{"service_name": "edp-agent"}]) is None
 
 
 def test_resolves_by_service_name_and_language():
@@ -31,11 +31,11 @@ def test_resolves_by_service_name_and_language():
 
     spans_java = [{"service_name": "edp-agent",
                    "resource_attributes": {"telemetry.sdk.language": "java"}}]
-    assert r._resolve_profile(spans_java) is ja
+    assert r.resolve_profile(spans_java) is ja
 
     spans_py = [{"service_name": "edp-agent",
                  "resource_attributes": {"telemetry.sdk.language": "python"}}]
-    assert r._resolve_profile(spans_py) is py
+    assert r.resolve_profile(spans_py) is py
 
 
 def test_distinct_service_names_route_directly():
@@ -43,7 +43,7 @@ def test_distinct_service_names_route_directly():
     a = TraceProfile(name="a", service_name="svc-a", service_language="python")
     r = _repo()
     r.set_profile_registry(ProfileRegistry({"a": a}))
-    assert r._resolve_profile([{"service_name": "svc-a"}]) is a
+    assert r.resolve_profile([{"service_name": "svc-a"}]) is a
 
 
 def test_no_matching_profile_returns_none():
@@ -56,7 +56,7 @@ def test_no_matching_profile_returns_none():
     }))
     spans = [{"service_name": "edp-agent",
               "resource_attributes": {"telemetry.sdk.language": "python"}}]
-    assert r._resolve_profile(spans) is None
+    assert r.resolve_profile(spans) is None
 
 
 def test_no_service_name_returns_none():
@@ -65,8 +65,8 @@ def test_no_service_name_returns_none():
     r.set_profile_registry(ProfileRegistry({
         "edp_agent": TraceProfile(name="edp_agent", service_name="edp-agent"),
     }))
-    assert r._resolve_profile([{"service_name": ""}]) is None
-    assert r._resolve_profile([{}]) is None
+    assert r.resolve_profile([{"service_name": ""}]) is None
+    assert r.resolve_profile([{}]) is None
 
 
 def test_language_taken_from_resource_attributes():
@@ -76,4 +76,4 @@ def test_language_taken_from_resource_attributes():
     r.set_profile_registry(ProfileRegistry({"ja": ja}))
     spans = [{"service_name": "svc",
               "resource_attributes": {"telemetry.sdk.language": "java", "service.name": "svc"}}]
-    assert r._resolve_profile(spans) is ja
+    assert r.resolve_profile(spans) is ja

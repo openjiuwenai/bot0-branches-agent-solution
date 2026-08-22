@@ -332,11 +332,11 @@ class PostgresTraceRepository:
         if not rows:
             return
         spans = [_row_to_span(r) for r in rows]
-        profile = self._resolve_profile(spans)
+        profile = self.resolve_profile(spans)
         summary = compute_trace_summary(trace_id, spans, profile=profile)
         await conn.execute(_TRACE_SQL, *_trace_params(summary))
 
-    def _resolve_profile(self, spans: list[dict[str, Any]]) -> object | None:
+    def resolve_profile(self, spans: list[dict[str, Any]]) -> object | None:
         """按 trace 的 service_name + resource_attributes.telemetry.sdk.language 解析 profile。
 
         service_name 取首个非空 (root 优先于乱序到达); language 同理。
