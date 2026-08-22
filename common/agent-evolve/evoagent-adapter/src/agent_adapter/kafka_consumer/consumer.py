@@ -23,6 +23,8 @@ from aiokafka import AIOKafkaConsumer
 
 from agent_adapter.kafka_consumer.otlp_parser import parse_otlp_envelope
 from agent_adapter.repository.base import TraceRepository
+from agent_adapter.trace_profile.loader import ProfileRegistry
+from agent_adapter.trace_profile.filters import filter_spans_by_service
 
 logger = logging.getLogger(__name__)
 
@@ -50,11 +52,13 @@ class TraceConsumer:
         *,
         topic: str = "otlp_traces",
         group_id: str = "agent-adapter",
+        profile_registry: ProfileRegistry | None = None,
     ) -> None:
         self._repo = repo
         self._brokers = brokers
         self._topic = topic
         self._group_id = group_id
+        self._registry = profile_registry
         self._consumer: AIOKafkaConsumer | None = None
         self._task: asyncio.Task[None] | None = None
 
@@ -90,8 +94,8 @@ class TraceConsumer:
         logger.info("kafka_consumer_stopped topic=%s", self._topic)
 
     async def _consume_loop(self) -> None:
-        if self._consumer is None:
-            raise RuntimeError("consumer not started")
+        if self._consumer is None:  # 启动前置校验: start() 未调用则消费循环不可运行
+            raise RuntimeError("TraceConsumer 未 start()")
         # 外层 try: fetch/解码层异常 (如 kafka 断连、消息体损坏) 不能让消费循环静默挂掉 ——
         # 记日志 + 退避重试, 避免无声停摆 (曾因 snappy codec 缺失致 task 静默死, 无日志无 commit)。
         while True:
@@ -103,15 +107,20 @@ class TraceConsumer:
                 await asyncio.sleep(1)
 
     async def _handle(self, msg: Any) -> None:
-        """处理一条消息: 解析跳过/入库重试/成功提交。"""
-        if self._consumer is None:
-            raise RuntimeError("consumer not started")
+        """处理一条消息: 解析 → 按 profile 过滤 → 入库 → 提交。"""
+        if self._consumer is None:  # 启动前置校验: start() 未调用则无法提交
+            raise RuntimeError("TraceConsumer 未 start()")
         try:
             spans = parse_otlp_envelope(msg.value)
         except Exception:
             logger.exception("kafka_parse_error offset=%s topic=%s", msg.offset, msg.topic)
-            await self._consumer.commit()  # poison 消息: 跳过
+            await self._consumer.commit()
             return
+        if not spans:
+            await self._consumer.commit()
+            return
+        if self._registry is not None:
+            spans = filter_spans_by_service(spans, self._registry, "ingest")
         if not spans:
             await self._consumer.commit()
             return
@@ -119,5 +128,5 @@ class TraceConsumer:
             await self._repo.bulk_insert_spans(spans)
         except Exception:
             logger.exception("kafka_insert_error offset=%s topic=%s (不提交, 待重投)", msg.offset, msg.topic)
-            return  # 不 commit, kafka 重投
+            return
         await self._consumer.commit()

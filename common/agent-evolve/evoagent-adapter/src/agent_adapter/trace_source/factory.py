@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from agent_adapter.repository.base import TraceRepository
+from agent_adapter.trace_profile.loader import ProfileRegistry
 from agent_adapter.trace_source.base import TraceSource
 from agent_adapter.trace_source.db_source import DbTraceSource
 from agent_adapter.trace_source.log_source import LogTraceSource
@@ -32,6 +33,8 @@ def make_trace_source(
     *,
     output_dirs: dict[str, Path] | None = None,
     repo: TraceRepository | None = None,
+    registry: ProfileRegistry | None = None,
+    agents: list | None = None,
 ) -> TraceSource:
     """按 TRACE_SOURCE 选子类。
 
@@ -39,12 +42,14 @@ def make_trace_source(
         config: 带 ``trace_source`` 属性的对象 (如 AdapterConfig); None 走环境变量。
         output_dirs: log 模式所需 agent_name → output_dir 映射。
         repo: standard 模式所需 TraceRepository (须已 start)。
+        registry: standard 模式所需 ProfileRegistry（多 Agent 轨迹配置化）。
+        agents: standard 模式所需 AgentEntryConfig 列表（用于 profile 解析）。
     """
     mode = _cfg(config, "trace_source", "ADAPTER_TRACE_SOURCE", "log")
     if mode == "standard":
         if repo is None:
             raise ValueError("standard 模式需传入 repo (TraceRepository)")
-        return DbTraceSource(repo)
+        return DbTraceSource(repo, registry, agents)
     if mode == "log":
         return LogTraceSource(output_dirs)
     raise ValueError(f"不支持的 TRACE_SOURCE={mode!r} (支持 log|standard)")
