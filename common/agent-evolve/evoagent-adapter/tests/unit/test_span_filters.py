@@ -75,7 +75,8 @@ class TestCombinations:
 
 class TestChainSpanPrefix:
     """chain span 名 Python='chain.EDP Agent'(含空格) / Java='chain.EDPAgent'(无空格);
-    ingest 白名单用通用前缀 'chain.' 兼容两者, 避免 Python chain span 被漏丢 (response_summary 恒空)。"""
+    ingest 白名单用通用前缀 'chain.' 兼容两者, 避免 Python chain span 被漏丢 (response_summary 恒空)。
+    """
 
     def test_chain_prefix_matches_both_variants(self):
         f = SpanFilter(include_prefixes=["llm.", "tool.", "http.request", "chain."])
