@@ -106,5 +106,4 @@ class RerankerIntentMatcherTest {
         assertThat(seenQueries).containsExactly("instruction:query", "query", "query");
         assertThat(context.routingSemantic()).isEqualTo("query");
     }
-
 }
