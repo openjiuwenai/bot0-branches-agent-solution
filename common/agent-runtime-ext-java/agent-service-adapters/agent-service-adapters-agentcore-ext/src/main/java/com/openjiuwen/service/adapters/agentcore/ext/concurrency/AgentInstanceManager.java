@@ -72,4 +72,14 @@ public class AgentInstanceManager {
             factory.destroy(agent);
         }
     }
+
+    /**
+     * Returns the active agent for a conversation without acquiring a new one.
+     *
+     * @param conversationId conversation identifier
+     * @return the active agent, or null if none exists
+     */
+    public Object get(String conversationId) {
+        return activeAgents.get(conversationId);
+    }
 }

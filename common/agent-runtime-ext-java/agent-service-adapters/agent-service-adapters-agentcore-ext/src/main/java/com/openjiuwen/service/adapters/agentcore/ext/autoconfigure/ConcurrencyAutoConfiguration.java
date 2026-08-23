@@ -17,6 +17,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Lazy;
 
 /**
  * Auto-configuration for DFX-002 runtime concurrency and throttling.
@@ -47,7 +48,7 @@ public class ConcurrencyAutoConfiguration {
     @Bean
     @ConditionalOnBean(AgentFactory.class)
     @ConditionalOnMissingBean
-    AgentInstanceManager agentInstanceManager(AgentFactory factory) {
+    AgentInstanceManager agentInstanceManager(@Lazy AgentFactory factory) {
         return new AgentInstanceManager(factory);
     }
 }

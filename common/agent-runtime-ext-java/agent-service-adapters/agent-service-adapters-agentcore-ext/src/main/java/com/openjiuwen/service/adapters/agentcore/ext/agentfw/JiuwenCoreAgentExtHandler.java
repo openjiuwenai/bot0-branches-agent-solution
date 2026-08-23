@@ -31,6 +31,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * AgentCore handler extension that installs remote A2A tools and SkillHub skills before execution.
@@ -51,6 +52,19 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     private RemoteA2aToolInstaller remoteToolInstaller = RemoteA2aToolInstaller.noop();
     private IntentDeepAgentInstaller intentInstaller;
     private SkillHubManager skillHubManager;
+
+    /**
+     * Task-level agent cache, keyed by conversationId.
+     * Populated by {@link #prepareTask(ServeRequest)}, drained by
+     * {@link #completeTask(Object)} with the matching token.
+     * When an agent is present in this cache, {@link #resolveTaskAgent} returns it without
+     * creating a new instance, and {@link #releaseTaskResources} skips the agent release.
+     */
+    private final ConcurrentHashMap<String, TaskAgentEntry> taskAgentCache = new ConcurrentHashMap<>();
+
+    /** Cache value binding a cached agent to the token of the task that owns it. */
+    private record TaskAgentEntry(Object token, Object agent) {
+    }
 
     @Autowired(required = false)
     private AgentInstanceManager agentManager;
@@ -220,8 +234,15 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
 
     private Object resolveTaskAgent(ServeRequest request) {
         if (agentManager != null) {
+            String conversationId = request.getConversationId();
+            // Reuse cached agent from prepareTask() if available
+            TaskAgentEntry cached = taskAgentCache.get(conversationId);
+            if (cached != null) {
+                return cached.agent();
+            }
+            // Fallback: no prepareTask() was called (e.g., non-orchestrator path)
             try {
-                return agentManager.acquire(request.getConversationId());
+                return agentManager.acquire(conversationId);
             } catch (ConversationBusyException ex) {
                 throw new AgentExecutionException(
                         "Conversation busy: another task is still running for this conversation",
@@ -240,12 +261,72 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     }
 
     private void releaseTaskResources(ServeRequest request, Object agent) {
+        String conversationId = request.getConversationId();
         if (quotaTracker != null) {
-            quotaTracker.onTaskReleased(request.getConversationId());
+            quotaTracker.onTaskReleased(conversationId);
         }
-        if (agentManager != null) {
-            agentManager.release(request.getConversationId(), agent);
+        // Only release agent if NOT managed by prepareTask/completeTask lifecycle
+        if (agentManager != null && !taskAgentCache.containsKey(conversationId)) {
+            agentManager.release(conversationId, agent);
         }
+    }
+
+    @Override
+    public Object prepareTask(ServeRequest request) {
+        if (agentManager == null) {
+            return null; // singleton mode, nothing to do
+        }
+        String conversationId = request.getConversationId();
+        // A cache entry here belongs to another in-flight task for the same
+        // conversation — treat as a conflict instead of silently sharing the agent.
+        if (taskAgentCache.containsKey(conversationId)) {
+            throw busyConversation(conversationId);
+        }
+        try {
+            Object agent = agentManager.acquire(conversationId);
+            // Fresh identity token: only the caller receiving it can release
+            // this entry, so a rejected task's completeTask(null) never
+            // disturbs the agent of the in-flight task owning the cache slot.
+            Object token = new Object();
+            taskAgentCache.put(conversationId, new TaskAgentEntry(token, agent));
+            return token;
+        } catch (ConversationBusyException ex) {
+            throw busyConversation(conversationId, ex);
+        }
+    }
+
+    @Override
+    public void completeTask(Object taskToken) {
+        if (agentManager == null || taskToken == null) {
+            return; // nothing acquired for this task (busy rejection or singleton mode)
+        }
+        for (Map.Entry<String, TaskAgentEntry> entry : taskAgentCache.entrySet()) {
+            TaskAgentEntry cached = entry.getValue();
+            if (cached.token() != taskToken) {
+                continue;
+            }
+            // Release from the manager first so a concurrent acquire for this
+            // conversation does not observe a stale busy state; removing the cache
+            // entry afterwards only briefly blocks prepareTask (conservative).
+            agentManager.release(entry.getKey(), cached.agent());
+            taskAgentCache.remove(entry.getKey(), cached);
+            return;
+        }
+        // Foreign or stale token — never release resources owned by another task.
+        log.warn("completeTask token does not match any active task agent cache entry — ignored");
+    }
+
+    private static AgentExecutionException busyConversation(String conversationId) {
+        return busyConversation(conversationId, null);
+    }
+
+    private static AgentExecutionException busyConversation(String conversationId, ConversationBusyException cause) {
+        return new AgentExecutionException(
+                "Conversation busy: another task is still running for this conversation",
+                new AgentFailureDescriptor(CONVERSATION_BUSY, null, true),
+                cause != null ? cause
+                        : new ConversationBusyException(
+                                "Conversation already has an active agent: " + conversationId));
     }
 
     private static Object requireAgentInstance(Object agent) {
