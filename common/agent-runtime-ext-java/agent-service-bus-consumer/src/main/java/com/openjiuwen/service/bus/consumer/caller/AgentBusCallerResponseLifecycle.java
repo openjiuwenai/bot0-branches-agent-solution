@@ -17,6 +17,7 @@ import org.springframework.context.SmartLifecycle;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 
 /**
  * Subscribes to Runtime caller responses and routes them to pending remote calls.
@@ -71,7 +72,7 @@ public final class AgentBusCallerResponseLifecycle implements SmartLifecycle {
             consumer.subscribe(consumerServiceId, type, filter);
         }
         running = true;
-        executor.execute(this::pollLoop);
+        submitNextPoll();
     }
 
     @Override
@@ -91,15 +92,39 @@ public final class AgentBusCallerResponseLifecycle implements SmartLifecycle {
         return Integer.MIN_VALUE + 100;
     }
 
-    private void pollLoop() {
-        while (running && !Thread.currentThread().isInterrupted()) {
-            try {
-                consumer.poll(System.currentTimeMillis()).ifPresent(this::process);
-            } catch (IllegalArgumentException | IllegalStateException failure) {
-                if (running) {
-                    LOG.warn("Agent Bus caller response poll failed", failure);
-                }
+    /**
+     * Submits exactly one poll round.
+     *
+     * <p>Replaces the {@code while} loop this class used to run: an unexpected throwable unwound that
+     * loop and killed the only response-consuming thread, leaving {@link #isRunning()} at
+     * {@code true} while every remote call silently ran into its timeout. Re-submitting from the
+     * {@code finally} block of {@link #pollOnce()} survives any throwable without widening that
+     * method's catch clause. The executor is single-threaded, so this queues the next round rather
+     * than recursing.
+     */
+    private void submitNextPoll() {
+        if (!running || executor.isShutdown()) {
+            return;
+        }
+        try {
+            executor.execute(this::pollOnce);
+        } catch (RejectedExecutionException rejected) {
+            LOG.debug("Agent Bus caller response poll loop stopped", rejected);
+        }
+    }
+
+    private void pollOnce() {
+        if (Thread.currentThread().isInterrupted()) {
+            return;
+        }
+        try {
+            consumer.poll(System.currentTimeMillis()).ifPresent(this::process);
+        } catch (IllegalArgumentException | IllegalStateException failure) {
+            if (running) {
+                LOG.warn("Agent Bus caller response poll failed", failure);
             }
+        } finally {
+            submitNextPoll();
         }
     }
 

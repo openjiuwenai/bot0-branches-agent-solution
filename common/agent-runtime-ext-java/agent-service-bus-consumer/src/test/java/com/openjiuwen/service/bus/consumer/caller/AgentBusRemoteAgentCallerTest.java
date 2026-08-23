@@ -31,6 +31,7 @@ import org.a2aproject.sdk.spec.TaskState;
 import org.a2aproject.sdk.spec.TaskStatus;
 import org.a2aproject.sdk.spec.TaskStatusUpdateEvent;
 import org.a2aproject.sdk.spec.TextPart;
+import org.a2aproject.sdk.spec.UnsupportedOperationError;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -386,6 +387,133 @@ class AgentBusRemoteAgentCallerTest {
         assertThat(caller.pendingCount()).isZero();
     }
 
+    /**
+     * A Task that finishes before the caller subscribes makes the callee answer
+     * {@code UnsupportedOperationError}. Refreshing the stream reference there would only re-hit the
+     * same terminal guard and would rewrite {@code expectedResponseId}, so the late Bus terminal
+     * projection would then fail id validation. The caller must degrade to non-streaming instead and
+     * let the control plane finish the call — including replaying the artifacts the stream never
+     * delivered.
+     *
+     * @throws Exception when the terminal response fixture cannot be serialized
+     */
+    @Test
+    void degradesToNonStreamingWhenRemoteTaskIsAlreadyTerminal() throws Exception {
+        AtomicReference<Consumer<Throwable>> streamError = new AtomicReference<>();
+        RuntimeRdcClient registry = new RuntimeRdcClient(
+                URI.create("http://127.0.0.1:" + server.getAddress().getPort()));
+        caller = new AgentBusRemoteAgentCaller(registry, requestSubmitter, Runnable::run,
+                "tenant-a", "runtime-a", 30_000L, (request, events, completion, error) -> {
+                    streamError.set(error);
+                    return () -> { };
+                });
+        List<TaskArtifactUpdateEvent> artifacts = new ArrayList<>();
+
+        var future = caller.callOutcome(new RemoteCall("agent-b", "hello", "context-a", null,
+                Map.of(), Map.of(), true), observer(artifacts));
+        ForwardingEnvelope create = submittedSingle();
+        caller.accept(response(create, AgentBusEventType.A2A_CALL_ACCEPTED,
+                projection(create, AgentBusEventType.A2A_CALL_ACCEPTED, "task-fast",
+                        Map.of("idempotencyResult", "NEW"))));
+        caller.accept(response(create, AgentBusEventType.A2A_STREAM_READY,
+                projection(create, AgentBusEventType.A2A_STREAM_READY, "task-fast",
+                        Map.of("streamRef", "ref-1"))));
+        streamError.get().accept(new UnsupportedOperationError(null,
+                "Cannot subscribe to task task-fast - task is in terminal state: TASK_STATE_COMPLETED", null));
+
+        assertThat(submitted).hasSize(1);
+        assertThat(future).isNotDone();
+
+        String json = A2aJsonRpcResponseSerializer.streamingEvent(create.messageId().value(),
+                taskWithArtifact("task-fast", "final result"));
+        caller.accept(response(create, AgentBusEventType.A2A_CALL_TERMINAL,
+                projection(create, AgentBusEventType.A2A_CALL_TERMINAL, "task-fast",
+                        Map.of("taskState", "TASK_STATE_COMPLETED", "a2aResponse", json))));
+
+        assertThat(future.join().resultCategory()).isEqualTo("COMPLETED");
+        assertThat(artifacts).singleElement().satisfies(update ->
+                assertThat(update.artifact().parts()).singleElement()
+                        .isInstanceOfSatisfying(TextPart.class,
+                                part -> assertThat(part.text()).isEqualTo("final result")));
+        assertThat(caller.pendingCount()).isZero();
+    }
+
+    @Test
+    void waitsForTheBusTerminalProjectionAfterStreamRefreshesAreExhausted() throws Exception {
+        List<Consumer<Throwable>> streamErrors = new ArrayList<>();
+        RuntimeRdcClient registry = new RuntimeRdcClient(
+                URI.create("http://127.0.0.1:" + server.getAddress().getPort()));
+        caller = new AgentBusRemoteAgentCaller(registry, requestSubmitter, Runnable::run,
+                "tenant-a", "runtime-a", 30_000L, 30_000L, (request, events, completion, error) -> {
+                    streamErrors.add(error);
+                    return () -> { };
+                });
+
+        var future = caller.callOutcome(new RemoteCall("agent-b", "hello", "context-a", null,
+                Map.of(), Map.of(), true), observer(new ArrayList<>()));
+        ForwardingEnvelope create = submittedSingle();
+        caller.accept(response(create, AgentBusEventType.A2A_CALL_ACCEPTED,
+                projection(create, AgentBusEventType.A2A_CALL_ACCEPTED, "task-stream",
+                        Map.of("idempotencyResult", "NEW"))));
+        caller.accept(response(create, AgentBusEventType.A2A_STREAM_READY,
+                projection(create, AgentBusEventType.A2A_STREAM_READY, "task-stream",
+                        Map.of("streamRef", "expired"))));
+        streamErrors.get(0).accept(new IllegalStateException("expired stream reference"));
+        ForwardingEnvelope refresh = submitted.get(1);
+        caller.accept(response(refresh, AgentBusEventType.A2A_STREAM_READY,
+                projection(refresh, AgentBusEventType.A2A_STREAM_READY, "task-stream",
+                        Map.of("streamRef", "fresh"))));
+        streamErrors.get(1).accept(new IllegalStateException("expired stream reference"));
+
+        assertThat(future).isNotDone();
+        String json = A2aJsonRpcResponseSerializer.streamingEvent(refresh.messageId().value(),
+                task("task-stream", TaskState.TASK_STATE_COMPLETED));
+        caller.accept(response(refresh, AgentBusEventType.A2A_CALL_TERMINAL,
+                projection(refresh, AgentBusEventType.A2A_CALL_TERMINAL, "task-stream",
+                        Map.of("taskState", "TASK_STATE_COMPLETED", "a2aResponse", json))));
+
+        assertThat(future.join().resultCategory()).isEqualTo("COMPLETED");
+    }
+
+    @Test
+    void failsAfterTheGraceWindowWhenNoTerminalProjectionArrives() throws Exception {
+        List<Consumer<Throwable>> streamErrors = new ArrayList<>();
+        RuntimeRdcClient registry = new RuntimeRdcClient(
+                URI.create("http://127.0.0.1:" + server.getAddress().getPort()));
+        caller = new AgentBusRemoteAgentCaller(registry, requestSubmitter, Runnable::run,
+                "tenant-a", "runtime-a", 30_000L, 50L, (request, events, completion, error) -> {
+                    streamErrors.add(error);
+                    return () -> { };
+                });
+
+        var future = caller.callOutcome(new RemoteCall("agent-b", "hello", "context-a", null,
+                Map.of(), Map.of(), true), observer(new ArrayList<>()));
+        ForwardingEnvelope create = submittedSingle();
+        caller.accept(response(create, AgentBusEventType.A2A_CALL_ACCEPTED,
+                projection(create, AgentBusEventType.A2A_CALL_ACCEPTED, "task-stream",
+                        Map.of("idempotencyResult", "NEW"))));
+        caller.accept(response(create, AgentBusEventType.A2A_STREAM_READY,
+                projection(create, AgentBusEventType.A2A_STREAM_READY, "task-stream",
+                        Map.of("streamRef", "expired"))));
+        streamErrors.get(0).accept(new IllegalStateException("expired stream reference"));
+        ForwardingEnvelope refresh = submitted.get(1);
+        caller.accept(response(refresh, AgentBusEventType.A2A_STREAM_READY,
+                projection(refresh, AgentBusEventType.A2A_STREAM_READY, "task-stream",
+                        Map.of("streamRef", "fresh"))));
+        streamErrors.get(1).accept(new IllegalStateException("stream is gone"));
+
+        assertThatThrownBy(future::join).hasCauseInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("stream is gone");
+        assertThat(caller.pendingCount()).isZero();
+    }
+
+    @Test
+    void ignoresProtocolFailureWithoutCorrelationId() {
+        caller.failProtocol(null, new IllegalArgumentException("correlationId is required"));
+
+        assertThat(caller.pendingCount()).isZero();
+    }
+
     private ForwardingEnvelope submittedSingle() {
         assertThat(submitted).hasSize(1);
         return submitted.get(0);
@@ -401,6 +529,12 @@ class AgentBusRemoteAgentCallerTest {
 
     private static Task task(String taskId, TaskState state) {
         return Task.builder().id(taskId).contextId("context-a").status(new TaskStatus(state)).build();
+    }
+
+    private static Task taskWithArtifact(String taskId, String text) {
+        Artifact artifact = Artifact.builder().artifactId("artifact-1").parts(new TextPart(text)).build();
+        return Task.builder().id(taskId).contextId("context-a")
+                .status(new TaskStatus(TaskState.TASK_STATE_COMPLETED)).artifacts(List.of(artifact)).build();
     }
 
     private static RemoteAgentCaller.EventObserver observer(List<TaskArtifactUpdateEvent> artifacts) {

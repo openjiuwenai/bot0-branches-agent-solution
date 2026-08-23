@@ -18,8 +18,12 @@ import com.openjiuwen.service.bus.consumer.projection.AgentBusProjectionJsonCode
 
 import org.a2aproject.sdk.client.ClientEvent;
 import org.a2aproject.sdk.client.TaskEvent;
+import org.a2aproject.sdk.spec.A2AError;
+import org.a2aproject.sdk.spec.A2AErrorCodes;
 import org.a2aproject.sdk.spec.A2AException;
 import org.a2aproject.sdk.spec.TaskState;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Locale;
@@ -40,9 +44,16 @@ import java.util.function.Consumer;
  * @since 2026-08-04
  */
 public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
+    private static final Logger LOG = LoggerFactory.getLogger(AgentBusRemoteAgentCaller.class);
     private static final String CAPABILITY = "a2a-call";
     private static final int MAX_STREAM_REFERENCE_REFRESHES = 1;
     private static final String CALLBACK_URL_METADATA = "runtime.a2a.callbackUrl";
+
+    /**
+     * Time a call waits for the authoritative Bus terminal projection after the data-plane
+     * subscription is definitively gone.
+     */
+    private static final long DEFAULT_STREAM_FAILURE_GRACE_MILLIS = 2_000L;
 
     private final RuntimeRdcClient registry;
     private final AgentBusRequestSubmitter requestSubmitter;
@@ -56,6 +67,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
     private final String tenantId;
     private final String sourceServiceId;
     private final long responseTimeoutMillis;
+    private final long streamFailureGraceMillis;
 
     /**
      * Creates an Agent Bus caller with the standard A2A subscription client.
@@ -95,12 +107,20 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
     AgentBusRemoteAgentCaller(RuntimeRdcClient registry, AgentBusRequestSubmitter requestSubmitter,
             Executor executor, String tenantId, String sourceServiceId, long responseTimeoutMillis,
             StreamSubscriber streamSubscriber) {
+        this(registry, requestSubmitter, executor, tenantId, sourceServiceId, responseTimeoutMillis,
+                DEFAULT_STREAM_FAILURE_GRACE_MILLIS, streamSubscriber);
+    }
+
+    AgentBusRemoteAgentCaller(RuntimeRdcClient registry, AgentBusRequestSubmitter requestSubmitter,
+            Executor executor, String tenantId, String sourceServiceId, long responseTimeoutMillis,
+            long streamFailureGraceMillis, StreamSubscriber streamSubscriber) {
         this.registry = Objects.requireNonNull(registry, "registry is required");
         this.requestSubmitter = Objects.requireNonNull(requestSubmitter, "requestSubmitter is required");
         this.executor = Objects.requireNonNull(executor, "executor is required");
         this.tenantId = require(tenantId, "tenantId");
         this.sourceServiceId = require(sourceServiceId, "sourceServiceId");
         this.responseTimeoutMillis = positive(responseTimeoutMillis, "responseTimeoutMillis");
+        this.streamFailureGraceMillis = Math.max(0L, streamFailureGraceMillis);
         this.streamSubscriber = Objects.requireNonNull(streamSubscriber, "streamSubscriber is required");
         this.outcomeMapper = new RemoteCallOutcomeMapper();
         this.eventConsumer = new BusRemoteCallEventConsumer();
@@ -151,10 +171,17 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
     /**
      * Completes a matching call exceptionally after a deterministic protocol error.
      *
-     * @param correlationId response correlation identifier
+     * <p>A missing {@code correlationId} is one of the protocol errors that lead here, so it must be
+     * tolerated: {@code pending} is a {@code ConcurrentHashMap} and would throw on a null lookup,
+     * and that throw would escape the caller's own catch block and kill its polling thread.
+     *
+     * @param correlationId response correlation identifier, may be null for malformed responses
      * @param failure protocol failure
      */
     public void failProtocol(String correlationId, RuntimeException failure) {
+        if (correlationId == null) {
+            return;
+        }
         PendingRemoteCall call = pending.get(correlationId);
         if (call != null) {
             call.result.completeExceptionally(failure);
@@ -281,22 +308,93 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
     }
 
     private void acceptStreamEvent(PendingRemoteCall call, ClientEvent event) {
-        eventConsumer.accept(event, call.result, call.eventObserver, true);
+        eventConsumer.accept(event, call.result, call.eventObserver, call);
     }
 
     private void streamFailed(PendingRemoteCall call, int generation, Throwable failure) {
-        if (!call.beginStreamReferenceRefresh(generation)) {
-            if (!call.result.isDone()) {
-                call.result.completeExceptionally(failure == null
-                        ? new IllegalStateException("SubscribeToTask failed") : failure);
+        if (call.result.isDone()) {
+            return;
+        }
+        if (isRemoteTaskAlreadyTerminal(failure)) {
+            // The callee refused the subscription because its Task is already terminal, so the
+            // authoritative A2A_CALL_TERMINAL projection is already in flight on the Bus control
+            // plane. Refreshing the stream reference would re-hit the same terminal guard, and it
+            // would additionally rewrite expectedResponseId so that the late TERMINAL fails
+            // validateResponseId. Degrade to non-streaming instead and let the control plane finish
+            // the call; result.orTimeout(responseTimeoutMillis) remains the backstop.
+            if (call.abandonStream(generation)) {
+                LOG.warn("SubscribeToTask refused for correlationId={} taskId={}: remote Task is already "
+                        + "terminal; degrading to non-streaming and waiting for the Bus terminal projection",
+                        call.correlationId, call.taskId);
             }
             return;
         }
-        try {
-            executor.execute(() -> refreshStreamReference(call));
-        } catch (RejectedExecutionException rejected) {
-            call.result.completeExceptionally(rejected);
+        switch (call.beginStreamReferenceRefresh(generation)) {
+            case STALE -> {
+                // Another callback already advanced the generation; that path owns the outcome.
+            }
+            case EXHAUSTED -> failAfterGrace(call, failure);
+            case REFRESH -> {
+                try {
+                    executor.execute(() -> refreshStreamReference(call));
+                } catch (RejectedExecutionException rejected) {
+                    call.result.completeExceptionally(rejected);
+                }
+            }
+            default -> throw new IllegalStateException("Unexpected stream refresh decision");
         }
+    }
+
+    /**
+     * Fails the call, but only after giving the Bus control plane a last chance to land its terminal
+     * projection.
+     *
+     * <p>The data plane is gone at this point, yet the Bus response for the same call may still be a
+     * few milliseconds behind; failing synchronously would turn an already-completed remote Task into
+     * a caller-side error.
+     *
+     * @param call pending call whose subscription is definitively gone
+     * @param failure the subscription failure to report if nothing arrives in time
+     */
+    private void failAfterGrace(PendingRemoteCall call, Throwable failure) {
+        Throwable cause = failure == null
+                ? new IllegalStateException("SubscribeToTask failed") : failure;
+        long grace = Math.min(streamFailureGraceMillis,
+                Math.max(0L, call.deadline - System.currentTimeMillis()));
+        if (grace <= 0L) {
+            call.result.completeExceptionally(cause);
+            return;
+        }
+        LOG.warn("SubscribeToTask exhausted stream reference refreshes for correlationId={} taskId={}; "
+                + "waiting {}ms for a Bus terminal projection before failing",
+                call.correlationId, call.taskId, grace);
+        try {
+            CompletableFuture.delayedExecutor(grace, TimeUnit.MILLISECONDS, executor)
+                    .execute(() -> call.result.completeExceptionally(cause));
+        } catch (RejectedExecutionException rejected) {
+            call.result.completeExceptionally(cause);
+        }
+    }
+
+    /**
+     * Detects the A2A error the callee raises when the Task being subscribed to is already terminal.
+     *
+     * <p>Per the A2A specification {@code SubscribeToTask} on a terminal Task must answer
+     * {@code UnsupportedOperationError} ({@code -32004}); the SDK rebuilds that JSON-RPC error into an
+     * {@link A2AError} before handing it to the stream error handler.
+     *
+     * @param failure subscription failure reported by the stream subscriber
+     * @return true when the failure means "the remote Task already finished"
+     */
+    private static boolean isRemoteTaskAlreadyTerminal(Throwable failure) {
+        for (Throwable cursor = failure; cursor != null && cursor != cursor.getCause();
+                cursor = cursor.getCause()) {
+            if (cursor instanceof A2AError error && error.getCode() != null
+                    && error.getCode() == A2AErrorCodes.UNSUPPORTED_OPERATION.code()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void refreshStreamReference(PendingRemoteCall call) {
@@ -319,7 +417,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
             AgentBusEventType eventType) {
         if (projection.task() != null) {
             call.captureTaskId(projection.task().id());
-            eventConsumer.accept(new TaskEvent(projection.task()), call.result, call.eventObserver, call.streaming);
+            eventConsumer.accept(new TaskEvent(projection.task()), call.result, call.eventObserver, call);
             return;
         }
         if (projection.message() != null) {
@@ -455,6 +553,16 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
             String requestId, long deadline) {
     }
 
+    /** Outcome of a stream reference refresh attempt. */
+    private enum RefreshDecision {
+        /** The reporting callback no longer owns the current stream generation. */
+        STALE,
+        /** A new stream reference must be requested from the callee. */
+        REFRESH,
+        /** No refresh budget is left for this call. */
+        EXHAUSTED
+    }
+
     @FunctionalInterface
     interface StreamSubscriber {
         /**
@@ -479,7 +587,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         void close();
     }
 
-    private static final class PendingRemoteCall {
+    private static final class PendingRemoteCall implements BusRemoteCallEventConsumer.ArtifactDelivery {
         private final CompletableFuture<RemoteCallOutcome> result;
         private final RemoteAgentCaller.EventObserver eventObserver;
         private final boolean streaming;
@@ -494,6 +602,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         private int streamGeneration;
         private int streamReferenceRefreshes;
         private StreamHandle subscription;
+        private boolean artifactDelivered;
 
         private PendingRemoteCall(CompletableFuture<RemoteCallOutcome> result,
                 RemoteAgentCaller.EventObserver eventObserver, boolean streaming,
@@ -508,6 +617,18 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
             this.idempotencyKey = idempotencyKey;
             this.expectedResponseId = requestId;
             this.deadline = deadline;
+        }
+
+        /** {@inheritDoc} */
+        @Override
+        public synchronized boolean hasDelivered() {
+            return artifactDelivered;
+        }
+
+        /** {@inheritDoc} */
+        @Override
+        public synchronized void markDelivered() {
+            artifactDelivered = true;
         }
 
         private synchronized void captureTaskId(String value) {
@@ -544,17 +665,33 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
             subscription = value;
         }
 
-        private synchronized boolean beginStreamReferenceRefresh(int generation) {
+        private synchronized RefreshDecision beginStreamReferenceRefresh(int generation) {
+            if (generation != streamGeneration || result.isDone()) {
+                return RefreshDecision.STALE;
+            }
+            streamGeneration++;
+            closeSubscription();
+            streamReference = null;
+            if (streamReferenceRefreshes >= MAX_STREAM_REFERENCE_REFRESHES) {
+                return RefreshDecision.EXHAUSTED;
+            }
+            streamReferenceRefreshes++;
+            return RefreshDecision.REFRESH;
+        }
+
+        /**
+         * Drops the local subscription without consuming a stream reference refresh.
+         *
+         * @param generation generation of the callback reporting the failure
+         * @return true when this callback owned the current generation and dropped the stream
+         */
+        private synchronized boolean abandonStream(int generation) {
             if (generation != streamGeneration || result.isDone()) {
                 return false;
             }
             streamGeneration++;
             closeSubscription();
             streamReference = null;
-            if (streamReferenceRefreshes >= MAX_STREAM_REFERENCE_REFRESHES) {
-                return false;
-            }
-            streamReferenceRefreshes++;
             return true;
         }
 
