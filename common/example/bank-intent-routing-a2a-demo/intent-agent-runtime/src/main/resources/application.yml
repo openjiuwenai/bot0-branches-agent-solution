@@ -32,7 +32,8 @@ openjiuwen:
         tool-description: >
           根据最新用户语义匹配一个银行业务或本地能力，并在同一次调用中执行匹配结果。
         routing-instructions: >
-          单一业务目标先调用 intent_match。包含多个业务目标的请求必须先调用 todo_create 创建计划，
+          所有用户请求（包括银行范围外、计算、日期和天气请求）都必须进入意图路由，禁止直接回答或自行选择工具。
+          单一业务目标先调用 intent_match；包含多个业务目标的请求必须先调用 todo_create 创建计划，
           不得在计划创建前调用 intent_match；随后按计划为每个单一业务目标分别调用 intent_match。
           semantic 必须保留最新用户语义及完成当前步骤所需的上下文。
           不得与其他业务工具并行调用 intent_match。intent_match 已经执行匹配目标，直接使用其工具结果。

@@ -16,7 +16,8 @@ public final class DefaultIntentPrompt {
      * Default description exposed with the intent Tool.
      */
     public static final String TOOL_DESCRIPTION = """
-            Match the latest complete user request or subtask to one available handler and execute that handler.
+            Match every latest complete user request or subtask, including requests outside the configured scope, to
+            one available handler and execute that handler.
             Pass a self-contained semantic description based on the latest conversation context.
             """;
 
@@ -24,9 +25,12 @@ public final class DefaultIntentPrompt {
      * Default system instructions appended to each model request.
      */
     public static final String ROUTING_INSTRUCTIONS = """
-            Use intent_match before choosing a business handler. Build semantic from the latest user request and
-            necessary conversation context; do not pass an isolated keyword or unrelated history. Do not call
-            intent_match in parallel with another business tool.
+            Every user request must enter intent routing. For a single target, call intent_match first, including
+            requests outside the configured scope and requests the model could answer directly. For multiple targets,
+            create a plan first and then call intent_match for each subtask. Never answer or call another business
+            tool before the required routing step. Build semantic from the latest user request and necessary
+            conversation context; do not pass an isolated keyword or unrelated history. Do not call intent_match in
+            parallel with another business tool.
 
             intent_match executes the selected target tool in the same call. Its Tool result is already the target
             tool result, so do not call that target again. After a successful target result, finish the current intent.

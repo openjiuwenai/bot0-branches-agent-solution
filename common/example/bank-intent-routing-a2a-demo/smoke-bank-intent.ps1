@@ -226,8 +226,7 @@ try {
             '"intentId":"bank-intent-fallback"')
 
     # 相近语义负向语料：意图目录必须区分开容易混淆的能力，而不只是"能匹配上"。
-    # 每条都会让对应本地工具的执行次数 +1，最终由文末的精确计数断言收口；
-    # 计算类请求同时用于验证不会被误路由到 balance-agent。
+    # 计算类请求同时用于验证不会被误路由到 balance-agent，并验证所有请求都经过意图工具。
     Run-Completed "date-not-weather" "今天星期几" @()
     Run-Completed "weather-not-date" "明天深圳会不会下雨" @("深圳")
     Run-Completed "calculator-not-balance" "帮我算一下 128 减去 28 等于多少" @("100")
@@ -297,7 +296,7 @@ try {
     $planLines | Set-Content -Path $planAuditLog -Encoding UTF8
     Assert-LogCount "planned intent_match calls" $planAuditLog 2 @("BANK_DEMO_TOOL_CALL tool=intent_match")
 
-    # 保持为 1：负向语料"帮我算一下 128 减去 28"不得被误路由到 balance-agent。
+    # 负向语料"帮我算一下 128 减去 28"也必须经过意图工具，且不得被误路由到 balance-agent。
     Assert-LogCount "balance execution" (Join-Path $tempDir "balance.out.log") 1 `
         @("BANK_DEMO_EXECUTION tool=query_balance")
     Assert-LogCount "wealth recommendation execution" (Join-Path $tempDir "wealth-advisor.out.log") 2 `
