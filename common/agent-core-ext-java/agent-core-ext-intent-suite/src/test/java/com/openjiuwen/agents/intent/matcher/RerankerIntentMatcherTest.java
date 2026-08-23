@@ -103,7 +103,6 @@ class RerankerIntentMatcherTest {
         assertThat(new RerankerIntentMatcher(recording, "instruction:").match(context)).isPresent();
         assertThat(new RerankerIntentMatcher(recording).match(context)).isPresent();
         assertThat(new RerankerIntentMatcher(recording, "  ").match(context)).isPresent();
-
         assertThat(seenQueries).containsExactly("instruction:query", "query", "query");
         assertThat(context.routingSemantic()).isEqualTo("query");
     }
