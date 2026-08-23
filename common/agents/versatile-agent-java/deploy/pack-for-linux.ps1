@@ -17,8 +17,16 @@ function Get-AdapterRuntimeJar {
         Get-ChildItem -LiteralPath (Join-Path $ProjectDir "target") -Filter "adapter-versatile-agent-java-*.jar" -File -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -notmatch "-(sources|javadoc|tests|plain)\.jar$" }
     )
+    if ($jars.Count -eq 0) {
+        throw "未找到 adapter 运行 jar，请先执行：mvn clean package -DskipTests"
+    }
+    # classifier=exec 后 thin jar 和 exec jar 并存，优先使用 exec jar（fat jar，可独立运行）
+    $execJar = $jars | Where-Object { $_.Name -match "-exec\.jar$" } | Select-Object -First 1
+    if ($execJar) {
+        return $execJar
+    }
     if ($jars.Count -ne 1) {
-        throw "期望 target 下恰好有一个 adapter 运行 jar，实际找到 $($jars.Count) 个。"
+        throw "期望 target 下恰好有一个 adapter 运行 jar，实际找到 $($jars.Count) 个；请先完成 Maven package 并清理旧产物。"
     }
     return $jars[0]
 }
