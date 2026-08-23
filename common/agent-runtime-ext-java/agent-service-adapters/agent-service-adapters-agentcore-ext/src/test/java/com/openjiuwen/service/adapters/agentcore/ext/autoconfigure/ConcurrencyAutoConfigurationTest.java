@@ -107,7 +107,7 @@ class ConcurrencyAutoConfigurationTest {
     }
 
     @Test
-    void noAgentFactoryBean_agentInstanceManagerAbsent_othersStillRegistered() {
+    void noFactory_agentMgrAbsent_othersRegistered() {
         // Negative branch of @ConditionalOnBean(AgentFactory.class): without a
         // factory the per-Task agent manager must NOT be created (handler falls
         // back to singleton mode), while admission control and task tracking

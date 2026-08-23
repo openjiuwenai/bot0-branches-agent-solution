@@ -25,7 +25,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TaskQuotaTracker implements ActiveTaskQuery {
 
     private final ConcurrentHashMap<String, ActiveTaskInfo> activeTasks = new ConcurrentHashMap<>();
-
     private final TaskAdmissionControl admissionControl;
 
     /**

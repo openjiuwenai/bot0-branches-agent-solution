@@ -44,14 +44,18 @@ import java.util.concurrent.ConcurrentHashMap;
  * @since 2026-06-30
  */
 public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
-    private static final Logger log = LoggerFactory.getLogger(JiuwenCoreAgentExtHandler.class);
-
     /** Stable failure code surfaced to protocol clients on a busy conversation. */
     static final String CONVERSATION_BUSY = "CONVERSATION_BUSY";
+    private static final Logger log = LoggerFactory.getLogger(JiuwenCoreAgentExtHandler.class);
 
     private RemoteA2aToolInstaller remoteToolInstaller = RemoteA2aToolInstaller.noop();
     private IntentDeepAgentInstaller intentInstaller;
     private SkillHubManager skillHubManager;
+
+    @Autowired(required = false)
+    private AgentInstanceManager agentManager;
+    @Autowired(required = false)
+    private TaskQuotaTracker quotaTracker;
 
     /**
      * Task-level agent cache, keyed by conversationId.
@@ -62,17 +66,11 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
      */
     private final ConcurrentHashMap<String, TaskAgentEntry> taskAgentCache = new ConcurrentHashMap<>();
 
+    final ThreadLocal<Object> currentTaskAgent = new ThreadLocal<>();
+
     /** Cache value binding a cached agent to the token of the task that owns it. */
     private record TaskAgentEntry(Object token, Object agent) {
     }
-
-    @Autowired(required = false)
-    private AgentInstanceManager agentManager;
-
-    @Autowired(required = false)
-    private TaskQuotaTracker quotaTracker;
-
-    final ThreadLocal<Object> currentTaskAgent = new ThreadLocal<>();
 
     public JiuwenCoreAgentExtHandler(Object agent) {
         super(requireAgentInstance(agent));
@@ -218,6 +216,11 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
         return super.executeAgent(inputs, session);
     }
 
+    /**
+     * Installs remote A2A tools, intent-based tools, and SkillHub skills on the agent before execution.
+     *
+     * @param agent the agent instance to install tools and skills on
+     */
     protected void installBeforeRun(Object agent) {
         if (intentInstaller == null) {
             remoteToolInstaller.install(agent);
@@ -254,8 +257,11 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
 
     private void onTaskWorking(ServeRequest request) {
         if (quotaTracker != null) {
-            String taskId = request.getMetadata() != null
-                    ? (String) request.getMetadata().get("runtime.parentTaskId") : null;
+            String taskId = null;
+            if (request.getMetadata() != null
+                    && request.getMetadata().get("runtime.parentTaskId") instanceof String tid) {
+                taskId = tid;
+            }
             quotaTracker.onTaskWorking(request.getConversationId(), taskId);
         }
     }
@@ -313,7 +319,7 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
             return;
         }
         // Foreign or stale token — never release resources owned by another task.
-        log.warn("completeTask token does not match any active task agent cache entry — ignored");
+        log.warn("completeTask token does not match any active task agent cache entry -- ignored");
     }
 
     private static AgentExecutionException busyConversation(String conversationId) {

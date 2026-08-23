@@ -13,7 +13,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "openjiuwen.service.concurrency")
 public class ConcurrencyProperties {
-
     /**
      * Maximum concurrent tasks. {@code -1} means unlimited.
      */

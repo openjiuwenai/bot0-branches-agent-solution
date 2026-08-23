@@ -108,7 +108,7 @@ class JiuwenCoreAgentExtHandlerTest {
 
         try {
             handler.query(request("c-except-q", "fail"));
-        } catch (Exception expected) {
+        } catch (RuntimeException expected) {
             // Expected — agent.invoke() throws
         }
 
@@ -321,6 +321,9 @@ class JiuwenCoreAgentExtHandlerTest {
         };
     }
 
+    /**
+     * Test agent that returns its identity in a streaming response.
+     */
     public static class IdentityStreamAgent {
         private final String identity;
 
@@ -328,11 +331,22 @@ class JiuwenCoreAgentExtHandlerTest {
             this.identity = identity;
         }
 
+        /**
+         * Returns a stream containing the agent's identity.
+         *
+         * @param inputs the invocation inputs
+         * @param session the agent session
+         * @param streamModes the requested stream modes
+         * @return an iterator over the stream output
+         */
         public Iterator<Object> stream(Object inputs, Session session, List<StreamMode> streamModes) {
             return List.<Object>of(new OutputSchema("llm_output", 0, Map.of("content", identity))).iterator();
         }
     }
 
+    /**
+     * Test agent that returns its identity in a synchronous response.
+     */
     public static class IdentityInvokeAgent {
         private final String identity;
 
@@ -340,28 +354,72 @@ class JiuwenCoreAgentExtHandlerTest {
             this.identity = identity;
         }
 
+        /**
+         * Returns a map containing the agent's identity.
+         *
+         * @param inputs the invocation inputs
+         * @param session the agent session
+         * @return a map containing the agent identity and result type
+         */
         public Object invoke(Object inputs, Session session) {
             return Map.of("output", identity, "result_type", "answer");
         }
 
+        /**
+         * Returns a stream containing the agent's identity.
+         *
+         * @param inputs the invocation inputs
+         * @param session the agent session
+         * @param streamModes the requested stream modes
+         * @return an iterator over the stream output
+         */
         public Iterator<Object> stream(Object inputs, Session session, List<StreamMode> streamModes) {
             return List.<Object>of(new OutputSchema("llm_output", 0, Map.of("content", identity))).iterator();
         }
     }
 
+    /**
+     * Test agent that always throws on streaming invocation.
+     */
     public static class ThrowingStreamAgent {
+        /**
+         * Always throws an {@link IllegalStateException}.
+         *
+         * @param inputs the invocation inputs
+         * @param session the agent session
+         * @param streamModes the requested stream modes
+         * @return never returns normally
+         */
         public Iterator<Object> stream(Object inputs, Session session, List<StreamMode> streamModes) {
-            throw new RuntimeException("stream failed");
+            throw new IllegalStateException("stream failed");
         }
     }
 
+    /**
+     * Test agent that always throws on synchronous invocation.
+     */
     public static class ThrowingInvokeAgent {
+        /**
+         * Always throws an {@link IllegalStateException}.
+         *
+         * @param inputs the invocation inputs
+         * @param session the agent session
+         * @return never returns normally
+         */
         public Object invoke(Object inputs, Session session) {
-            throw new RuntimeException("invoke failed");
+            throw new IllegalStateException("invoke failed");
         }
 
+        /**
+         * Always throws an {@link IllegalStateException}.
+         *
+         * @param inputs the invocation inputs
+         * @param session the agent session
+         * @param streamModes the requested stream modes
+         * @return never returns normally
+         */
         public Iterator<Object> stream(Object inputs, Session session, List<StreamMode> streamModes) {
-            throw new RuntimeException("stream failed");
+            throw new IllegalStateException("stream failed");
         }
     }
 }

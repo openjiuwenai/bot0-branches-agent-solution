@@ -19,6 +19,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * EDPAgent implementation of {@link CustomRestProtocolAdapter} for custom REST endpoints.
+ *
+ * <p>Translates between the custom REST protocol and the A2A protocol,
+ * mapping incoming requests to A2A messages and projecting A2A responses
+ * back to the custom REST format.
+ *
+ * @since 0.1.0
+ */
 @Component
 public final class EdpaCustomRestAdapter implements CustomRestProtocolAdapter {
 

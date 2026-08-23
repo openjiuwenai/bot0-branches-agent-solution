@@ -16,7 +16,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * @since 0.1.0
  */
 public class AgentInstanceManager {
-
     private final AgentFactory factory;
 
     private final ConcurrentHashMap<String, Object> activeAgents = new ConcurrentHashMap<>();

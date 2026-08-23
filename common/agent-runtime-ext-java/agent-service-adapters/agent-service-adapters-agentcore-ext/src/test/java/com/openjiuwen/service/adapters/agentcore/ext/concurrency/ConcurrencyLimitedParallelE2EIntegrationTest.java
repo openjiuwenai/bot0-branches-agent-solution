@@ -49,7 +49,8 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
@@ -99,7 +100,7 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
     @Test
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void concurrentRequests_exactlyLimitAdmitted_othersRejected503() throws Exception {
-        ExecutorService pool = Executors.newFixedThreadPool(LIMIT + 3);
+        ExecutorService pool = new ThreadPoolExecutor(LIMIT + 3, LIMIT + 3, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         List<CompletableFuture<ResponseEntity<String>>> admitted = new ArrayList<>();
         try {
             // 1. Fire LIMIT requests that block inside the agent — they hold the quota
@@ -155,7 +156,7 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
     @Test
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void quotaDrainedAfterParallelCompletion_newRequestAdmitted() throws Exception {
-        ExecutorService pool = Executors.newFixedThreadPool(LIMIT);
+        ExecutorService pool = new ThreadPoolExecutor(LIMIT, LIMIT, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         try {
             List<CompletableFuture<ResponseEntity<String>>> held = new ArrayList<>();
             for (int i = 0; i < LIMIT; i++) {
@@ -259,6 +260,7 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
                     // give the server a moment to close, then re-check
                     Thread.sleep(100);
                 } else {
+                    /* non-state line, continue */
                     Thread.sleep(50);
                 }
             }
@@ -359,7 +361,7 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
                 }
                 observer.onComplete();
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+                Thread.currentThread().interrupt(); // preserve interrupt status
             } finally {
                 quotaTracker.onTaskReleased(request.getConversationId());
             }

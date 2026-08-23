@@ -20,7 +20,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -58,7 +59,7 @@ class EdpAgentFactoryConcurrencyTest {
         final AtomicInteger concurrentCount = new AtomicInteger(0);
         final AtomicInteger maxConcurrent = new AtomicInteger(0);
         final AtomicInteger totalCalls = new AtomicInteger(0);
-        volatile long sleepMs = 0;
+        volatile long sleepMs = 0L;
         volatile boolean throwOnFirst = false;
         final AtomicInteger callCount = new AtomicInteger(0);
 
@@ -69,9 +70,8 @@ class EdpAgentFactoryConcurrencyTest {
         @Override
         protected DeepAgent createAgent() {
             int count = totalCalls.incrementAndGet();
-
             if (throwOnFirst && callCount.incrementAndGet() == 1) {
-                throw new RuntimeException("Simulated creation failure");
+                throw new IllegalStateException("Simulated creation failure");
             }
 
             int current = concurrentCount.incrementAndGet();
@@ -81,7 +81,7 @@ class EdpAgentFactoryConcurrencyTest {
                     Thread.sleep(sleepMs);
                 }
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+                Thread.currentThread().interrupt(); // preserve interrupt status
             } finally {
                 concurrentCount.decrementAndGet();
             }
@@ -100,15 +100,22 @@ class EdpAgentFactoryConcurrencyTest {
         CountDownLatch done = new CountDownLatch(THREAD_COUNT);
         AtomicReference<Throwable> firstError = new AtomicReference<>();
 
-        ExecutorService executor = Executors.newFixedThreadPool(THREAD_COUNT);
+        ExecutorService exec = new ThreadPoolExecutor(THREAD_COUNT, THREAD_COUNT,
+                0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
+                r -> {
+                    Thread t = new Thread(r);
+                    t.setUncaughtExceptionHandler((thr, e) -> System.err.println("Uncaught: " + e));
+                    return t;
+                });
         try {
             for (int i = 0; i < THREAD_COUNT; i++) {
-                executor.submit(() -> {
+                exec.submit(() -> {
                     try {
                         barrier.await(5, TimeUnit.SECONDS);
                         Object agent = factory.create();
                         identityHashCodes.add(System.identityHashCode(agent));
                     } catch (Throwable t) {
+                        // capture any error from worker thread — test asserts firstError is null
                         firstError.compareAndSet(null, t);
                     } finally {
                         done.countDown();
@@ -125,7 +132,7 @@ class EdpAgentFactoryConcurrencyTest {
                     .hasSize(THREAD_COUNT);
             assertThat(factory.totalCalls.get()).isEqualTo(THREAD_COUNT);
         } finally {
-            executor.shutdownNow();
+            exec.shutdownNow();
         }
     }
 
@@ -139,14 +146,21 @@ class EdpAgentFactoryConcurrencyTest {
         CyclicBarrier barrier = new CyclicBarrier(THREAD_COUNT);
         CountDownLatch done = new CountDownLatch(THREAD_COUNT);
 
-        ExecutorService executor = Executors.newFixedThreadPool(THREAD_COUNT);
+        ExecutorService exec = new ThreadPoolExecutor(THREAD_COUNT, THREAD_COUNT,
+                0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
+                r -> {
+                    Thread t = new Thread(r);
+                    t.setUncaughtExceptionHandler((thr, e) -> System.err.println("Uncaught: " + e));
+                    return t;
+                });
         try {
             for (int i = 0; i < THREAD_COUNT; i++) {
-                executor.submit(() -> {
+                exec.submit(() -> {
                     try {
                         barrier.await(5, TimeUnit.SECONDS);
                         factory.create();
                     } catch (Exception ignored) {
+                        // expected in concurrent test scenarios
                     } finally {
                         done.countDown();
                     }
@@ -159,7 +173,7 @@ class EdpAgentFactoryConcurrencyTest {
                     .as("V1 lock should serialize: max concurrent inside createAgent() must be 1")
                     .isEqualTo(1);
         } finally {
-            executor.shutdownNow();
+            exec.shutdownNow();
         }
     }
 
@@ -174,7 +188,7 @@ class EdpAgentFactoryConcurrencyTest {
         try {
             factory.create();
         } catch (RuntimeException expected) {
-            // expected
+            // expected — verifies exception path releases the lock
         }
 
         // Second call must succeed — proves lock was released after exception
@@ -196,7 +210,7 @@ class EdpAgentFactoryConcurrencyTest {
                 try {
                     Thread.sleep(100);
                 } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
+                    Thread.currentThread().interrupt(); // preserve interrupt status
                 }
                 return mock(DeepAgent.class);
             }
@@ -206,6 +220,7 @@ class EdpAgentFactoryConcurrencyTest {
 
         // Start create() in background — holds the lock for ~100ms
         Thread createThread = new Thread(() -> factory.create(), "create-thread");
+        createThread.setUncaughtExceptionHandler((t, e) -> System.err.println("Uncaught exception in " + t.getName() + ": " + e));
         createThread.start();
 
         // Wait briefly for create() to acquire the lock

@@ -43,7 +43,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -104,7 +105,7 @@ class JiuwenCoreAgentExtHandlerParallelE2EIntegrationTest {
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void parallelTasks_eachGetsDifferentPerTaskAgent() throws Exception {
         int taskCount = 5;
-        ExecutorService pool = Executors.newFixedThreadPool(taskCount);
+        ExecutorService pool = new ThreadPoolExecutor(taskCount, taskCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         List<CompletableFuture<String>> futures = new ArrayList<>();
 
         try {
@@ -152,7 +153,7 @@ class JiuwenCoreAgentExtHandlerParallelE2EIntegrationTest {
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void parallelTasks_noContextLeak() throws Exception {
         int taskCount = 10;
-        ExecutorService pool = Executors.newFixedThreadPool(taskCount);
+        ExecutorService pool = new ThreadPoolExecutor(taskCount, taskCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         List<CompletableFuture<String>> futures = new ArrayList<>();
 
         try {
@@ -203,7 +204,7 @@ class JiuwenCoreAgentExtHandlerParallelE2EIntegrationTest {
     @Test
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void taskAFailure_doesNotAffectTaskB() throws Exception {
-        ExecutorService pool = Executors.newFixedThreadPool(2);
+        ExecutorService pool = new ThreadPoolExecutor(2, 2, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         List<CompletableFuture<String>> futures = new ArrayList<>();
 
         try {
@@ -255,7 +256,7 @@ class JiuwenCoreAgentExtHandlerParallelE2EIntegrationTest {
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void highConcurrency_allTasksComplete_allAgentsDestroyed() throws Exception {
         int threadCount = 20;
-        ExecutorService pool = Executors.newFixedThreadPool(threadCount);
+        ExecutorService pool = new ThreadPoolExecutor(threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         AtomicInteger successCount = new AtomicInteger(0);
         String baseUrl = "http://localhost:" + port + "/a2a/";
 
@@ -343,6 +344,10 @@ class JiuwenCoreAgentExtHandlerParallelE2EIntegrationTest {
         }
     }
 
+    /**
+     * Test agent stub for parallel execution tests. Returns a unique identity
+     * per instance to verify that each parallel task gets its own agent.
+     */
     public static final class ParallelAgent {
         private final String identity;
 
@@ -350,6 +355,13 @@ class JiuwenCoreAgentExtHandlerParallelE2EIntegrationTest {
             this.identity = identity;
         }
 
+        /**
+         * Handles a synchronous invocation.
+         *
+         * @param inputs the invocation inputs
+         * @param session the agent session
+         * @return a map containing the agent identity and result type
+         */
         public Object invoke(Object inputs, Session session) {
             if (inputs instanceof Map<?, ?> map && "trigger failure".equals(map.get("query"))) {
                 throw new IllegalStateException("intentional failure");
@@ -357,6 +369,14 @@ class JiuwenCoreAgentExtHandlerParallelE2EIntegrationTest {
             return Map.of("output", identity, "result_type", "answer");
         }
 
+        /**
+         * Handles a streaming invocation, returning a single-element stream.
+         *
+         * @param inputs the invocation inputs
+         * @param session the agent session
+         * @param streamModes the requested stream modes
+         * @return an iterator over the stream output
+         */
         public Iterator<Object> stream(Object inputs, Session session, List<StreamMode> streamModes) {
             return List.<Object>of(new OutputSchema("llm_output", 0, Map.of("content", identity))).iterator();
         }

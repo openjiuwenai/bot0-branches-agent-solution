@@ -10,7 +10,6 @@ import com.openjiuwen.core.session.Session;
 import com.openjiuwen.core.session.stream.OutputSchema;
 import com.openjiuwen.core.session.stream.StreamMode;
 import com.openjiuwen.service.adapters.agentcore.ext.agentfw.JiuwenCoreAgentExtHandler;
-import com.openjiuwen.service.adapters.agentcore.ext.autoconfigure.ConcurrencyAutoConfiguration;
 import com.openjiuwen.service.app.controller.probe.ActiveTaskController;
 import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
 import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
@@ -174,6 +173,7 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendMessage", "ext-block", "block"), headers), String.class);
         });
+        first.setUncaughtExceptionHandler((t, e) -> e.printStackTrace());
         first.start();
         assertThat(TrackingAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
@@ -215,6 +215,7 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendMessage", "ext-active", "block"), headers), String.class);
         });
+        slow.setUncaughtExceptionHandler((t, e) -> e.printStackTrace());
         slow.start();
         assertThat(TrackingAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
@@ -303,6 +304,7 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendMessage", "ext-blocker", "block"), headers), String.class);
         });
+        blocker.setUncaughtExceptionHandler((t, e) -> e.printStackTrace());
         blocker.start();
         assertThat(TrackingAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
@@ -387,6 +389,10 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
         }
     }
 
+    /**
+     * Test agent stub that blocks on a latch to simulate long-running work.
+     * Supports both synchronous and streaming invocation patterns.
+     */
     public static final class TrackingAgent {
         private static volatile CountDownLatch startedLatch = new CountDownLatch(1);
         private static volatile CountDownLatch blockLatch = new CountDownLatch(1);
@@ -410,6 +416,13 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
             blockLatch.countDown();
         }
 
+        /**
+         * Handles a synchronous invocation, blocking if the query is "block".
+         *
+         * @param inputs the invocation inputs
+         * @param session the agent session
+         * @return a map containing the agent identity and result type
+         */
         public Object invoke(Object inputs, Session session) {
             if (inputs instanceof Map<?, ?> map) {
                 Object query = map.get("query");
@@ -424,6 +437,14 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
             return Map.of("output", identity, "result_type", "answer");
         }
 
+        /**
+         * Handles a streaming invocation, returning a single-element stream.
+         *
+         * @param inputs the invocation inputs
+         * @param session the agent session
+         * @param streamModes the requested stream modes
+         * @return an iterator over the stream output
+         */
         public Iterator<Object> stream(Object inputs, Session session, List<StreamMode> streamModes) {
             if (inputs instanceof Map<?, ?> map && "require input".equals(map.get("query"))) {
                 return List.<Object>of(Map.of("type", "__interaction__", "message", "Need more info")).iterator();
@@ -435,7 +456,7 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
             try {
                 blockLatch.await(15, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+                Thread.currentThread().interrupt(); // preserve interrupt status
             }
         }
     }

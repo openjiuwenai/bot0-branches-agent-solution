@@ -16,7 +16,6 @@ package com.openjiuwen.service.adapters.agentcore.ext.concurrency;
  * @since 0.1.2
  */
 public class ConversationBusyException extends IllegalStateException {
-
     /**
      * Creates a busy-conversation conflict.
      *

@@ -25,9 +25,7 @@ public class TaskAdmissionControl implements TaskAdmissionGate {
     private static final Logger log = LoggerFactory.getLogger(TaskAdmissionControl.class);
 
     private final int maxConcurrentTasks;
-
     private final AtomicInteger currentCount = new AtomicInteger(0);
-
     private volatile boolean shutdown = false;
 
     /**

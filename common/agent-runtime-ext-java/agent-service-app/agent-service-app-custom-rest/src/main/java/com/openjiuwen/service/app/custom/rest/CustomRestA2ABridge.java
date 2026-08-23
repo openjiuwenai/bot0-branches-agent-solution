@@ -11,7 +11,6 @@ import com.openjiuwen.service.spec.lifecycle.AgentReadiness;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import org.a2aproject.sdk.server.ServerCallContext;
 import org.a2aproject.sdk.server.auth.UnauthenticatedUser;
 import org.a2aproject.sdk.server.requesthandlers.RequestHandler;
@@ -23,7 +22,6 @@ import org.a2aproject.sdk.spec.Message;
 import org.a2aproject.sdk.spec.MessageSendParams;
 import org.a2aproject.sdk.spec.StreamingEventKind;
 import org.a2aproject.sdk.spec.Task;
-
 import org.springframework.beans.factory.ObjectProvider;
 
 import java.util.Map;
@@ -38,9 +36,8 @@ import java.util.concurrent.Flow;
  * @since 0.1.0
  */
 final class CustomRestA2ABridge {
-    private static final Logger log = LoggerFactory.getLogger(CustomRestA2ABridge.class);
-
     static final String STREAM_STATE_KEY = "_a2a_stream";
+    private static final Logger log = LoggerFactory.getLogger(CustomRestA2ABridge.class);
 
     private final CustomRestProtocolAdapter adapter;
     private final RequestHandler requestHandler;
@@ -104,6 +101,8 @@ final class CustomRestA2ABridge {
      * Read-only admission pre-check for fast failure. Authoritative admission
      * happens in {@code A2AAgentExecutor.executeRequest()} — this check
      * carries no permit and therefore has no release obligation.
+     *
+     * @return {@code true} if the admission limit is reached, {@code false} otherwise
      */
     private boolean isAdmissionOverloaded() {
         if (admissionGateProvider == null) {
@@ -117,7 +116,8 @@ final class CustomRestA2ABridge {
     private void logRejected(String conversationId) {
         TaskAdmissionGate gate = admissionGateProvider != null ? admissionGateProvider.getIfAvailable() : null;
         if (gate != null) {
-            log.warn("[CONCURRENCY] task_rejected conversationId={} currentActive={} maxConcurrent={} reason=\"limit_reached\"",
+            log.warn("[CONCURRENCY] task_rejected conversationId={} currentActive={} "
+                            + "maxConcurrent={} reason=\"limit_reached\"",
                     conversationId, gate.currentCount(), gate.limit());
         }
     }

@@ -25,12 +25,14 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -88,7 +90,7 @@ class ExternalStressConcurrencyIntegrationTest {
     }
 
     @Test
-    void sustainedConcurrency_quotaHygiene_noUnexpectedErrors_contextIsolated() throws Exception {
+    void sustainedConcurrency_noUnexpectedErrors() throws Exception {
         driveSustainedLoad(false);
     }
 
@@ -97,12 +99,21 @@ class ExternalStressConcurrencyIntegrationTest {
      * stream via {@code SendStreamingMessage}, tracks terminal state
      * incrementally, and applies the same four invariants plus a streaming
      * stability invariant: no stream must hang past its timeout.
+     *
+     * @throws Exception if the HTTP request or JSON parsing fails
      */
     @Test
-    void sustainedStreamingConcurrency_quotaHygiene_noHangs_contextIsolated() throws Exception {
+    void sustainedStreaming_noHangs() throws Exception {
         driveSustainedLoad(true);
     }
 
+    /**
+     * Drives sustained concurrent load against the agent endpoint, verifying
+     * the four stability invariants under concurrent stress.
+     *
+     * @param streaming whether to use SSE streaming or blocking requests
+     * @throws Exception if the underlying execution or assertions fail
+     */
     private void driveSustainedLoad(boolean streaming) throws Exception {
         int configuredLimit = rawAdmissionLimit();
         boolean quotaLimited = configuredLimit > 0;
@@ -118,68 +129,22 @@ class ExternalStressConcurrencyIntegrationTest {
         Map<String, AtomicInteger> responsesByContext = new ConcurrentHashMap<>();
         List<String> unexpectedDetails = new ArrayList<>();
 
-        ExecutorService pool = Executors.newFixedThreadPool(WORKERS);
+        ExecutorService pool = new ThreadPoolExecutor(WORKERS, WORKERS,
+                0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
+                r -> {
+                    Thread t = new Thread(r);
+                    t.setUncaughtExceptionHandler((thr, e) ->
+                            System.err.println("Uncaught in " + thr.getName() + ": " + e));
+                    return t;
+                });
         CountingLatch done = new CountingLatch();
         long deadline = System.currentTimeMillis() + RUN_SECONDS * 1000L;
         try {
             for (int w = 0; w < WORKERS; w++) {
                 pool.submit(() -> {
-                    while (System.currentTimeMillis() < deadline && unexpected.get() < 10) {
-                        String convId = "stress-" + UUID.randomUUID().toString().substring(0, 12);
-                        String text = QUERIES[ThreadLocalRandom.current().nextInt(QUERIES.length)];
-                        issued.incrementAndGet();
-                        RequestOutcome outcome;
-                        try {
-                            outcome = streaming ? sendA2AStream(convId, text) : sendA2ARawOutcome(convId, text);
-                        } catch (Exception e) {
-                            unexpected.incrementAndGet();
-                            unexpectedDetails.add("client exception: " + e);
-                            continue;
-                        }
-                        if (outcome.httpStatus == 503) {
-                            if (quotaLimited) {
-                                rejected503.incrementAndGet();
-                            } else {
-                                unexpected.incrementAndGet();
-                                unexpectedDetails.add("503 with unlimited quota: " + snippet(outcome.body));
-                            }
-                            continue;
-                        }
-                        if (!convId.equals(outcome.echoedContextId)) {
-                            if (outcome.isJsonRpcError) {
-                                if (quotaLimited && outcome.jsonRpcErrorCode == -32603) {
-                                    rejectedExecutor.incrementAndGet();
-                                } else {
-                                    unexpected.incrementAndGet();
-                                    unexpectedDetails.add("error body: " + snippet(outcome.body));
-                                }
-                            } else {
-                                unexpected.incrementAndGet();
-                                unexpectedDetails.add("context mismatch: expected " + convId
-                                        + " got " + outcome.echoedContextId + " " + snippet(outcome.body));
-                            }
-                            continue;
-                        }
-                        if (outcome.streamHang) {
-                            streamHang.incrementAndGet();
-                            unexpected.incrementAndGet();
-                            unexpectedDetails.add("stream hung past timeout: " + snippet(outcome.body));
-                            continue;
-                        }
-                        responsesByContext.computeIfAbsent(convId, k -> new AtomicInteger())
-                                .incrementAndGet();
-                        String state = outcome.terminalState;
-                        if ("TASK_STATE_FAILED".equals(state)) {
-                            failedTasks.incrementAndGet();
-                        } else if ("TASK_STATE_COMPLETED".equals(state)
-                                || "TASK_STATE_INPUT_REQUIRED".equals(state)) {
-                            terminalOk.incrementAndGet();
-                        } else {
-                            unexpected.incrementAndGet();
-                            unexpectedDetails.add("non-terminal state " + state + ": "
-                                    + snippet(outcome.body));
-                        }
-                    }
+                    runWorkerLoop(streaming, deadline, issued, rejected503,
+                            rejectedExecutor, failedTasks, terminalOk, streamHang, unexpected,
+                            unexpectedDetails, responsesByContext, quotaLimited);
                     done.countDown();
                 });
             }
@@ -234,7 +199,8 @@ class ExternalStressConcurrencyIntegrationTest {
             if (quotaLimited) {
                 awaitQuotaDrained();
             }
-            JsonNode active = fetchActiveTasks();
+            JsonNode active = fetchActiveTasks().orElseThrow(
+                    () -> new AssertionError("active tasks endpoint unavailable"));
             assertThat(active).as("active tasks endpoint must be available").isNotNull();
             assertThat(active.get("currentActiveTasks").asInt())
                     .as("quota must drain to zero after sustained load (no leak)")
@@ -256,11 +222,126 @@ class ExternalStressConcurrencyIntegrationTest {
         }
     }
 
+    /**
+     * Runs the main request loop for a single worker, driving repeated A2A
+     * requests until the deadline passes or too many unexpected errors occur.
+     *
+     * @param streaming        whether to use SSE streaming or blocking requests
+     * @param deadline         epoch millis after which the loop should stop
+     * @param issued           counter for total requests issued
+     * @param rejected503      counter for HTTP 503 rejections
+     * @param rejectedExecutor counter for JSON-RPC executor-side rejections
+     * @param failedTasks      counter for tasks ending in FAILED state
+     * @param terminalOk       counter for tasks reaching a successful terminal state
+     * @param streamHang       counter for streams that hung past timeout
+     * @param unexpected       counter for unexpected outcomes
+     * @param unexpectedDetails list collecting details of unexpected outcomes
+     * @param responsesByContext map tracking response counts per conversation id
+     * @param quotaLimited     whether a quota admission limit is configured
+     */
+    private void runWorkerLoop(boolean streaming, long deadline,
+            AtomicInteger issued, AtomicInteger rejected503, AtomicInteger rejectedExecutor,
+            AtomicInteger failedTasks, AtomicInteger terminalOk, AtomicInteger streamHang,
+            AtomicInteger unexpected, List<String> unexpectedDetails,
+            Map<String, AtomicInteger> responsesByContext, boolean quotaLimited) {
+        while (System.currentTimeMillis() < deadline && unexpected.get() < 10) {
+            String convId = "stress-" + UUID.randomUUID().toString().substring(0, 12);
+            String text = QUERIES[ThreadLocalRandom.current().nextInt(QUERIES.length)];
+            issued.incrementAndGet();
+            RequestOutcome outcome;
+            try {
+                outcome = streaming ? sendA2AStream(convId, text) : sendA2ARawOutcome(convId, text);
+            } catch (Exception e) {
+                // client-side exceptions (I/O, timeout) are unexpected in this stress scenario
+                unexpected.incrementAndGet();
+                unexpectedDetails.add("client exception: " + e);
+                continue;
+            }
+            processOutcome(outcome, convId, quotaLimited, unexpected, unexpectedDetails,
+                    rejected503, rejectedExecutor, streamHang, failedTasks, terminalOk,
+                    responsesByContext);
+        }
+    }
+
+    /**
+     * Processes a single request outcome, updating the appropriate counters
+     * based on the HTTP status, task state, and context isolation checks.
+     *
+     * @param outcome          the request outcome to process
+     * @param convId           the conversation id sent with the request
+     * @param quotaLimited     whether a quota admission limit is configured
+     * @param unexpected       counter for unexpected outcomes
+     * @param unexpectedDetails list collecting details of unexpected outcomes
+     * @param rejected503      counter for HTTP 503 rejections
+     * @param rejectedExecutor counter for JSON-RPC executor-side rejections
+     * @param streamHang       counter for streams that hung past timeout
+     * @param failedTasks      counter for tasks ending in FAILED state
+     * @param terminalOk       counter for tasks reaching a successful terminal state
+     * @param responsesByContext map tracking response counts per conversation id
+     */
+    private void processOutcome(RequestOutcome outcome, String convId, boolean quotaLimited,
+            AtomicInteger unexpected, List<String> unexpectedDetails,
+            AtomicInteger rejected503, AtomicInteger rejectedExecutor,
+            AtomicInteger streamHang, AtomicInteger failedTasks, AtomicInteger terminalOk,
+            Map<String, AtomicInteger> responsesByContext) {
+        if (outcome.httpStatus == 503) {
+            if (quotaLimited) {
+                rejected503.incrementAndGet();
+            } else {
+                unexpected.incrementAndGet();
+                unexpectedDetails.add("503 with unlimited quota: " + snippet(outcome.body));
+            }
+            return;
+        }
+        if (!convId.equals(outcome.echoedContextId)) {
+            if (outcome.isJsonRpcError) {
+                if (quotaLimited && outcome.jsonRpcErrorCode == -32603) {
+                    rejectedExecutor.incrementAndGet();
+                } else {
+                    unexpected.incrementAndGet();
+                    unexpectedDetails.add("error body: " + snippet(outcome.body));
+                }
+            } else {
+                unexpected.incrementAndGet();
+                unexpectedDetails.add("context mismatch: expected " + convId
+                        + " got " + outcome.echoedContextId + " " + snippet(outcome.body));
+            }
+            return;
+        }
+        if (outcome.streamHang) {
+            streamHang.incrementAndGet();
+            unexpected.incrementAndGet();
+            unexpectedDetails.add("stream hung past timeout: " + snippet(outcome.body));
+            return;
+        }
+        responsesByContext.computeIfAbsent(convId, k -> new AtomicInteger())
+                .incrementAndGet();
+        String state = outcome.terminalState;
+        if ("TASK_STATE_FAILED".equals(state)) {
+            failedTasks.incrementAndGet();
+        } else if ("TASK_STATE_COMPLETED".equals(state)
+                || "TASK_STATE_INPUT_REQUIRED".equals(state)) {
+            terminalOk.incrementAndGet();
+        } else {
+            unexpected.incrementAndGet();
+            unexpectedDetails.add("non-terminal state " + state + ": "
+                    + snippet(outcome.body));
+        }
+    }
+
     /** Unified outcome for either the blocking or the streaming request. */
     private record RequestOutcome(int httpStatus, String echoedContextId, String terminalState,
             boolean streamHang, boolean isJsonRpcError, int jsonRpcErrorCode, String body) {
     }
 
+    /**
+     * Sends a blocking {@code SendMessage} request and returns the parsed outcome.
+     *
+     * @param contextId the conversation id to send with the request
+     * @param text      the user message text to send
+     * @return the parsed request outcome
+     * @throws Exception if the HTTP request or JSON parsing fails
+     */
     private RequestOutcome sendA2ARawOutcome(String contextId, String text) throws Exception {
         HttpResponse<String> resp = sendA2ARaw(contextId, text);
         JsonNode body = MAPPER.readTree(resp.body());
@@ -281,6 +362,11 @@ class ExternalStressConcurrencyIntegrationTest {
      * elapses (hang), or the stream ends. Returns the terminal state, the
      * echoed conversation id (from the first {@code statusUpdate}), and a
      * hang flag.
+     *
+     * @param contextId the conversation id to send with the request
+     * @param text      the user message text to send
+     * @return the outcome containing terminal state, echoed context id, and hang flag
+     * @throws Exception if the HTTP request, SSE stream reading, or JSON parsing fails
      */
     private RequestOutcome sendA2AStream(String contextId, String text) throws Exception {
         String requestBody = MAPPER.writeValueAsString(MAPPER.createObjectNode()
@@ -359,6 +445,14 @@ class ExternalStressConcurrencyIntegrationTest {
         }
     }
 
+    /**
+     * Sends a blocking {@code SendMessage} request and returns the raw HTTP response.
+     *
+     * @param contextId the conversation id to send with the request
+     * @param text      the user message text to send
+     * @return the raw HTTP response as a string
+     * @throws Exception if the HTTP request fails
+     */
     private HttpResponse<String> sendA2ARaw(String contextId, String text) throws Exception {
         String body = MAPPER.writeValueAsString(MAPPER.createObjectNode()
                 .put("jsonrpc", "2.0")
@@ -383,38 +477,57 @@ class ExternalStressConcurrencyIntegrationTest {
                 HttpResponse.BodyHandlers.ofString());
     }
 
-    private JsonNode fetchActiveTasks() throws Exception {
+    /**
+     * Fetches the active tasks snapshot from the agent endpoint.
+     *
+     * @return the active tasks JSON, or empty if the endpoint is unreachable
+     * @throws Exception if the HTTP request fails
+     */
+    private Optional<JsonNode> fetchActiveTasks() throws Exception {
         HttpResponse<String> resp = http.send(
                 HttpRequest.newBuilder(URI.create(BASE_URL + "/v1/current_active_tasks"))
                         .timeout(Duration.ofSeconds(10))
                         .GET().build(),
                 HttpResponse.BodyHandlers.ofString());
-        return resp.statusCode() == 200 ? MAPPER.readTree(resp.body()) : null;
+        return resp.statusCode() == 200
+                ? Optional.of(MAPPER.readTree(resp.body()))
+                : Optional.empty();
     }
 
     /**
      * Returns the raw deployed {@code maxConcurrentTasks} value: {@code -1}
      * (unlimited), a positive limit, or {@code 0} when the probe is unreachable.
+     *
+     * @return the raw admission limit, or {@code 0} if the probe is unreachable
+     * @throws Exception if the HTTP request to the active-tasks endpoint fails
      */
     private int rawAdmissionLimit() throws Exception {
-        JsonNode active = fetchActiveTasks();
-        if (active == null) {
-            return 0;
-        }
-        return active.path("maxConcurrentTasks").asInt(-1);
+        Optional<JsonNode> active = fetchActiveTasks();
+        return active.map(jsonNode -> jsonNode.path("maxConcurrentTasks").asInt(-1)).orElse(0);
     }
 
+    /**
+     * Waits for the quota counter to drain to zero, with a 60-second timeout.
+     *
+     * @throws Exception if interrupted while waiting
+     */
     private void awaitQuotaDrained() throws Exception {
         long deadline = System.currentTimeMillis() + 60_000;
         while (System.currentTimeMillis() < deadline) {
-            JsonNode active = fetchActiveTasks();
-            if (active != null && active.path("currentActiveTasks").asInt(0) == 0) {
+            Optional<JsonNode> active = fetchActiveTasks();
+            if (active.isPresent() && active.get().path("currentActiveTasks").asInt(0) == 0) {
                 return;
             }
             Thread.sleep(300);
         }
     }
 
+    /**
+     * Truncates a response body to a readable snippet for diagnostic output.
+     *
+     * @param body the response body to truncate
+     * @return a snippet of at most 120 characters
+     */
     private static String snippet(String body) {
         return body == null ? "" : body.substring(0, Math.min(120, body.length()));
     }

@@ -106,6 +106,9 @@ public class EdpEngineConfiguration {
      * <p>包含 AgentCard、DeepAgentConfig 以及业务增强所需的全部初始化产物。
      * 依赖 {@code edpaExtHandler} 确保 {@code performInit} 先于本 Bean 执行。
      * 循环依赖通过 {@code @Lazy} 在 {@code EdpAgentFactoryAutoConfiguration} 中打破。</p>
+     *
+     * @param edpaExtHandler the agent handler bean ensuring initialization completes first
+     * @return the cached initialization result shared across beans
      */
     @Bean
     EdpaExtHandler.InitResult edpInitResult(AgentHandler edpaExtHandler) {
@@ -117,6 +120,9 @@ public class EdpEngineConfiguration {
      *
      * <p>从 {@code edpaExtHandler} 初始化结果中提取，与单例 Agent 共享同一 AgentCard。
      * 仅在 per-Task 模式激活时被 {@code EdpAgentFactoryAutoConfiguration} 消费。</p>
+     *
+     * @param edpaExtHandler the agent handler bean ensuring initialization completes first
+     * @return the AgentCard extracted from the initialization result
      */
     @Bean
     AgentCard edpAgentCard(AgentHandler edpaExtHandler) {
@@ -128,6 +134,9 @@ public class EdpEngineConfiguration {
      *
      * <p>从 {@code edpaExtHandler} 初始化结果中提取，与单例 Agent 共享同一配置模板。
      * 仅在 per-Task 模式激活时被 {@code EdpAgentFactoryAutoConfiguration} 消费。</p>
+     *
+     * @param edpaExtHandler the agent handler bean ensuring initialization completes first
+     * @return the DeepAgentConfig extracted from the initialization result
      */
     @Bean
     DeepAgentConfig edpDeepAgentConfig(AgentHandler edpaExtHandler) {

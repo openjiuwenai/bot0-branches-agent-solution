@@ -6,6 +6,19 @@ package com.openjiuwen.service.adapters.agentcore.ext.concurrency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import com.openjiuwen.service.app.controller.probe.ActiveTaskController;
 import com.openjiuwen.service.adapters.agentcore.ext.autoconfigure.ConcurrencyAutoConfiguration;
 import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
@@ -35,18 +48,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.web.client.RestTemplate;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * End-to-end integration tests for concurrent task execution (DFX-002 NF-1~NF-3, S-17~S-22).
@@ -105,7 +106,7 @@ class ConcurrencyParallelE2EIntegrationTest {
             tac.reset();
         }
 
-        ExecutorService pool = Executors.newFixedThreadPool(threadCount);
+        ExecutorService pool = new ThreadPoolExecutor(threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         CountDownLatch ready = new CountDownLatch(threadCount);
         CountDownLatch start = new CountDownLatch(1);
         ConcurrentLinkedQueue<Integer> results = new ConcurrentLinkedQueue<>();
@@ -148,7 +149,7 @@ class ConcurrencyParallelE2EIntegrationTest {
         CountDownLatch releaseAll = new CountDownLatch(1);
         ParallelAgent.configure(allStarted, releaseAll);
 
-        ExecutorService pool = Executors.newFixedThreadPool(taskCount);
+        ExecutorService pool = new ThreadPoolExecutor(taskCount, taskCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         List<CompletableFuture<Void>> futures = new ArrayList<>();
 
         try {
@@ -185,7 +186,7 @@ class ConcurrencyParallelE2EIntegrationTest {
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void parallelTasks_noContextLeak() throws Exception {
         int taskCount = 10;
-        ExecutorService pool = Executors.newFixedThreadPool(taskCount);
+        ExecutorService pool = new ThreadPoolExecutor(taskCount, taskCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         List<CompletableFuture<String>> futures = new ArrayList<>();
 
         try {
@@ -226,7 +227,7 @@ class ConcurrencyParallelE2EIntegrationTest {
     @Test
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void taskAFailure_doesNotAffectTaskB() throws Exception {
-        ExecutorService pool = Executors.newFixedThreadPool(2);
+        ExecutorService pool = new ThreadPoolExecutor(2, 2, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         CountDownLatch bothStarted = new CountDownLatch(2);
         CountDownLatch releaseBoth = new CountDownLatch(1);
         ParallelAgent.configure(bothStarted, releaseBoth);
@@ -275,7 +276,7 @@ class ConcurrencyParallelE2EIntegrationTest {
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void concurrentAdmissionAndRelease_countStaysAccurate() throws Exception {
         int threadCount = 20;
-        ExecutorService pool = Executors.newFixedThreadPool(threadCount);
+        ExecutorService pool = new ThreadPoolExecutor(threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         AtomicInteger successCount = new AtomicInteger(0);
         String baseUrl = "http://localhost:" + port + "/a2a/";
 
@@ -326,7 +327,7 @@ class ConcurrencyParallelE2EIntegrationTest {
     static final class ParallelAgent implements AgentHandler {
         private static volatile CountDownLatch allStarted;
         private static volatile CountDownLatch releaseGate;
-        private static final AtomicInteger activeCount = new AtomicInteger(0);
+        private static final AtomicInteger ACTIVE_COUNT = new AtomicInteger(0);
         private static final ConcurrentHashMap<String, String> conversationByThread =
                 new ConcurrentHashMap<>();
 
@@ -341,14 +342,14 @@ class ConcurrencyParallelE2EIntegrationTest {
         static void configure(CountDownLatch started, CountDownLatch release) {
             allStarted = started;
             releaseGate = release;
-            activeCount.set(0);
+            ACTIVE_COUNT.set(0);
             conversationByThread.clear();
         }
 
         static void reset() {
             allStarted = null;
             releaseGate = null;
-            activeCount.set(0);
+            ACTIVE_COUNT.set(0);
             conversationByThread.clear();
         }
 
@@ -356,7 +357,7 @@ class ConcurrencyParallelE2EIntegrationTest {
         public QueryResponse query(ServeRequest request) {
             String convId = request.getConversationId();
             conversationByThread.put(Thread.currentThread().getName(), convId);
-            int concurrent = activeCount.incrementAndGet();
+            int concurrent = ACTIVE_COUNT.incrementAndGet();
             try {
                 if (allStarted != null) {
                     allStarted.countDown();
@@ -373,10 +374,10 @@ class ConcurrencyParallelE2EIntegrationTest {
                                 "concurrent_peak", concurrent),
                         convId);
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new RuntimeException(e);
+                Thread.currentThread().interrupt(); // preserve interrupt status
+                throw new IllegalStateException(e);
             } finally {
-                activeCount.decrementAndGet();
+                ACTIVE_COUNT.decrementAndGet();
                 quotaTracker.onTaskReleased(convId);
                 admissionGate.release();
             }
@@ -386,7 +387,7 @@ class ConcurrencyParallelE2EIntegrationTest {
         public void streamQuery(ServeRequest request, QueryStreamObserver observer) {
             String convId = request.getConversationId();
             conversationByThread.put(Thread.currentThread().getName(), convId);
-            int concurrent = activeCount.incrementAndGet();
+            int concurrent = ACTIVE_COUNT.incrementAndGet();
             try {
                 observer.onNext(new QueryChunk("chunk",
                         Map.of("content", "tick-" + convId, "conversation_id", convId)));
@@ -398,9 +399,9 @@ class ConcurrencyParallelE2EIntegrationTest {
                 }
                 observer.onComplete();
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+                Thread.currentThread().interrupt(); // preserve interrupt status
             } finally {
-                activeCount.decrementAndGet();
+                ACTIVE_COUNT.decrementAndGet();
                 quotaTracker.onTaskReleased(convId);
                 admissionGate.release();
             }

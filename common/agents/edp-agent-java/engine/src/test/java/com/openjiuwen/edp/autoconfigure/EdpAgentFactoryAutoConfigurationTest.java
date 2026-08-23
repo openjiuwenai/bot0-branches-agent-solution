@@ -33,7 +33,6 @@ import org.springframework.context.annotation.Configuration;
  * @since 0.1.2
  */
 class EdpAgentFactoryAutoConfigurationTest {
-
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(EdpAgentFactoryAutoConfiguration.class));
 

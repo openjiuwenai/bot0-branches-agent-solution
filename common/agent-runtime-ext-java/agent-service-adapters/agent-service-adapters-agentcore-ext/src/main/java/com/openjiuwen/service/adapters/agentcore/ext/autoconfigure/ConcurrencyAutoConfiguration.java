@@ -32,7 +32,6 @@ import org.springframework.context.annotation.Lazy;
 @AutoConfiguration
 @EnableConfigurationProperties(ConcurrencyProperties.class)
 public class ConcurrencyAutoConfiguration {
-
     @Bean
     @ConditionalOnMissingBean(TaskAdmissionGate.class)
     TaskAdmissionControl taskAdmissionControl(ConcurrencyProperties props) {
