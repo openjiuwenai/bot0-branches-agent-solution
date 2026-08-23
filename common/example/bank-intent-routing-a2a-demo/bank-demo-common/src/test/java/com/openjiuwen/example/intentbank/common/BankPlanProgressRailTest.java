@@ -26,8 +26,7 @@ import java.util.Map;
 class BankPlanProgressRailTest {
     @Test
     void emitsCreatedPlanBeforeRemoteStepWithoutChangingDelegateArguments() {
-        TestInvocation invocation = invokeRail(List.of(
-                todo("first", "给张三转账100元", TodoStatus.IN_PROGRESS, null),
+        TestInvocation invocation = invokeRail(List.of(todo("first", "给张三转账100元", TodoStatus.IN_PROGRESS, null),
                 todo("second", "给李四转账100元", TodoStatus.PENDING, null)));
 
         assertThat(invocation.inputs().getToolCall().getArguments())
@@ -42,8 +41,7 @@ class BankPlanProgressRailTest {
 
     @Test
     void emitsCompletedResultBeforeNextRemoteStep() {
-        TestInvocation invocation = invokeRail(List.of(
-                todo("first", "给张三转账100元", TodoStatus.COMPLETED, "已向张三转账100元"),
+        TestInvocation invocation = invokeRail(List.of(todo("first", "给张三转账100元", TodoStatus.COMPLETED, "已向张三转账100元"),
                 todo("second", "给李四转账100元", TodoStatus.IN_PROGRESS, null)));
 
         assertProgress(invocation.session(), 2, """
@@ -55,8 +53,8 @@ class BankPlanProgressRailTest {
     private static TestInvocation invokeRail(List<TodoItem> todos) {
         String json = "{\"agentName\":\"transfer-agent\",\"remoteInput\":\"transfer\"}";
         ToolCall toolCall = ToolCall.builder().id("call-1").name("a2a_delegate").arguments(json).build();
-        ToolCallInputs inputs = ToolCallInputs.builder().toolCall(toolCall).toolName("a2a_delegate")
-                .toolArgs(json).build();
+        ToolCallInputs inputs = ToolCallInputs.builder().toolCall(toolCall).toolName("a2a_delegate").toolArgs(json)
+                .build();
         TestSession session = new TestSession("session-1");
         TaskPlanningRail taskPlanningRail = new TaskPlanningRail() {
             @Override
@@ -64,8 +62,8 @@ class BankPlanProgressRailTest {
                 return todos;
             }
         };
-        new BankPlanProgressRail(taskPlanningRail).beforeToolCall(
-                AgentCallbackContext.builder().inputs(inputs).session(session).build());
+        new BankPlanProgressRail(taskPlanningRail)
+                .beforeToolCall(AgentCallbackContext.builder().inputs(inputs).session(session).build());
         return new TestInvocation(inputs, session);
     }
 

@@ -8,6 +8,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.agents.intent.api.IntentSuite;
+import com.openjiuwen.agents.intent.model.FinishAction;
 import com.openjiuwen.agents.intent.model.IntentDecision;
 import com.openjiuwen.agents.intent.model.IntentDecisionStatus;
 import com.openjiuwen.agents.intent.model.InvokeToolAction;
@@ -31,6 +32,18 @@ import java.util.Objects;
 
 /**
  * Resolves the virtual intent Tool and routes the same ToolCall to its selected target.
+ *
+ * <p>
+ * A decision carrying {@link InvokeToolAction} rewrites the
+ * ToolCall in place, so the target Tool runs under the caller's own loop. Any other decision is
+ * answered by this Rail alone: the encoded result becomes the Tool message and the downstream Tool
+ * is skipped.
+ *
+ * <p>
+ * A decision carrying {@link FinishAction} additionally ends the calling Agent turn. The Tool
+ * message is still written, but the Agent stops instead of taking another model turn, and
+ * {@code output} is delivered as the answer. Whatever the Agent had planned after this Tool call is
+ * abandoned, which is why only a result function that owns the final wording returns that action.
  *
  * @since 0.1.0
  */
@@ -80,14 +93,16 @@ public final class IntentRoutingRail extends AgentRail {
         }
         ToolCall toolCall = inputs.getToolCall();
         String toolCallId = toolCall == null ? null : toolCall.getId();
-        log.info("Intent Tool call intercepted toolCallId={} catalogVersion={}", toolCallId,
+        String sessionId = sessionId(context);
+        log.info("Intent Tool call intercepted sessionId={} toolCallId={} catalogVersion={}", sessionId, toolCallId,
                 suite.snapshot().version());
         Map<String, Object> toolInputs;
         try {
             toolInputs = parseToolInputs(inputs.getToolArgs(), toolCall == null ? null : toolCall.getArguments());
         } catch (IllegalArgumentException exception) {
-            log.info("Intent Tool call rejected toolCallId={} reason={}", toolCallId, exception.getMessage());
-            writeResult(context, inputs, failed("意图调用输入无效"));
+            log.warn("Intent Tool call rejected sessionId={} toolCallId={} reason={}", sessionId, toolCallId,
+                    exception.getMessage());
+            writeResult(context, inputs, failed("intent call inputs are invalid"), sessionId);
             return;
         }
 
@@ -95,18 +110,28 @@ public final class IntentRoutingRail extends AgentRail {
         if (context.getSession() != null) {
             kwargs.put(SESSION_KWARG, context.getSession());
         }
+        if (!sessionId.isEmpty()) {
+            kwargs.put(IntentSuite.SESSION_ID_KWARG, sessionId);
+        }
         if (context.getContext() != null) {
             kwargs.put(CONTEXT_KWARG, context.getContext());
         }
         IntentDecision decision = suite.resolve(toolInputs, kwargs);
-        log.info("Intent Tool decision toolCallId={} status={} intentId={} actionType={}", toolCallId,
-                decision.status(), decision.intentId(),
+        log.info("Intent Tool decision sessionId={} toolCallId={} status={} intentId={} actionType={}", sessionId,
+                toolCallId, decision.status(), decision.intentId(),
                 decision.action() == null ? "none" : decision.action().getClass().getSimpleName());
         if (decision.action() instanceof InvokeToolAction invokeAction) {
-            routeInvokeAction(context, inputs, decision, invokeAction);
+            routeInvokeAction(context, inputs, decision, invokeAction, sessionId);
             return;
         }
-        writeResult(context, inputs, decision);
+        writeResult(context, inputs, decision, sessionId);
+    }
+
+    private static String sessionId(AgentCallbackContext context) {
+        if (context.getSession() == null || context.getSession().getSessionId() == null) {
+            return "";
+        }
+        return context.getSession().getSessionId();
     }
 
     /**
@@ -147,55 +172,67 @@ public final class IntentRoutingRail extends AgentRail {
     }
 
     private void routeInvokeAction(AgentCallbackContext context, ToolCallInputs inputs, IntentDecision decision,
-            InvokeToolAction action) {
+            InvokeToolAction action, String sessionId) {
         if (TOOL_NAME.equals(action.toolName())) {
-            writeResult(context, inputs, failed(decision.intentId(), "意图动作不能再次调用意图工具"));
+            writeResult(context, inputs,
+                    failed(decision.intentId(), "intent action must not call the intent Tool again"), sessionId);
             return;
         }
         if (!A2ADelegateIntentResultFunction.TOOL_NAME.equals(action.toolName())
                 && !isRegisteredAbility(context, action.toolName())) {
-            writeResult(context, inputs, failed(decision.intentId(), "目标工具未注册: " + action.toolName()));
+            writeResult(context, inputs,
+                    failed(decision.intentId(), "target Tool is not registered: " + action.toolName()), sessionId);
             return;
         }
         ToolCall toolCall = inputs.getToolCall();
         if (toolCall == null) {
-            writeResult(context, inputs, failed(decision.intentId(), "意图调用缺少 ToolCall"));
+            writeResult(context, inputs, failed(decision.intentId(), "intent call has no ToolCall"), sessionId);
             return;
         }
         String arguments;
         try {
             arguments = OBJECT_MAPPER.writeValueAsString(action.arguments());
         } catch (JsonProcessingException exception) {
-            writeResult(context, inputs, failed(decision.intentId(), "目标工具参数无法序列化"));
+            writeResult(context, inputs, failed(decision.intentId(), "target Tool arguments are not serializable"),
+                    sessionId);
             return;
         }
         toolCall.setName(action.toolName());
         toolCall.setArguments(arguments);
         inputs.setToolName(action.toolName());
         inputs.setToolArgs(action.arguments());
-        log.info("Intent Tool call routed intentId={} targetTool={} toolCallId={}", decision.intentId(),
-                action.toolName(), toolCall.getId());
+        log.info("Intent Tool call routed sessionId={} intentId={} targetTool={} toolCallId={}", sessionId,
+                decision.intentId(), action.toolName(), toolCall.getId());
     }
 
     private static boolean isRegisteredAbility(AgentCallbackContext context, String toolName) {
         return context.getAgent() instanceof BaseAgent agent && agent.getAbilityManager().get(toolName) != null;
     }
 
-    private void writeResult(AgentCallbackContext context, ToolCallInputs inputs, IntentDecision decision) {
+    private void writeResult(AgentCallbackContext context, ToolCallInputs inputs, IntentDecision decision,
+            String sessionId) {
         IntentDecision encodable = decision;
         String encoded;
         try {
             encoded = resultCodec.encode(encodable);
         } catch (IllegalArgumentException exception) {
-            encodable = failed(decision.intentId(), "意图结果无法序列化");
+            encodable = failed(decision.intentId(), "intent result is not JSON serializable");
             encoded = resultCodec.encode(encodable);
         }
         String toolCallId = inputs.getToolCall() == null ? null : inputs.getToolCall().getId();
         inputs.setToolResult(encoded);
         inputs.setToolMsg(ToolMessage.builder().content(encoded).toolCallId(toolCallId).name(TOOL_NAME).build());
         context.getExtra().put("_skip_tool", Boolean.TRUE);
-        log.info("Intent Tool call completed without downstream Tool toolCallId={} status={} intentId={}", toolCallId,
-                encodable.status(), encodable.intentId());
+        log.info("Intent Tool call completed without downstream Tool sessionId={} toolCallId={} status={} intentId={}",
+                sessionId, toolCallId, encodable.status(), encodable.intentId());
+        if (encodable.action() instanceof FinishAction finishAction) {
+            Map<String, Object> finishResult = new LinkedHashMap<>();
+            finishResult.put("output", finishAction.output());
+            finishResult.put("result_type", "answer");
+            context.requestForceFinish(finishResult);
+            log.info("Intent Tool call ended the Agent turn sessionId={} toolCallId={} intentId={}", sessionId,
+                    toolCallId, encodable.intentId());
+        }
     }
 
     private static IntentDecision failed(String message) {

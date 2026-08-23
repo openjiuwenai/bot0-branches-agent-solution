@@ -9,5 +9,5 @@ package com.openjiuwen.agents.intent.model;
  *
  * @since 0.1.0
  */
-public sealed interface IntentAction permits ReturnAction, InvokeToolAction {
+public sealed interface IntentAction permits ReturnAction, InvokeToolAction, FinishAction {
 }

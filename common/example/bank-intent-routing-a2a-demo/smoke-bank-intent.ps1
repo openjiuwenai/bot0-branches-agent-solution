@@ -225,6 +225,12 @@ try {
         @("BANK_DEMO_TOOL_RESULT tool=intent_match", '"status":"FALLBACK"', `
             '"intentId":"bank-intent-fallback"')
 
+    # 相近语义负向语料：意图目录必须区分开容易混淆的能力，而不只是"能匹配上"。
+    # 计算类请求同时用于验证不会被误路由到 balance-agent，并验证所有请求都经过意图工具。
+    Run-Completed "date-not-weather" "今天星期几" @()
+    Run-Completed "weather-not-date" "明天深圳会不会下雨" @("深圳")
+    Run-Completed "calculator-not-balance" "帮我算一下 128 减去 28 等于多少" @("100")
+
     $context = New-Context "transfer-confirm"
     $response = Send-BankMessage $context "" "给张三转100元"
     $task = Assert-Task $response "TASK_STATE_INPUT_REQUIRED" @("确认", "张三", "100")
@@ -245,7 +251,7 @@ try {
 
     $context = New-Context "wealth-purchase"
     $response = Send-BankMessage $context "" "购买一万元稳盈90天"
-    $task = Assert-Task $response "TASK_STATE_INPUT_REQUIRED" @("确认")
+    $task = Assert-Task $response "TASK_STATE_INPUT_REQUIRED" @("确认", "稳盈90天", "10000")
     $response = Send-BankMessage $context $task.id "确认"
     $null = Assert-Task $response "TASK_STATE_COMPLETED" @("稳盈90天", "10000")
     Write-Host "PASS: wealth purchase confirmation and resume"
@@ -290,13 +296,14 @@ try {
     $planLines | Set-Content -Path $planAuditLog -Encoding UTF8
     Assert-LogCount "planned intent_match calls" $planAuditLog 2 @("BANK_DEMO_TOOL_CALL tool=intent_match")
 
+    # 负向语料"帮我算一下 128 减去 28"也必须经过意图工具，且不得被误路由到 balance-agent。
     Assert-LogCount "balance execution" (Join-Path $tempDir "balance.out.log") 1 `
         @("BANK_DEMO_EXECUTION tool=query_balance")
     Assert-LogCount "wealth recommendation execution" (Join-Path $tempDir "wealth-advisor.out.log") 2 `
         @("BANK_DEMO_EXECUTION tool=recommend_wealth")
-    Assert-LogCount "calculator execution" $intentLog 1 @("BANK_DEMO_EXECUTION tool=bank_calculator")
-    Assert-LogCount "date execution" $intentLog 1 @("BANK_DEMO_EXECUTION tool=current_date")
-    Assert-LogCount "weather execution" $intentLog 1 @("BANK_DEMO_EXECUTION tool=weather_query")
+    Assert-LogCount "calculator execution" $intentLog 2 @("BANK_DEMO_EXECUTION tool=bank_calculator")
+    Assert-LogCount "date execution" $intentLog 2 @("BANK_DEMO_EXECUTION tool=current_date")
+    Assert-LogCount "weather execution" $intentLog 2 @("BANK_DEMO_EXECUTION tool=weather_query")
     $transferLog = Join-Path $tempDir "transfer.out.log"
     Assert-LogCount "all confirmed transfer executions" $transferLog 4 `
         @("BANK_DEMO_EXECUTION tool=execute_transfer")

@@ -87,6 +87,7 @@ public class RuntimeIntentProperties {
      */
     public static class MatchProperties {
         private double threshold = 0.65D;
+        private String queryInstruction = "";
 
         public double getThreshold() {
             return threshold;
@@ -94,6 +95,14 @@ public class RuntimeIntentProperties {
 
         public void setThreshold(double threshold) {
             this.threshold = threshold;
+        }
+
+        public String getQueryInstruction() {
+            return queryInstruction;
+        }
+
+        public void setQueryInstruction(String queryInstruction) {
+            this.queryInstruction = queryInstruction;
         }
     }
 

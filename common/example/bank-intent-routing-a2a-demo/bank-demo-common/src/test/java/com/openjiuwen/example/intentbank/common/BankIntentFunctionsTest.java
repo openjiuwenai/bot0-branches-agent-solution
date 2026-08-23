@@ -10,11 +10,11 @@ import com.openjiuwen.agents.intent.spi.IntentResultFunction;
 import com.openjiuwen.agents.intent.api.IntentSuite;
 import com.openjiuwen.agents.intent.initializer.DefaultIntentInitializer;
 import com.openjiuwen.agents.intent.model.CustomIntentRegistration;
+import com.openjiuwen.agents.intent.model.FinishAction;
 import com.openjiuwen.agents.intent.model.IntentCatalogInput;
 import com.openjiuwen.agents.intent.model.IntentDecision;
 import com.openjiuwen.agents.intent.model.IntentSuiteConfig;
 import com.openjiuwen.agents.intent.model.InvokeToolAction;
-import com.openjiuwen.agents.intent.model.ReturnAction;
 
 import org.junit.jupiter.api.Test;
 
@@ -42,11 +42,13 @@ class BankIntentFunctionsTest {
     }
 
     @Test
-    void fallbackReturnsStableUnmatchedPayload() {
+    void fallbackReturnsStableUnmatchedPayloadAndEndsTheTurn() {
         IntentDecision decision = resolve(BankIntentFunctions.fallback(), "写一首诗");
 
-        assertThat(decision.action()).isInstanceOfSatisfying(ReturnAction.class,
-                action -> assertThat(payload(action.result())).containsEntry("status", "UNMATCHED"));
+        assertThat(decision.action()).isInstanceOfSatisfying(FinishAction.class, action -> {
+            assertThat(payload(action.result())).containsEntry("status", "UNMATCHED");
+            assertThat(action.output()).isEqualTo(payload(action.result()).get("message"));
+        });
     }
 
     private static IntentDecision resolve(IntentResultFunction function, String semantic) {

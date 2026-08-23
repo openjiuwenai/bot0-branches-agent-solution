@@ -9,6 +9,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openjiuwen.agents.intent.model.FinishAction;
 import com.openjiuwen.agents.intent.model.IntentDecision;
 import com.openjiuwen.agents.intent.model.IntentDecisionStatus;
 import com.openjiuwen.agents.intent.model.ReturnAction;
@@ -35,15 +36,20 @@ class IntentToolResultCodecTest {
         assertThat(fallback).containsEntry("status", "FALLBACK").containsEntry("intentId", "default-fallback")
                 .containsEntry("result", "请重新描述");
 
+        Map<String, Object> finish = decode(codec.encode(new IntentDecision(IntentDecisionStatus.FALLBACK,
+                "terminal-fallback", new FinishAction(Map.of("notice", "超出范围"), "超出范围，请补充说明。"), null)));
+        assertThat(finish).containsEntry("status", "FALLBACK").containsEntry("intentId", "terminal-fallback")
+                .containsEntry("result", Map.of("notice", "超出范围")).doesNotContainKey("output");
+
         Map<String, Object> unmatched = decode(
-                codec.encode(new IntentDecision(IntentDecisionStatus.UNMATCHED, null, null, "意图未匹配")));
-        assertThat(unmatched).containsEntry("status", "UNMATCHED").containsEntry("message", "意图未匹配")
+                codec.encode(new IntentDecision(IntentDecisionStatus.UNMATCHED, null, null, "no intent matched")));
+        assertThat(unmatched).containsEntry("status", "UNMATCHED").containsEntry("message", "no intent matched")
                 .doesNotContainKey("intentId").doesNotContainKey("result");
 
-        Map<String, Object> failed = decode(
-                codec.encode(new IntentDecision(IntentDecisionStatus.FAILED, "broken", null, "意图结果函数执行失败")));
+        Map<String, Object> failed = decode(codec.encode(
+                new IntentDecision(IntentDecisionStatus.FAILED, "broken", null, "intent result function failed")));
         assertThat(failed).containsEntry("status", "FAILED").containsEntry("intentId", "broken")
-                .containsEntry("message", "意图结果函数执行失败").doesNotContainKey("result");
+                .containsEntry("message", "intent result function failed").doesNotContainKey("result");
     }
 
     @Test

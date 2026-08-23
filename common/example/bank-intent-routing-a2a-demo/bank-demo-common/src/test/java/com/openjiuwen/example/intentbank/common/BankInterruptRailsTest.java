@@ -47,8 +47,8 @@ class BankInterruptRailsTest {
         assertThat(context.hasForceFinishRequest()).isTrue();
         assertThat(context.getForceFinishRequest().getResult()).containsEntry("result_type", "answer");
         assertThat(context.getForceFinishRequest().getResult().get("output")).isInstanceOfSatisfying(Map.class,
-                output -> assertThat(output).containsEntry("status", "INTENT_CHANGED")
-                        .containsEntry("latestSemantic", "购买1000元理财"));
+                output -> assertThat(output).containsEntry("status", "INTENT_CHANGED").containsEntry("latestSemantic",
+                        "购买1000元理财"));
     }
 
     @Test

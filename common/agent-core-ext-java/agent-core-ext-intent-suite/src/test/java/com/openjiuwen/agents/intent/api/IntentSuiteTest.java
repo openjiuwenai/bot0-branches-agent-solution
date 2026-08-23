@@ -11,6 +11,7 @@ import com.openjiuwen.agents.intent.exception.IntentInitializationException;
 import com.openjiuwen.agents.intent.exception.IntentMatchException;
 import com.openjiuwen.agents.intent.initializer.DefaultIntentInitializer;
 import com.openjiuwen.agents.intent.model.CustomIntentRegistration;
+import com.openjiuwen.agents.intent.model.FinishAction;
 import com.openjiuwen.agents.intent.model.IntentCatalogInput;
 import com.openjiuwen.agents.intent.model.IntentDecision;
 import com.openjiuwen.agents.intent.model.IntentDecisionStatus;
@@ -107,6 +108,48 @@ class IntentSuiteTest {
         selected.set(actionSuite.snapshot().initializedIntents().matchableIntents().get(0));
         assertThat(actionSuite.resolve(Map.of("semantic", "bad"), Map.of()).status())
                 .isEqualTo(IntentDecisionStatus.FAILED);
+    }
+
+    @Test
+    void keepsFinishActionsWithAnswerTextAndRejectsBlankOnes() {
+        AtomicReference<IntentDefinition> selected = new AtomicReference<>();
+        IntentSuite terminalSuite = suite(context -> Optional.of(selected.get()));
+        terminalSuite.replaceCatalog(catalog(
+                new CustomIntentRegistration("terminal", "terminal", context -> new FinishAction("evidence", "answer")),
+                null));
+        selected.set(terminalSuite.snapshot().initializedIntents().matchableIntents().get(0));
+
+        IntentDecision terminal = terminalSuite.resolve(Map.of("semantic", "out of scope"), Map.of());
+
+        assertThat(terminal.status()).isEqualTo(IntentDecisionStatus.MATCHED);
+        assertThat(terminal.action()).isEqualTo(new FinishAction("evidence", "answer"));
+
+        IntentSuite blankSuite = suite(context -> Optional.of(selected.get()));
+        blankSuite.replaceCatalog(catalog(
+                new CustomIntentRegistration("blank", "blank", context -> new FinishAction("evidence", "  ")), null));
+        selected.set(blankSuite.snapshot().initializedIntents().matchableIntents().get(0));
+
+        assertThat(blankSuite.resolve(Map.of("semantic", "out of scope"), Map.of()).status())
+                .isEqualTo(IntentDecisionStatus.FAILED);
+    }
+
+    @Test
+    void nullMatcherResultFailsWithoutReachingFallbackOrResultFunction() {
+        AtomicReference<Boolean> fallbackInvoked = new AtomicReference<>(Boolean.FALSE);
+        CustomIntentRegistration fallback = new CustomIntentRegistration("fallback", "fallback description",
+                context -> {
+                    fallbackInvoked.set(Boolean.TRUE);
+                    return new ReturnAction("fallback");
+                });
+        IntentSuite suite = suite(context -> null);
+        suite.replaceCatalog(catalog(registration("candidate"), fallback));
+
+        IntentDecision decision = suite.resolve(Map.of("semantic", "pay"), Map.of());
+
+        assertThat(decision.status()).isEqualTo(IntentDecisionStatus.FAILED);
+        assertThat(decision.intentId()).isNull();
+        assertThat(decision.action()).isNull();
+        assertThat(fallbackInvoked.get()).isFalse();
     }
 
     @Test
