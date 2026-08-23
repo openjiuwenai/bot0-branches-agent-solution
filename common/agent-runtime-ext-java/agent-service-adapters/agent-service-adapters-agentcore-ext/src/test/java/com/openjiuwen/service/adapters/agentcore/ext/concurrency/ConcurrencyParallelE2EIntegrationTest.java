@@ -232,18 +232,22 @@ class ConcurrencyParallelE2EIntegrationTest {
         ParallelAgent.configure(bothStarted, releaseBoth);
 
         try {
-            CompletableFuture<Void> taskA = CompletableFuture.runAsync(() -> {
+            // Task-A uses SendMessage: the failure trigger ("fail-sync-query")
+            // is only wired into ParallelAgent.query(), not streamQuery().
+            CompletableFuture<String> taskA = CompletableFuture.supplyAsync(() -> {
                 HttpHeaders headers = jsonHeaders();
-                String body = jsonRpc("SendStreamingMessage", "fail-conv", "fail-sync-query");
-                rest.postForEntity("http://localhost:" + port + "/a2a/",
+                String body = jsonRpc("SendMessage", "fail-conv", "fail-sync-query");
+                ResponseEntity<String> resp = rest.postForEntity("http://localhost:" + port + "/a2a/",
                         new HttpEntity<>(body, headers), String.class);
+                return resp.getBody();
             }, pool);
 
-            CompletableFuture<Void> taskB = CompletableFuture.runAsync(() -> {
+            CompletableFuture<String> taskB = CompletableFuture.supplyAsync(() -> {
                 HttpHeaders headers = jsonHeaders();
-                String body = jsonRpc("SendStreamingMessage", "ok-conv", "ok-data");
-                rest.postForEntity("http://localhost:" + port + "/a2a/",
+                String body = jsonRpc("SendMessage", "ok-conv", "ok-data");
+                ResponseEntity<String> resp = rest.postForEntity("http://localhost:" + port + "/a2a/",
                         new HttpEntity<>(body, headers), String.class);
+                return resp.getBody();
             }, pool);
 
             bothStarted.await(10, TimeUnit.SECONDS);
@@ -251,6 +255,14 @@ class ConcurrencyParallelE2EIntegrationTest {
 
             taskB.get(15, TimeUnit.SECONDS);
             taskA.get(15, TimeUnit.SECONDS);
+
+            // Task-A must have failed (T-10: failure is contained, not silent)
+            String failBody = taskA.get();
+            assertThat(failBody).contains("TASK_STATE_FAILED");
+            // Task-B must have completed normally, unaffected by Task-A's failure
+            String okBody = taskB.get();
+            assertThat(okBody).contains("ok-conv");
+            assertThat(okBody).doesNotContain("TASK_STATE_FAILED");
         } finally {
             pool.shutdown();
             pool.awaitTermination(30, TimeUnit.SECONDS);

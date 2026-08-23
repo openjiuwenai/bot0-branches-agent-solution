@@ -105,4 +105,21 @@ class ConcurrencyAutoConfigurationTest {
                     assertThat(context).doesNotHaveBean(AgentInstanceManager.class);
                 });
     }
+
+    @Test
+    void noAgentFactoryBean_agentInstanceManagerAbsent_othersStillRegistered() {
+        // Negative branch of @ConditionalOnBean(AgentFactory.class): without a
+        // factory the per-Task agent manager must NOT be created (handler falls
+        // back to singleton mode), while admission control and task tracking
+        // must still be registered so limiting and the query endpoint work.
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(ConcurrencyAutoConfiguration.class))
+                .run(context -> {
+                    assertThat(context).doesNotHaveBean(AgentInstanceManager.class);
+                    assertThat(context).hasSingleBean(TaskAdmissionControl.class);
+                    assertThat(context).hasSingleBean(TaskQuotaTracker.class);
+                    assertThat(context).hasSingleBean(TaskAdmissionGate.class);
+                    assertThat(context).hasSingleBean(ActiveTaskQuery.class);
+                });
+    }
 }

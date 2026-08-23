@@ -6,7 +6,9 @@ package com.openjiuwen.service.adapters.agentcore.ext.agentfw;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -190,6 +192,107 @@ class JiuwenCoreAgentExtHandlerTest {
                     assertThat(ex.getDescriptor().isRetryable()).isTrue();
                     assertThat(ex.getCause()).isInstanceOf(ConversationBusyException.class);
                 });
+    }
+
+    @Test
+    void prepareTask_cachesAgent_completeTaskReleasesIt() {
+        AgentInstanceManager agentManager = mock(AgentInstanceManager.class);
+        Object agent = new IdentityInvokeAgent("per-task");
+        when(agentManager.acquire("c-lifecycle")).thenReturn(agent);
+
+        JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityInvokeAgent("singleton"));
+        handler.setAgentManager(agentManager);
+
+        Object token = handler.prepareTask(request("c-lifecycle", "hello"));
+        assertThat(token).isNotNull();
+
+        QueryResponse response = handler.query(request("c-lifecycle", "hello"));
+        assertThat((Map<String, Object>) response.getResult()).containsEntry("content", "per-task");
+        // query() must NOT release the agent — it is owned by the task lifecycle now
+        verify(agentManager, never()).release("c-lifecycle", agent);
+
+        handler.completeTask(token);
+        verify(agentManager).release("c-lifecycle", agent);
+    }
+
+    @Test
+    void prepareTask_secondTaskWhileCached_throwsConversationBusy() {
+        AgentInstanceManager agentManager = mock(AgentInstanceManager.class);
+        Object firstAgent = new IdentityInvokeAgent("first");
+        when(agentManager.acquire("c-conflict")).thenReturn(firstAgent);
+
+        JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityInvokeAgent("singleton"));
+        handler.setAgentManager(agentManager);
+
+        Object firstToken = handler.prepareTask(request("c-conflict", "hello"));
+
+        // A second task for the same conversation while the first is in flight:
+        // must fail with the retryable CONVERSATION_BUSY error, not silently
+        // share the first task's agent.
+        assertThatThrownBy(() -> handler.prepareTask(request("c-conflict", "second")))
+                .isInstanceOfSatisfying(AgentExecutionException.class, ex -> {
+                    assertThat(ex.getDescriptor().code()).isEqualTo("CONVERSATION_BUSY");
+                    assertThat(ex.getDescriptor().isRetryable()).isTrue();
+                });
+        // The busy rejection must not have disturbed the first task's agent
+        verify(agentManager, never()).release(org.mockito.ArgumentMatchers.eq("c-conflict"), any());
+
+        // P0 regression: the rejected task's finally calls completeTask with a
+        // null token (it never acquired anything) — the first task's agent and
+        // cache entry must survive untouched.
+        handler.completeTask(null);
+        verify(agentManager, never()).release("c-conflict", firstAgent);
+
+        // The first task still owns its agent and can complete normally
+        handler.completeTask(firstToken);
+        verify(agentManager).release("c-conflict", firstAgent);
+    }
+
+    @Test
+    void prepareTask_afterCompleteTask_newTaskCanAcquire() {
+        AgentInstanceManager agentManager = mock(AgentInstanceManager.class);
+        Object first = new IdentityInvokeAgent("first");
+        Object second = new IdentityInvokeAgent("second");
+        when(agentManager.acquire("c-reuse")).thenReturn(first, second);
+
+        JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityInvokeAgent("singleton"));
+        handler.setAgentManager(agentManager);
+
+        Object firstToken = handler.prepareTask(request("c-reuse", "hello"));
+        handler.completeTask(firstToken);
+        verify(agentManager).release("c-reuse", first);
+
+        Object secondToken = handler.prepareTask(request("c-reuse", "hello again"));
+        QueryResponse response = handler.query(request("c-reuse", "hello again"));
+        assertThat((Map<String, Object>) response.getResult()).containsEntry("content", "second");
+        handler.completeTask(secondToken);
+        verify(agentManager).release("c-reuse", second);
+    }
+
+    @Test
+    void completeTask_nullOrForeignToken_neverReleasesOwnerAgent() {
+        AgentInstanceManager agentManager = mock(AgentInstanceManager.class);
+        Object agent = new IdentityInvokeAgent("owner");
+        when(agentManager.acquire("c-owner")).thenReturn(agent);
+
+        JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityInvokeAgent("singleton"));
+        handler.setAgentManager(agentManager);
+
+        Object token = handler.prepareTask(request("c-owner", "hello"));
+
+        // null token: nothing acquired for that caller — must be a no-op
+        handler.completeTask(null);
+        // foreign token: belongs to nobody — must be a no-op
+        handler.completeTask(new Object());
+        verify(agentManager, never()).release(org.mockito.ArgumentMatchers.eq("c-owner"), any());
+
+        // the real owner's token still releases exactly once
+        handler.completeTask(token);
+        verify(agentManager).release("c-owner", agent);
+
+        // a second completeTask with the now-stale token must not re-release
+        handler.completeTask(token);
+        verify(agentManager).release("c-owner", agent); // still exactly once
     }
 
     private static ServeRequest request(String conversationId, String content) {

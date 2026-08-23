@@ -26,6 +26,10 @@ class TaskQuotaTrackerTest {
         ConcurrencyLoadSnapshot snapshot = tracker.snapshot();
         assertThat(snapshot.getTasks()).hasSize(1);
         assertThat(snapshot.getTasks().get(0).getConversationId()).isEqualTo("conv-1");
+        assertThat(snapshot.getTasks().get(0).getTaskId()).isEqualTo("task-1");
+        // Entry contract (L2 §2.3): WORKING status with a non-empty start time
+        assertThat(snapshot.getTasks().get(0).getStatus()).isEqualTo("WORKING");
+        assertThat(snapshot.getTasks().get(0).getStartedAt()).isNotBlank();
     }
 
     @Test
@@ -45,6 +49,8 @@ class TaskQuotaTrackerTest {
         tracker.onTaskWorking("conv-2", "task-2");
         ConcurrencyLoadSnapshot snapshot = tracker.snapshot();
         assertThat(snapshot.getCurrentActiveTasks()).isEqualTo(2);
+        // Snapshot aggregates the configured limit from the admission control
+        assertThat(snapshot.getMaxConcurrentTasks()).isEqualTo(5);
     }
 
     @Test

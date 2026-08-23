@@ -142,11 +142,17 @@ class AgentInstanceManagerTest {
     void release_removesFromActiveAgents() {
         AgentFactory factory = mock(AgentFactory.class);
         Object agent = new Object();
-        when(factory.create()).thenReturn(agent);
+        Object recreated = new Object();
+        when(factory.create()).thenReturn(agent, recreated);
         AgentInstanceManager manager = new AgentInstanceManager(factory);
         manager.acquire("conv-1");
         manager.release("conv-1", agent);
         verify(factory).destroy(agent);
+
+        // The conversation is free again: a fresh acquire must succeed with a
+        // new instance — proves the entry was really removed from activeAgents
+        Object reacquired = manager.acquire("conv-1");
+        assertThat(reacquired).isSameAs(recreated);
     }
 
     @Test
@@ -157,6 +163,11 @@ class AgentInstanceManagerTest {
         assertThatThrownBy(() -> manager.acquire("conv-1"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("create failed");
+        // No residue: the failed acquire must not destroy anything and must
+        // not leave the conversation marked busy — a retry can succeed
+        verify(factory, never()).destroy(any());
+        org.mockito.Mockito.doReturn(new Object()).when(factory).create();
+        assertThat(manager.acquire("conv-1")).isNotNull();
     }
 
     @Test

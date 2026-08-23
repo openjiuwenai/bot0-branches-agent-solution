@@ -53,6 +53,7 @@ class CustomRestA2ABridgeAdmissionTest {
         assertThatThrownBy(() -> bridge.prepare(context(), true))
                 .isInstanceOfSatisfying(CustomRestFailure.class,
                         f -> assertThat(f.getHttpStatus()).isEqualTo(503));
+        verify(gate, never()).tryAcquire();
         verify(gate, never()).release();
     }
 
@@ -67,6 +68,7 @@ class CustomRestA2ABridgeAdmissionTest {
         Object result = bridge.executeBlocking(bridge.prepare(context(), true));
 
         assertThat(result).isEqualTo(Map.of("ok", true));
+        verify(gate, never()).tryAcquire();
         verify(gate, never()).release();
     }
 
@@ -76,12 +78,17 @@ class CustomRestA2ABridgeAdmissionTest {
         when(handler.onMessageSend(any(), any())).thenAnswer(invocation -> completedTask());
         TaskAdmissionGate gate = mock(TaskAdmissionGate.class);
         when(gate.limit()).thenReturn(-1);
+        // Extreme count proves the pre-check was skipped (not merely passed):
+        // a non-skipped check against MAX_VALUE would reject with 503.
         when(gate.currentCount()).thenReturn(Integer.MAX_VALUE);
         CustomRestA2ABridge bridge = newBridge(handler, gate);
 
-        CustomRestA2ABridge.Prepared prepared = bridge.prepare(context(), true);
+        // Execute fully — the request must succeed, not just pass prepare()
+        Object result = bridge.executeBlocking(bridge.prepare(context(), true));
 
-        assertThat(prepared).isNotNull();
+        assertThat(result).isEqualTo(Map.of("ok", true));
+        verify(gate, never()).tryAcquire();
+        verify(gate, never()).release();
     }
 
     @Test
@@ -101,6 +108,7 @@ class CustomRestA2ABridgeAdmissionTest {
         assertThatThrownBy(() -> bridge.prepare(context(), true))
                 .isInstanceOf(RuntimeException.class);
 
+        verify(gate, never()).tryAcquire();
         verify(gate, never()).release();
     }
 
@@ -115,6 +123,7 @@ class CustomRestA2ABridgeAdmissionTest {
         assertThatThrownBy(() -> bridge.executeBlocking(bridge.prepare(context(), true)))
                 .isInstanceOf(CustomRestFailure.class);
 
+        verify(gate, never()).tryAcquire();
         verify(gate, never()).release();
     }
 
@@ -130,6 +139,7 @@ class CustomRestA2ABridgeAdmissionTest {
                 .isInstanceOfSatisfying(CustomRestFailure.class,
                         f -> assertThat(f.getHttpStatus()).isEqualTo(502));
 
+        verify(gate, never()).tryAcquire();
         verify(gate, never()).release();
     }
 
@@ -144,6 +154,7 @@ class CustomRestA2ABridgeAdmissionTest {
         assertThatThrownBy(() -> bridge.executeStream(bridge.prepare(context(), true)))
                 .isInstanceOf(CustomRestFailure.class);
 
+        verify(gate, never()).tryAcquire();
         verify(gate, never()).release();
     }
 
@@ -159,20 +170,23 @@ class CustomRestA2ABridgeAdmissionTest {
         Flow.Publisher<StreamingEventKind> result = bridge.executeStream(bridge.prepare(context(), true));
 
         assertThat(result).isSameAs(publisher);
+        verify(gate, never()).tryAcquire();
         verify(gate, never()).release();
     }
 
     @Test
     void admissionGateNull_skipsCheck() {
         RequestHandler handler = mock(RequestHandler.class);
-        when(handler.onMessageSend(any(), any())).thenReturn(completedTask());
+        when(handler.onMessageSend(any(), any())).thenAnswer(invocation -> completedTask());
         ObjectProvider<TaskAdmissionGate> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(null);
         CustomRestA2ABridge bridge = newBridgeWithoutGate(handler);
         bridge.setAdmissionGateProvider(provider);
 
-        CustomRestA2ABridge.Prepared prepared = bridge.prepare(context(), true);
-        assertThat(prepared).isNotNull();
+        // Execute fully — behavior must be unchanged when no gate bean exists
+        Object result = bridge.executeBlocking(bridge.prepare(context(), true));
+
+        assertThat(result).isEqualTo(Map.of("ok", true));
     }
 
     private static CustomRestA2ABridge newBridge(RequestHandler handler, TaskAdmissionGate gate) {
