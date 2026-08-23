@@ -6,6 +6,7 @@ package com.openjiuwen.agents.intent.deepagent;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openjiuwen.agents.intent.model.FinishAction;
 import com.openjiuwen.agents.intent.model.IntentDecision;
 import com.openjiuwen.agents.intent.model.ReturnAction;
 
@@ -36,6 +37,9 @@ public final class IntentToolResultCodec {
         }
         if (decision.action() instanceof ReturnAction returnAction) {
             payload.put("result", returnAction.result());
+        }
+        if (decision.action() instanceof FinishAction finishAction) {
+            payload.put("result", finishAction.result());
         }
         if (decision.message() != null) {
             payload.put("message", decision.message());

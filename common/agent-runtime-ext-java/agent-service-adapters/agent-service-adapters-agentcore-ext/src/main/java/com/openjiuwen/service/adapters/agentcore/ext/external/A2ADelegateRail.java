@@ -74,8 +74,8 @@ public final class A2ADelegateRail extends BaseInterruptRail {
                     toolCallId(toolCall), agentName);
             return reject("Remote A2A agent is not registered: " + agentName);
         }
-        log.info("A2A delegate Rail created interrupt toolCallId={} agentName={} remoteInputLength={}",
-                toolCallId(toolCall), agentName, remoteInput.length());
+        log.info("A2A delegate Rail created interrupt toolCallId={} agentName={} remoteInput={}",
+                toolCallId(toolCall), agentName, remoteInput);
         return interrupt(InterruptRequest.builder().message(remoteInput)
                 .context(Map.of("agentName", agentName, "_interrupt_kind", "a2a_delegate")).build());
     }

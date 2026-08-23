@@ -55,7 +55,8 @@ public class IntentAgentApplication {
         return new JiuwenCoreAgentExtHandler(BankDemoAgentFactory.create(definition,
                 List.of(BankTools.calculator(), BankTools.currentDate(), BankTools.weather()),
                 List.of(new BankToolAuditRail(), new IntentOnlyToolVisibilityRail(), taskPlanningRail,
-                        new BankPlanProgressRail(taskPlanningRail)), properties));
+                        new BankPlanProgressRail(taskPlanningRail)),
+                properties));
     }
 
     @Bean

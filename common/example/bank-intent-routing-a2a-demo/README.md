@@ -76,7 +76,8 @@ All bank intent routing scenarios passed.
 |---|---|
 | 余额、理财推荐 | 分别路由到正确的远端业务 Agent |
 | 计算器、日期、天气 | 执行入口 Agent 的本地意图函数 |
-| fallback | 返回银行能力范围提示，不调用业务 Agent |
+| 相近语义区分 | 日期与天气、计算与余额等易混语义分别路由到正确目标，且不误调业务 Agent |
+| fallback | 原样返回银行能力范围提示并直接结束本轮，不调用业务 Agent |
 | 转账追问与确认 | 补齐收款人和金额，在同一 A2A Task 中确认后执行 |
 | 理财购买确认 | 在同一 A2A Task 中确认后执行购买 |
 | 语义指代 | 根据同一会话的推荐结果解析“刚才推荐的第一个产品” |
@@ -377,7 +378,8 @@ JSON
 ```
 
 预期最终状态为 `TASK_STATE_COMPLETED`，响应说明入口只支持银行相关能力；入口日志中的意图结果应
-包含 `FALLBACK` 和 `bank-intent-fallback`。
+包含 `FALLBACK` 和 `bank-intent-fallback`。兜底意图函数返回 `FinishAction`，兜底话术直接作为本轮答复
+返回，模型不会再拿它续写一轮，因此这句拒绝不会被改写或忽略。
 
 ### 5. 转账追问、确认和同 Task 续接
 

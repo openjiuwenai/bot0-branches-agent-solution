@@ -6,6 +6,7 @@ package com.openjiuwen.example.intentbank.common;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openjiuwen.agents.intent.model.IntentChangeSignal;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.singleagent.interrupt.InterruptRequest;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
@@ -63,12 +64,11 @@ public final class BankInterruptRails {
         @Override
         public void afterToolCall(AgentCallbackContext context) {
             if (!(context.getInputs() instanceof ToolCallInputs inputs)
-                    || !(inputs.getToolResult() instanceof Map<?, ?> result)
-                    || !"INTENT_CHANGED".equals(result.get("status"))) {
+                    || !IntentChangeSignal.matches(inputs.getToolResult())) {
                 return;
             }
             Map<String, Object> terminal = new java.util.LinkedHashMap<>();
-            result.forEach((key, value) -> terminal.put(String.valueOf(key), value));
+            ((Map<?, ?>) inputs.getToolResult()).forEach((key, value) -> terminal.put(String.valueOf(key), value));
             context.requestForceFinish(Map.of("output", terminal, "result_type", "answer"));
         }
     }
@@ -99,8 +99,7 @@ public final class BankInterruptRails {
             if (NEGATIVE.contains(input.toLowerCase(Locale.ROOT))) {
                 return reject(Map.of("status", "CANCELLED", "message", "用户已取消操作"));
             }
-            return interrupt(InterruptRequest.builder()
-                    .message(confirmationMessage(toolCall) + "\n请明确回复确认或取消。")
+            return interrupt(InterruptRequest.builder().message(confirmationMessage(toolCall) + "\n请明确回复确认或取消。")
                     .context(Map.of("_interrupt_kind", "ask_user")).build());
         }
 
@@ -142,7 +141,7 @@ public final class BankInterruptRails {
     }
 
     private static Map<String, Object> intentChanged(String input) {
-        return Map.of("status", "INTENT_CHANGED", "latestSemantic", input, "message", "用户输入表达了新的处理目标");
+        return IntentChangeSignal.of(input, "用户输入表达了新的处理目标");
     }
 
     private static String normalize(Object value) {

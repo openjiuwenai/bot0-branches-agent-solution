@@ -37,7 +37,8 @@ public final class BankPlanProgressRail extends AgentRail {
     /**
      * Creates a progress Rail for the DeepAgent workspace.
      *
-     * @param taskPlanningRail Intent Agent task-planning Rail
+     * @param taskPlanningRail
+     *            Intent Agent task-planning Rail
      */
     public BankPlanProgressRail(TaskPlanningRail taskPlanningRail) {
         this.taskPlanningRail = Objects.requireNonNull(taskPlanningRail, "taskPlanningRail");
@@ -50,8 +51,8 @@ public final class BankPlanProgressRail extends AgentRail {
 
     @Override
     public void beforeToolCall(AgentCallbackContext context) {
-        if (!(context.getInputs() instanceof ToolCallInputs inputs)
-                || !A2A_DELEGATE.equals(inputs.getToolName()) || context.getSession() == null) {
+        if (!(context.getInputs() instanceof ToolCallInputs inputs) || !A2A_DELEGATE.equals(inputs.getToolName())
+                || context.getSession() == null) {
             return;
         }
         String sessionId = context.getSession().getSessionId();

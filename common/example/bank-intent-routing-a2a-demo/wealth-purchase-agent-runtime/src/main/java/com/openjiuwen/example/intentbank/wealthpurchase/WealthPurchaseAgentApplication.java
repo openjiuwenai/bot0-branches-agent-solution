@@ -45,7 +45,7 @@ public class WealthPurchaseAgentApplication {
         return new JiuwenCoreAgentHandler(
                 BankDemoAgentFactory.create(definition, List.of(BankTools.askUser(), BankTools.wealthPurchase()),
                         List.of(new IntentAwareAskUserRail(),
-                                new ConfirmationRail(BankTools.WEALTH_PURCHASE, "请确认是否购买这款理财产品。"),
+                                new ConfirmationRail(BankTools.WEALTH_PURCHASE, "请确认是否购买{product}，金额{amount}元。"),
                                 new IntentChangeTerminationRail()),
                         properties));
     }

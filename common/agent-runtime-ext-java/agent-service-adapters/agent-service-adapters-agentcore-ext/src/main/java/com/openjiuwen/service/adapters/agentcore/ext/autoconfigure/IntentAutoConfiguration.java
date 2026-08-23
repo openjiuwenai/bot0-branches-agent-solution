@@ -48,8 +48,8 @@ public class IntentAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    IntentMatcher intentMatcher(Reranker reranker) {
-        return new RerankerIntentMatcher(reranker);
+    IntentMatcher intentMatcher(Reranker reranker, RuntimeIntentProperties properties) {
+        return new RerankerIntentMatcher(reranker, properties.getMatch().getQueryInstruction());
     }
 
     @Bean

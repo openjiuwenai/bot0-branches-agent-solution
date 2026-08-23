@@ -20,6 +20,7 @@ import com.openjiuwen.core.retrieval.reranker.Reranker;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -89,4 +90,22 @@ class RerankerIntentMatcherTest {
         return new RetrievalResult(candidate.getText(), score, candidate.getMetadata(), candidate.getDocId(),
                 candidate.getChunkId());
     }
+
+    @Test
+    void prependsConfiguredInstructionToTheRerankerQueryOnly() {
+        List<String> seenQueries = new ArrayList<>();
+        Reranker recording = (query, candidates, topK) -> {
+            seenQueries.add(query);
+            return List.of(scored(candidates.get(0), 0.9D));
+        };
+        IntentExecutionContext context = context(List.of(intent("known")), 0.65D);
+
+        assertThat(new RerankerIntentMatcher(recording, "instruction:").match(context)).isPresent();
+        assertThat(new RerankerIntentMatcher(recording).match(context)).isPresent();
+        assertThat(new RerankerIntentMatcher(recording, "  ").match(context)).isPresent();
+
+        assertThat(seenQueries).containsExactly("instruction:query", "query", "query");
+        assertThat(context.routingSemantic()).isEqualTo("query");
+    }
+
 }

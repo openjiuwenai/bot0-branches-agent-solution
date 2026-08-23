@@ -6,6 +6,7 @@ package com.openjiuwen.agents.intent.api;
 
 import com.openjiuwen.agents.intent.exception.IntentInitializationException;
 import com.openjiuwen.agents.intent.exception.IntentMatchException;
+import com.openjiuwen.agents.intent.model.FinishAction;
 import com.openjiuwen.agents.intent.model.InitializedIntents;
 import com.openjiuwen.agents.intent.model.IntentAction;
 import com.openjiuwen.agents.intent.model.IntentCatalogInput;
@@ -38,6 +39,9 @@ import java.util.concurrent.locks.ReentrantLock;
  * @since 0.1.0
  */
 public final class IntentSuite {
+    /** Tool kwargs key carrying the active session identifier for diagnostics. */
+    public static final String SESSION_ID_KWARG = "sessionId";
+
     private static final Logger log = LoggerFactory.getLogger(IntentSuite.class);
 
     private final IntentSuiteConfig config;
@@ -82,17 +86,23 @@ public final class IntentSuite {
      */
     public IntentDecision resolve(Map<String, Object> inputs, Map<String, Object> kwargs) {
         IntentCatalogSnapshot snapshot = current.get();
+        String sessionId = sessionId(kwargs);
         IntentExecutionContext context;
         try {
             context = IntentExecutionContext.create(config, snapshot, inputs, kwargs);
         } catch (IllegalArgumentException | NullPointerException exception) {
-            log.info("Intent resolution rejected invalid input catalogVersion={}", snapshot.version());
-            return failed(null, "意图调用输入无效");
+            log.info("Intent resolution rejected invalid input sessionId={} catalogVersion={}", sessionId,
+                    snapshot.version());
+            return failed(null, "intent call inputs are invalid");
         }
-        log.info("Intent resolution started catalogVersion={} candidates={} fallback={} semanticLength={}",
-                snapshot.version(), snapshot.initializedIntents().matchableIntents().size(),
-                snapshot.initializedIntents().fallback() != null, context.routingSemantic().length());
+        log.info("Intent resolution started sessionId={} catalogVersion={} candidates={} fallback={} semantic={}",
+                sessionId, snapshot.version(), snapshot.initializedIntents().matchableIntents().size(),
+                snapshot.initializedIntents().fallback() != null, context.routingSemantic());
 
+        // FutureTask runs the extension inline and republishes its unchecked failures as
+        // ExecutionException, which keeps SPI defects mappable without catching RuntimeException.
+        // get() cannot block after run() completed, so the InterruptedException branch is only
+        // required by the checked signature and is unreachable at runtime.
         Optional<IntentDefinition> matched;
         FutureTask<Optional<IntentDefinition>> matching = new FutureTask<>(
                 () -> Optional.ofNullable(matcher.match(context))
@@ -101,30 +111,33 @@ public final class IntentSuite {
         try {
             matched = matching.get();
         } catch (InterruptedException exception) {
-            log.info("Intent matching interrupted catalogVersion={}", snapshot.version(), exception);
-            return failed(null, "意图匹配失败");
+            log.warn("Intent matching interrupted sessionId={} catalogVersion={}", sessionId, snapshot.version(),
+                    exception);
+            return failed(null, "intent matching failed");
         } catch (ExecutionException exception) {
             Throwable cause = executionCause(exception);
-            log.info("Intent matching failed catalogVersion={} reason={}", snapshot.version(), cause.getMessage());
-            return failed(null, "意图匹配失败");
+            log.warn("Intent matching failed sessionId={} catalogVersion={}", sessionId, snapshot.version(), cause);
+            return failed(null, "intent matching failed");
         }
         if (!isValidMatch(matched, snapshot.initializedIntents())) {
-            log.info("Intent matcher returned an intent outside catalogVersion={}", snapshot.version());
-            return failed(null, "意图匹配结果无效");
+            log.warn("Intent matcher returned an intent outside the catalog sessionId={} catalogVersion={}", sessionId,
+                    snapshot.version());
+            return failed(null, "intent matching result is invalid");
         }
 
         IntentDefinition selected = matched.orElse(snapshot.initializedIntents().fallback());
         if (selected == null) {
-            log.info("Intent resolution completed status={} catalogVersion={}", IntentDecisionStatus.UNMATCHED,
-                    snapshot.version());
-            return new IntentDecision(IntentDecisionStatus.UNMATCHED, null, null, "意图未匹配");
+            log.info("Intent resolution completed sessionId={} status={} catalogVersion={}", sessionId,
+                    IntentDecisionStatus.UNMATCHED, snapshot.version());
+            return new IntentDecision(IntentDecisionStatus.UNMATCHED, null, null, "no intent matched");
         }
         IntentDecisionStatus status = matched.isPresent()
                 ? IntentDecisionStatus.MATCHED
                 : IntentDecisionStatus.FALLBACK;
-        log.info("Intent selected status={} intentId={} catalogVersion={}", status, selected.id(), snapshot.version());
+        log.info("Intent selected sessionId={} status={} intentId={} catalogVersion={}", sessionId, status,
+                selected.id(), snapshot.version());
         context.select(selected);
-        return applyResultFunction(status, selected, context);
+        return applyResultFunction(status, selected, context, sessionId);
     }
 
     /**
@@ -159,26 +172,36 @@ public final class IntentSuite {
     }
 
     private IntentDecision applyResultFunction(IntentDecisionStatus status, IntentDefinition selected,
-            IntentExecutionContext context) {
+            IntentExecutionContext context, String sessionId) {
+        // Same inline FutureTask boundary as resolve(): see the comment there before changing it.
         FutureTask<IntentAction> generation = new FutureTask<>(() -> selected.resultFunction().apply(context));
         generation.run();
         try {
             IntentAction action = generation.get();
             if (!isValidAction(action)) {
-                log.info("Intent result function returned invalid action intentId={}", selected.id());
-                return failed(selected.id(), "意图动作无效");
+                log.warn("Intent result function returned invalid action sessionId={} intentId={}", sessionId,
+                        selected.id());
+                return failed(selected.id(), "intent action is invalid");
             }
-            log.info("Intent result function completed intentId={} actionType={}", selected.id(),
-                    action.getClass().getSimpleName());
+            log.info("Intent result function completed sessionId={} intentId={} actionType={}", sessionId,
+                    selected.id(), action.getClass().getSimpleName());
             return new IntentDecision(status, selected.id(), action, null);
         } catch (InterruptedException exception) {
-            log.info("Intent result function interrupted intentId={}", selected.id(), exception);
-            return failed(selected.id(), "意图结果函数执行失败");
+            log.warn("Intent result function interrupted sessionId={} intentId={}", sessionId, selected.id(),
+                    exception);
+            return failed(selected.id(), "intent result function failed");
         } catch (ExecutionException exception) {
             Throwable cause = executionCause(exception);
-            log.info("Intent result function failed intentId={} reason={}", selected.id(), cause.getMessage());
-            return failed(selected.id(), "意图结果函数执行失败");
+            log.warn("Intent result function failed sessionId={} intentId={}", sessionId, selected.id(), cause);
+            return failed(selected.id(), "intent result function failed");
         }
+    }
+
+    private static String sessionId(Map<String, Object> kwargs) {
+        if (kwargs == null) {
+            return "";
+        }
+        return kwargs.get(SESSION_ID_KWARG) instanceof String value ? value : "";
     }
 
     private static Throwable executionCause(ExecutionException exception) {
@@ -200,6 +223,10 @@ public final class IntentSuite {
     private static boolean isValidAction(IntentAction action) {
         if (action instanceof ReturnAction returnAction) {
             return !(returnAction.result() instanceof Throwable);
+        }
+        if (action instanceof FinishAction finishAction) {
+            return !(finishAction.result() instanceof Throwable) && finishAction.output() != null
+                    && !finishAction.output().isBlank();
         }
         if (action instanceof InvokeToolAction invokeAction) {
             return invokeAction.toolName() != null && !invokeAction.toolName().isBlank()

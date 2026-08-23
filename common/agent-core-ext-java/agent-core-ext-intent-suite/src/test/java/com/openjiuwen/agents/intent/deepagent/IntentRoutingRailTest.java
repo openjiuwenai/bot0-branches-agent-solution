@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.agents.intent.api.IntentSuite;
 import com.openjiuwen.agents.intent.initializer.DefaultIntentInitializer;
 import com.openjiuwen.agents.intent.model.CustomIntentRegistration;
+import com.openjiuwen.agents.intent.model.FinishAction;
 import com.openjiuwen.agents.intent.model.IntentCatalogInput;
 import com.openjiuwen.agents.intent.model.IntentSuiteConfig;
 import com.openjiuwen.agents.intent.model.InvokeToolAction;
@@ -55,6 +56,27 @@ class IntentRoutingRailTest {
                 });
         assertThat(payload).containsEntry("status", "MATCHED").containsEntry("intentId", "intent");
         assertThat(stringObjectMap(payload.get("result"))).containsEntry("answer", 42);
+        assertThat(callback.hasForceFinishRequest()).isFalse();
+    }
+
+    @Test
+    void writesFinishActionResultAndEndsTheAgentTurn() throws Exception {
+        IntentSuite suite = suite(
+                context -> new FinishAction(Map.of("status", "UNMATCHED"), "out of scope, please rephrase"));
+        IntentRoutingRail rail = new IntentRoutingRail(suite);
+        ToolCallInputs inputs = inputs(intentCall("call-7", "write me a poem"));
+        AgentCallbackContext callback = AgentCallbackContext.builder().inputs(inputs).extra(new LinkedHashMap<>())
+                .build();
+
+        rail.beforeToolCall(callback);
+
+        assertThat(callback.getExtra()).containsEntry("_skip_tool", true);
+        assertThat(json(inputs)).containsEntry("status", "MATCHED").containsEntry("intentId", "intent")
+                .containsEntry("result", Map.of("status", "UNMATCHED"));
+        AgentCallbackContext.ForceFinishRequest finish = callback.consumeForceFinish();
+        assertThat(finish).isNotNull();
+        assertThat(finish.getResult()).containsEntry("output", "out of scope, please rephrase")
+                .containsEntry("result_type", "answer");
     }
 
     @Test
@@ -95,7 +117,8 @@ class IntentRoutingRailTest {
                 .extra(new LinkedHashMap<>()).build();
         unknownRail.beforeToolCall(unknownCallback);
         assertThat(unknownCallback.getExtra()).containsEntry("_skip_tool", true);
-        assertThat(json(unknownInputs)).containsEntry("status", "FAILED").containsEntry("message", "目标工具未注册: missing");
+        assertThat(json(unknownInputs)).containsEntry("status", "FAILED").containsEntry("message",
+                "target Tool is not registered: missing");
 
         IntentRoutingRail recursiveRail = new IntentRoutingRail(
                 suite(context -> new InvokeToolAction(IntentRoutingRail.TOOL_NAME, Map.of())));

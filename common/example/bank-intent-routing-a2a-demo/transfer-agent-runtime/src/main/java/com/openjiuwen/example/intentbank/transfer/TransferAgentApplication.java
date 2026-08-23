@@ -42,10 +42,11 @@ public class TransferAgentApplication {
                         要求用户确认，收到确认后完成转账。若工具结果 status 为 INTENT_CHANGED，立即原样返回，
                         不继续转账，也不要处理新的业务目标。
                         """, "target/transfer-agent-workspace", false);
-        return new JiuwenCoreAgentHandler(BankDemoAgentFactory.create(definition,
-                List.of(BankTools.askUser(), BankTools.transfer()), List.of(new IntentAwareAskUserRail(),
-                        new ConfirmationRail(BankTools.TRANSFER, "请确认是否向{recipient}转账{amount}元。"),
-                        new IntentChangeTerminationRail()),
-                properties));
+        return new JiuwenCoreAgentHandler(
+                BankDemoAgentFactory.create(definition, List.of(BankTools.askUser(), BankTools.transfer()),
+                        List.of(new IntentAwareAskUserRail(),
+                                new ConfirmationRail(BankTools.TRANSFER, "请确认是否向{recipient}转账{amount}元。"),
+                                new IntentChangeTerminationRail()),
+                        properties));
     }
 }

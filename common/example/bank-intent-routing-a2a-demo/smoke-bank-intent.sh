@@ -320,6 +320,13 @@ assert_log_count "fallback intent result" "$TMP_DIR/intent.log" 1 \
   "BANK_DEMO_TOOL_RESULT tool=intent_match" '"status":"FALLBACK"' \
   '"intentId":"bank-intent-fallback"'
 
+# 相近语义负向语料：意图目录必须区分开容易混淆的能力，而不只是"能匹配上"。
+# 每条都会让对应本地工具的执行次数 +1，最终由文末的精确计数断言收口；
+# 计算类请求同时用于验证不会被误路由到 balance-agent。
+run_completed date-not-weather "今天星期几"
+run_completed weather-not-date "明天深圳会不会下雨" "深圳"
+run_completed calculator-not-balance "帮我算一下 128 减去 28 等于多少" "100"
+
 transfer_context="$(new_context transfer-confirm)"
 transfer_first="$TMP_DIR/transfer-confirm-1.json"
 write_request "$transfer_context" "" "给张三转100元" "$transfer_first"
@@ -355,7 +362,7 @@ purchase_context="$(new_context wealth-purchase)"
 purchase_1="$TMP_DIR/wealth-purchase-1.json"
 write_request "$purchase_context" "" "购买一万元稳盈90天" "$purchase_1"
 assert_state "$purchase_1" TASK_STATE_INPUT_REQUIRED
-assert_contains "$purchase_1" "确认"
+assert_contains "$purchase_1" "确认" "稳盈90天" "10000"
 purchase_task="$(task_field "$purchase_1" id)"
 purchase_2="$TMP_DIR/wealth-purchase-2.json"
 write_request "$purchase_context" "$purchase_task" "确认" "$purchase_2"
@@ -424,15 +431,16 @@ assert_log_order "todo_create precedes planned intent routing" "$TMP_DIR/intent-
 assert_log_count "planned intent_match calls" "$TMP_DIR/intent-plan.log" 2 \
   "BANK_DEMO_TOOL_CALL tool=intent_match"
 
+# 保持为 1：负向语料"帮我算一下 128 减去 28"不得被误路由到 balance-agent。
 assert_log_count "balance execution" "$TMP_DIR/balance.log" 1 \
   "BANK_DEMO_EXECUTION tool=query_balance"
 assert_log_count "wealth recommendation execution" "$TMP_DIR/wealth-advisor.log" 2 \
   "BANK_DEMO_EXECUTION tool=recommend_wealth"
-assert_log_count "calculator execution" "$TMP_DIR/intent.log" 1 \
+assert_log_count "calculator execution" "$TMP_DIR/intent.log" 2 \
   "BANK_DEMO_EXECUTION tool=bank_calculator"
-assert_log_count "date execution" "$TMP_DIR/intent.log" 1 \
+assert_log_count "date execution" "$TMP_DIR/intent.log" 2 \
   "BANK_DEMO_EXECUTION tool=current_date"
-assert_log_count "weather execution" "$TMP_DIR/intent.log" 1 \
+assert_log_count "weather execution" "$TMP_DIR/intent.log" 2 \
   "BANK_DEMO_EXECUTION tool=weather_query"
 assert_log_count "all confirmed transfer executions" "$TMP_DIR/transfer.log" 4 \
   "BANK_DEMO_EXECUTION tool=execute_transfer"

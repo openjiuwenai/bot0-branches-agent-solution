@@ -62,30 +62,28 @@ class BankIntentChangeDeepAgentTest {
                 AgentCard.builder().id("bank-intent-change-agent").name("BankIntentChangeAgent")
                         .description("intent change regression agent").build(),
                 DeepAgentConfig.builder().systemPrompt("Always execute one transfer.")
-                        .workspacePath(workspace.toString())
-                        .enableTaskLoop(true).maxIterations(4).completionTimeout(10D)
-                        .tools(List.of(BankTools.transfer()))
-                        .rails(List.of(new ConfirmationRail(BankTools.TRANSFER,
-                                "请确认是否向{recipient}转账{amount}元。"), new IntentChangeTerminationRail()))
+                        .workspacePath(workspace.toString()).enableTaskLoop(true).maxIterations(4)
+                        .completionTimeout(10D).tools(List.of(BankTools.transfer()))
+                        .rails(List.of(new ConfirmationRail(BankTools.TRANSFER, "请确认是否向{recipient}转账{amount}元。"),
+                                new IntentChangeTerminationRail()))
                         .build(),
                 null);
         agent.ensureInitialized();
-        agent.getAgent().setLlm(new Model(
-                ModelClientConfig.builder().clientId("intent-change-test").clientProvider(PROVIDER)
-                        .apiKey("test-key").apiBase("test://intent-change").verifySsl(false).build(),
-                ModelRequestConfig.builder().modelName("intent-change-test-model").build()));
+        agent.getAgent()
+                .setLlm(new Model(
+                        ModelClientConfig.builder().clientId("intent-change-test").clientProvider(PROVIDER)
+                                .apiKey("test-key").apiBase("test://intent-change").verifySsl(false).build(),
+                        ModelRequestConfig.builder().modelName("intent-change-test-model").build()));
         AgentSessionApi session = AgentSessionApi.create(sessionId, null, agent.getCard());
 
         List<Object> interrupted = collect(agent.stream(Map.of("query", "给王五转账50元", "conversation_id", sessionId),
                 session, List.of(StreamMode.OUTPUT)));
         assertThat(hasInteraction(interrupted)).isTrue();
 
-        List<Object> resumed = collect(agent.stream(
-                Map.of("query", "改为购买1000元稳盈90天理财", "conversation_id", sessionId), session,
-                List.of(StreamMode.OUTPUT)));
+        List<Object> resumed = collect(agent.stream(Map.of("query", "改为购买1000元稳盈90天理财", "conversation_id", sessionId),
+                session, List.of(StreamMode.OUTPUT)));
         String rendered = renderPayloads(resumed);
-        assertThat(rendered).contains("INTENT_CHANGED", "改为购买1000元稳盈90天理财")
-                .doesNotContain("task_failed");
+        assertThat(rendered).contains("INTENT_CHANGED", "改为购买1000元稳盈90天理财").doesNotContain("task_failed");
     }
 
     private static List<Object> collect(Iterator<Object> stream) {
@@ -149,14 +147,14 @@ class BankIntentChangeDeepAgentTest {
         public Iterator<AssistantMessageChunk> stream(Object messages, Object tools, Float temperature, Float topP,
                 String model, Integer maxTokens, String stop, BaseOutputParser outputParser, Float timeout,
                 Map<String, Object> kwargs) {
-            return List.of(AssistantMessageChunk.builder().content("")
-                    .toolCalls(transferCall().getToolCalls()).build()).iterator();
+            return List.of(AssistantMessageChunk.builder().content("").toolCalls(transferCall().getToolCalls()).build())
+                    .iterator();
         }
 
         private static AssistantMessage transferCall() {
-            return AssistantMessage.builder().content("")
-                    .toolCalls(List.of(ToolCall.builder().id("execute-transfer-call").name(BankTools.TRANSFER)
-                            .arguments("{\"recipient\":\"王五\",\"amount\":50}").build()))
+            return AssistantMessage
+                    .builder().content("").toolCalls(List.of(ToolCall.builder().id("execute-transfer-call")
+                            .name(BankTools.TRANSFER).arguments("{\"recipient\":\"王五\",\"amount\":50}").build()))
                     .build();
         }
 
