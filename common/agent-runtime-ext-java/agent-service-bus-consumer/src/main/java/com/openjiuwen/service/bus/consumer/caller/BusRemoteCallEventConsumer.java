@@ -55,7 +55,9 @@ final class BusRemoteCallEventConsumer {
          */
         boolean hasDelivered();
 
-        /** Records that an artifact reached the observer. */
+        /**
+         * Records that an artifact reached the observer.
+         */
         void markDelivered();
     }
 

@@ -330,9 +330,9 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
             return;
         }
         switch (call.beginStreamReferenceRefresh(generation)) {
-            case STALE -> {
-                // Another callback already advanced the generation; that path owns the outcome.
-            }
+            // STALE: another callback already advanced the generation; that path owns the outcome.
+            case STALE -> LOG.debug("Stream failure for correlationId={} taskId={} is stale; "
+                    + "a newer callback already owns the outcome", call.correlationId, call.taskId);
             case EXHAUSTED -> failAfterGrace(call, failure);
             case REFRESH -> {
                 try {

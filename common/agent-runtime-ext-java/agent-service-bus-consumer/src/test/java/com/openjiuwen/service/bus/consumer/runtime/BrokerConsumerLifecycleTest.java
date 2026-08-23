@@ -74,6 +74,11 @@ class BrokerConsumerLifecycleTest {
 
     @FunctionalInterface
     private interface Poller {
+        /**
+         * Supplies the next delivery the loop should process.
+         *
+         * @return the next delivery, empty when the broker has nothing to hand over
+         */
         Optional<AgentBusBrokerDeliveryPort.Delivery> poll();
     }
 

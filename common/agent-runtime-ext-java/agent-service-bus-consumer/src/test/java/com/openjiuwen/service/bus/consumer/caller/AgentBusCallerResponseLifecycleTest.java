@@ -21,7 +21,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -36,8 +38,8 @@ class AgentBusCallerResponseLifecycleTest {
         BrokerInboundMessage malformed = new BrokerInboundMessage("tenant-a", "message-1", "runtime-b", "runtime-a",
                 "runtime-a", null, null, AgentBusEventType.A2A_CALL_TERMINAL);
         RecordingConsumerPort consumer = new RecordingConsumerPort(malformed);
-        var lifecycle = new AgentBusCallerResponseLifecycle(consumer, caller(),
-                Executors.newSingleThreadExecutor(), "runtime-a", "tenant-a", "runtime-a");
+        var lifecycle = new AgentBusCallerResponseLifecycle(consumer, caller(), singleThreadPool(),
+                "runtime-a", "tenant-a", "runtime-a");
 
         lifecycle.start();
         try {
@@ -49,6 +51,15 @@ class AgentBusCallerResponseLifecycleTest {
         } finally {
             lifecycle.stop();
         }
+    }
+
+    /**
+     * Mirrors the single-threaded polling executor the lifecycle owns; {@code stop()} shuts it down.
+     *
+     * @return a single-threaded pool with an unbounded hand-off queue
+     */
+    private static ExecutorService singleThreadPool() {
+        return new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
     }
 
     private static AgentBusRemoteAgentCaller caller() {

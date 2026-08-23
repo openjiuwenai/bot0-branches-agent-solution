@@ -17,9 +17,8 @@ import com.openjiuwen.service.bus.consumer.stream.StreamReadyProjector;
 import com.openjiuwen.service.bus.consumer.validation.BusEnvelopeValidator;
 
 import org.a2aproject.sdk.spec.A2AError;
-import org.a2aproject.sdk.spec.TaskNotFoundError;
-import org.a2aproject.sdk.spec.A2AError;
 import org.a2aproject.sdk.spec.A2AErrorCodes;
+import org.a2aproject.sdk.spec.TaskNotFoundError;
 import org.a2aproject.sdk.spec.UnsupportedOperationError;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

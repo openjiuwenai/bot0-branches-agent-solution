@@ -7,6 +7,7 @@ package com.openjiuwen.service.bus.consumer.runtime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Optional;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -62,26 +63,35 @@ public final class BusExecutors {
         @Override
         protected void afterExecute(Runnable task, Throwable thrown) {
             super.afterExecute(task, thrown);
-            Throwable failure = thrown == null ? completedTaskFailure(task) : thrown;
-            if (failure != null) {
-                LOG.error("Uncaught failure in {}", threadName, failure);
-            }
+            Optional<Throwable> failure = thrown == null
+                    ? completedTaskFailure(task)
+                    : Optional.of(thrown);
+            failure.ifPresent(cause -> LOG.error("Uncaught failure in {}", threadName, cause));
         }
 
-        private static Throwable completedTaskFailure(Runnable task) {
+        /**
+         * Extracts the throwable a completed task stored in its {@link Future}.
+         *
+         * @param task task the pool has just finished running
+         *
+         * @return the failure that ended the task, empty when it succeeded or was cancelled
+         */
+        private static Optional<Throwable> completedTaskFailure(Runnable task) {
             if (!(task instanceof Future<?> future) || !future.isDone()) {
-                return null;
+                return Optional.empty();
             }
             try {
                 future.get();
-                return null;
+                return Optional.empty();
             } catch (CancellationException cancelled) {
-                return null;
+                return Optional.empty();
             } catch (ExecutionException failure) {
-                return failure.getCause();
+                return Optional.ofNullable(failure.getCause());
             } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                return null;
+                // Unreachable in practice: isDone() is checked above, so get() reports the stored
+                // outcome without ever blocking. Report it as the failure rather than re-interrupting
+                // the pool worker, which would cancel unrelated scheduled work on this thread.
+                return Optional.of(interrupted);
             }
         }
     }
