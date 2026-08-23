@@ -15,6 +15,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Lazy;
 
 /**
  * Auto-configuration that registers {@link EdpAgentFactory} as an {@link AgentFactory} Bean,
@@ -51,7 +52,7 @@ public class EdpAgentFactoryAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(AgentFactory.class)
     @ConditionalOnBean(EdpaExtHandler.InitResult.class)
-    AgentFactory edpAgentFactory(EdpaExtHandler.InitResult initResult) {
+    AgentFactory edpAgentFactory(@Lazy EdpaExtHandler.InitResult initResult) {
         LOGGER.info("DFX-002: registering EdpAgentFactory for per-Task Agent mode, agentId={}",
                 initResult.getDeepAgent().getCard().getId());
         return new EdpAgentFactory(initResult);

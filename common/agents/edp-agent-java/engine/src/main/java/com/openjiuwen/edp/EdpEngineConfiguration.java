@@ -104,7 +104,8 @@ public class EdpEngineConfiguration {
      * 暴露 InitResult Bean，供 DFX-002 per-Task Agent 工厂使用。
      *
      * <p>包含 AgentCard、DeepAgentConfig 以及业务增强所需的全部初始化产物。
-     * 依赖 {@code edpaExtHandler} 确保 {@code performInit} 先于本 Bean 执行。</p>
+     * 依赖 {@code edpaExtHandler} 确保 {@code performInit} 先于本 Bean 执行。
+     * 循环依赖通过 {@code @Lazy} 在 {@code EdpAgentFactoryAutoConfiguration} 中打破。</p>
      */
     @Bean
     EdpaExtHandler.InitResult edpInitResult(AgentHandler edpaExtHandler) {
