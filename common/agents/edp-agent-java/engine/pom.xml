@@ -25,10 +25,6 @@
           <groupId>com.openjiuwen</groupId>
           <artifactId>agent-core-java</artifactId>
         </exclusion>
-        <exclusion>
-          <groupId>io.opentelemetry</groupId>
-          <artifactId>opentelemetry-exporter-otlp</artifactId>
-        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -93,10 +89,6 @@
         </exclusion>
         <exclusion>
           <groupId>io.opentelemetry</groupId>
-          <artifactId>opentelemetry-exporter-otlp</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>io.opentelemetry</groupId>
           <artifactId>opentelemetry-exporter-sender-jdk</artifactId>
         </exclusion>
         <exclusion>
@@ -104,6 +96,13 @@
           <artifactId>opentelemetry-exporter-sender-grpc-managed-channel</artifactId>
         </exclusion>
       </exclusions>
+    </dependency>
+    <!-- DFX-001 OTel 轨迹上报（runtime ext middleware/otel）运行时必需。
+         禁止排除/删除：缺失时 otel.enabled=true 启动即 NoClassDefFoundError。
+         opentelemetry-exporter-sender-jdk / sender-grpc-managed-channel 由本依赖传递引入，无需单独声明。 -->
+    <dependency>
+      <groupId>io.opentelemetry</groupId>
+      <artifactId>opentelemetry-exporter-otlp</artifactId>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>

@@ -9,11 +9,13 @@ import com.openjiuwen.extensions.tracerotel.OtelTracerSetup;
 import com.openjiuwen.service.adapters.agentcore.autoconfigure.AgentCoreAdaptersAutoConfiguration;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.egress.OtelRemoteAgentCallerPostProcessor;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.egress.OtelRemoteClientDecoratorFactory;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.egress.TraceparentResolver;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.http.HttpRequestSpanFilter;
 import com.openjiuwen.service.adapters.agentcore.external.AgentCoreRemoteClientDecoratorFactory;
 import com.openjiuwen.service.adapters.agentcore.external.ExternalSvcAdapterRegistrar;
 import com.openjiuwen.service.adapters.agentcore.middleware.MiddlewareAdapterRegistrar;
 import com.openjiuwen.service.app.a2a.catalog.A2ARemoteAgentCardRegistry;
+import com.openjiuwen.service.app.controller.a2a.client.A2APropagationHeaderRegistry;
 import com.openjiuwen.service.spec.spi.AgentHandler;
 
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
@@ -133,7 +135,12 @@ public class OtelAutoConfiguration {
     }
 
     @Bean
-    OtelRemoteAgentCallerPostProcessor otelRemoteAgentCallerPostProcessor(
+    InitializingBean otelPropagationHeaderRegistrar() {
+        return () -> A2APropagationHeaderRegistry.registerProvider(TraceparentResolver::provideHeaders);
+    }
+
+    @Bean
+    static OtelRemoteAgentCallerPostProcessor otelRemoteAgentCallerPostProcessor(
             OtelProviderHolder holder, OtelTracerConfig config,
             ObjectProvider<A2ARemoteAgentCardRegistry> registry) {
         return new OtelRemoteAgentCallerPostProcessor(holder.provider().get(config.getTracerName()), registry);
