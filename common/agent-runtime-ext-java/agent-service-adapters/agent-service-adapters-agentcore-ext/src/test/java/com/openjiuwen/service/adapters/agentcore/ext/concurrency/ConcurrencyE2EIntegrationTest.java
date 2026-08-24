@@ -44,7 +44,6 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -107,12 +106,11 @@ class ConcurrencyE2EIntegrationTest {
     void sendMessage_rejected503_whenRealLimitReached() throws InterruptedException {
         HttpHeaders headers = jsonHeaders();
 
-        ExecutorService first = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
-                namedThreadFactory("e2e-slow", "rejected503"));
-        first.submit(() -> {
+        ExecutorService first = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        first.submit(wrapWithErrorLogging(() -> {
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendStreamingMessage", "e2e-slow", "slow"), headers), String.class);
-        });
+        }, "rejected503"));
         assertThat(SlowAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
         ResponseEntity<String> response = rest.postForEntity(
@@ -144,13 +142,12 @@ class ConcurrencyE2EIntegrationTest {
     @Test
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void activeTaskEndpoint_reflectsRealAdmissionState() throws InterruptedException {
-        ExecutorService slow = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
-                namedThreadFactory("e2e-active", "activeTaskEndpoint"));
-        slow.submit(() -> {
+        ExecutorService slow = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        slow.submit(wrapWithErrorLogging(() -> {
             HttpHeaders headers = jsonHeaders();
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendStreamingMessage", "e2e-active", "slow"), headers), String.class);
-        });
+        }, "activeTaskEndpoint"));
         assertThat(SlowAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
         ResponseEntity<Map> snapshot = rest.getForEntity(
@@ -172,12 +169,11 @@ class ConcurrencyE2EIntegrationTest {
     void getTask_notThrottled_whenAtLimit() throws InterruptedException {
         HttpHeaders headers = jsonHeaders();
 
-        ExecutorService slow = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
-                namedThreadFactory("e2e-slow2", "getTask-notThrottled"));
-        slow.submit(() -> {
+        ExecutorService slow = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        slow.submit(wrapWithErrorLogging(() -> {
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendStreamingMessage", "e2e-slow2", "slow"), headers), String.class);
-        });
+        }, "getTask-notThrottled"));
         assertThat(SlowAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
         String getTaskBody = "{\"jsonrpc\":\"2.0\",\"id\":\"req-gt\","
@@ -256,12 +252,13 @@ class ConcurrencyE2EIntegrationTest {
         try {
             HttpHeaders headers = jsonHeaders();
 
-            ExecutorService slow = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
-                    namedThreadFactory("e2e-log-slow", "rejection-logs"));
-            slow.submit(() -> {
+            ExecutorService slow = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+            slow.submit(wrapWithErrorLogging(() -> {
                 rest.postForEntity("http://localhost:" + port + "/a2a/",
-                        new HttpEntity<>(jsonRpc("SendStreamingMessage", "e2e-log-slow", "slow"), headers), String.class);
-            });
+                        new HttpEntity<>(
+                            jsonRpc("SendStreamingMessage", "e2e-log-slow", "slow"), headers),
+                    String.class);
+            }, "rejection-logs"));
             assertThat(SlowAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
             rest.postForEntity("http://localhost:" + port + "/a2a/",
@@ -347,7 +344,9 @@ class ConcurrencyE2EIntegrationTest {
                 }
                 observer.onComplete();
             } catch (InterruptedException e) {
-                preserveInterrupt(); // preserve interrupt status
+                // The slow agent parks on sleep and exits via the cooperative
+                // stopped/observer.isCancelled() flags; workers are never
+                // interrupted here — a failed sleep just ends the stream early.
             } finally {
                 quotaTracker.onTaskReleased(request.getConversationId());
             }
@@ -358,17 +357,14 @@ class ConcurrencyE2EIntegrationTest {
         log.error("test error in {}: {}", context, e.getMessage(), e);
     }
 
-    private static ThreadFactory namedThreadFactory(String name, String context) {
-        return r -> {
-            Thread t = new Thread(r, name);
-            t.setUncaughtExceptionHandler((tt, e) -> logError(context, e));
-            return t;
+    private static Runnable wrapWithErrorLogging(Runnable task, String context) {
+        return () -> {
+            try {
+                task.run();
+            } catch (Throwable t) {
+                logError(context, t);
+            }
         };
-    }
-
-    @SuppressWarnings("java:S2142")
-    private static void preserveInterrupt() {
-        Thread.currentThread().interrupt();
     }
 
     private static HttpHeaders jsonHeaders() {

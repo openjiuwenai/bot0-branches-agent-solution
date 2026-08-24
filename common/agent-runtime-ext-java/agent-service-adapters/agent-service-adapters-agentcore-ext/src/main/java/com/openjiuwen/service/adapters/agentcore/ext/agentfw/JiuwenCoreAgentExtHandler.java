@@ -50,6 +50,8 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
 
     private static final Logger log = LoggerFactory.getLogger(JiuwenCoreAgentExtHandler.class);
 
+    final ThreadLocal<Object> currentTaskAgent = new ThreadLocal<>();
+
     private RemoteA2aToolInstaller remoteToolInstaller = RemoteA2aToolInstaller.noop();
     private IntentDeepAgentInstaller intentInstaller;
     private SkillHubManager skillHubManager;
@@ -57,8 +59,6 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     private AgentInstanceManager agentManager;
     @Autowired(required = false)
     private TaskQuotaTracker quotaTracker;
-
-    final ThreadLocal<Object> currentTaskAgent = new ThreadLocal<>();
 
     /**
      * Task-level agent cache, keyed by conversationId.

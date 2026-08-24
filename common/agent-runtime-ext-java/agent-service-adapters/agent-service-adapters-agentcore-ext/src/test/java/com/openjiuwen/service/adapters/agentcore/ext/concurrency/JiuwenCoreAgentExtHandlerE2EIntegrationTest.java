@@ -43,7 +43,6 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -176,12 +175,11 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
     void sendMessage_throttled503_whenLimitReached() throws InterruptedException {
         HttpHeaders headers = jsonHeaders();
 
-        ExecutorService first = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
-                namedThreadFactory("ext-block", "throttled503"));
-        first.submit(() -> {
+        ExecutorService first = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        first.submit(wrapWithErrorLogging(() -> {
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendMessage", "ext-block", "block"), headers), String.class);
-        });
+        }, "throttled503"));
         assertThat(TrackingAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
         ResponseEntity<String> response = rest.postForEntity(
@@ -219,12 +217,11 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
     void activeTaskEndpoint_reflectsRealAdmissionState() throws InterruptedException {
         HttpHeaders headers = jsonHeaders();
 
-        ExecutorService slow = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
-                namedThreadFactory("ext-active", "activeTaskEndpoint"));
-        slow.submit(() -> {
+        ExecutorService slow = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        slow.submit(wrapWithErrorLogging(() -> {
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendMessage", "ext-active", "block"), headers), String.class);
-        });
+        }, "activeTaskEndpoint"));
         assertThat(TrackingAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
         ResponseEntity<Map> snapshot = rest.getForEntity(
@@ -309,12 +306,11 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
                 .isZero();
 
         // Step 2: start a blocking task with different contextId → fills quota (limit=1)
-        ExecutorService blocker = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
-                namedThreadFactory("ext-blocker", "resumeRejected"));
-        blocker.submit(() -> {
+        ExecutorService blocker = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        blocker.submit(wrapWithErrorLogging(() -> {
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendMessage", "ext-blocker", "block"), headers), String.class);
-        });
+        }, "resumeRejected"));
         assertThat(TrackingAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
         // Step 3: resume the INPUT_REQUIRED task → admission full → rejected
@@ -463,26 +459,24 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
             try {
                 blockLatch.await(15, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
-                preserveInterrupt(); // preserve interrupt status
+                // The latch uses a bounded await; workers are never interrupted
+                // here — a failed wait just unblocks the tracking agent early.
             }
         }
     }
 
-    private static ThreadFactory namedThreadFactory(String name, String context) {
-        return r -> {
-            Thread t = new Thread(r, name);
-            t.setUncaughtExceptionHandler((tt, e) -> logError(context, e));
-            return t;
+    private static Runnable wrapWithErrorLogging(Runnable task, String context) {
+        return () -> {
+            try {
+                task.run();
+            } catch (Throwable t) {
+                logError(context, t);
+            }
         };
     }
 
     private static void logError(String context, Throwable e) {
         log.error("test error in {}: {}", context, e.getMessage(), e);
-    }
-
-    @SuppressWarnings("java:S2142")
-    private static void preserveInterrupt() {
-        Thread.currentThread().interrupt();
     }
 
     private static HttpHeaders jsonHeaders() {

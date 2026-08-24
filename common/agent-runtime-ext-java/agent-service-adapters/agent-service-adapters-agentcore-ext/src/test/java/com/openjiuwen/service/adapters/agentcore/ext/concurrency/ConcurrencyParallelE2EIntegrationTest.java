@@ -385,7 +385,9 @@ class ConcurrencyParallelE2EIntegrationTest {
                                 "concurrent_peak", concurrent),
                         convId);
             } catch (InterruptedException e) {
-                preserveInterrupt(); // preserve interrupt status
+                // The release gate uses a bounded await; workers are never
+                // interrupted here, so a failed wait means the test is already
+                // aborting — surface it as a runtime failure.
                 throw new IllegalStateException(e);
             } finally {
                 ACTIVE_COUNT.decrementAndGet();
@@ -410,7 +412,8 @@ class ConcurrencyParallelE2EIntegrationTest {
                 }
                 observer.onComplete();
             } catch (InterruptedException e) {
-                preserveInterrupt(); // preserve interrupt status
+                // The release gate uses a bounded await; workers are never
+                // interrupted here — a failed wait just ends the stream early.
             } finally {
                 ACTIVE_COUNT.decrementAndGet();
                 quotaTracker.onTaskReleased(convId);
@@ -421,11 +424,6 @@ class ConcurrencyParallelE2EIntegrationTest {
 
     private static void logError(String context, Throwable e) {
         log.error("test error in {}: {}", context, e.getMessage(), e);
-    }
-
-    @SuppressWarnings("java:S2142")
-    private static void preserveInterrupt() {
-        Thread.currentThread().interrupt();
     }
 
     private static HttpHeaders jsonHeaders() {

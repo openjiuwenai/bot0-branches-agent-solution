@@ -23,7 +23,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -47,11 +46,6 @@ class EdpAgentFactoryConcurrencyTest {
     private static final Logger log = LoggerFactory.getLogger(EdpAgentFactoryConcurrencyTest.class);
 
     private static final int THREAD_COUNT = 10;
-
-    @SuppressWarnings("java:S2142")
-    private static void preserveInterrupt() {
-        Thread.currentThread().interrupt();
-    }
 
     private static InitResult createInitResult(AgentCard card, DeepAgentConfig config) {
         DeepAgent mockDeepAgent = mock(DeepAgent.class);
@@ -92,7 +86,9 @@ class EdpAgentFactoryConcurrencyTest {
                     Thread.sleep(sleepMs);
                 }
             } catch (InterruptedException e) {
-                preserveInterrupt(); // preserve interrupt status in test subclass
+                // The sleep only widens the race window; shutdownNow() runs
+                // after all workers are done, so an interrupted sleep means
+                // the test is already aborting — ending early is harmless.
             } finally {
                 concurrentCount.decrementAndGet();
             }
@@ -229,13 +225,14 @@ class EdpAgentFactoryConcurrencyTest {
                 try {
                     Thread.sleep(100);
                 } catch (InterruptedException e) {
-                    preserveInterrupt(); // preserve interrupt status in test override
+                    // Same as above: the sleep only holds the creation lock;
+                    // ending it early cannot affect the destroy() timing check.
                 }
                 return mock(DeepAgent.class);
             }
         };
 
-        ExecutorService exec = Executors.newSingleThreadExecutor();
+        ExecutorService exec = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         try {
             exec.submit(() -> factory.create());
 

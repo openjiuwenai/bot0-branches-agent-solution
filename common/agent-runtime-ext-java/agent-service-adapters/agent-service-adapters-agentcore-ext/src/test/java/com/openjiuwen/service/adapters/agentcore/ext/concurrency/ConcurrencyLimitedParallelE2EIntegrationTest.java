@@ -232,6 +232,10 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
     /**
      * Non-blocking read loop: {@code reader.readLine()} would hang forever if
      * the server stops sending events, so poll {@code reader.ready()} instead.
+     *
+     * @param reader the SSE stream reader to consume
+     * @return the extracted task ID, or null if not found
+     * @throws Exception if an I/O or interrupt error occurs during reading
      */
     private String readTaskIdFromSse(BufferedReader reader) throws Exception {
         String taskId = null;
@@ -386,16 +390,13 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
                 }
                 observer.onComplete();
             } catch (InterruptedException e) {
-                preserveInterrupt(); // preserve interrupt status
+                // The parking loop exits cooperatively via releaseLatch or
+                // observer.isCancelled(); workers are never interrupted here —
+                // a failed wait just ends the stream early.
             } finally {
                 quotaTracker.onTaskReleased(request.getConversationId());
             }
         }
-    }
-
-    @SuppressWarnings("java:S2142")
-    private static void preserveInterrupt() {
-        Thread.currentThread().interrupt();
     }
 
     private static HttpHeaders jsonHeaders() {

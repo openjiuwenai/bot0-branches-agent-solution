@@ -83,7 +83,9 @@ class TaskAdmissionControlTest {
                         successCount.incrementAndGet();
                     }
                 } catch (InterruptedException e) {
-                    preserveInterrupt(); // preserve interrupt status
+                    // The latch is counted down promptly and the pool is shut
+                    // down gracefully, so workers are never interrupted here;
+                    // a failed wait simply counts as a failed acquisition.
                 } finally {
                     doneLatch.countDown();
                 }
@@ -141,10 +143,5 @@ class TaskAdmissionControlTest {
     @Test
     void limit_returnsMinusOne_whenUnlimited() {
         assertThat(new TaskAdmissionControl(-1).limit()).isEqualTo(-1);
-    }
-
-    @SuppressWarnings("java:S2142")
-    private static void preserveInterrupt() {
-        Thread.currentThread().interrupt();
     }
 }

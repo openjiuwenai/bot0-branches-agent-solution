@@ -82,15 +82,15 @@ public class EdpAgentFactory implements AgentFactory {
      */
     protected DeepAgent createAgent() {
         DeepAgent agent = HarnessFactory.createDeepAgent(agentCard, deepAgentConfig, null);
+        boolean initialized = false;
         try {
             agent.ensureInitialized();
             EdpaExtHandler.initPerTaskAgent(agent, initResult);
-        } catch (RuntimeException e) {
-            // Cleanup on partial init failure: destroy agent to prevent ResourceMgr leaks.
-            // Broad catch required because ensureInitialized() and initPerTaskAgent() throw
-            // various unchecked exceptions (NPE, IllegalArgumentException, framework errors).
-            agent.destroy();
-            throw e;
+            initialized = true;
+        } finally {
+            if (!initialized) {
+                agent.destroy();
+            }
         }
         return agent;
     }
