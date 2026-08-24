@@ -137,7 +137,7 @@ public class ControllerHandoffProperties {
         }
     }
 
-    /** 转调信息提取路径（fields.*）：从命中行提取 handoff-type/intent/domain 等字段。 */
+    /** 转调信息提取路径（fields.*）：从命中的事件行提取 handoff-type/intent/domain 等字段。 */
     public static class Fields {
         private String handoffType;
         private String intentId;
