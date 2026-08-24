@@ -6,6 +6,8 @@ package com.openjiuwen.service.adapters.agentcore.ext.concurrency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.Test;
+
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -13,15 +15,12 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.junit.jupiter.api.Test;
-
 /**
  * Unit tests for {@link TaskAdmissionControl}.
  *
  * @since 0.1.0
  */
 class TaskAdmissionControlTest {
-
     @Test
     void tryAcquire_returnsTrue_whenUnderLimit() {
         TaskAdmissionControl gate = new TaskAdmissionControl(3);
@@ -144,6 +143,7 @@ class TaskAdmissionControlTest {
         assertThat(new TaskAdmissionControl(-1).limit()).isEqualTo(-1);
     }
 
+    @SuppressWarnings("java:S2142")
     private static void preserveInterrupt() {
         Thread.currentThread().interrupt();
     }

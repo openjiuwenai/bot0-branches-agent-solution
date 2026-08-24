@@ -16,7 +16,6 @@ import org.junit.jupiter.api.Test;
  * @since 0.1.0
  */
 class TaskQuotaTrackerTest {
-
     @Test
     void onTaskWorking_recordsActiveTask() {
         TaskAdmissionControl gate = new TaskAdmissionControl(5);

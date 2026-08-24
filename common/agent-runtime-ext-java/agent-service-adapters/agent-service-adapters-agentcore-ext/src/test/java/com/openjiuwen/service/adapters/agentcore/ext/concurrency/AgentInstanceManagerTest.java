@@ -13,6 +13,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import org.junit.jupiter.api.Test;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -24,15 +26,12 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.junit.jupiter.api.Test;
-
 /**
  * Unit tests for {@link AgentInstanceManager}.
  *
  * @since 0.1.0
  */
 class AgentInstanceManagerTest {
-
     @Test
     void acquire_callsFactoryCreate() {
         AgentFactory factory = mock(AgentFactory.class);

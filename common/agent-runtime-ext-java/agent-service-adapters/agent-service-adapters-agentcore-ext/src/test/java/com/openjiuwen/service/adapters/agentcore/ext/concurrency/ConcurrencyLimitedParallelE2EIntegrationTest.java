@@ -74,7 +74,6 @@ import java.util.regex.Pattern;
     properties = "openjiuwen.service.concurrency.max-concurrent-tasks=2")
 @AutoConfigureTestRestTemplate
 class ConcurrencyLimitedParallelE2EIntegrationTest {
-
     private static final int LIMIT = 2;
 
     /** Extracts the task id from an SSE data line of an A2A task event. */
@@ -190,6 +189,7 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
             + "CancelTask — the request fails with JSON-RPC -32601 and A2AAgentExecutor.cancel() "
             + "is unreachable through the JSON-RPC surface. Re-enable once the product fix lands.")
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
+    @SuppressWarnings("java:S138")
     void canceledTask_releasesQuota_endsCanceled_newRequestAdmitted() throws Exception {
         // S-21: cancel an in-flight streaming task through the A2A protocol —
         // the task must end CANCELED, the quota must be released, and the
@@ -252,7 +252,7 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
                     } else if (line.contains("TASK_STATE_CANCELED")) {
                         canceledSeen = true;
                     } else {
-                        /* other state line — continue */
+                        Thread.onSpinWait(); /* other state line — continue */
                     }
                 } else if (canceledSeen) {
                     // give the server a moment to close, then re-check
@@ -303,7 +303,6 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
     @SpringBootConfiguration
     @EnableAutoConfiguration
     static class LimitedTestApp {
-
         @Bean
         @Primary
         AgentHandler gatedAgentHandler(TaskQuotaTracker quotaTracker) {
@@ -368,7 +367,7 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
                 // Park until released OR cancelled — cancellation (S-21) must
                 // be able to unblock an in-flight streaming task
                 while (!releaseLatch.await(100, TimeUnit.MILLISECONDS) && !observer.isCancelled()) {
-                    // no-op: release gate only
+                    Thread.onSpinWait(); // release gate only
                 }
                 observer.onComplete();
             } catch (InterruptedException e) {
@@ -379,6 +378,7 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
         }
     }
 
+    @SuppressWarnings("java:S2142")
     private static void preserveInterrupt() {
         Thread.currentThread().interrupt();
     }

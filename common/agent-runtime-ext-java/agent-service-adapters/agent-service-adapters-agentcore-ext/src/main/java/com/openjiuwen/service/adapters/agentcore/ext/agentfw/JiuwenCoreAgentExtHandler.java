@@ -31,6 +31,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -56,6 +57,7 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     private AgentInstanceManager agentManager;
     @Autowired(required = false)
     private TaskQuotaTracker quotaTracker;
+
     /**
      * Task-level agent cache, keyed by conversationId.
      * Populated by {@link #prepareTask(ServeRequest)}, drained by
@@ -277,9 +279,9 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     }
 
     @Override
-    public Object prepareTask(ServeRequest request) {
+    public Optional<Object> prepareTask(ServeRequest request) {
         if (agentManager == null) {
-            return null; // singleton mode, nothing to do
+            return Optional.empty(); // singleton mode, nothing to do
         }
         String conversationId = request.getConversationId();
         // A cache entry here belongs to another in-flight task for the same
@@ -290,24 +292,25 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
         try {
             Object agent = agentManager.acquire(conversationId);
             // Fresh identity token: only the caller receiving it can release
-            // this entry, so a rejected task's completeTask(null) never
-            // disturbs the agent of the in-flight task owning the cache slot.
+            // this entry, so a rejected task's completeTask(Optional.empty())
+            // never disturbs the agent of the in-flight task owning the cache slot.
             Object token = new Object();
             taskAgentCache.put(conversationId, new TaskAgentEntry(token, agent));
-            return token;
+            return Optional.of(token);
         } catch (ConversationBusyException ex) {
             throw busyConversation(conversationId, ex);
         }
     }
 
     @Override
-    public void completeTask(Object taskToken) {
-        if (agentManager == null || taskToken == null) {
+    public void completeTask(Optional<Object> taskToken) {
+        if (agentManager == null || taskToken == null || taskToken.isEmpty()) {
             return; // nothing acquired for this task (busy rejection or singleton mode)
         }
+        Object token = taskToken.get();
         for (Map.Entry<String, TaskAgentEntry> entry : taskAgentCache.entrySet()) {
             TaskAgentEntry cached = entry.getValue();
-            if (cached.token() != taskToken) {
+            if (cached.token() != token) {
                 continue;
             }
             // Release from the manager first so a concurrent acquire for this

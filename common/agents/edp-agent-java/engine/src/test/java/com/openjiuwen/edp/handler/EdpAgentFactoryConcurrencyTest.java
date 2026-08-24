@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -209,11 +210,14 @@ class EdpAgentFactoryConcurrencyTest {
         AgentCard card = AgentCard.builder().id("destroy-concurrent").name("Destroy Concurrent").build();
         DeepAgentConfig config = new DeepAgentConfig();
 
-        AtomicReference<Boolean> overlapped = new AtomicReference<>(false);
+        DeepAgent mockAgent = mock(DeepAgent.class);
 
+        // Start create() in background — holds the lock for ~100ms
+        CountDownLatch createLockAcquired = new CountDownLatch(1);
         TestableFactory factory = new TestableFactory(createInitResult(card, config)) {
             @Override
             protected DeepAgent createAgent() {
+                createLockAcquired.countDown();
                 try {
                     Thread.sleep(100);
                 } catch (InterruptedException e) {
@@ -223,27 +227,25 @@ class EdpAgentFactoryConcurrencyTest {
             }
         };
 
-        DeepAgent mockAgent = mock(DeepAgent.class);
+        ExecutorService exec = Executors.newSingleThreadExecutor();
+        try {
+            exec.submit(() -> factory.create());
 
-        // Start create() in background — holds the lock for ~100ms
-        Thread createThread = new Thread(() -> factory.create(), "create-thread");
-        createThread.setUncaughtExceptionHandler(
-                (t, e) -> log.error("Uncaught exception in {}: {}", t.getName(), e.getMessage()));
-        createThread.start();
+            // Wait for create() to acquire the lock
+            createLockAcquired.await(5, TimeUnit.SECONDS);
 
-        // Wait briefly for create() to acquire the lock
-        Thread.sleep(20);
+            // destroy() should NOT block — it runs outside the creation lock
+            long start = System.nanoTime();
+            factory.destroy(mockAgent);
+            long elapsed = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
 
-        // destroy() should NOT block — it runs outside the creation lock
-        long start = System.nanoTime();
-        factory.destroy(mockAgent);
-        long elapsed = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
-
-        createThread.join(5000);
-
-        // destroy() completed quickly while create() was still holding the lock
-        assertThat(elapsed)
-                .as("destroy() should complete without waiting for the creation lock (elapsed=%d ms)", elapsed)
-                .isLessThan(80);
+            // destroy() completed quickly while create() was still holding the lock
+            assertThat(elapsed)
+                    .as("destroy() should complete without waiting for the creation lock (elapsed=%d ms)", elapsed)
+                    .isLessThan(80);
+        } finally {
+            exec.shutdownNow();
+            exec.awaitTermination(5, TimeUnit.SECONDS);
+        }
     }
 }

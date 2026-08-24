@@ -46,7 +46,6 @@ import java.util.concurrent.TimeoutException;
  */
 @EnabledIfSystemProperty(named = "external.e2e.enabled", matches = "true")
 class ExternalE2EIntegrationTest {
-
     private static final String BASE_URL = System.getProperty("external.e2e.url", "http://localhost:8190");
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final Duration TIMEOUT = Duration.ofSeconds(120);
@@ -604,7 +603,7 @@ class ExternalE2EIntegrationTest {
         ExecutorService pool = new ThreadPoolExecutor(
                 2, 2, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         try {
-            ConversationBusyResult busyResult = triggerConversationBusyFailure(pool);
+            ConversationBusyResult busyResult = triggerConversationBusyFailure(pool).orElse(null);
             Assumptions.assumeTrue(busyResult != null,
                     "conversation-busy failure not triggered in 3 attempts "
                             + "(first request completed before the concurrent one arrived)");
@@ -640,7 +639,7 @@ class ExternalE2EIntegrationTest {
     private record ConversationBusyResult(HttpResponse<String> failedResponse, JsonNode firstResult) {
     }
 
-    private ConversationBusyResult triggerConversationBusyFailure(
+    private Optional<ConversationBusyResult> triggerConversationBusyFailure(
             ExecutorService pool)
             throws InterruptedException, ExecutionException, TimeoutException, IOException {
         for (int attempt = 1; attempt <= 3; attempt++) {
@@ -662,13 +661,13 @@ class ExternalE2EIntegrationTest {
             HttpResponse<String> resp = sendA2ARaw(convId, "帮我查询账户余额");
             if (isFailedTask(resp)) {
                 JsonNode firstResult = first.get(120, TimeUnit.SECONDS);
-                return new ConversationBusyResult(resp, firstResult);
+                return Optional.of(new ConversationBusyResult(resp, firstResult));
             }
             // The first request completed before the second arrived
             // (session released) — settle and retry with a fresh conversation
             first.get(120, TimeUnit.SECONDS);
         }
-        return null;
+        return Optional.empty();
     }
 
     /**
@@ -794,7 +793,7 @@ class ExternalE2EIntegrationTest {
         try {
             Optional<JsonNode> active = fetchActiveTasks();
             return active.isPresent() && active.get().path("maxConcurrentTasks").asInt(-1) > 0;
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             // safe default: treat probe failure as "no limit configured"
             return false;
         }
@@ -815,7 +814,7 @@ class ExternalE2EIntegrationTest {
             }
             int limit = active.get().path("maxConcurrentTasks").asInt(-1);
             return (limit > 0 && limit <= MAX_AFFORDABLE_ADMISSION_LIMIT) ? limit : 0;
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             // safe default: treat probe failure as "unlimited or unreachable"
             return 0;
         }
@@ -836,7 +835,7 @@ class ExternalE2EIntegrationTest {
             }
             int limit = active.get().path("maxConcurrentTasks").asInt(-1);
             return limit == 0 ? 0 : limit;
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             // safe default: treat probe failure as "unreachable"
             return 0;
         }
@@ -1037,6 +1036,20 @@ class ExternalE2EIntegrationTest {
         assertThat(resp.statusCode())
                 .as("SendStreamingMessage must return 200 for contextId=%s", contextId)
                 .isEqualTo(200);
+        return readStreamResult(resp);
+    }
+
+    /**
+     * Reads SSE events from the HTTP response stream to extract the terminal
+     * state and echoed context ID.
+     *
+     * @param resp the HTTP response with an InputStream body
+     * @return the streaming result with terminal state and echoed context ID
+     * @throws IOException          if reading the stream fails
+     * @throws InterruptedException if the thread is interrupted while waiting
+     */
+    private StreamResult readStreamResult(HttpResponse<java.io.InputStream> resp)
+            throws IOException, InterruptedException {
         long deadline = System.currentTimeMillis() + TIMEOUT.toMillis() * 3 / 4;
         String echoedCtx = "";
         String terminalState = "";

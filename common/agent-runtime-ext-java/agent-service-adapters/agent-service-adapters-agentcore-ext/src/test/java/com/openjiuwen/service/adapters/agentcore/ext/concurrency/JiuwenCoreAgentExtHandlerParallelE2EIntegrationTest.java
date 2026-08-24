@@ -72,7 +72,6 @@ import java.util.concurrent.atomic.AtomicInteger;
     properties = "openjiuwen.service.concurrency.max-concurrent-tasks=-1")
 @AutoConfigureTestRestTemplate
 class JiuwenCoreAgentExtHandlerParallelE2EIntegrationTest {
-
     @LocalServerPort
     private int port;
 
@@ -298,7 +297,6 @@ class JiuwenCoreAgentExtHandlerParallelE2EIntegrationTest {
     @SpringBootConfiguration
     @EnableAutoConfiguration
     static class ParallelExtTestApp {
-
         @Bean
         ParallelAgentFactory parallelAgentFactory() {
             return new ParallelAgentFactory();

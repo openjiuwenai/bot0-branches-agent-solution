@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Unit tests for {@link JiuwenCoreAgentExtHandler} per-Task Agent lifecycle
@@ -40,7 +41,6 @@ import java.util.Map;
  * @since 0.1.2
  */
 class JiuwenCoreAgentExtHandlerTest {
-
     @Test
     @SuppressWarnings("unchecked")
     void streamQuery_usesPerTaskAgent_notSingleton() {
@@ -108,7 +108,8 @@ class JiuwenCoreAgentExtHandlerTest {
 
         try {
             handler.query(request("c-except-q", "fail"));
-        } catch (RuntimeException expected) { // RunnerImpl wraps IllegalStateException in RuntimeException
+        } catch (RuntimeException expected) {
+            // expected: RunnerImpl wraps IllegalStateException in RuntimeException
         }
 
         verify(quotaTracker).onTaskReleased("c-except-q");
@@ -202,8 +203,8 @@ class JiuwenCoreAgentExtHandlerTest {
         JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityInvokeAgent("singleton"));
         handler.setAgentManager(agentManager);
 
-        Object token = handler.prepareTask(request("c-lifecycle", "hello"));
-        assertThat(token).isNotNull();
+        Optional<Object> token = handler.prepareTask(request("c-lifecycle", "hello"));
+        assertThat(token).isPresent();
 
         QueryResponse response = handler.query(request("c-lifecycle", "hello"));
         assertThat((Map<String, Object>) response.getResult()).containsEntry("content", "per-task");
@@ -223,7 +224,7 @@ class JiuwenCoreAgentExtHandlerTest {
         JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityInvokeAgent("singleton"));
         handler.setAgentManager(agentManager);
 
-        Object firstToken = handler.prepareTask(request("c-conflict", "hello"));
+        Optional<Object> firstToken = handler.prepareTask(request("c-conflict", "hello"));
 
         // A second task for the same conversation while the first is in flight:
         // must fail with the retryable CONVERSATION_BUSY error, not silently
@@ -236,10 +237,10 @@ class JiuwenCoreAgentExtHandlerTest {
         // The busy rejection must not have disturbed the first task's agent
         verify(agentManager, never()).release(org.mockito.ArgumentMatchers.eq("c-conflict"), any());
 
-        // P0 regression: the rejected task's finally calls completeTask with a
-        // null token (it never acquired anything) — the first task's agent and
+        // P0 regression: the rejected task's finally calls completeTask with an
+        // empty Optional (it never acquired anything) — the first task's agent and
         // cache entry must survive untouched.
-        handler.completeTask(null);
+        handler.completeTask(Optional.empty());
         verify(agentManager, never()).release("c-conflict", firstAgent);
 
         // The first task still owns its agent and can complete normally
@@ -257,11 +258,11 @@ class JiuwenCoreAgentExtHandlerTest {
         JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityInvokeAgent("singleton"));
         handler.setAgentManager(agentManager);
 
-        Object firstToken = handler.prepareTask(request("c-reuse", "hello"));
+        Optional<Object> firstToken = handler.prepareTask(request("c-reuse", "hello"));
         handler.completeTask(firstToken);
         verify(agentManager).release("c-reuse", first);
 
-        Object secondToken = handler.prepareTask(request("c-reuse", "hello again"));
+        Optional<Object> secondToken = handler.prepareTask(request("c-reuse", "hello again"));
         QueryResponse response = handler.query(request("c-reuse", "hello again"));
         assertThat((Map<String, Object>) response.getResult()).containsEntry("content", "second");
         handler.completeTask(secondToken);
@@ -277,12 +278,12 @@ class JiuwenCoreAgentExtHandlerTest {
         JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityInvokeAgent("singleton"));
         handler.setAgentManager(agentManager);
 
-        Object token = handler.prepareTask(request("c-owner", "hello"));
+        Optional<Object> token = handler.prepareTask(request("c-owner", "hello"));
 
-        // null token: nothing acquired for that caller — must be a no-op
-        handler.completeTask(null);
+        // empty Optional: nothing acquired for that caller — must be a no-op
+        handler.completeTask(Optional.empty());
         // foreign token: belongs to nobody — must be a no-op
-        handler.completeTask(new Object());
+        handler.completeTask(Optional.of(new Object()));
         verify(agentManager, never()).release(org.mockito.ArgumentMatchers.eq("c-owner"), any());
 
         // the real owner's token still releases exactly once

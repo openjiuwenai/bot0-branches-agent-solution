@@ -43,6 +43,7 @@ public class EdpAgentFactory implements AgentFactory {
     private final EdpaExtHandler.InitResult initResult;
     private final AgentCard agentCard;
     private final DeepAgentConfig deepAgentConfig;
+
     /** V1: serializes agent creation to prevent concurrent writes to global ResourceMgr HashMaps. */
     private final Lock creationLock = new ReentrantLock();
 
@@ -84,7 +85,7 @@ public class EdpAgentFactory implements AgentFactory {
         try {
             agent.ensureInitialized();
             EdpaExtHandler.initPerTaskAgent(agent, initResult);
-        } catch (RuntimeException e) { // cleanup on partial init failure
+        } catch (RuntimeException e) { // cleanup agent on partial init failure; re-throw to propagate
             agent.destroy();
             throw e;
         }

@@ -6,14 +6,14 @@ package com.openjiuwen.service.adapters.agentcore.ext.concurrency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import com.openjiuwen.core.session.Session;
+import com.openjiuwen.core.session.stream.OutputSchema;
+import com.openjiuwen.core.session.stream.StreamMode;
+import com.openjiuwen.service.adapters.agentcore.ext.agentfw.JiuwenCoreAgentExtHandler;
+import com.openjiuwen.service.app.controller.probe.ActiveTaskController;
+import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
+import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
+import com.openjiuwen.service.spec.spi.AgentHandler;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,14 +35,17 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.annotation.DirtiesContext;
 
-import com.openjiuwen.core.session.Session;
-import com.openjiuwen.core.session.stream.OutputSchema;
-import com.openjiuwen.core.session.stream.StreamMode;
-import com.openjiuwen.service.adapters.agentcore.ext.agentfw.JiuwenCoreAgentExtHandler;
-import com.openjiuwen.service.app.controller.probe.ActiveTaskController;
-import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
-import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
-import com.openjiuwen.service.spec.spi.AgentHandler;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * End-to-end integration tests using the real {@link JiuwenCoreAgentExtHandler}
@@ -72,7 +75,6 @@ import com.openjiuwen.service.spec.spi.AgentHandler;
     properties = "openjiuwen.service.concurrency.max-concurrent-tasks=1")
 @AutoConfigureTestRestTemplate
 class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
-
     private static final Logger log = LoggerFactory.getLogger(JiuwenCoreAgentExtHandlerE2EIntegrationTest.class);
 
     @LocalServerPort
@@ -173,12 +175,12 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
     void sendMessage_throttled503_whenLimitReached() throws InterruptedException {
         HttpHeaders headers = jsonHeaders();
 
-        Thread first = new Thread(() -> {
+        ExecutorService first = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
+                r -> { Thread t = new Thread(r, "ext-block"); t.setUncaughtExceptionHandler((tt, e) -> logError("throttled503", e)); return t; });
+        first.submit(() -> {
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendMessage", "ext-block", "block"), headers), String.class);
         });
-        first.setUncaughtExceptionHandler((t, e) -> logError("throttled503", e));
-        first.start();
         assertThat(TrackingAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
         ResponseEntity<String> response = rest.postForEntity(
@@ -188,7 +190,8 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
         assertThat(response.getStatusCode().value()).isEqualTo(503);
 
         TrackingAgent.releaseBlock();
-        first.join(5000);
+        first.shutdown();
+        first.awaitTermination(5, TimeUnit.SECONDS);
     }
 
     @Test
@@ -215,12 +218,12 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
     void activeTaskEndpoint_reflectsRealAdmissionState() throws InterruptedException {
         HttpHeaders headers = jsonHeaders();
 
-        Thread slow = new Thread(() -> {
+        ExecutorService slow = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
+                r -> { Thread t = new Thread(r, "ext-active"); t.setUncaughtExceptionHandler((tt, e) -> logError("activeTaskEndpoint", e)); return t; });
+        slow.submit(() -> {
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendMessage", "ext-active", "block"), headers), String.class);
         });
-        slow.setUncaughtExceptionHandler((t, e) -> logError("activeTaskEndpoint", e));
-        slow.start();
         assertThat(TrackingAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
         ResponseEntity<Map> snapshot = rest.getForEntity(
@@ -233,7 +236,8 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
         assertThat(body).containsEntry("currentActiveTasks", 1);
 
         TrackingAgent.releaseBlock();
-        slow.join(5000);
+        slow.shutdown();
+        slow.awaitTermination(5, TimeUnit.SECONDS);
     }
 
     @Test
@@ -304,12 +308,12 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
                 .isZero();
 
         // Step 2: start a blocking task with different contextId → fills quota (limit=1)
-        Thread blocker = new Thread(() -> {
+        ExecutorService blocker = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
+                r -> { Thread t = new Thread(r, "ext-blocker"); t.setUncaughtExceptionHandler((tt, e) -> logError("resumeRejected", e)); return t; });
+        blocker.submit(() -> {
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendMessage", "ext-blocker", "block"), headers), String.class);
         });
-        blocker.setUncaughtExceptionHandler((t, e) -> logError("resumeRejected", e));
-        blocker.start();
         assertThat(TrackingAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
         // Step 3: resume the INPUT_REQUIRED task → admission full → rejected
@@ -322,13 +326,13 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
                 .isEqualTo(503);
 
         TrackingAgent.releaseBlock();
-        blocker.join(5000);
+        blocker.shutdown();
+        blocker.awaitTermination(5, TimeUnit.SECONDS);
     }
 
     @SpringBootConfiguration
     @EnableAutoConfiguration
     static class ExtHandlerE2ETestApp {
-
         @Bean
         TrackingAgentFactory trackingAgentFactory() {
             return new TrackingAgentFactory();
@@ -467,6 +471,7 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
         log.error("test error in {}: {}", context, e.getMessage(), e);
     }
 
+    @SuppressWarnings("java:S2142")
     private static void preserveInterrupt() {
         Thread.currentThread().interrupt();
     }

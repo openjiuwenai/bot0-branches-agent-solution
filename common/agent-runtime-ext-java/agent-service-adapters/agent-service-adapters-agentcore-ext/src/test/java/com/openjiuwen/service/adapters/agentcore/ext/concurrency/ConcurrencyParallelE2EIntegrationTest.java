@@ -6,21 +6,19 @@ package com.openjiuwen.service.adapters.agentcore.ext.concurrency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import com.openjiuwen.service.app.controller.probe.ActiveTaskController;
+import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
+import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
+import com.openjiuwen.service.spec.dto.QueryChunk;
+import com.openjiuwen.service.spec.dto.QueryResponse;
+import com.openjiuwen.service.spec.dto.ServeRequest;
+import com.openjiuwen.service.spec.spi.AgentHandler;
+import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -39,14 +37,18 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.web.client.RestTemplate;
 
-import com.openjiuwen.service.app.controller.probe.ActiveTaskController;
-import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
-import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
-import com.openjiuwen.service.spec.dto.QueryChunk;
-import com.openjiuwen.service.spec.dto.QueryResponse;
-import com.openjiuwen.service.spec.dto.ServeRequest;
-import com.openjiuwen.service.spec.spi.AgentHandler;
-import com.openjiuwen.service.spec.spi.QueryStreamObserver;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * End-to-end integration tests for concurrent task execution (DFX-002 NF-1~NF-3, S-17~S-22).
@@ -69,6 +71,7 @@ import com.openjiuwen.service.spec.spi.QueryStreamObserver;
     properties = "openjiuwen.service.concurrency.max-concurrent-tasks=-1")
 @AutoConfigureTestRestTemplate
 class ConcurrencyParallelE2EIntegrationTest {
+    private static final Logger log = LoggerFactory.getLogger(ConcurrencyParallelE2EIntegrationTest.class);
 
     @LocalServerPort
     private int port;
@@ -320,7 +323,6 @@ class ConcurrencyParallelE2EIntegrationTest {
     @SpringBootConfiguration
     @EnableAutoConfiguration
     static class ParallelTestApp {
-
         @Bean
         @Primary
         AgentHandler parallelAgentHandler(TaskAdmissionGate admissionGate, TaskQuotaTracker quotaTracker) {
@@ -418,9 +420,10 @@ class ConcurrencyParallelE2EIntegrationTest {
     }
 
     private static void logError(String context, Throwable e) {
-        System.err.println("test error in " + context + ": " + e.getMessage());
+        log.error("test error in {}: {}", context, e.getMessage(), e);
     }
 
+    @SuppressWarnings("java:S2142")
     private static void preserveInterrupt() {
         Thread.currentThread().interrupt();
     }
