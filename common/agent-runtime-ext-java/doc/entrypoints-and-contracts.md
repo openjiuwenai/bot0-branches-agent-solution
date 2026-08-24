@@ -260,9 +260,9 @@ data: {"type":"error","error":"具体错误信息"}
 | 一轮产生多个远端委派 | 同一批成员并发 fan-out，全部收敛后按原工具调用顺序 fan-in；流式远端业务输出可在完成前逐条返回，因此不同成员的中间输出可能交错 |
 | 超过远端并发上限 | 全局最多同时运行 `max-concurrency` 个远端成员，其余进入 FIFO 队列；队列满或等待超时的成员以 `REMOTE_OVERLOADED` 失败 |
 
-过程事件是否进入用户响应由当前用户入口的 `stream` 决定，不由下游 Agent 的传输方式决定。用户入口为流式时，即使某个下游配置为非流式 A2A 调用，Runtime 仍会从其最终 Task 快照中依次投影 Artifact 和状态；用户入口为非流式时，这些 observer 事件只用于内部关联，不进入响应。
+过程事件只有在当前用户入口为流式、且下游实际使用流式 A2A 调用时才进入用户响应。任一侧为非流式时，Runtime 只从最终 Task 形成 outcome，不投影 delegation，也不回放 Task 快照中的 Artifact 或状态。
 
-Gateway caller 与默认 caller 使用相同的 observer/outcome 边界：远端 answer 通过 `EventObserver.onArtifact` 进入统一的 `content + metadata.agentEvent` 投影，不由 caller 另发普通 `TYPE_CHUNK`；远端 `INPUT_REQUIRED` 只先形成 member outcome，待同批成员收敛后由 `RemoteInvocationBatchCoordinator` 统一生成带 `items[].toolCallId/toolName/message` 的批次中断。这样并行成员不会各自向用户流发送无法统一恢复的中断。
+Gateway caller 与默认 caller 使用相同的 observer/outcome 边界：实际流式下游的远端 answer 通过 `EventObserver.onArtifact` 进入统一的 `content + metadata.agentEvent` 投影，不由 caller 另发普通 `TYPE_CHUNK`；非流式 Task 快照只通过 outcome 返回。远端 `INPUT_REQUIRED` 只先形成 member outcome，待同批成员收敛后由 `RemoteInvocationBatchCoordinator` 统一生成带 `items[].toolCallId/toolName/message` 的批次中断。这样并行成员不会各自向用户流发送无法统一恢复的中断。
 
 以下示例限定为流式 REST、`resume=false`、一个远端 Agent 只产生一个普通文本 Part。Runtime 先发布委派关系，再发布远端状态和原始输出，最后返回批次聚合终值：
 
@@ -513,7 +513,7 @@ data:{"jsonrpc":"2.0","id":"request-2","result":{"artifactUpdate":{"taskId":"tas
 | `result.artifactUpdate.artifact.metadata.agentEvent.state` | 仅 status 存在；同一节点的 status Artifact ID 稳定复用 |
 | `result.artifactUpdate.artifact.parts` | 下游 Artifact Parts；Runtime 不解包业务载荷，只换挂外层 Artifact ID |
 
-下游已经携带的合法 `agentEvent` 会逐跳保留，因此多跳来源不会被直接父节点覆盖。无标签的直接下游 Artifact 使用 `remote:<agentId>:<taskId>:<artifactId>` 作为父 Artifact ID；已有标签的嵌套 Artifact 保留原 ID。投影副本会移除仅用于远端终值提取的 `_agentcore_terminal`。A2A 用户入口为非流式时只返回最终 Task 或 Message，不发布这些过程事件，也不为最终 Artifact 补来源标签；流式用户入口调用非流式下游时，仍会投影下游最终 Task 快照中的 Artifact 和状态。
+下游已经携带的合法 `agentEvent` 会逐跳保留，因此多跳来源不会被直接父节点覆盖。无标签的直接下游 Artifact 使用 `remote:<agentId>:<taskId>:<artifactId>` 作为父 Artifact ID；已有标签的嵌套 Artifact 保留原 ID。投影副本会移除仅用于远端终值提取的 `_agentcore_terminal`。只有 A2A 用户入口和下游实际调用均为流式时才发布这些过程事件；任一侧非流式时只返回最终 Task 或 Message，并且不为最终 Artifact 补来源标签，也不回放下游 Task 快照中的 Artifact 或状态。
 
 ### 3.5 GetTask 与 SubscribeToTask
 

@@ -47,8 +47,10 @@ final class VersatileRequestExtractor {
         if (hasText(semanticInput.intent())) {
             inputs.put("intent", semanticInput.intent());
         }
-        serializeIntents().ifPresent(json -> inputs.put("intents", json));
-        serializeMessages(request).ifPresent(json -> inputs.put("messages", json));
+        serializeIntents().ifPresent(json -> {
+            inputs.put("intents", json);
+            serializeMessages(request).ifPresent(messages -> inputs.put("messages", messages));
+        });
         if (!inputs.isEmpty()) {
             remoteBody.put("inputs", inputs);
         }
