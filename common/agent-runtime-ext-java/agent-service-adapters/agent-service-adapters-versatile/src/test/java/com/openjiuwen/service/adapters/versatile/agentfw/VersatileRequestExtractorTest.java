@@ -217,7 +217,7 @@ class VersatileRequestExtractorTest {
         Map<String, Object> inputs = (Map<String, Object>) remote.body().get("inputs");
         assertThat(inputs).isNotNull();
         assertThat(inputs).containsEntry("query", "订酒店");
-        assertThat(inputs).doesNotContainKey("intents");
+        assertThat(inputs).doesNotContainKeys("intents", "messages");
     }
 
     @Test
