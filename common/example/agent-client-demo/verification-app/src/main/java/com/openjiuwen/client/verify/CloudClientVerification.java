@@ -264,8 +264,8 @@ public final class CloudClientVerification {
                 "trace / correlation 穿过 Gateway 和 BUS 到达目标 Runtime"),
         S12("s12", "Scenario 12: an expired exposure window advertises no tools", "工具治理",
                 "暴露窗口已关闭则不宣告工具，自然不会被驱动执行"),
-        S13("s13", "Scenario 13: agentId reaches the target runtime and a blank one is omitted", "上下文传递",
-                "显式 agentId 到达目标 Runtime；空白串在客户端归一化为未指定");
+        S13("s13", "Scenario 13: agentId reaches the target runtime; a blank one is rejected", "上下文传递",
+                "显式 agentId 到达目标 Runtime；空白串归一化为未指定后被网关以 VALIDATION_AGENT_ID 拒绝");
 
         private final String id;
         private final String title;
@@ -389,11 +389,12 @@ public final class CloudClientVerification {
     private void scenarioContinueInput(String id, AgentClient client)
             throws InterruptedException, ExecutionException, TimeoutException {
         String conversationId = "conv-ui-1";
-        // 不指定 agentId：验证 agentId 可选，由网关路由到默认 Agent（Feat-Func-011 §4.9 AC-4）。
+        // 指定 agentId（DF-Q01：创建类 agentId 必填，缺/空 → VALIDATION_AGENT_ID，无默认 Agent 回退）。
         // 输入文本走 a2a demo 的 calc 路径：Agent A 委派给 Agent B，Agent B 的 calc 工具会中断等待确认，
         // 产生真实的 INPUT_REQUIRED，验证 continueInput 续轮在真栈上能跑通。
         InvocationCall call = client.invoke(InvocationRequest.builder()
                 .conversationId(conversationId)
+                .agentId("demo-a2a-agent-a")
                 .mode(InvocationMode.STREAMING)
                 .input("Please calculate 1+1 through Agent B.")
                 .build());
@@ -479,6 +480,7 @@ public final class CloudClientVerification {
             throws InterruptedException, ExecutionException, TimeoutException {
         InvocationCall call = client.invoke(InvocationRequest.builder()
                 .conversationId("conv-async-1")
+                .agentId("demo-a2a-agent-a")
                 .mode(InvocationMode.ASYNC)
                 .input("async hello")
                 .exposure(ToolExposurePolicy.none())
@@ -519,6 +521,7 @@ public final class CloudClientVerification {
         List<InvocationEvent> seen = new ArrayList<>();
         InvocationCall call = client.invoke(InvocationRequest.builder()
                 .conversationId("conv-drop-recover")
+                .agentId("demo-a2a-agent-a")
                 .mode(InvocationMode.STREAMING)
                 .input("stream hello")
                 .exposure(ToolExposurePolicy.none())
@@ -553,6 +556,7 @@ public final class CloudClientVerification {
         List<InvocationEvent> seen = new ArrayList<>();
         InvocationCall call = client.invoke(InvocationRequest.builder()
                 .conversationId("conv-drop-uncertain")
+                .agentId("demo-a2a-agent-a")
                 .mode(InvocationMode.STREAMING)
                 .input("stream hello again")
                 .exposure(ToolExposurePolicy.none())
@@ -640,6 +644,7 @@ public final class CloudClientVerification {
         String traceId = "trace-" + UUID.randomUUID();
         InvocationCall call = client.invoke(InvocationRequest.builder()
                 .conversationId("conv-attributes")
+                .agentId("demo-a2a-agent-a")
                 .mode(InvocationMode.STREAMING)
                 .input("carry my trace")
                 .attribute("traceId", traceId)
@@ -657,9 +662,9 @@ public final class CloudClientVerification {
     /**
      * Scenario 13: agentId 经 SDK 透传到达网关，空白串在客户端即被归一化。
      *
-     * <p>网关侧（真网关 + mock）已支持 {@code params.metadata.agentId}（FEAT-011 §4.9 / FEAT-006 §3）：
+     * <p>网关侧（真网关）要求 {@code params.metadata.agentId}（FEAT-011 §3 / DF-Q01：创建类必填，无默认 Agent 回退）：
      * <ul>
-     * <li>缺省 → 交由 {@code DefaultAgentResolver} 路由到默认 Agent；</li>
+     * <li>缺省 → 400 {@code VALIDATION_AGENT_ID}（无默认 Agent 回退）。</li>
      * <li>显式非空 → 路由到指定 Agent；</li>
      * <li>显式空白串 → 400 {@code VALIDATION_AGENT_ID}。</li>
      * </ul>
@@ -668,7 +673,7 @@ public final class CloudClientVerification {
      *
      * <p>Demo Runtime 会把收到的 {@code metadata.agentId} 写入最终 artifact 文本，
      * 因此显式 agentId 的断言同时覆盖网关路由与 Runtime 透传；空白 agentId 则验证
-     * SDK 将其归一化为未指定，并由 Gateway 选择默认 Agent。
+     * SDK 将其归一化为未指定后被网关 G3 以 VALIDATION_AGENT_ID 拒绝（无默认 Agent）。
      *
      * @param id 场景标识
      * @param client AgentClient 实例
@@ -679,7 +684,7 @@ public final class CloudClientVerification {
     private void scenarioAgentIdRouting(String id, AgentClient client)
             throws InterruptedException, ExecutionException, TimeoutException {
         progress.onEvent(VerificationProgress.Event.scenarioStart(id,
-                "Scenario 13: agentId reaches the target runtime and a blank one is omitted"));
+                "Scenario 13: agentId reaches the target runtime; a blank one is rejected"));
 
         // 1) 显式 agentId → 网关按它路由到对应 runtime 实例。
         //    真栈下 agentId 必须是 RDC 中已注册的 agentId（agent-x 指向 a2a Agent A），否则 ROUTE_NO_CANDIDATES。
@@ -698,8 +703,9 @@ public final class CloudClientVerification {
                 "runtime output confirms the explicit agentId reached the target Agent");
         call.close();
 
-        // 2) 空白串 → SDK 归一化为 null（不传），落到网关默认 Agent 路由，不被 400 拒。
-        //    这与网关「显式空串 → 400」对齐：SDK 不把一个无意义的空串当成"显式指定"。
+        // 2) 空白串 → SDK 归一化为 null（不传），网关 G3 以 VALIDATION_AGENT_ID 拒绝（DF-Q01：创建类
+        //    agentId 必填，无默认 Agent 回退）。SDK 不把无意义的空串当成"显式指定"，故与网关
+        //    「显式空串 → 400」语义一致：均归一化为未指定后被 G3 拒。
         InvocationCall blank = client.invoke(InvocationRequest.builder()
                 .conversationId("conv-agentid")
                 .mode(InvocationMode.STREAMING)
@@ -708,11 +714,10 @@ public final class CloudClientVerification {
                 .exposure(ToolExposurePolicy.none())
                 .build());
         InvocationSnapshot blankSnap = blank.completion().toCompletableFuture().get(60, TimeUnit.SECONDS);
-        check(id, blankSnap.state() == TaskState.COMPLETED,
-                "a blank agentId is normalized (not sent) and the call still completes, state="
-                        + blankSnap.state());
-        check(id, blankSnap.outputText() != null && !blankSnap.outputText().contains("[agent="),
-                "a blank agentId is omitted from the runtime request metadata");
+        check(id, blankSnap.state() == TaskState.FAILED,
+                "a blank agentId is rejected (not completed), state=" + blankSnap.state());
+        check(id, "VALIDATION_AGENT_ID".equals(blankSnap.errorCode()),
+                "a blank agentId is rejected with VALIDATION_AGENT_ID, errorCode=" + blankSnap.errorCode());
         blank.close();
     }
 
@@ -740,6 +745,7 @@ public final class CloudClientVerification {
         // 窗口在过去就已关闭：授权本身允许这两个工具，但已过期。
         InvocationCall call = client.invoke(InvocationRequest.builder()
                 .conversationId("conv-expired-exposure")
+                .agentId("demo-a2a-agent-a")
                 .mode(InvocationMode.STREAMING)
                 .input("please read the page then submit the order")
                 .exposure(ToolExposurePolicy.allow(DemoTools.READ_PAGE, DemoTools.SUBMIT_ORDER)
@@ -846,6 +852,7 @@ public final class CloudClientVerification {
     private InvocationCall invokePlain(AgentClient client, String conversationId, String input) {
         InvocationRequest r = InvocationRequest.builder()
                 .conversationId(conversationId)
+                .agentId("demo-a2a-agent-a")
                 .mode(InvocationMode.STREAMING)
                 .input(input)
                 .build();
