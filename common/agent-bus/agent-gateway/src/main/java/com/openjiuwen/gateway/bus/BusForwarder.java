@@ -192,7 +192,8 @@ public class BusForwarder {
                     body = "payloadRef:" + event.payloadRef();
                 }
                 log.info("forwardQuery corrId={} RESPONSE taskId={}", correlationId, event.taskId());
-                String responseBody = statusBody(folded, event.taskId(), body);
+                String responseBody = event.a2aResponsePresent()
+                        ? body : statusBody(folded, event.taskId(), body);
                 return ResponseEntity.ok().body(responseBody);
             }
             if (FiveStateFolder.isTerminal(folded) || folded == InvocationResponseStatus.REJECTED
@@ -254,7 +255,15 @@ public class BusForwarder {
             InvocationResponseStatus folded = FiveStateFolder.fold(event.eventType());
             if (FiveStateFolder.isTerminal(folded) || folded == InvocationResponseStatus.REJECTED
                     || folded == InvocationResponseStatus.FAILED) {
-                return Optional.of(statusBody(folded, event.taskId(), event.body()));
+                // Faithful passthrough: if the runtime attached a complete JSON-RPC response (a2aResponse,
+                // e.g. the -32004 error the bus-side built for a terminal / not-subscribable
+                // SubscribeToTask), surface it verbatim — unify with DIRECT, where the runtime's HTTP
+                // SubscribeToTask returns the error as-is. Otherwise fall back to the synthesized body.
+                String body = event.body();
+                if (event.a2aResponsePresent()) {
+                    return Optional.of(body);
+                }
+                return Optional.of(statusBody(folded, event.taskId(), body));
             }
         }
         return Optional.of(statusBody(InvocationResponseStatus.FAILED, null,
@@ -388,7 +397,8 @@ public class BusForwarder {
         if (FiveStateFolder.isTerminal(folded) || folded == InvocationResponseStatus.INPUT_REQUIRED) {
             // terminal or wait-for-input: surface to the client and end the blocking call
             String taskId = event.taskId() != null ? event.taskId() : window.taskId();
-            String body = statusBody(folded, taskId, event.body());
+            String body = event.a2aResponsePresent()
+                    ? event.body() : statusBody(folded, taskId, event.body());
             log.info("forwardSync corrId={} folded={} taskId={} bodyPresent={}",
                     correlationId, folded, taskId, event.body() != null);
             g4w.onFold(folded, ctx.tenantId(), ctx.messageId(), body);
@@ -485,7 +495,8 @@ public class BusForwarder {
             } else if (FiveStateFolder.isTerminal(folded)
                     || folded == InvocationResponseStatus.INPUT_REQUIRED) {
                 String taskId = event.taskId() != null ? event.taskId() : window.taskId();
-                String body = statusBody(folded, taskId, event.body());
+                String body = event.a2aResponsePresent()
+                        ? event.body() : statusBody(folded, taskId, event.body());
                 log.info("forwardStreaming corrId={} folded={} taskId={}", correlationId, folded, taskId);
                 g4w.onFold(folded, ctx.tenantId(), ctx.messageId(), body);
                 return new StreamReadyOutcome(null, body);
@@ -720,7 +731,8 @@ public class BusForwarder {
      * @return JSON-RPC envelope 字符串
      */
     private static String terminalTaskFrame(ProjectionFeed.ProjectionEvent terminalEvent) {
-        if (terminalEvent.body() != null && !terminalEvent.body().isBlank()) {
+        if (terminalEvent.a2aResponsePresent()
+                && terminalEvent.body() != null && !terminalEvent.body().isBlank()) {
             // Runtime 已使用与 HTTP 入口相同的序列化器产出完整 JSON-RPC response。
             // Gateway 只原样透传，不重建 result 联合体或 envelope。
             return terminalEvent.body();

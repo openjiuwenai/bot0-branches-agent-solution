@@ -202,9 +202,15 @@ public class A2aController {
             return Optional.empty();
         }
         // Direct: sticky lookup → runtime SubscribeToTask SSE
-        Stream<String> frames = router.routeSubscribe(context);
         try {
+            Stream<String> frames = router.routeSubscribe(context);
             sseBridge.writeSse(response.getOutputStream(), frames);
+        } catch (GovernanceException ex) {
+            // Runtime rejected the subscription with a JSON-RPC error (HTTP 200 + a non-SSE body,
+            // e.g. SubscribeToTask on a terminal task → -32004). Surface the runtime's error body
+            // verbatim — unify with the BUS path, which folds the runtime's failure to -32004.
+            return Optional.of(ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON)
+                    .body(ex.getMessage()));
         } catch (IOException ex) {
             // SSE disconnected (client/runtime) — response committed; log + close, no rethrow
             // (no G4 to abort — SubscribeToTask is read-only). SseBridge logged the bridge release.

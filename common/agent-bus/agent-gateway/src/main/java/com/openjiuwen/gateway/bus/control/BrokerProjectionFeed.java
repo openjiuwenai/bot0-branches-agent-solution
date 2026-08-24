@@ -13,9 +13,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -75,6 +72,7 @@ public class BrokerProjectionFeed implements ProjectionFeed, SmartLifecycle {
     private final BrokerForwardingConsumerPort consumer;
     private final String gatewayServiceId;
     private final long pollTimeoutMillis;
+    private final ProjectionPayloadDecoder payloadDecoder = new ProjectionPayloadDecoder();
     private volatile boolean running = false;
     private ScheduledExecutorService dispatcher;
 
@@ -167,9 +165,15 @@ public class BrokerProjectionFeed implements ProjectionFeed, SmartLifecycle {
                     m.correlationId(), evt.eventType(), evt.taskId(), evt.body() != null);
             return true;
         } catch (IllegalArgumentException decodeFailure) {
-            // a malformed projection must not wedge the dispatcher; commit + drop so the broker advances
-            log.warn("decode failure corrId={} → drop", m.correlationId(), decodeFailure);
+            // Commit malformed input but stage a deterministic failure for the owning wait loop.
+            log.warn("projection decode failure messageId={} corrId={} eventType={} classification={}",
+                    m.messageId(), m.correlationId(), m.eventType(), "PROJECTION_PAYLOAD_INVALID");
             consumer.commit(m);
+            LinkedBlockingQueue<ProjectionEvent> queue = stagingByCorrId.computeIfAbsent(m.correlationId(),
+                    ignored -> new LinkedBlockingQueue<>());
+            synchronized (queue) {
+                queue.add(ProjectionEvent.protocolFailure("PROJECTION_PAYLOAD_INVALID"));
+            }
             return true;
         }
     }
@@ -200,43 +204,9 @@ public class BrokerProjectionFeed implements ProjectionFeed, SmartLifecycle {
     }
 
     private ProjectionEvent map(BrokerInboundMessage m) {
-        Map<String, String> descriptor = parseDescriptor(m.inlinePayload());
-        String taskId = descriptor.get("taskId");
-        String streamRef = descriptor.get("streamRef");
-        String a2aResponse = descriptor.get("a2aResponse");
-        String body = null;
-        if (a2aResponse != null && !a2aResponse.isBlank()) {
-            body = decodeBase64Url(a2aResponse);
-        }
-        if (body == null) {
-            String reason = descriptor.get("reason");
-            if (reason != null && !reason.isBlank()) {
-                body = reason;
-            }
-        }
-        return new ProjectionEvent(m.eventType(), taskId, streamRef, m.payloadRef(), body);
-    }
-
-    private static Map<String, String> parseDescriptor(String inlinePayload) {
-        Map<String, String> map = new HashMap<>();
-        if (inlinePayload == null || inlinePayload.isBlank()) {
-            return map;
-        }
-        for (String entry : inlinePayload.split(";")) {
-            int eq = entry.indexOf('=');
-            if (eq <= 0) {
-                continue;
-            }
-            map.put(entry.substring(0, eq), entry.substring(eq + 1));
-        }
-        return map;
-    }
-
-    private static String decodeBase64Url(String s) {
-        int pad = (4 - s.length() % 4) % 4;
-        String padded = pad == 0 ? s : s + "=".repeat(pad);
-        byte[] bytes = Base64.getUrlDecoder().decode(padded);
-        return new String(bytes, StandardCharsets.UTF_8);
+        ProjectionPayloadDecoder.DecodedProjection decoded = payloadDecoder.decode(m.inlinePayload(), m.eventType());
+        return new ProjectionEvent(m.eventType(), decoded.taskId(), decoded.streamRef(), m.payloadRef(),
+                decoded.body(), decoded.a2aResponsePresent(), null);
     }
 
     private static ThreadFactory daemonFactory() {
