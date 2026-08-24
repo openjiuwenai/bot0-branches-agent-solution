@@ -21,7 +21,6 @@ gateway:
   path-mode: bus
   rdc:
     base-url: ${GATEWAY_RDC_BASE_URL:}
-  default-agent-id: ${GATEWAY_DEFAULT_AGENT_ID:travel-hotel}
   test-credential:
     token: ${GATEWAY_TEST_TOKEN:}
     principalId: ${GATEWAY_TEST_PRINCIPAL:test-principal}

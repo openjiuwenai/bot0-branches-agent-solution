@@ -25,11 +25,12 @@ import java.util.stream.Stream;
 
 /**
  * Routes a create call over the direct path (FEAT-011 L2 §4): resolve the
- * effective agent (explicit or default) → search RDC → pick the first candidate
- * → resolve the route handle → inject the authoritative tenant → forward
- * synchronously → on first taskId, bind the sticky index. Failures (no
- * candidate / resolve failure) surface as governance-layer errors that the S5
- * path returns — never a fabricated success.
+ * effective agent (explicit; C2 removed the default-Agent fallback, so a
+ * create-type request always carries an agentId validated in G3) → search RDC
+ * → pick the first candidate → resolve the route handle → inject the
+ * authoritative tenant → forward synchronously → on first taskId, bind the
+ * sticky index. Failures (no candidate / resolve failure) surface as
+ * governance-layer errors that the S5 path returns — never a fabricated success.
  *
  * @since 0.1.0
  */
@@ -38,7 +39,6 @@ public class Router {
     private final RdcRouteClient rdc;
     private final AgentRuntimeClient runtime;
     private final StickyIndex stickyIndex;
-    private final DefaultAgentResolver defaultAgentResolver;
     private final ObjectMapper mapper = new ObjectMapper();
 
     /**
@@ -47,14 +47,11 @@ public class Router {
      * @param rdc                  RDC route client
      * @param runtime              runtime forwarder
      * @param stickyIndex          taskId -> routeHandle index
-     * @param defaultAgentResolver default agent resolver
      */
-    public Router(RdcRouteClient rdc, AgentRuntimeClient runtime, StickyIndex stickyIndex,
-                  DefaultAgentResolver defaultAgentResolver) {
+    public Router(RdcRouteClient rdc, AgentRuntimeClient runtime, StickyIndex stickyIndex) {
         this.rdc = rdc;
         this.runtime = runtime;
         this.stickyIndex = stickyIndex;
-        this.defaultAgentResolver = defaultAgentResolver;
     }
 
     /**
@@ -65,8 +62,16 @@ public class Router {
      *         the runtime (FEAT-001) is responsible for not returning physical topology)
      */
     public String routeCreate(GovernanceContext ctx) {
-        String effectiveAgentId = ctx.agentId() != null ? ctx.agentId() : defaultAgentResolver.resolve();
-        List<AgentCardRoute> candidates = rdc.searchInstancesByAgentId(ctx.tenantId(), effectiveAgentId);
+        String effectiveAgentId = ctx.agentId();  // C2: validator guarantees non-null for create-type
+        List<AgentCardRoute> candidates;
+        try {
+            candidates = rdc.searchInstancesByAgentId(ctx.tenantId(), effectiveAgentId);
+        } catch (RouteResolutionException ex) {
+            // L2-014: RDC search-stage failure (network down / empty cache) is distinct from
+            // "no candidates" (empty business list). Retryable: transient RDC unavailability.
+            throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "RDC_UNAVAILABLE",
+                    "RDC search unavailable for agent " + effectiveAgentId, ex);
+        }
         if (candidates.isEmpty()) {
             throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "ROUTE_NO_CANDIDATES",
                     "No routable instance for agent " + effectiveAgentId);
@@ -97,8 +102,16 @@ public class Router {
      * @return lazy stream of SSE data payloads (sticky-write hooked)
      */
     public Stream<String> routeStream(GovernanceContext ctx) {
-        String effectiveAgentId = ctx.agentId() != null ? ctx.agentId() : defaultAgentResolver.resolve();
-        List<AgentCardRoute> candidates = rdc.searchInstancesByAgentId(ctx.tenantId(), effectiveAgentId);
+        String effectiveAgentId = ctx.agentId();  // C2: validator guarantees non-null for create-type
+        List<AgentCardRoute> candidates;
+        try {
+            candidates = rdc.searchInstancesByAgentId(ctx.tenantId(), effectiveAgentId);
+        } catch (RouteResolutionException ex) {
+            // L2-014: RDC search-stage failure (network down / empty cache) is distinct from
+            // "no candidates" (empty business list). Retryable: transient RDC unavailability.
+            throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "RDC_UNAVAILABLE",
+                    "RDC search unavailable for agent " + effectiveAgentId, ex);
+        }
         if (candidates.isEmpty()) {
             throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "ROUTE_NO_CANDIDATES",
                     "No routable instance for agent " + effectiveAgentId);

@@ -22,7 +22,6 @@ import com.openjiuwen.gateway.governance.JsonRpcError;
 import com.openjiuwen.gateway.governance.MethodResultException;
 import com.openjiuwen.gateway.governance.idempotency.IdempotencyRule;
 import com.openjiuwen.gateway.routing.AgentCardRoute;
-import com.openjiuwen.gateway.routing.DefaultAgentResolver;
 import com.openjiuwen.gateway.routing.RdcRouteClient;
 import com.openjiuwen.gateway.routing.ResolvedRoute;
 import com.openjiuwen.gateway.routing.RouteResolutionException;
@@ -71,7 +70,6 @@ public class BusForwarder {
     private final long acceptWindowMillis;
     private final long responseWindowMillis;
     private final AgentRuntimeClient agentRuntimeClient;
-    private final DefaultAgentResolver defaultAgentResolver;
     private final StickyIndex stickyIndex;
     private long streamFirstFrameDeadlineMillis = 10_000L;
     private long singleResponseWindowMillis = 30_000L;
@@ -88,11 +86,11 @@ public class BusForwarder {
 
     /**
      * Creates a forwarder wired with RDC search, control enqueue, projection feed, G4,
-     * SSE-bridge runtime client, and the default-agent fallback.
+     * and the SSE-bridge runtime client.
      *
-     * <p>When a create carries no {@code agentId}, the {@link DefaultAgentResolver} supplies
-     * the configured default (mirrors {@code Router}); a missing default is a clean
-     * {@code DEFAULT_AGENT_UNCONFIGURED} governance error rather than an NPE.
+     * <p>C2 removed the default-agent fallback: a create-type request always carries
+     * an agentId validated in G3 (ParamValidator), so {@code ctx.agentId()} is
+     * guaranteed non-null for create-type routing.
      *
      * @param rdc route discovery client
      * @param control I-04 outbound forwarder
@@ -102,7 +100,6 @@ public class BusForwarder {
      * @param acceptWindowMillis accept-phase timeout window
      * @param responseWindowMillis response-phase timeout window after accept
      * @param agentRuntimeClient runtime client for SSE bridge after STREAM_READY (null on sync-only wiring)
-     * @param defaultAgentResolver default logical agent resolver (used when ctx carries no agentId)
      * @param stickyIndex taskId -> routeHandle index; written on the first taskId-bearing projection
      *                    so a BUS-created task resumes to its owning runtime (P-13, mirrors DIRECT
      *                    Router.routeCreate which writes sticky from the response taskId)
@@ -110,8 +107,7 @@ public class BusForwarder {
     public BusForwarder(RdcRouteClient rdc, BusControlForwarder control, ProjectionFeed projectionFeed,
                         IdempotencyRule g4, String sourceServiceId,
                         long acceptWindowMillis, long responseWindowMillis,
-                        AgentRuntimeClient agentRuntimeClient, DefaultAgentResolver defaultAgentResolver,
-                        StickyIndex stickyIndex) {
+                        AgentRuntimeClient agentRuntimeClient, StickyIndex stickyIndex) {
         this.rdc = rdc;
         this.control = control;
         this.projectionFeed = projectionFeed;
@@ -120,7 +116,6 @@ public class BusForwarder {
         this.acceptWindowMillis = acceptWindowMillis;
         this.responseWindowMillis = responseWindowMillis;
         this.agentRuntimeClient = agentRuntimeClient;
-        this.defaultAgentResolver = defaultAgentResolver;
         this.stickyIndex = stickyIndex;
     }
 
@@ -320,7 +315,7 @@ public class BusForwarder {
      * @throws GovernanceException when no routable instance or enqueue fails
      */
     public ResponseEntity<String> forwardSync(GovernanceContext ctx) {
-        String effectiveAgentId = ctx.agentId() != null ? ctx.agentId() : defaultAgentResolver.resolve();
+        String effectiveAgentId = ctx.agentId();  // C2: validator guarantees non-null for create-type
         List<AgentCardRoute> candidates = rdc.searchInstancesByAgentId(ctx.tenantId(), effectiveAgentId);
         if (candidates.isEmpty()) {
             throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "ROUTE_NO_CANDIDATES",
@@ -426,7 +421,7 @@ public class BusForwarder {
      */
     public Optional<String> forwardStreaming(GovernanceContext ctx, HttpServletResponse response, SseBridge sseBridge)
             throws IOException {
-        String effectiveAgentId = ctx.agentId() != null ? ctx.agentId() : defaultAgentResolver.resolve();
+        String effectiveAgentId = ctx.agentId();  // C2: validator guarantees non-null for create-type
         List<AgentCardRoute> candidates = rdc.searchInstancesByAgentId(ctx.tenantId(), effectiveAgentId);
         if (candidates.isEmpty()) {
             throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "ROUTE_NO_CANDIDATES",

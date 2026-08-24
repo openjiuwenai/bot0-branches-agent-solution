@@ -34,7 +34,8 @@ class ParamValidatorTest {
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"message/send\",\"params\":{}}";
     private static final String STREAMING =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendStreamingMessage\","
-                    + "\"params\":{\"message\":{\"messageId\":\"m3\",\"parts\":[{\"text\":\"hi\"}]}}}";
+                    + "\"params\":{\"message\":{\"messageId\":\"m3\",\"parts\":[{\"text\":\"hi\"}]},"
+                    + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
 
     // --- T1: S6/S8 whitelist + params.id (v0830) ---
     private static final String GET_TASK =
@@ -79,11 +80,11 @@ class ParamValidatorTest {
     }
 
     @Test
-    void createWithoutAgentIdIsAccepted() {
-        GovernanceContext ctx = validate(validator, CREATE_NO_AGENT);
-        assertThat(ctx.method()).isEqualTo("SendMessage");
-        assertThat(ctx.agentId()).isNull();
-        assertThat(ctx.taskId()).isNull();
+    void createWithoutAgentIdReturns400ValidationAgentId() {
+        // DF-Q01: create-type MUST carry an explicit agentId (no default-Agent fallback).
+        GovernanceException ge = govern(() -> validate(validator, CREATE_NO_AGENT));
+        assertThat(ge.code()).isEqualTo("VALIDATION_AGENT_ID");
+        assertThat(ge.httpStatus().value()).isEqualTo(400);
     }
 
     @Test
@@ -130,8 +131,8 @@ class ParamValidatorTest {
 
     @Test
     void resumeMissingTaskIdIsTreatedAsCreate() {
-        // No taskId -> classified as create (no failure, agentId absent is OK).
-        GovernanceContext ctx = validate(validator, CREATE_NO_AGENT);
+        // No taskId -> classified as create (agentId required for create per DF-Q01).
+        GovernanceContext ctx = validate(validator, CREATE_WITH_AGENT);
         assertThat(ctx.taskId()).isNull();
     }
 
@@ -158,9 +159,11 @@ class ParamValidatorTest {
     void fingerprintExcludesJsonRpcRequestId() {
         // ISSUE-84/85: 同一业务正文,仅顶层 id 不同(JSON-RPC 客户端重试惯例) → 同指纹 → 幂等复用而非 409
         String idA = "{\"jsonrpc\":\"2.0\",\"id\":\"A\",\"method\":\"SendMessage\","
-                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]}}}";
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]},"
+                + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
         String idB = "{\"jsonrpc\":\"2.0\",\"id\":\"B\",\"method\":\"SendMessage\","
-                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]}}}";
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]},"
+                + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
         assertThat(validate(validator, idA).idempotencyFingerprint())
                 .isEqualTo(validate(validator, idB).idempotencyFingerprint());
     }
@@ -182,9 +185,11 @@ class ParamValidatorTest {
     void fingerprintReflectsBusinessBody() {
         // 不同业务正文 → 不同指纹 → 幂等冲突 409(保留冲突检测)
         String body1 = "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
-                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]}}}";
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]},"
+                + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
         String body2 = "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
-                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"bye\"}]}}}";
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"bye\"}]},"
+                + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
         assertThat(validate(validator, body1).idempotencyFingerprint())
                 .isNotEqualTo(validate(validator, body2).idempotencyFingerprint());
     }
@@ -194,7 +199,7 @@ class ParamValidatorTest {
         // ISSUE-86 缺陷①: rawBody 正好 65536 字节(规格上限,对齐 ForwardingEnvelope) → G3 通过,不抛 413
         String prefix = "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
                 + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"";
-        String suffix = "\"}]}}}";
+        String suffix = "\"}]},\"metadata\":{\"agentId\":\"agent-9\"}}}";
         int textLen = 65536 - prefix.length() - suffix.length();
         String body = prefix + "a".repeat(textLen) + suffix;
         GovernanceContext ctx = validate(validator, body);

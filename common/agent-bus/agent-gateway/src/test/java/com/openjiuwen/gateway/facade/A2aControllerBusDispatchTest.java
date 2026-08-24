@@ -23,7 +23,6 @@ import com.openjiuwen.gateway.obs.AuditEvent;
 import com.openjiuwen.gateway.obs.AuditSink;
 import com.openjiuwen.gateway.obs.GovernanceAuditor;
 import com.openjiuwen.gateway.path.PathSelector;
-import com.openjiuwen.gateway.routing.DefaultAgentResolver;
 import com.openjiuwen.gateway.routing.FakeRdcRouteClient;
 import com.openjiuwen.gateway.routing.Router;
 import com.openjiuwen.gateway.routing.StickyIndex;
@@ -55,12 +54,13 @@ import java.util.Optional;
 @WebMvcTest(controllers = A2aController.class)
 @Import({AuthRule.class, TenantResolver.class, ParamValidator.class, IdempotencyRule.class,
         GovernanceAuditor.class, GovernanceErrorHandler.class, Router.class, StickyIndex.class,
-        DefaultAgentResolver.class, SseBridge.class, PathSelector.class})
-@TestPropertySource(properties = {"gateway.path-mode=bus", "gateway.default-agent-id=default-agent-1"})
+        SseBridge.class, PathSelector.class})
+@TestPropertySource(properties = "gateway.path-mode=bus")
 class A2aControllerBusDispatchTest {
     private static final String VALID_CREATE =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
-                    + "\"params\":{\"message\":{\"messageId\":\"mb\",\"parts\":[{\"text\":\"hi\"}]}}}";
+                    + "\"params\":{\"message\":{\"messageId\":\"mb\",\"parts\":[{\"text\":\"hi\"}]},"
+                    + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
 
     @Autowired
     private MockMvc mvc;
@@ -111,7 +111,7 @@ class A2aControllerBusDispatchTest {
         boolean called;
 
         StubBusForwarder() {
-            super(null, null, null, null, "stub-gw", 0L, 0L, null, new DefaultAgentResolver(""), new StickyIndex());
+            super(null, null, null, null, "stub-gw", 0L, 0L, null, new StickyIndex());
         }
 
         @Override

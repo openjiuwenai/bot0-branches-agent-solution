@@ -26,6 +26,8 @@ public class FakeAgentRuntimeClient implements AgentRuntimeClient {
     private String lastBody;
     private boolean neverClosingStream;
     private GovernanceException streamException;
+    private GovernanceException syncException;
+    private GovernanceException openStreamException;
 
     /**
      * Configure the canned response body returned by invokeSync.
@@ -67,6 +69,27 @@ public class FakeAgentRuntimeClient implements AgentRuntimeClient {
     }
 
     /**
+     * When set, {@code invokeSync} throws this exception — simulates a DIRECT transport
+     * failure (HttpAgentRuntimeClient maps IOException -> FORWARD_FAILED).
+     *
+     * @param syncException the exception to throw, or {@code null} to clear
+     */
+    public void setSyncException(GovernanceException syncException) {
+        this.syncException = syncException;
+    }
+
+    /**
+     * When set, {@code openStream} throws this exception — simulates a DIRECT streaming
+     * transport failure (FORWARD_FAILED) or a verbatim runtime rejection
+     * (RUNTIME_JSONRPC_ERROR, e.g. terminal SubscribeToTask -32004).
+     *
+     * @param openStreamException the exception to throw, or {@code null} to clear
+     */
+    public void setOpenStreamException(GovernanceException openStreamException) {
+        this.openStreamException = openStreamException;
+    }
+
+    /**
      * Return the endpoint recorded from the last invokeSync/openStream call.
      *
      * @return the endpoint of the last invokeSync
@@ -90,12 +113,19 @@ public class FakeAgentRuntimeClient implements AgentRuntimeClient {
     public void reset() {
         this.lastEndpoint = null;
         this.lastBody = null;
+        this.syncException = null;
+        this.openStreamException = null;
+        this.streamException = null;
+        this.neverClosingStream = false;
     }
 
     @Override
     public String invokeSync(String endpointUrl, String jsonRpcBody) {
         this.lastEndpoint = endpointUrl;
         this.lastBody = jsonRpcBody;
+        if (syncException != null) {
+            throw syncException;
+        }
         return response;
     }
 
@@ -103,6 +133,9 @@ public class FakeAgentRuntimeClient implements AgentRuntimeClient {
     public Stream<String> openStream(String endpointUrl, String jsonRpcBody) {
         this.lastEndpoint = endpointUrl;
         this.lastBody = jsonRpcBody;
+        if (openStreamException != null) {
+            throw openStreamException;
+        }
         return new ArrayList<>(frames).stream();
     }
 

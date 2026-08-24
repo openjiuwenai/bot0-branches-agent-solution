@@ -12,7 +12,7 @@ package com.openjiuwen.gateway.governance;
  * <ul>
  *   <li><b>Governance / method-front errors</b> (G1–G5): non-2xx HTTP + flat
  *       {@link GatewayError} body (unchanged from 730).</li>
- *   <li><b>Method-result errors</b> (UNKNOWN / TASK_NOT_FOUND /
+ *   <li><b>Method-result errors</b> (UNKNOWN / DIRECT_TRANSPORT_UNKNOWN / TASK_NOT_FOUND /
  *       CONTINUATION_FAILED / STREAM_NOT_AVAILABLE / PAYLOAD_REF_UNAVAILABLE /
  *       passthrough runtime JSON-RPC errors): HTTP 200 + {@link JsonRpcError}
  *       envelope carrying {@code error.code} (numeric) +
@@ -27,6 +27,7 @@ package com.openjiuwen.gateway.governance;
  */
 public enum ErrorCodes {
     PROJECTION_TIMEOUT_UNKNOWN(-32050, "PROJECTION_TIMEOUT_UNKNOWN", true),
+    DIRECT_TRANSPORT_UNKNOWN(-32053, "DIRECT_TRANSPORT_UNKNOWN", false),  // DF-003: DIRECT transport failure before taskId (do NOT retry original create)
     CONTINUATION_FAILED(-32051, "CONTINUATION_FAILED", false),
     STREAM_NOT_AVAILABLE(-32052, "STREAM_NOT_AVAILABLE", false),
     PAYLOAD_REF_UNAVAILABLE(-32054, "PAYLOAD_REF_UNAVAILABLE", true),
@@ -86,6 +87,7 @@ public enum ErrorCodes {
     public static ErrorCodes fromRpcCode(int rpcCode) {
         return switch (rpcCode) {
             case -32001 -> TASK_NOT_FOUND;
+            case -32004 -> UNSUPPORTED_OPERATION;
             case -32602 -> VALIDATION_FAILED;
             case -32601 -> VALIDATION_METHOD;
             case -32603 -> INTERNAL_ERROR;
