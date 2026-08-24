@@ -50,7 +50,6 @@ import org.springframework.context.annotation.Bean;
         havingValue = "true")
 @EnableConfigurationProperties({VersatileProperties.class, ControllerHandoffProperties.class})
 public class ControllerHandoffHandlerAutoConfiguration implements InitializingBean {
-
     private final ControllerHandoffProperties properties;
 
     public ControllerHandoffHandlerAutoConfiguration(ControllerHandoffProperties properties) {

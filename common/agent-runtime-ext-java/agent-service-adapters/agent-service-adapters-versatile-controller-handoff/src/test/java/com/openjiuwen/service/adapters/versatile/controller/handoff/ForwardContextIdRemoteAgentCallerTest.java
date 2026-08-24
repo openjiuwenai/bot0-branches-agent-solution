@@ -25,7 +25,6 @@ import java.util.concurrent.atomic.AtomicReference;
  * @since 0.1.0
  */
 class ForwardContextIdRemoteAgentCallerTest {
-
     private static final RemoteCallOutcome DONE = new RemoteCallOutcome("task-9", null, "final", "ok", null);
 
     private final CapturingDelegate delegate = new CapturingDelegate();

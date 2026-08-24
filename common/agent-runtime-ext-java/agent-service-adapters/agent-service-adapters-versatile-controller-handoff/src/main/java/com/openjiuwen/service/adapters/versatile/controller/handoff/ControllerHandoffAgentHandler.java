@@ -101,8 +101,7 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
                     request.getConversationId());
         }
         List<QueryChunk> finalEvents = runHandoffChain(request, null,
-                remote.map(RemoteToolResults::bouncedTargets).orElse(Set.of()))
-                .orElse(List.of());
+                remote.map(RemoteToolResults::bouncedTargets).orElse(Set.of()));
         return new QueryResponse(resolveQueryResult(request, finalEvents),
                 request.getConversationId());
     }
@@ -118,7 +117,7 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
             return;
         }
         try {
-            Optional<List<QueryChunk>> finalEvents = runHandoffChain(request, observer,
+            List<QueryChunk> finalEvents = runHandoffChain(request, observer,
                     remote.map(RemoteToolResults::bouncedTargets).orElse(Set.of()));
             if (observer.isCancelled()) {
                 log.warn("controller-handoff streamQuery cancelled conversation_id={}",
@@ -128,7 +127,7 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
             if (finalEvents.isEmpty()) {
                 return; // 转调/信号/错误路径已驱动 observer 到终态
             }
-            Optional<QueryChunk> terminalError = finalEvents.get().stream()
+            Optional<QueryChunk> terminalError = finalEvents.stream()
                     .filter(c -> QueryChunk.TYPE_ERROR.equals(c.getType()))
                     .findFirst();
             if (terminalError.isPresent()) {
@@ -274,10 +273,10 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
      * @param observer 流式观察者；{@code null} 表示 query 收集模式
      * @param bouncedTargets 本链已弹回过的目标（re-invoke 重入时来自
      *        remoteToolResults 解析）；再转调同目标 → DUPLICATE_TARGET
-     * @return 无转调命中时的基线终态事件；流式模式 {@link Optional#empty()} 表示
-     *         observer 已被驱动到终态（query 收集模式不会为空，错误以异常上抛）
+     * @return 无转调命中时的基线终态事件；空列表表示流式模式下 observer
+     *         已被驱动到终态（query 收集模式不会为空，错误以异常上抛）
      */
-    private Optional<List<QueryChunk>> runHandoffChain(ServeRequest request, QueryStreamObserver observer,
+    private List<QueryChunk> runHandoffChain(ServeRequest request, QueryStreamObserver observer,
             Set<String> bouncedTargets) {
         ControllerExecution execution = execute(request, observer);
         while (execution.handoffHit() != null) {
@@ -291,21 +290,21 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
                 if (observer != null) {
                     observer.onNext(envelope);
                     observer.onComplete();
-                    return Optional.empty();
+                    return List.of();
                 }
-                return Optional.of(List.of(envelope));
+                return List.of(envelope);
             }
             ResolvedTarget target;
             try {
                 target = targetResolver.resolve(hit.handoff());
             } catch (HandoffTargetResolutionException ex) {
                 emitHandoffError(observer, ex.getErrorCode(), ex.getMessage());
-                return Optional.empty();
+                return List.of();
             }
             if (bouncedTargets.contains(target.agentId())) {
                 emitHandoffError(observer, "VERSATILE_HANDOFF_DUPLICATE_TARGET",
                         "target bounced in this chain: " + target.agentId());
-                return Optional.empty();
+                return List.of();
             }
             prepareDelegationMetadata(request);
             QueryChunk interrupt = handoffDelegateInterrupt(target, request);
@@ -314,11 +313,11 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
             if (observer != null) {
                 observer.onNext(interrupt);
                 observer.onComplete();
-                return Optional.empty();
+                return List.of();
             }
-            return Optional.of(List.of(interrupt));
+            return List.of(interrupt);
         }
-        return Optional.of(execution.finalEvents());
+        return execution.finalEvents();
     }
 
     /**

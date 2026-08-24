@@ -114,6 +114,12 @@ public class MockControllerController {
 
     /**
      * L1 意图分支：意图帧 flush 后延迟 {@value #INTENT_TAIL_DELAY_MS}ms 再终态。
+     *
+     * @param out SSE 响应输出流
+     * @param query 当前轮用户请求文本
+     * @param invocation 本次会话的轮次计数（从 1 开始）
+     * @param conversationId 会话标识
+     * @throws IOException 写出 SSE 帧或意图尾延迟被中断时抛出
      */
     private void l1Stream(OutputStream out, String query, int invocation, String conversationId)
             throws IOException {
