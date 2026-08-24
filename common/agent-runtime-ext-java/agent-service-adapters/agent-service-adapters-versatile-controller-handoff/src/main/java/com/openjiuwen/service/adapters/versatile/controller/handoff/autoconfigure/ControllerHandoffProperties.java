@@ -22,7 +22,6 @@ import java.util.Map;
  */
 @ConfigurationProperties(prefix = "openjiuwen.service.versatile.handoff")
 public class ControllerHandoffProperties {
-
     private boolean enabled = false;
 
     private Classify classify;
@@ -107,6 +106,7 @@ public class ControllerHandoffProperties {
         return value == null || value.trim().isEmpty();
     }
 
+    /** 识别条件（classify.*）：事件类型 + 字段路径/取值命中即判为转调。 */
     public static class Classify {
         private String eventType;
         private String fieldPath;
@@ -137,6 +137,7 @@ public class ControllerHandoffProperties {
         }
     }
 
+    /** 转调信息提取路径（fields.*）：从命中行提取 handoff-type/intent/domain 等字段。 */
     public static class Fields {
         private String handoffType;
         private String intentId;
@@ -185,6 +186,7 @@ public class ControllerHandoffProperties {
         }
     }
 
+    /** 目标解析配置（target.*）：解析优先级、allowlist 与 intent/domain 映射。 */
     public static class Target {
         private List<String> allowedAgents = new ArrayList<>();
         private List<String> resolutionPriority = new ArrayList<>(List.of("direct", "intent", "domain"));

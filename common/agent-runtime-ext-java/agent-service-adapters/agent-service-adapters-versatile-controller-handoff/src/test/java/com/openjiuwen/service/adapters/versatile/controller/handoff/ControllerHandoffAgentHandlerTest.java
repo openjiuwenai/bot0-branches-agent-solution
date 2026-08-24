@@ -4,12 +4,15 @@
 
 package com.openjiuwen.service.adapters.versatile.controller.handoff;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
+
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
 import com.openjiuwen.service.adapters.versatile.controller.handoff.autoconfigure.ControllerHandoffProperties;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.dto.QueryResponse;
-import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 import com.openjiuwen.service.spec.dto.ServeRequest;
+import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
@@ -25,23 +28,37 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowableOfType;
-
+/**
+ * ControllerHandoffAgentHandler 单元验收：基线透传、转调中断、re-invoke 轮、
+ * 目标解析失败与生产 message 报文形态（识别先于基线错误映射，spec 2.2）。
+ *
+ * @since 2026-08-19
+ */
 class ControllerHandoffAgentHandlerTest {
+    private HttpServer server;
+    private String controllerUrl;
 
+    /** 流式观察者记录：chunk 序列 + 完成/错误终态。 */
     static final class RecordingObserver implements QueryStreamObserver {
         final List<QueryChunk> chunks = new ArrayList<>();
         boolean completed;
         Throwable error;
 
-        @Override public void onNext(QueryChunk chunk) { chunks.add(chunk); }
-        @Override public void onError(Throwable error) { this.error = error; }
-        @Override public void onComplete() { this.completed = true; }
-    }
+        @Override
+        public void onNext(QueryChunk chunk) {
+            chunks.add(chunk);
+        }
 
-    private HttpServer server;
-    private String controllerUrl;
+        @Override
+        public void onError(Throwable error) {
+            this.error = error;
+        }
+
+        @Override
+        public void onComplete() {
+            this.completed = true;
+        }
+    }
 
     @BeforeEach
     void startController() throws Exception {
@@ -105,7 +122,15 @@ class ControllerHandoffAgentHandlerTest {
         return r;
     }
 
-    /** 生产 message 报文形态的转调行（field 值随参数化）。 */
+    /**
+     * 生产 message 报文形态的转调行（field 值随参数化）。
+     *
+     * @param handoffType 转调类型
+     * @param intentId 意图标识
+     * @param domain 业务域
+     * @param targetAgentId 直连目标
+     * @return 转调 JSON 行
+     */
     private String handoffLine(String handoffType, String intentId, String domain,
             String targetAgentId) {
         return "{\"data\":{\"code\":14000,\"handoff_type\":\"" + handoffType
@@ -138,6 +163,8 @@ class ControllerHandoffAgentHandlerTest {
      * 生产部署形态配置（L2 §7.2 message 格式）：classify 与 business-domain/
      * target-agent-id 同在 /data/node_name（真实报文无独立目标字段），intent 取
      * /data/summary，resolution-priority=[intent]。
+     *
+     * @return 生产形态 handoff 配置
      */
     private ControllerHandoffProperties productionMessageProperties() {
         ControllerHandoffProperties p = new ControllerHandoffProperties();
@@ -177,7 +204,7 @@ class ControllerHandoffAgentHandlerTest {
         assertThat(observer.chunks).hasSize(1);
         assertThat(observer.chunks.get(0).getType()).isEqualTo(QueryChunk.TYPE_INTERRUPT);
         Map<?, ?> payload = (Map<?, ?>) observer.chunks.get(0).getData();
-        assertThat((String) payload.get("toolCallId")).startsWith("handoff:agent_card_flight:");
+        assertThat(String.valueOf(payload.get("toolCallId"))).startsWith("handoff:agent_card_flight:");
         assertThat(payload.get("agentName")).isEqualTo("agent_card_flight");
     }
 
@@ -193,7 +220,7 @@ class ControllerHandoffAgentHandlerTest {
         assertThat(observer.chunks.get(0).getType()).isEqualTo(QueryChunk.TYPE_INTERRUPT);
         Map<?, ?> payload = (Map<?, ?>) observer.chunks.get(0).getData();
         assertThat(payload.get("type")).isEqualTo("__interaction__");
-        assertThat((String) payload.get("toolCallId")).startsWith("handoff:agent_card_flight:");
+        assertThat(String.valueOf(payload.get("toolCallId"))).startsWith("handoff:agent_card_flight:");
         assertThat(payload.get("agentName")).isEqualTo("agent_card_flight");
         assertThat(payload.get("message")).isEqualTo("订机票");
         assertThat(payload.get("resume")).isEqualTo(true);

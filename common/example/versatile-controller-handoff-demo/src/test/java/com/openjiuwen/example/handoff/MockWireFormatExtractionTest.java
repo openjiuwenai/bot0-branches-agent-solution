@@ -4,6 +4,8 @@
 
 package com.openjiuwen.example.handoff;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.service.adapters.versatile.agentfw.IntentAgentResolver;
 import com.openjiuwen.service.adapters.versatile.agentfw.VersatileResponseExtractor;
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
@@ -12,11 +14,9 @@ import com.openjiuwen.service.adapters.versatile.controller.handoff.IntentHandof
 import com.openjiuwen.service.adapters.versatile.controller.handoff.autoconfigure.ControllerHandoffProperties;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 
-import java.util.List;
-
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.List;
 
 /**
  * Sanity check: the mock controller's SSE lines must be recognized by the
@@ -26,7 +26,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @since 0.1.0
  */
 class MockWireFormatExtractionTest {
-
     @Test
     void answerAndEndLinesProduceLegacyAnswer() {
         VersatileProperties properties = new VersatileProperties();
@@ -54,7 +53,9 @@ class MockWireFormatExtractionTest {
         assertThat(finish.get(0).getType()).isEqualTo(QueryChunk.TYPE_ERROR);
     }
 
-    /** 生产 message 报文：转调分类命中，intent 取 data.summary，dedup-key 取顶层 createdTime。 */
+    /**
+     * 生产 message 报文：转调分类命中，intent 取 data.summary，dedup-key 取顶层 createdTime。
+     */
     @Test
     void messageFormatHandoffLinesAreClassified() {
         ControllerHandoffProperties handoff = new ControllerHandoffProperties();

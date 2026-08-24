@@ -4,11 +4,13 @@
 
 package com.openjiuwen.service.adapters.versatile.controller.handoff;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
 import com.openjiuwen.service.adapters.versatile.controller.handoff.autoconfigure.ControllerHandoffProperties;
 import com.openjiuwen.service.spec.dto.QueryChunk;
-import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 import com.openjiuwen.service.spec.dto.ServeRequest;
+import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
@@ -24,30 +26,41 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
  * Spec 7.2 场景旅程验收：一级转调二级（a2a_delegate 中断）、二级退回一级
  * （remoteToolResults 信封重识别）、异常区分、目标不可用（REMOTE_* 映射）、
  * 弹回目标重复转调保护；以及 7.4 masking（错误载荷不携带原始报文）。
+ *
+ * @since 2026-08-19
  */
 class ControllerHandoffIntegrationTest {
-
-    static final class RecordingObserver implements QueryStreamObserver {
-        final List<QueryChunk> chunks = new ArrayList<>();
-        boolean completed;
-        Throwable error;
-
-        @Override public void onNext(QueryChunk chunk) { chunks.add(chunk); }
-        @Override public void onError(Throwable error) { this.error = error; }
-        @Override public void onComplete() { this.completed = true; }
-    }
-
     private HttpServer server;
     private String baseUrl;
     private final List<String[]> perRequestResponses = new ArrayList<>();
     private final java.util.concurrent.atomic.AtomicInteger requestCount =
             new java.util.concurrent.atomic.AtomicInteger();
+
+    /** 流式观察者记录：chunk 序列 + 完成/错误终态。 */
+    static final class RecordingObserver implements QueryStreamObserver {
+        final List<QueryChunk> chunks = new ArrayList<>();
+        boolean completed;
+        Throwable error;
+
+        @Override
+        public void onNext(QueryChunk chunk) {
+            chunks.add(chunk);
+        }
+
+        @Override
+        public void onError(Throwable error) {
+            this.error = error;
+        }
+
+        @Override
+        public void onComplete() {
+            this.completed = true;
+        }
+    }
 
     @BeforeEach
     void setUp() throws Exception {
@@ -138,7 +151,7 @@ class ControllerHandoffIntegrationTest {
         assertThat(observer.chunks).hasSize(1);
         Map<?, ?> payload = (Map<?, ?>) observer.chunks.get(0).getData();
         assertThat(observer.chunks.get(0).getType()).isEqualTo(QueryChunk.TYPE_INTERRUPT);
-        assertThat((String) payload.get("toolCallId")).startsWith("handoff:agent_card_flight:");
+        assertThat(String.valueOf(payload.get("toolCallId"))).startsWith("handoff:agent_card_flight:");
         assertThat(payload.get("agentName")).isEqualTo("agent_card_flight");
         assertThat(payload.get("message")).isEqualTo("订机票");
         Map<?, ?> context = (Map<?, ?>) payload.get("context");
@@ -219,7 +232,12 @@ class ControllerHandoffIntegrationTest {
         assertThat(payload).contains("VERSATILE_HANDOFF_TARGET_UNAVAILABLE");
     }
 
-    /** re-invoke 请求：协调器 buildBatchResumeRequest 把 remote 结果注入该 metadata 键。 */
+    /**
+     * re-invoke 请求：协调器 buildBatchResumeRequest 把 remote 结果注入该 metadata 键。
+     *
+     * @param results toolCallId → remote 结果
+     * @return re-invoke 服务请求
+     */
     private ServeRequest resumeRequest(Map<String, Object> results) {
         ServeRequest r = request("补充后的输入");
         r.getMetadata().put("runtime.remoteToolResults", results);
@@ -263,7 +281,7 @@ class ControllerHandoffIntegrationTest {
         handler().streamQuery(request("多消息"), observer);
         assertThat(observer.chunks).hasSize(1);
         Map<?, ?> payload = (Map<?, ?>) observer.chunks.get(0).getData();
-        assertThat((String) payload.get("toolCallId")).startsWith("handoff:agent_card_hotel:");
+        assertThat(String.valueOf(payload.get("toolCallId"))).startsWith("handoff:agent_card_hotel:");
         assertThat(observer.completed).isTrue();
     }
 }

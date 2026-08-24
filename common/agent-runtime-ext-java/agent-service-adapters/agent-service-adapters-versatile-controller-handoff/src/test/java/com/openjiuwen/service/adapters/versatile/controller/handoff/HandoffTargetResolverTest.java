@@ -4,6 +4,9 @@
 
 package com.openjiuwen.service.adapters.versatile.controller.handoff;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.openjiuwen.service.adapters.versatile.controller.handoff.autoconfigure.ControllerHandoffProperties;
 
 import org.junit.jupiter.api.Test;
@@ -11,11 +14,13 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
+/**
+ * HandoffTargetResolver 验收：解析优先级（direct &gt; intent &gt; domain）、allowlist
+ * 校验与 resolution-priority 可配置（spec 4.4/5.5，映射 1:1 无负载选择）。
+ *
+ * @since 2026-08-19
+ */
 class HandoffTargetResolverTest {
-
     private ControllerHandoffProperties properties() {
         ControllerHandoffProperties p = new ControllerHandoffProperties();
         ControllerHandoffProperties.Target t = p.getTarget();
@@ -41,9 +46,9 @@ class HandoffTargetResolverTest {
     void directTargetMustPassAllowlist() {
         assertThatThrownBy(() -> new HandoffTargetResolver(properties())
                 .resolve(handoff("agent_card_rogue", null, null)))
-                .isInstanceOf(HandoffTargetResolutionException.class)
-                .satisfies(ex -> assertThat(((HandoffTargetResolutionException) ex).getErrorCode())
-                        .isEqualTo("VERSATILE_HANDOFF_TARGET_NOT_ALLOWED"));
+                .isInstanceOfSatisfying(HandoffTargetResolutionException.class,
+                        ex -> assertThat(ex.getErrorCode())
+                                .isEqualTo("VERSATILE_HANDOFF_TARGET_NOT_ALLOWED"));
     }
 
     @Test
@@ -67,17 +72,17 @@ class HandoffTargetResolverTest {
         ControllerHandoffProperties p = properties();
         p.getTarget().setIntentMapping(Map.of("intent_hotel", "agent_card_rogue"));
         assertThatThrownBy(() -> new HandoffTargetResolver(p).resolve(handoff(null, "intent_hotel", null)))
-                .isInstanceOf(HandoffTargetResolutionException.class)
-                .satisfies(ex -> assertThat(((HandoffTargetResolutionException) ex).getErrorCode())
-                        .isEqualTo("VERSATILE_HANDOFF_TARGET_NOT_ALLOWED"));
+                .isInstanceOfSatisfying(HandoffTargetResolutionException.class,
+                        ex -> assertThat(ex.getErrorCode())
+                                .isEqualTo("VERSATILE_HANDOFF_TARGET_NOT_ALLOWED"));
     }
 
     @Test
     void noResolvableTargetYieldsMissing() {
         assertThatThrownBy(() -> new HandoffTargetResolver(properties()).resolve(handoff(null, null, null)))
-                .isInstanceOf(HandoffTargetResolutionException.class)
-                .satisfies(ex -> assertThat(((HandoffTargetResolutionException) ex).getErrorCode())
-                        .isEqualTo("VERSATILE_HANDOFF_TARGET_MISSING"));
+                .isInstanceOfSatisfying(HandoffTargetResolutionException.class,
+                        ex -> assertThat(ex.getErrorCode())
+                                .isEqualTo("VERSATILE_HANDOFF_TARGET_MISSING"));
     }
 
     @Test

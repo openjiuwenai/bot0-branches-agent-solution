@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Classifies controller SSE/REST output lines: identification strictly precedes the
@@ -48,6 +49,12 @@ public class IntentHandoffClassifier {
         this.properties = properties;
     }
 
+    /**
+     * 分类控制器单行输出。
+     *
+     * @param rawLine 控制器原始输出行（SSE data/event 行或 REST 行，可为 {@code null}）
+     * @return 分类结果：HANDOFF / NOT_HANDOFF / IGNORED（识别命中但无可用解析来源）
+     */
     public HandoffClassification classify(String rawLine) {
         if (rawLine == null || rawLine.isBlank()) {
             return HandoffClassification.notHandoff();
@@ -57,21 +64,23 @@ public class IntentHandoffClassifier {
             return HandoffClassification.notHandoff();
         }
         String data = stripSseDataPrefix(rawLine.trim());
-        JsonNode json = readTree(data);
+        Optional<JsonNode> json = readTree(data);
         if (!matchesEventType(rawLine.trim(), json, classify.getEventType())) {
             return HandoffClassification.notHandoff();
         }
-        String value = readPath(json, classify.getFieldPath());
-        if (value == null || classify.getFieldValue() == null || !classify.getFieldValue().contains(value)) {
+        Optional<String> value = readPath(json, classify.getFieldPath());
+        if (value.isEmpty() || classify.getFieldValue() == null
+                || !classify.getFieldValue().contains(value.get())) {
             return HandoffClassification.notHandoff();
         }
 
         ControllerHandoffProperties.Fields fields = properties.getFields();
-        String handoffType = readPath(json, fields.getHandoffType()); // optional: signal 路由未命中即走解析链
-        String intentId = readPath(json, fields.getIntentId());
-        String businessDomain = readPath(json, fields.getBusinessDomain());
-        String targetAgentId = readPath(json, fields.getTargetAgentId());
-        String dedupKey = readPath(json, fields.getDedupKey()); // optional per spec 2.2
+        // optional: signal 路由未命中即走解析链
+        String handoffType = readPath(json, fields.getHandoffType()).orElse(null);
+        String intentId = readPath(json, fields.getIntentId()).orElse(null);
+        String businessDomain = readPath(json, fields.getBusinessDomain()).orElse(null);
+        String targetAgentId = readPath(json, fields.getTargetAgentId()).orElse(null);
+        String dedupKey = readPath(json, fields.getDedupKey()).orElse(null); // optional per spec 2.2
         if (isUpstreamSignal(handoffType) || hasUsableResolutionSource(intentId, businessDomain,
                 targetAgentId)) {
             return new HandoffClassification(HandoffClassification.Outcome.HANDOFF,
@@ -93,6 +102,11 @@ public class IntentHandoffClassifier {
      * 可用来源——否则生产同节点的回显帧（无 summary，但 node_name 路径已提取出值）
      * 会凭这些惰性来源提前命中，抑制掉随后携带 summary 的完整信号帧（2026-08-20）。
      * 默认 priority 含全部三个来源，行为与旧的任一非空规则一致。
+     *
+     * @param intentId 提取的意图标识（可缺失）
+     * @param businessDomain 提取的业务域（可缺失）
+     * @param targetAgentId 提取的直连目标（可缺失）
+     * @return resolution-priority 参与来源中任一非空即 {@code true}
      */
     private boolean hasUsableResolutionSource(String intentId, String businessDomain,
             String targetAgentId) {
@@ -111,33 +125,33 @@ public class IntentHandoffClassifier {
         return value == null || value.isBlank();
     }
 
-    private static boolean matchesEventType(String rawLine, JsonNode json, String eventType) {
+    private static boolean matchesEventType(String rawLine, Optional<JsonNode> json, String eventType) {
         if (eventType == null || eventType.isBlank()) {
             return true;
         }
         if (rawLine.startsWith("event:") && eventType.equals(rawLine.substring("event:".length()).trim())) {
             return true;
         }
-        return json != null && json.isObject() && json.hasNonNull("event")
-                && eventType.equals(json.get("event").asText());
+        return json.isPresent() && json.get().isObject() && json.get().hasNonNull("event")
+                && eventType.equals(json.get().get("event").asText());
     }
 
-    private static String readPath(JsonNode json, String path) {
-        if (json == null || path == null || path.isBlank()) {
-            return null;
+    private static Optional<String> readPath(Optional<JsonNode> json, String path) {
+        if (json.isEmpty() || path == null || path.isBlank()) {
+            return Optional.empty();
         }
-        JsonNode node = json.at(path.startsWith("/") ? path : "/" + path.replace('.', '/'));
+        JsonNode node = json.get().at(path.startsWith("/") ? path : "/" + path.replace('.', '/'));
         if (node == null || node.isMissingNode() || node.isNull()) {
-            return null;
+            return Optional.empty();
         }
-        return node.isTextual() ? node.asText() : node.toString();
+        return Optional.of(node.isTextual() ? node.asText() : node.toString());
     }
 
-    private static JsonNode readTree(String data) {
+    private static Optional<JsonNode> readTree(String data) {
         try {
-            return MAPPER.readTree(data);
+            return Optional.of(MAPPER.readTree(data));
         } catch (JsonProcessingException ignored) {
-            return null;
+            return Optional.empty();
         }
     }
 

@@ -36,6 +36,13 @@ public final class VersatileRequestExtractor {
         this.properties = Objects.requireNonNull(properties, "properties");
     }
 
+    /**
+     * 从服务请求抽取 Versatile 远端请求（url/headers/params/body）。
+     *
+     * @param request 服务请求（metadata 携带 body/headers/query 原始数据）
+     * @return 远端请求
+     * @throws IllegalArgumentException url-template 缺失或必填输入不完整
+     */
     public RemoteRequest extract(ServeRequest request) {
         Map<String, Object> sourceBody = mapValue(request.getMetadata().get("body"));
         Map<String, Object> remoteBody = new LinkedHashMap<>(mapValue(sourceBody.get("custom_data")));

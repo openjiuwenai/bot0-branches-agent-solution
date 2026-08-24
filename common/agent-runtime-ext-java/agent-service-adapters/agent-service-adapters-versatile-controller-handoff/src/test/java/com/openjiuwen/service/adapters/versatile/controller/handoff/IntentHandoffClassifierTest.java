@@ -4,16 +4,21 @@
 
 package com.openjiuwen.service.adapters.versatile.controller.handoff;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.service.adapters.versatile.controller.handoff.autoconfigure.ControllerHandoffProperties;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
+/**
+ * IntentHandoffClassifier 验收：结构化识别条件命中、事件类型门控、
+ * resolution-priority 可用来源判定与 signal 类型旁路（spec 2.2/3.4/3.5）。
+ *
+ * @since 2026-08-19
+ */
 class IntentHandoffClassifierTest {
-
     private ControllerHandoffProperties properties() {
         ControllerHandoffProperties p = new ControllerHandoffProperties();
         ControllerHandoffProperties.Classify c = new ControllerHandoffProperties.Classify();

@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -67,14 +68,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Profile("mock-controller")
 @RestController
 public class MockControllerController {
-    private static final Logger log = LoggerFactory.getLogger(MockControllerController.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
-
     /** Versatile agent id this mock serves for the L1 layer runtime. */
     public static final String L1_AGENT_ID = "agent_L1_controller";
 
     /** Versatile agent id this mock serves for the L2 layer runtime. */
     public static final String L2_AGENT_ID = "agent_L2_controller";
+
+    private static final Logger log = LoggerFactory.getLogger(MockControllerController.class);
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /** L1 意图命中后控制器"继续执行"的时长，e2e 断言转发发生在此之前之后。 */
     private static final long INTENT_TAIL_DELAY_MS = 2_000L;
@@ -111,21 +112,24 @@ public class MockControllerController {
         return sse(out -> l1Stream(out, query, count, conversationId));
     }
 
-    /** L1 意图分支：意图帧 flush 后延迟 {@value #INTENT_TAIL_DELAY_MS}ms 再终态。 */
+    /**
+     * L1 意图分支：意图帧 flush 后延迟 {@value #INTENT_TAIL_DELAY_MS}ms 再终态。
+     */
     private void l1Stream(OutputStream out, String query, int invocation, String conversationId)
             throws IOException {
         if (query.contains("异常")) {
             sseLines(out, exceptionEvent());
             return;
         }
-        String intent = intentForQuery(query);
-        if (intent != null && !(query.contains("退回") && invocation >= 2)) {
-            sseLines(out, echoMessageEvent(intent, invocation), intentHandoffEvent(intent, invocation));
+        Optional<String> intent = intentForQuery(query);
+        if (intent.isPresent() && !(query.contains("退回") && invocation >= 2)) {
+            sseLines(out, echoMessageEvent(intent.get(), invocation),
+                    intentHandoffEvent(intent.get(), invocation));
             out.flush();
             try {
                 Thread.sleep(INTENT_TAIL_DELAY_MS);
             } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
+                // G.CON.10：mock 不重设中断标记，直接以 IOException 结束本次流
                 throw new IOException("intent tail delay interrupted", ex);
             }
             log.info("L1 controller workflow finished conversationId={} invocation={}",
@@ -149,33 +153,44 @@ public class MockControllerController {
             try {
                 Thread.sleep(10_000L);
             } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
+                // G.CON.10：mock 不重设中断标记，记录后继续按场景回包
+                log.warn("mock L2 timeout delay interrupted, answering immediately");
             }
         }
         sseLines(out, answerEvent("二级本域业务答案：机票已预订"), workflowEndEvent());
     }
 
-    private static String intentForQuery(String query) {
+    /**
+     * 按查询关键字选择 L1 意图值。
+     *
+     * @param query 请求查询关键字
+     * @return 命中的意图值；无转调场景返回 {@link Optional#empty()}
+     */
+    private static Optional<String> intentForQuery(String query) {
         if (query.contains("无目标")) {
-            return "99";
+            return Optional.of("99");
         }
         if (query.contains("越权")) {
-            return "6";
+            return Optional.of("6");
         }
         if (query.contains("不可达")) {
-            return "5";
+            return Optional.of("5");
         }
         if (query.contains("转调") || query.contains("退回") || query.contains("循环")
                 || query.contains("补充信息") || query.contains("超时")) {
-            return "3";
+            return Optional.of("3");
         }
-        return null;
+        return Optional.empty();
     }
 
     /**
      * L1 意图转调信号 — 生产报文样例原样（intent 值与 createdTime 随执行变化：
      * 真实控制器每条消息的 createdTime 不同，作为 dedup-key，重识别后的再次转调
      * 不会被判为重复消息）。
+     *
+     * @param intentId 意图值（如 "3"）
+     * @param invocation 会话内第几次调用（驱动 createdTime 变化）
+     * @return message SSE 事件行
      */
     private static String intentHandoffEvent(String intentId, int invocation) {
         return "{\"event\":\"message\",\"data\":{\"text\":\"\",\"summary\":\"" + intentId + "\","
@@ -189,6 +204,10 @@ public class MockControllerController {
      * 生产 SSE 会混入的意图回显帧（2026-08-19 确认）：同一 node_name、无 summary 键、
      * 意图值在 data.text。识别命中但提取路径缺失 → 分类器按非转调忽略（WARN），
      * 不报错不出站，交回基线。
+     *
+     * @param intentId 意图值（回显到 data.text）
+     * @param invocation 会话内第几次调用（驱动 createdTime 变化）
+     * @return message SSE 回显事件行
      */
     private static String echoMessageEvent(String intentId, int invocation) {
         return "{\"event\":\"message\",\"data\":{\"text\":\"" + intentId + "\","
@@ -198,7 +217,12 @@ public class MockControllerController {
                 + "\"createdTime\":" + (createdTime(invocation) - 1) + "}";
     }
 
-    /** L2 不在范围退回信号 — 生产报文样例原样（createdTime 随执行变化）。 */
+    /**
+     * L2 不在范围退回信号 — 生产报文样例原样（createdTime 随执行变化）。
+     *
+     * @param invocation 会话内第几次调用（驱动 createdTime 变化）
+     * @return message SSE 事件行
+     */
     private static String notInScopeEvent(int invocation) {
         return "{\"event\":\"message\",\"data\":{\"text\":\"\",\"summary\":\"不在范围\","
                 + "\"node_id\":\"node_1787129452975\",\"node_type\":\"QA\",\"node_name\":\"不在范围\","
@@ -211,6 +235,9 @@ public class MockControllerController {
      * 本地/本域业务答案。{@code data.text} 与 {@code outputs.response} 同值：前者供
      * FEAT-002 基线 result-node-name 提取（{@code extractLegacyText} 读 {@code data.text}），
      * 后者保持真实报文形态。
+     *
+     * @param text 业务答案文本
+     * @return node_finished SSE 事件行
      */
     private static String answerEvent(String text) {
         return "{\"event\":\"node_finished\",\"data\":{\"agent_id\":\"81476c36-28e6-4ec1-84c5-247be51a9327\","
@@ -221,13 +248,21 @@ public class MockControllerController {
                 + "\"execution_id\":\"exec-answer\"},\"createdTime\":1787129556876}";
     }
 
-    /** 控制器真实异常（不满足转调识别条件，走 FEAT-002 错误映射）。 */
+    /**
+     * 控制器真实异常（不满足转调识别条件，走 FEAT-002 错误映射）。
+     *
+     * @return exception SSE 事件行
+     */
     private static String exceptionEvent() {
         return "{\"event\":\"exception\",\"data\":{\"code\":500,\"message\":\"workflow node failed\","
                 + "\"node_id\":\"node_failed\"}}";
     }
 
-    /** L2 向最终用户请求补充信息（FEAT-002 基线中断信号，配置 interrupt.signal-match）。 */
+    /**
+     * L2 向最终用户请求补充信息（FEAT-002 基线中断信号，配置 interrupt.signal-match）。
+     *
+     * @return need_user_input SSE 事件行
+     */
     private static String interruptEvent() {
         return "{\"event\":\"need_user_input\",\"data\":{\"question\":\"请补充入住日期\","
                 + "\"input_schema\":\"date\",\"resume_token\":\"tok-123\"}}";
@@ -238,7 +273,12 @@ public class MockControllerController {
                 + "\"node_status\":\"node_finished\"}}";
     }
 
-    /** 每次控制器执行生成新的 createdTime（真实控制器行为，作 dedup-key）。 */
+    /**
+     * 每次控制器执行生成新的 createdTime（真实控制器行为，作 dedup-key）。
+     *
+     * @param invocation 会话内第几次调用
+     * @return 本执行的 createdTime
+     */
     private static long createdTime(int invocation) {
         return 1787140547059L + invocation;
     }
@@ -258,6 +298,12 @@ public class MockControllerController {
 
     @FunctionalInterface
     private interface StreamingResponseBodyWriter {
+        /**
+         * Writes the canned scenario body.
+         *
+         * @param out response output stream
+         * @throws IOException when writing fails
+         */
         void writeTo(OutputStream out) throws IOException;
     }
 

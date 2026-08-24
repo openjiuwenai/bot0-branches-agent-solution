@@ -65,6 +65,14 @@ public final class VersatileHttpClient {
         }
     }
 
+    /**
+     * 以流式 POST 调用 Versatile 兼容端点，逐行消费响应。
+     *
+     * @param request 远端请求（url/headers/params/body）
+     * @param consumer 逐行消费者（非空行）
+     * @throws IOException HTTP 或流读取失败
+     * @throws InterruptedException 调用线程被中断
+     */
     public void postStream(VersatileRequestExtractor.RemoteRequest request, LineConsumer consumer)
             throws IOException, InterruptedException {
         String body = OBJECT_MAPPER.writeValueAsString(request.body());
@@ -250,6 +258,6 @@ public final class VersatileHttpClient {
          * @throws IOException when line processing fails
          * @throws InterruptedException when line processing is interrupted
          */
-        public void accept(String line) throws IOException, InterruptedException;
+        void accept(String line) throws IOException, InterruptedException;
     }
 }

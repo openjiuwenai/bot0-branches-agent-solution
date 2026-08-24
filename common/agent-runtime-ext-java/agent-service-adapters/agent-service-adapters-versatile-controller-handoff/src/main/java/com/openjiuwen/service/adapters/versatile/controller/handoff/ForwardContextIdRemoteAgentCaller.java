@@ -27,7 +27,6 @@ import java.util.concurrent.CompletableFuture;
  * @since 0.1.0
  */
 public final class ForwardContextIdRemoteAgentCaller implements RemoteAgentCaller {
-
     private static final String PREFIX_SEPARATOR = "-";
 
     private final RemoteAgentCaller delegate;
@@ -53,7 +52,13 @@ public final class ForwardContextIdRemoteAgentCaller implements RemoteAgentCalle
                 call.metadata(), call.messageMetadata(), call.isCallerStreaming());
     }
 
-    /** {@code agentId + "-" + contextId}；已带同目标前缀或空白原值不重复改写。 */
+    /**
+     * {@code agentId + "-" + contextId}；已带同目标前缀或空白原值不重复改写。
+     *
+     * @param agentId 已解析的目标 agent 标识
+     * @param contextId 原始 contextId
+     * @return 改写后的 contextId
+     */
     static String prefixedContextId(String agentId, String contextId) {
         if (contextId == null || contextId.isBlank()) {
             return contextId;

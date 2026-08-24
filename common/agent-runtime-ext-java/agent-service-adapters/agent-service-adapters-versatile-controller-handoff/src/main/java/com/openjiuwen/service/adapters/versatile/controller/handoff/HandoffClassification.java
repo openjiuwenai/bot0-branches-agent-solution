@@ -11,6 +11,7 @@ package com.openjiuwen.service.adapters.versatile.controller.handoff;
  */
 public record HandoffClassification(Outcome outcome, IntentHandoff handoff) {
 
+    /** 分类结局：转调命中 / 回交基线 / 命中但字段不全整行抑制。 */
     public enum Outcome {
         /** Full identification hit — consume as intent handoff. */
         HANDOFF,
@@ -24,6 +25,11 @@ public record HandoffClassification(Outcome outcome, IntentHandoff handoff) {
         IGNORED
     }
 
+    /**
+     * 非转调结果（回交 FEAT-002 基线映射）。
+     *
+     * @return NOT_HANDOFF 分类实例
+     */
     public static HandoffClassification notHandoff() {
         return new HandoffClassification(Outcome.NOT_HANDOFF, null);
     }

@@ -57,24 +57,47 @@ public class ControllerHandoffHandlerAutoConfiguration implements InitializingBe
         this.properties = properties;
     }
 
-    /** 启动校验：识别配置不完整即失败，不允许静默进入运行（spec 1.3 case 1 / 6.4）。 */
+    /**
+     * 启动校验：识别配置不完整即失败，不允许静默进入运行（spec 1.3 case 1 / 6.4）。
+     */
     @Override
     public void afterPropertiesSet() {
         properties.validateRequiredIdentifiers();
     }
 
+    /**
+     * 注册默认转调分类器。
+     *
+     * @param props handoff 配置
+     * @return 分类器实例
+     */
     @Bean
     @ConditionalOnMissingBean
     public IntentHandoffClassifier handoffClassifier(ControllerHandoffProperties props) {
         return new IntentHandoffClassifier(props);
     }
 
+    /**
+     * 注册默认目标解析器。
+     *
+     * @param props handoff 配置
+     * @return 目标解析器实例
+     */
     @Bean
     @ConditionalOnMissingBean
     public HandoffTargetResolver handoffTargetResolver(ControllerHandoffProperties props) {
         return new HandoffTargetResolver(props);
     }
 
+    /**
+     * 注册控制器转调 handler，占位 AgentHandler 槽位（顺序敏感，见类注释）。
+     *
+     * @param versatileProperties Versatile 基线配置
+     * @param classifier 转调分类器
+     * @param targetResolver 目标解析器
+     * @param handoffProperties handoff 配置
+     * @return 控制器转调 handler
+     */
     @Bean
     @ConditionalOnMissingBean(AgentHandler.class)
     public ControllerHandoffAgentHandler controllerHandoffAgentHandler(

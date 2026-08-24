@@ -4,16 +4,21 @@
 
 package com.openjiuwen.service.adapters.versatile.controller.handoff.autoconfigure;
 
-import org.junit.jupiter.api.Test;
-
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class ControllerHandoffPropertiesTest {
+import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
+/**
+ * ControllerHandoffProperties 验收：默认值契约与启动校验（识别条件不完整即失败，
+ * spec 1.3 case 1 / 6.4）。
+ *
+ * @since 2026-08-19
+ */
+class ControllerHandoffPropertiesTest {
     private ControllerHandoffProperties full() {
         ControllerHandoffProperties p = new ControllerHandoffProperties();
         ControllerHandoffProperties.Classify c = new ControllerHandoffProperties.Classify();

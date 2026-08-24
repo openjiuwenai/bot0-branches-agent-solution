@@ -26,6 +26,13 @@ public class HandoffTargetResolver {
         this.properties = properties;
     }
 
+    /**
+     * 按优先级解析下游目标并校验 allowlist。
+     *
+     * @param handoff 分类命中的转调信息
+     * @return 解析出的目标
+     * @throws HandoffTargetResolutionException 无可解析目标或目标不在 allowed-agents
+     */
     public ResolvedTarget resolve(IntentHandoff handoff) {
         ControllerHandoffProperties.Target target = properties.getTarget();
         for (String source : target.getResolutionPriority()) {

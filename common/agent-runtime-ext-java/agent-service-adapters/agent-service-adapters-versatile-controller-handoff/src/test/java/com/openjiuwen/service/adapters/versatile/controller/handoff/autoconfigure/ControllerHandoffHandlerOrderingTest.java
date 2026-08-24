@@ -4,17 +4,16 @@
 
 package com.openjiuwen.service.adapters.versatile.controller.handoff.autoconfigure;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.service.adapters.versatile.controller.handoff.ControllerHandoffAgentHandler;
 import com.openjiuwen.service.app.autoconfigure.A2AAutoConfiguration;
 import com.openjiuwen.service.app.autoconfigure.AgentServiceAutoConfiguration;
 import com.openjiuwen.service.spec.spi.AgentHandler;
 
 import org.junit.jupiter.api.Test;
-
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Regression tests for the real auto-configuration ordering: the handler must claim
@@ -27,7 +26,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @since 2026-08-19
  */
 class ControllerHandoffHandlerOrderingTest {
-
     private static final String[] ENABLED_PROPERTIES = {
             "openjiuwen.service.agent-id=agent_card_l1",
             "openjiuwen.service.versatile.url-template=http://127.0.0.1:1/conversations/{conversation_id}",

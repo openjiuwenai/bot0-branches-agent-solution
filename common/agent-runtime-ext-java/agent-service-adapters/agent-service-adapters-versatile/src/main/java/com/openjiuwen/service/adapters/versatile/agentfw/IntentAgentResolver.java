@@ -22,6 +22,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <p>Strategies are static deployment rules — they do not read session content or
  * user profile; round-robin cursors are per-{@code intent_id} and in-memory only
  * (reset on process restart).
+ *
+ * @since 2026-06-30
  */
 public final class IntentAgentResolver {
     private final VersatileProperties properties;

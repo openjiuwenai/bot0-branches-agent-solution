@@ -43,6 +43,12 @@ public final class VersatileResponseExtractor {
         this.agentResolver = Objects.requireNonNull(agentResolver, "agentResolver");
     }
 
+    /**
+     * 消费单行流式响应，产出透传 chunk（多数行即时透传，提取行暂存到 finish）。
+     *
+     * @param line 原始响应行（SSE data 行或普通行）
+     * @return 本行产出的 chunk 列表（可为空列表，不返回 {@code null}）
+     */
     public List<QueryChunk> consumeLine(String line) {
         if (line == null || line.isBlank()) {
             return List.of();
@@ -88,6 +94,11 @@ public final class VersatileResponseExtractor {
         return List.of(new QueryChunk(QueryChunk.TYPE_CHUNK, data.get()));
     }
 
+    /**
+     * 流结束后产出终态事件：中断/错误/三字段答案信封/遗留答案/未识别终态错误。
+     *
+     * @return 终态 chunk 列表（可为空列表，不返回 {@code null}）
+     */
     public List<QueryChunk> finish() {
         if (pendingInterrupt) {
             Map<String, Object> payload = new LinkedHashMap<>();

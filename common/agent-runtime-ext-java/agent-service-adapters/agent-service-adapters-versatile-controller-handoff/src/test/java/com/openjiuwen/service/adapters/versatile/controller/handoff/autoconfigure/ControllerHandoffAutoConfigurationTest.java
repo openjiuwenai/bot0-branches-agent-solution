@@ -4,16 +4,21 @@
 
 package com.openjiuwen.service.adapters.versatile.controller.handoff.autoconfigure;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.service.adapters.versatile.controller.handoff.ControllerHandoffAgentHandler;
 import com.openjiuwen.service.spec.spi.AgentHandler;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
+/**
+ * ControllerHandoffHandlerAutoConfiguration 条件装配验收：enabled=true 完整配置
+ * 装配唯一 handler；缺省/enabled=false 不装配；识别条件不完整启动即失败。
+ *
+ * @since 2026-08-19
+ */
 class ControllerHandoffAutoConfigurationTest {
-
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withPropertyValues(
                     "openjiuwen.service.versatile.url-template=http://localhost:1/v1/p/a/c/{conversation_id}")

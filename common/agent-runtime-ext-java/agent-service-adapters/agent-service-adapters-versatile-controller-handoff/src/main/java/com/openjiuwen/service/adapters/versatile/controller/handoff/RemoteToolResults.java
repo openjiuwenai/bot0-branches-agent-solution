@@ -6,8 +6,10 @@ package com.openjiuwen.service.adapters.versatile.controller.handoff;
 
 import com.openjiuwen.service.spec.dto.ServeRequest;
 
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -31,25 +33,34 @@ public final class RemoteToolResults {
         this.results = results;
     }
 
-    /** 无该 metadata 键或值非 map 时返回 {@code null}（普通首轮请求）。 */
-    public static RemoteToolResults parse(ServeRequest request) {
+    /**
+     * 解析请求 metadata 中的 remote 结果标记。
+     *
+     * @param request re-invoke 轮服务请求
+     * @return 无该 metadata 键或值非 map 时返回 {@link Optional#empty()}（普通首轮请求）
+     */
+    public static Optional<RemoteToolResults> parse(ServeRequest request) {
         if (request.getMetadata() == null) {
-            return null;
+            return Optional.empty();
         }
         Object raw = request.getMetadata().get(METADATA_KEY);
         if (!(raw instanceof Map<?, ?> map)) {
-            return null;
+            return Optional.empty();
         }
-        Map<String, Object> results = new java.util.LinkedHashMap<>();
+        Map<String, Object> results = new LinkedHashMap<>();
         for (Map.Entry<?, ?> entry : map.entrySet()) {
             if (entry.getKey() != null) {
                 results.put(String.valueOf(entry.getKey()), entry.getValue());
             }
         }
-        return new RemoteToolResults(results);
+        return Optional.of(new RemoteToolResults(results));
     }
 
-    /** 任一成功成员携带 not-in-scope 信封（二级退回一级 upstream-signal）。 */
+    /**
+     * 是否任一成功成员携带 not-in-scope 信封（二级退回一级 upstream-signal）。
+     *
+     * @return 携带信封即 {@code true}
+     */
     public boolean hasNotInScopeEnvelope() {
         for (Object value : results.values()) {
             if (value instanceof String s && HandoffSignals.isNotInScope(s)) {
@@ -59,7 +70,11 @@ public final class RemoteToolResults {
         return false;
     }
 
-    /** 从 toolCallId（{@code handoff:<agentId>:<uuid>}）解析的弹回目标集合。 */
+    /**
+     * 从 toolCallId（{@code handoff:<agentId>:<uuid>}）解析的弹回目标集合。
+     *
+     * @return 弹回目标集合（无则空集合）
+     */
     public Set<String> bouncedTargets() {
         Set<String> targets = new LinkedHashSet<>();
         for (String toolCallId : results.keySet()) {
@@ -75,19 +90,27 @@ public final class RemoteToolResults {
         return targets;
     }
 
-    /** 首个失败成员（单 item 批）；errorCode 已映射为 {@code VERSATILE_HANDOFF_*}。 */
-    public Failure failure() {
+    /**
+     * 首个失败成员（单 item 批）；errorCode 已映射为 {@code VERSATILE_HANDOFF_*}。
+     *
+     * @return 首个失败成员；全成功时返回 {@link Optional#empty()}
+     */
+    public Optional<Failure> failure() {
         for (Map.Entry<String, Object> entry : results.entrySet()) {
             if (entry.getValue() instanceof Map<?, ?> failure && Boolean.FALSE.equals(failure.get("ok"))) {
                 String code = String.valueOf(failure.get("code"));
-                return new Failure(mapErrorCode(code),
-                        code + ": " + failure.get("message") + " toolCallId=" + entry.getKey());
+                return Optional.of(new Failure(mapErrorCode(code),
+                        code + ": " + failure.get("message") + " toolCallId=" + entry.getKey()));
             }
         }
-        return null;
+        return Optional.empty();
     }
 
-    /** 成功字符串结果以换行拼接（单 item 批实际只有一个值）；信封是协议信号不计入。 */
+    /**
+     * 成功字符串结果以换行拼接（单 item 批实际只有一个值）；信封是协议信号不计入。
+     *
+     * @return 拼接后的终答文本（无则空串）
+     */
     public String joinedResults() {
         StringBuilder sb = new StringBuilder();
         for (Object value : results.values()) {
