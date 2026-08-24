@@ -27,7 +27,8 @@ package com.openjiuwen.gateway.governance;
  */
 public enum ErrorCodes {
     PROJECTION_TIMEOUT_UNKNOWN(-32050, "PROJECTION_TIMEOUT_UNKNOWN", true),
-    DIRECT_TRANSPORT_UNKNOWN(-32053, "DIRECT_TRANSPORT_UNKNOWN", false),  // DF-003: DIRECT transport failure before taskId (do NOT retry original create)
+    // DF-003: DIRECT transport failure before taskId (do NOT retry original create)
+    DIRECT_TRANSPORT_UNKNOWN(-32053, "DIRECT_TRANSPORT_UNKNOWN", false),
     CONTINUATION_FAILED(-32051, "CONTINUATION_FAILED", false),
     STREAM_NOT_AVAILABLE(-32052, "STREAM_NOT_AVAILABLE", false),
     PAYLOAD_REF_UNAVAILABLE(-32054, "PAYLOAD_REF_UNAVAILABLE", true),

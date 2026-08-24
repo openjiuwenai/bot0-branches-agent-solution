@@ -419,7 +419,7 @@ class A2aControllerWebMvcTest {
     }
 
     @Test
-    void streamingCreateRuntimeTransportFailureReturnsDirectTransportUnknown() throws Exception {
+    void streamCreateRuntimeTransportFailureReturnsDirectTransportUnknown() throws Exception {
         runtime.setOpenStreamException(new GovernanceException(HttpStatus.BAD_GATEWAY, "FORWARD_FAILED",
                 "Cannot open runtime stream"));
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
