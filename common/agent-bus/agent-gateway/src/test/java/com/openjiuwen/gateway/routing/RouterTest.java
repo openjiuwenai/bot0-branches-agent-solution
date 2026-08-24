@@ -14,13 +14,13 @@ import com.openjiuwen.gateway.governance.GovernanceException;
 import com.openjiuwen.gateway.governance.MethodResultException;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 
 import java.util.List;
 
 /**
  * Unit tests for {@link Router} create path (FEAT-011 L2 §4 T-S2-1/2/5/6/7 +
- * routing-failure branches). Uses fake RDC + fake runtime; real StickyIndex +
- * DefaultAgentResolver.
+ * routing-failure branches). Uses fake RDC + fake runtime; real StickyIndex.
  */
 class RouterTest {
     private static final String ENDPOINT = "http://runtime-1:8000";
@@ -31,8 +31,7 @@ class RouterTest {
     private final FakeRdcRouteClient rdc = new FakeRdcRouteClient();
     private final FakeAgentRuntimeClient runtime = new FakeAgentRuntimeClient();
     private final StickyIndex sticky = new StickyIndex();
-    private final DefaultAgentResolver defaultAgent = new DefaultAgentResolver("default-agent-1");
-    private final Router router = new Router(rdc, runtime, sticky, defaultAgent);
+    private final Router router = new Router(rdc, runtime, sticky);
 
     private static GovernanceContext createCtx(String agentId) {
         GovernanceContext ctx = new GovernanceContext();
@@ -105,15 +104,6 @@ class RouterTest {
     }
 
     @Test
-    void noAgentIdFallsBackToDefaultAgent() {
-        rdc.setCandidates(List.of(new AgentCardRoute("h1")));
-        rdc.setResolved(new ResolvedRoute(ENDPOINT));
-        runtime.setResponse(TASK_BODY);
-        router.routeCreate(createCtx(null));
-        assertThat(rdc.lastAgentId()).isEqualTo("default-agent-1");
-    }
-
-    @Test
     void reentryWithExplicitAgentDoesNotUseDefault() {
         rdc.setCandidates(List.of(new AgentCardRoute("h1")));
         rdc.setResolved(new ResolvedRoute(ENDPOINT));
@@ -147,12 +137,26 @@ class RouterTest {
     }
 
     @Test
-    void defaultAgentUnconfiguredIsConfigError() {
-        Router unconfigured = new Router(rdc, runtime, sticky, new DefaultAgentResolver(""));
-        GovernanceException ge = asGovernanceException(catchThrowable(() -> unconfigured.routeCreate(createCtx(null))));
+    void searchFailureReturnsRdcUnavailableAndDoesNotCallRuntime() {
+        // L2-014: RDC search-stage failure (network down / empty cache) is distinct from
+        // "no candidates" (empty business list) and "resolve failed".
+        rdc.setSearchFails(true);
+        GovernanceException ge = asGovernanceException(catchThrowable(() -> router.routeCreate(createCtx("agent-9"))));
 
         assertThat(ge).isNotNull();
-        assertThat(ge.code()).isEqualTo("DEFAULT_AGENT_UNCONFIGURED");
+        assertThat(ge.code()).isEqualTo("RDC_UNAVAILABLE");
+        assertThat(ge.httpStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        // S5 invariant: no runtime call, no topology in the failure message.
+        assertThat(runtime.lastEndpoint()).isNull();
+        assertThat(ge.getMessage()).doesNotContain("http");
+    }
+
+    @Test
+    void searchFailureOnStreamReturnsRdcUnavailable() {
+        rdc.setSearchFails(true);
+        GovernanceException ge = asGovernanceException(catchThrowable(() -> router.routeStream(createCtx("agent-9"))));
+        assertThat(ge).isNotNull();
+        assertThat(ge.code()).isEqualTo("RDC_UNAVAILABLE");
     }
 
     @Test

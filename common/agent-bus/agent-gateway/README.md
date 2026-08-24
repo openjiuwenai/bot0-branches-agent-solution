@@ -86,7 +86,6 @@ gateway:
   path-mode: direct             # direct | bus
   rdc:
     base-url: http://127.0.0.1:8092   # RDC 路由解析
-  default-agent-id: travel-hotel
   test-credential:              # 本地联调凭据
     token: mock-token
     principalId: test-principal
@@ -137,7 +136,7 @@ curl -i -H 'Authorization: Bearer mock-token' -H 'Content-Type: application/json
 - 错误 token（与配置不一致）→ `401 AUTH_INVALID`
 - 正确 `mock-token` → 不再返回认证错误；此后再排查 RDC/runtime/路由
 
-- `metadata.agentId` 必填（BUS 模式按 `ctx.agentId()` 路由，不回退 `default-agent-id`）
+- `metadata.agentId` 必填（C2 移除默认 Agent 兜底：DIRECT 与 BUS 创建类均按 `ctx.agentId()` 路由，缺/空 → 400 `VALIDATION_AGENT_ID`）
 - `message.role` 可省（默认 `ROLE_USER`）；显式给须是 `ROLE_USER` / `ROLE_AGENT` / `ROLE_UNSPECIFIED`
 - `parts[].kind` 必须是 `"text"`
 - 流式用 `SendStreamingMessage`（DIRECT 经 runtime `/a2a` SSE；BUS 经 `SubscribeToTask` SSE）

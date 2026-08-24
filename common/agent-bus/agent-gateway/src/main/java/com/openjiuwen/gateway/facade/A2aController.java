@@ -4,8 +4,10 @@
 
 package com.openjiuwen.gateway.facade;
 
+import com.openjiuwen.gateway.governance.ErrorCodes;
 import com.openjiuwen.gateway.governance.GovernanceContext;
 import com.openjiuwen.gateway.governance.GovernanceException;
+import com.openjiuwen.gateway.governance.MethodResultException;
 import com.openjiuwen.gateway.governance.auth.AuthRule;
 import com.openjiuwen.gateway.governance.auth.Principal;
 import com.openjiuwen.gateway.governance.idempotency.IdempotencyRule;
@@ -254,6 +256,13 @@ public class A2aController {
         } catch (GovernanceException ex) {
             idempotencyRule.abort(context.tenantId(), context.messageId());
             ex.setTraceId(context.traceId());
+            // DF-003: transport failure before taskId -> UNKNOWN (do NOT retry original create).
+            // routeCreate throws FORWARD_FAILED only on transport failure (invokeSync IOException);
+            // runtime method errors arrive as 200+JSON-RPC in the body (returned, not thrown).
+            if ("FORWARD_FAILED".equals(ex.code())) {
+                throw new MethodResultException(ErrorCodes.DIRECT_TRANSPORT_UNKNOWN,
+                        "Runtime unreachable before taskId was obtained; create outcome unknown", null);
+            }
             throw ex;
         }
         idempotencyRule.complete(context.tenantId(), context.messageId(), runtimeResponse);
@@ -278,6 +287,12 @@ public class A2aController {
         } catch (GovernanceException ex) {
             idempotencyRule.abort(context.tenantId(), context.messageId());
             ex.setTraceId(context.traceId());
+            // DF-003: openStream throws FORWARD_FAILED (transport) or RUNTIME_JSONRPC_ERROR (verbatim
+            // runtime rejection). Convert only FORWARD_FAILED -> UNKNOWN; rethrow the rest verbatim.
+            if ("FORWARD_FAILED".equals(ex.code())) {
+                throw new MethodResultException(ErrorCodes.DIRECT_TRANSPORT_UNKNOWN,
+                        "Runtime stream unreachable before taskId was obtained; create outcome unknown", null);
+            }
             throw ex;
         } catch (IOException ex) {
             // SSE disconnected (client Ctrl+C or runtime Connection-reset) — response is already

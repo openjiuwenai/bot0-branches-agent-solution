@@ -27,8 +27,8 @@ import java.util.TreeMap;
  * {@code params.message.taskId}:
  * <ul>
  *   <li>create ({@code SendMessage}/{@code SendStreamingMessage}, no taskId):
- *       {@code params.metadata.agentId} may be absent (default Agent later) but
- *       an empty-string value is rejected with {@code VALIDATION_AGENT_ID}.</li>
+ *       {@code params.metadata.agentId} is required ({@code VALIDATION_AGENT_ID} on
+ *       missing/blank).</li>
  *   <li>resume (non-empty taskId): {@code taskId} captured; {@code agentId} not
  *       required (not used for routing).</li>
  * </ul>
@@ -70,7 +70,7 @@ public class ParamValidator {
      *
      * @param rawBody raw JSON-RPC envelope
      * @param ctx     governance context to populate
-     * @throws GovernanceException 400 VALIDATION_* on malformed body / bad method / empty agentId
+     * @throws GovernanceException 400 VALIDATION_* on malformed body / bad method / missing or blank agentId
      */
     public void validate(String rawBody, GovernanceContext ctx) {
         checkInlinePayloadSize(rawBody);
@@ -148,7 +148,7 @@ public class ParamValidator {
             ctx.setTaskId(taskId);
             return;
         }
-        // create — parts must not be empty; agentId optional but empty-string is illegal
+        // create — parts must not be empty; agentId required (DF-Q01: no default-Agent fallback)
         if (message.path("parts").isEmpty()) {
             throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_MESSAGE",
                     "params.message.parts must not be empty for create");
@@ -158,13 +158,13 @@ public class ParamValidator {
         if (agentId == null) {
             agentId = text(root.path("params"), "agentId").orElse(null);
         }
-        if (agentId != null && agentId.isBlank()) {
+        // DF-Q01: create-type MUST carry an explicit agentId (design §3).
+        // Missing/blank agentId is a validation failure — no default-Agent fallback.
+        if (agentId == null || agentId.isBlank()) {
             throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_AGENT_ID",
-                    "agentId must not be empty");
+                    "agentId is required for create-type requests");
         }
-        if (agentId != null) {
-            ctx.setAgentId(agentId);
-        }
+        ctx.setAgentId(agentId);
     }
 
     private static void populateMessageFields(JsonNode message, GovernanceContext ctx) {

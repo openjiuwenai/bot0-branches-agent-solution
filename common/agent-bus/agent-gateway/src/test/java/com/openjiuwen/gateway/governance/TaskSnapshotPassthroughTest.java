@@ -43,8 +43,7 @@ class TaskSnapshotPassthroughTest {
         rdc.setResolved(new ResolvedRoute("http://runtime:8090"));
         sticky = new StickyIndex();
         sticky.put("task-123", "h1", "svc-rt");
-        router = new Router(rdc, runtime, sticky,
-                new com.openjiuwen.gateway.routing.DefaultAgentResolver("default-agent"));
+        router = new Router(rdc, runtime, sticky);
     }
 
     private GovernanceContext getTaskContext(String taskId) {

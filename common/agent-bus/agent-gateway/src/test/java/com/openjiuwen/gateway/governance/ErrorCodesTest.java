@@ -27,6 +27,14 @@ class ErrorCodesTest {
     }
 
     @Test
+    void direct_transport_unknown_is_not_retryable() {
+        // DF-003: DIRECT transport failure before taskId — client must NOT retry the original create.
+        assertThat(ErrorCodes.DIRECT_TRANSPORT_UNKNOWN.retryable()).isFalse();
+        assertThat(ErrorCodes.DIRECT_TRANSPORT_UNKNOWN.numericCode()).isEqualTo(-32053);
+        assertThat(ErrorCodes.DIRECT_TRANSPORT_UNKNOWN.stableCode()).isEqualTo("DIRECT_TRANSPORT_UNKNOWN");
+    }
+
+    @Test
     void non_retryable_codes() {
         assertThat(ErrorCodes.CONTINUATION_FAILED.retryable()).isFalse();
         assertThat(ErrorCodes.STREAM_NOT_AVAILABLE.retryable()).isFalse();
@@ -56,6 +64,12 @@ class ErrorCodesTest {
         assertThat(ErrorCodes.fromRpcCode(-32602)).isEqualTo(ErrorCodes.VALIDATION_FAILED);
         assertThat(ErrorCodes.fromRpcCode(-32601)).isEqualTo(ErrorCodes.VALIDATION_METHOD);
         assertThat(ErrorCodes.fromRpcCode(-32603)).isEqualTo(ErrorCodes.INTERNAL_ERROR);
+    }
+
+    @Test
+    void from_rpc_code_maps32004_toUnsupportedOperation() {
+        // L2-010: -32004 (UNSUPPORTED_OPERATION / terminal task) reverse-lookup.
+        assertThat(ErrorCodes.fromRpcCode(-32004)).isEqualTo(ErrorCodes.UNSUPPORTED_OPERATION);
     }
 
     @Test
