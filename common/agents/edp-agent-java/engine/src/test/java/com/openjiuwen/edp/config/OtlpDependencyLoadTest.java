@@ -42,7 +42,6 @@ import org.junit.jupiter.api.Test;
  * 验证 OtlpGrpcSpanExporter + OtelTracerSetup 即可覆盖核心依赖链。</p>
  */
 class OtlpDependencyLoadTest {
-
     @Test
     @DisplayName("opentelemetry-exporter-otlp: OtlpGrpcSpanExporter 可加载")
     void otlpGrpcSpanExporter_loadable() {
