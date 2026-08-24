@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
 
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -46,7 +47,28 @@ public final class BrokerConsumerLifecycle implements SmartLifecycle {
     public void start() {
         if (!running) {
             running = true;
-            executor.scheduleWithFixedDelay(this::tick, 0, intervalMillis, TimeUnit.MILLISECONDS);
+            scheduleNext(0);
+        }
+    }
+
+    /**
+     * Schedules exactly one tick.
+     *
+     * <p>Deliberately not {@code scheduleWithFixedDelay}: that API cancels every remaining execution
+     * as soon as a task throws, which would stop Bus consumption for good while {@link #isRunning()}
+     * keeps reporting {@code true}. Re-arming from the {@code finally} block of {@link #tick()}
+     * survives any throwable without widening that method's catch clause.
+     *
+     * @param delayMillis delay before the next tick
+     */
+    private void scheduleNext(long delayMillis) {
+        if (!running || executor.isShutdown()) {
+            return;
+        }
+        try {
+            executor.schedule(this::tick, delayMillis, TimeUnit.MILLISECONDS);
+        } catch (RejectedExecutionException rejected) {
+            LOG.debug("Broker delivery loop stopped; no further ticks scheduled", rejected);
         }
     }
 
@@ -55,6 +77,8 @@ public final class BrokerConsumerLifecycle implements SmartLifecycle {
             loop.tick();
         } catch (IllegalArgumentException | IllegalStateException failure) {
             LOG.warn("Broker delivery tick failed; the next tick will retry", failure);
+        } finally {
+            scheduleNext(intervalMillis);
         }
     }
 

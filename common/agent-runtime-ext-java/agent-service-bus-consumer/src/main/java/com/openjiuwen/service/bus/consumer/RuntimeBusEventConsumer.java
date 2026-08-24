@@ -17,6 +17,7 @@ import com.openjiuwen.service.bus.consumer.stream.StreamReadyProjector;
 import com.openjiuwen.service.bus.consumer.validation.BusEnvelopeValidator;
 
 import org.a2aproject.sdk.spec.A2AError;
+import org.a2aproject.sdk.spec.A2AErrorCodes;
 import org.a2aproject.sdk.spec.TaskNotFoundError;
 import org.a2aproject.sdk.spec.UnsupportedOperationError;
 import org.slf4j.Logger;
@@ -172,27 +173,38 @@ public final class RuntimeBusEventConsumer {
         if (invalid.isPresent()) {
             return invalidEnvelope(envelope, invalid.get());
         }
+        byte[] payload = null;
         try {
-            byte[] payload = envelope.inlinePayload() != null
+            payload = envelope.inlinePayload() != null
                     ? envelope.inlinePayload()
                     : concurrency.call(BusConcurrencyGuard.Lane.PAYLOAD, () -> payloadResolver.apply(envelope));
             if (payload == null || payload.length == 0) {
                 return failed(envelope, null, "PAYLOAD_EMPTY", false);
             }
+            byte[] dispatchPayload = payload;
             return isCreation(envelope.eventType())
                     ? concurrency.admission(envelope.tenantId(), envelope.idempotencyKey(),
-                            () -> consumeCreation(envelope, payload, brokerPayload))
-                    : consumeControl(envelope, payload);
+                            () -> consumeCreation(envelope, dispatchPayload, brokerPayload))
+                    : consumeControl(envelope, dispatchPayload);
         } catch (BusConcurrencyGuard.BusyException busy) {
             return BusConsumptionDecision.retry(busy.getMessage());
         } catch (TaskNotFoundError missing) {
             return failed(envelope, null, "TASK_NOT_FOUND", false);
         } catch (UnsupportedOperationError unavailable) {
-            return failed(envelope, null, "STREAM_NOT_AVAILABLE", false);
+            // Terminal / not-subscribable task (e.g. SubscribeToTask on a COMPLETED task). Build the
+            // -32004 (UNSUPPORTED_OPERATION) JSON-RPC error with the client's request id decoded from
+            // the inline payload and attach it as the projection's a2aResponse, so the gateway passes
+            // it through verbatim, byte-identical to DIRECT (where the runtime's HTTP SubscribeToTask
+            // returns -32004 as-is).
+            return failedWithResponse(envelope, null, "UNSUPPORTED_OPERATION",
+                    bridge.errorResponseJson(A2AErrorCodes.UNSUPPORTED_OPERATION.code(),
+                            unavailable.getMessage(), envelope.inlinePayload()),
+                    false);
         } catch (IllegalArgumentException invalidPayload) {
             return failed(envelope, null, normalize(invalidPayload.getMessage(), "PAYLOAD_INVALID"), false);
         } catch (A2AError protocolError) {
-            return failed(envelope, null, "A2A_ERROR_" + protocolError.getCode(), false);
+            return failedWithResponse(envelope, null, "A2A_ERROR_" + protocolError.getCode(),
+                    bridge.errorResponseJson(protocolError.getCode(), protocolError.getMessage(), payload), false);
         } catch (IllegalStateException failure) {
             LOG.warn("Bus event processing failed, messageId={}", envelope.messageId(), failure);
             return BusConsumptionDecision.retry("PROCESSING_FAILED");
@@ -309,6 +321,35 @@ public final class RuntimeBusEventConsumer {
             projections.project(projection(envelope, taskId,
                     new ProjectionFact("FAILED", type, 0, Map.of("errorCode", code, "retryable", retryable))));
             return BusConsumptionDecision.rejected(code);
+        } catch (IllegalArgumentException | IllegalStateException failure) {
+            LOG.warn("Failed to persist failure projection, messageId={}", envelope.messageId(), failure);
+            return BusConsumptionDecision.retry("PROJECTION_HANDOFF_FAILED");
+        }
+    }
+
+    /**
+     * Emits a FAILED projection that carries a complete a2aResponse JSON-RPC body (e.g. the -32004
+     * error built for a terminal / not-subscribable SubscribeToTask), in addition to the errorCode.
+     * The gateway's projection feed reads a2aResponse first and passes it through verbatim, so the
+     * client sees the same Runtime JSON-RPC error as on the DIRECT (HTTP) path.
+     *
+     * @param envelope bus event envelope
+     * @param taskId task id (null when not yet bound)
+     * @param errorCode stable error code string (e.g. "UNSUPPORTED_OPERATION")
+     * @param a2aResponseJson complete A2A JSON-RPC error response body
+     * @param retryable whether the error is retryable
+     * @return consumption decision
+     */
+    private BusConsumptionDecision failedWithResponse(AgentBusEventEnvelope envelope, String taskId,
+            String errorCode, String a2aResponseJson, boolean retryable) {
+        if (!trustedForResponse(envelope)) {
+            return BusConsumptionDecision.rejected(errorCode);
+        }
+        try {
+            String type = envelope.eventType().startsWith("A2A") ? "A2A_CALL_FAILED" : "INVOCATION_FAILED";
+            projections.project(projection(envelope, taskId, new ProjectionFact("FAILED", type, 0,
+                    Map.of("errorCode", errorCode, "a2aResponse", a2aResponseJson, "retryable", retryable))));
+            return BusConsumptionDecision.rejected(errorCode);
         } catch (IllegalArgumentException | IllegalStateException failure) {
             LOG.warn("Failed to persist failure projection, messageId={}", envelope.messageId(), failure);
             return BusConsumptionDecision.retry("PROJECTION_HANDOFF_FAILED");

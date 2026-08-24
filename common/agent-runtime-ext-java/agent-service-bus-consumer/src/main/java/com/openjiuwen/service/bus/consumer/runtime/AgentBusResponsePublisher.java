@@ -10,14 +10,9 @@ import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerOutboundMess
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
 import com.openjiuwen.service.bus.consumer.model.BusResponseProjection;
+import com.openjiuwen.service.bus.consumer.projection.AgentBusProjectionJsonCodec;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
-import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
-import java.util.StringJoiner;
 
 /**
  * Publishes FEAT-017 response projections through the agent-bus runtime-role producer.
@@ -25,7 +20,7 @@ import java.util.StringJoiner;
  * @since 2026-07-22
  */
 public final class AgentBusResponsePublisher {
-    private static final Set<String> RESERVED_FIELDS = Set.of("revision", "a2aResponse");
+    private static final AgentBusProjectionJsonCodec PROJECTION_CODEC = new AgentBusProjectionJsonCodec();
 
     private final BrokerForwardingProducerPort producer;
     private final String localServiceId;
@@ -78,49 +73,7 @@ public final class AgentBusResponsePublisher {
     }
 
     static String encodeProjection(BusResponseProjection projection) {
-        StringJoiner descriptor = new StringJoiner(";");
-        if (projection.taskId() != null) {
-            descriptor.add("taskId=" + projection.taskId());
-        }
-        descriptor.add("projectionKind=" + projection.projectionKind());
-        descriptor.add("revision=" + projection.revision());
-        Object taskState = projection.data().get("taskState");
-        if (taskState instanceof String state) {
-            descriptor.add("status=" + normalizeState(state));
-        }
-        Object errorCode = projection.data().get("errorCode");
-        if (errorCode instanceof String code && !projection.data().containsKey("reason")) {
-            descriptor.add("reason=" + code);
-        }
-        appendA2aResponse(descriptor, projection.data());
-        projection.data().entrySet().stream().filter(entry -> !RESERVED_FIELDS.contains(entry.getKey()))
-                .sorted(Map.Entry.comparingByKey()).forEach(entry -> {
-            if (entry.getValue() instanceof String || entry.getValue() instanceof Number
-                    || entry.getValue() instanceof Boolean) {
-                descriptor.add(entry.getKey() + "=" + entry.getValue());
-            }
-        });
-        return descriptor.toString();
-    }
-
-    private static void appendA2aResponse(StringJoiner descriptor, Map<String, Object> data) {
-        Object response = data.get("a2aResponse");
-        if (response == null) {
-            return;
-        }
-        if (!(response instanceof String json) || json.isBlank()) {
-            throw new IllegalArgumentException("a2aResponse must be a complete JSON-RPC response");
-        }
-        String encoded = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(json.getBytes(StandardCharsets.UTF_8));
-        descriptor.add("a2aResponseType=JsonRpcResponse");
-        descriptor.add("a2aResponse=" + encoded);
-    }
-
-    private static String normalizeState(String state) {
-        String prefix = "TASK_STATE_";
-        String normalized = state.startsWith(prefix) ? state.substring(prefix.length()) : state;
-        return normalized.toLowerCase(Locale.ROOT);
+        return PROJECTION_CODEC.encode(projection);
     }
 
     private static String fallback(String value, String fallback) {
