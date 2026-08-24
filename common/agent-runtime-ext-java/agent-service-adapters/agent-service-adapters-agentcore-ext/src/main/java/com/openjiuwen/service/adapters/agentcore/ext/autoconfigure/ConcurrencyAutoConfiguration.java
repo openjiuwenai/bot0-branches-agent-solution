@@ -12,14 +12,14 @@ import com.openjiuwen.service.adapters.agentcore.ext.concurrency.TaskQuotaTracke
 import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
 import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
 
-import java.util.Locale;
-
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Lazy;
+
+import java.util.Locale;
 
 /**
  * Auto-configuration for DFX-002 runtime concurrency and throttling.
