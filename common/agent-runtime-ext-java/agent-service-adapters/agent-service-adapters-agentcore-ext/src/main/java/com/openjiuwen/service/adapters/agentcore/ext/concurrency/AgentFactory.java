@@ -13,7 +13,6 @@ package com.openjiuwen.service.adapters.agentcore.ext.concurrency;
  * @since 0.1.0
  */
 public interface AgentFactory {
-
     /**
      * Create a new Agent instance.
      *

@@ -30,7 +30,6 @@ import java.util.UUID;
  */
 @Component
 public final class EdpaCustomRestAdapter implements CustomRestProtocolAdapter {
-
     @Override
     public A2ASendCommand toA2ARequest(Context context) {
         String conversationId = context.pathVariables().get("conversation_id");

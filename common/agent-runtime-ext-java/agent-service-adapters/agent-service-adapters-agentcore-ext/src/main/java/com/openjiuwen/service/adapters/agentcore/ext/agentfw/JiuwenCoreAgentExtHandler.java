@@ -46,17 +46,16 @@ import java.util.concurrent.ConcurrentHashMap;
 public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     /** Stable failure code surfaced to protocol clients on a busy conversation. */
     static final String CONVERSATION_BUSY = "CONVERSATION_BUSY";
+
     private static final Logger log = LoggerFactory.getLogger(JiuwenCoreAgentExtHandler.class);
 
     private RemoteA2aToolInstaller remoteToolInstaller = RemoteA2aToolInstaller.noop();
     private IntentDeepAgentInstaller intentInstaller;
     private SkillHubManager skillHubManager;
-
     @Autowired(required = false)
     private AgentInstanceManager agentManager;
     @Autowired(required = false)
     private TaskQuotaTracker quotaTracker;
-
     /**
      * Task-level agent cache, keyed by conversationId.
      * Populated by {@link #prepareTask(ServeRequest)}, drained by

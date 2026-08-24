@@ -46,7 +46,6 @@ import org.springframework.context.annotation.Lazy;
 @AutoConfiguration
 @ConditionalOnClass(name = "com.openjiuwen.service.adapters.agentcore.ext.concurrency.AgentFactory")
 public class EdpAgentFactoryAutoConfiguration {
-
     private static final Logger LOGGER = LoggerFactory.getLogger(EdpAgentFactoryAutoConfiguration.class);
 
     @Bean

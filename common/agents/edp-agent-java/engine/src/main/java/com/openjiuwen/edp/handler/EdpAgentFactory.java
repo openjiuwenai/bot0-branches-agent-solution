@@ -38,13 +38,13 @@ import java.util.concurrent.locks.ReentrantLock;
  * @since 0.1.2
  */
 public class EdpAgentFactory implements AgentFactory {
-
     private static final Logger log = LoggerFactory.getLogger(EdpAgentFactory.class);
-    /** V1: serializes agent creation to prevent concurrent writes to global ResourceMgr HashMaps. */
-    private final Lock creationLock = new ReentrantLock();
+
     private final EdpaExtHandler.InitResult initResult;
     private final AgentCard agentCard;
     private final DeepAgentConfig deepAgentConfig;
+    /** V1: serializes agent creation to prevent concurrent writes to global ResourceMgr HashMaps. */
+    private final Lock creationLock = new ReentrantLock();
 
     /**
      * Creates a factory with the startup initialization result.

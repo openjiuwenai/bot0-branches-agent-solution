@@ -24,7 +24,6 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
  * @since 0.1.2
  */
 class ConcurrencyAutoConfigurationTest {
-
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(ConcurrencyAutoConfiguration.class))
             .withBean(AgentFactory.class, () -> new AgentFactory() {

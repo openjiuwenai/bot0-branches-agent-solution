@@ -21,7 +21,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @since 0.1.0
  */
 public class TaskAdmissionControl implements TaskAdmissionGate {
-
     private static final Logger log = LoggerFactory.getLogger(TaskAdmissionControl.class);
 
     private final int maxConcurrentTasks;

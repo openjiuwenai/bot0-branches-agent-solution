@@ -14,6 +14,8 @@ import com.openjiuwen.harness.schema.config.DeepAgentConfig;
 import com.openjiuwen.edp.handler.EdpaExtHandler.InitResult;
 
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,8 +41,13 @@ import java.util.concurrent.atomic.AtomicReference;
  * @since 0.1.2
  */
 class EdpAgentFactoryConcurrencyTest {
+    private static final Logger log = LoggerFactory.getLogger(EdpAgentFactoryConcurrencyTest.class);
 
     private static final int THREAD_COUNT = 10;
+
+    private static void preserveInterrupt() {
+        Thread.currentThread().interrupt();
+    }
 
     private static InitResult createInitResult(AgentCard card, DeepAgentConfig config) {
         DeepAgent mockDeepAgent = mock(DeepAgent.class);
@@ -81,7 +88,7 @@ class EdpAgentFactoryConcurrencyTest {
                     Thread.sleep(sleepMs);
                 }
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt(); // preserve interrupt status
+                preserveInterrupt(); // preserve interrupt status in test subclass
             } finally {
                 concurrentCount.decrementAndGet();
             }
@@ -98,13 +105,13 @@ class EdpAgentFactoryConcurrencyTest {
         CyclicBarrier barrier = new CyclicBarrier(THREAD_COUNT);
         Set<Integer> identityHashCodes = ConcurrentHashMap.newKeySet();
         CountDownLatch done = new CountDownLatch(THREAD_COUNT);
-        AtomicReference<Throwable> firstError = new AtomicReference<>();
+        AtomicReference<Exception> firstError = new AtomicReference<>();
 
         ExecutorService exec = new ThreadPoolExecutor(THREAD_COUNT, THREAD_COUNT,
                 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
                 r -> {
                     Thread t = new Thread(r);
-                    t.setUncaughtExceptionHandler((thr, e) -> System.err.println("Uncaught: " + e));
+                    t.setUncaughtExceptionHandler((thr, e) -> log.error("Uncaught: {}", e.getMessage()));
                     return t;
                 });
         try {
@@ -114,7 +121,7 @@ class EdpAgentFactoryConcurrencyTest {
                         barrier.await(5, TimeUnit.SECONDS);
                         Object agent = factory.create();
                         identityHashCodes.add(System.identityHashCode(agent));
-                    } catch (Throwable t) {
+                    } catch (Exception t) {
                         // capture any error from worker thread — test asserts firstError is null
                         firstError.compareAndSet(null, t);
                     } finally {
@@ -150,7 +157,7 @@ class EdpAgentFactoryConcurrencyTest {
                 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
                 r -> {
                     Thread t = new Thread(r);
-                    t.setUncaughtExceptionHandler((thr, e) -> System.err.println("Uncaught: " + e));
+                    t.setUncaughtExceptionHandler((thr, e) -> log.error("Uncaught: {}", e.getMessage()));
                     return t;
                 });
         try {
@@ -210,7 +217,7 @@ class EdpAgentFactoryConcurrencyTest {
                 try {
                     Thread.sleep(100);
                 } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt(); // preserve interrupt status
+                    preserveInterrupt(); // preserve interrupt status in test override
                 }
                 return mock(DeepAgent.class);
             }
@@ -220,7 +227,8 @@ class EdpAgentFactoryConcurrencyTest {
 
         // Start create() in background — holds the lock for ~100ms
         Thread createThread = new Thread(() -> factory.create(), "create-thread");
-        createThread.setUncaughtExceptionHandler((t, e) -> System.err.println("Uncaught exception in " + t.getName() + ": " + e));
+        createThread.setUncaughtExceptionHandler(
+                (t, e) -> log.error("Uncaught exception in {}: {}", t.getName(), e.getMessage()));
         createThread.start();
 
         // Wait briefly for create() to acquire the lock

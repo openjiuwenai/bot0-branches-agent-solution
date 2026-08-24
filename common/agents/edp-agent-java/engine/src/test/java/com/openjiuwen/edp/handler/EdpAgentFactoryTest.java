@@ -29,7 +29,6 @@ import org.mockito.Mockito;
  * @since 0.1.2
  */
 class EdpAgentFactoryTest {
-
     private static InitResult createInitResult(AgentCard card, DeepAgentConfig config) {
         DeepAgent mockDeepAgent = mock(DeepAgent.class);
         when(mockDeepAgent.getCard()).thenReturn(card);

@@ -6,17 +6,19 @@ package com.openjiuwen.service.adapters.agentcore.ext.concurrency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.openjiuwen.core.session.Session;
-import com.openjiuwen.core.session.stream.OutputSchema;
-import com.openjiuwen.core.session.stream.StreamMode;
-import com.openjiuwen.service.adapters.agentcore.ext.agentfw.JiuwenCoreAgentExtHandler;
-import com.openjiuwen.service.app.controller.probe.ActiveTaskController;
-import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
-import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
-import com.openjiuwen.service.spec.spi.AgentHandler;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -33,14 +35,14 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.annotation.DirtiesContext;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import com.openjiuwen.core.session.Session;
+import com.openjiuwen.core.session.stream.OutputSchema;
+import com.openjiuwen.core.session.stream.StreamMode;
+import com.openjiuwen.service.adapters.agentcore.ext.agentfw.JiuwenCoreAgentExtHandler;
+import com.openjiuwen.service.app.controller.probe.ActiveTaskController;
+import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
+import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
+import com.openjiuwen.service.spec.spi.AgentHandler;
 
 /**
  * End-to-end integration tests using the real {@link JiuwenCoreAgentExtHandler}
@@ -70,6 +72,8 @@ import java.util.concurrent.atomic.AtomicInteger;
     properties = "openjiuwen.service.concurrency.max-concurrent-tasks=1")
 @AutoConfigureTestRestTemplate
 class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
+
+    private static final Logger log = LoggerFactory.getLogger(JiuwenCoreAgentExtHandlerE2EIntegrationTest.class);
 
     @LocalServerPort
     private int port;
@@ -173,7 +177,7 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendMessage", "ext-block", "block"), headers), String.class);
         });
-        first.setUncaughtExceptionHandler((t, e) -> e.printStackTrace());
+        first.setUncaughtExceptionHandler((t, e) -> logError("throttled503", e));
         first.start();
         assertThat(TrackingAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
@@ -215,7 +219,7 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendMessage", "ext-active", "block"), headers), String.class);
         });
-        slow.setUncaughtExceptionHandler((t, e) -> e.printStackTrace());
+        slow.setUncaughtExceptionHandler((t, e) -> logError("activeTaskEndpoint", e));
         slow.start();
         assertThat(TrackingAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
@@ -304,7 +308,7 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendMessage", "ext-blocker", "block"), headers), String.class);
         });
-        blocker.setUncaughtExceptionHandler((t, e) -> e.printStackTrace());
+        blocker.setUncaughtExceptionHandler((t, e) -> logError("resumeRejected", e));
         blocker.start();
         assertThat(TrackingAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
@@ -372,11 +376,9 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
         int getCreatedCount() {
             return createdIdentities.size();
         }
-
         List<String> getCreatedIdentities() {
             return new ArrayList<>(createdIdentities);
         }
-
         int getDestroyedCount() {
             return destroyedAgents.size();
         }
@@ -456,9 +458,17 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
             try {
                 blockLatch.await(15, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt(); // preserve interrupt status
+                preserveInterrupt(); // preserve interrupt status
             }
         }
+    }
+
+    private static void logError(String context, Throwable e) {
+        log.error("test error in {}: {}", context, e.getMessage(), e);
+    }
+
+    private static void preserveInterrupt() {
+        Thread.currentThread().interrupt();
     }
 
     private static HttpHeaders jsonHeaders() {

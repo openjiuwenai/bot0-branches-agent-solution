@@ -108,8 +108,7 @@ class JiuwenCoreAgentExtHandlerTest {
 
         try {
             handler.query(request("c-except-q", "fail"));
-        } catch (RuntimeException expected) {
-            // Expected — agent.invoke() throws
+        } catch (RuntimeException expected) { // RunnerImpl wraps IllegalStateException in RuntimeException
         }
 
         verify(quotaTracker).onTaskReleased("c-except-q");

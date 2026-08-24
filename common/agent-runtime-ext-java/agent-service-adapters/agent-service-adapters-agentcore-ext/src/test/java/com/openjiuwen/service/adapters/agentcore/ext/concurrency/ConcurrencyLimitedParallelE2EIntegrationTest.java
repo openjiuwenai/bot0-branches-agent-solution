@@ -100,7 +100,9 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
     @Test
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void concurrentRequests_exactlyLimitAdmitted_othersRejected503() throws Exception {
-        ExecutorService pool = new ThreadPoolExecutor(LIMIT + 3, LIMIT + 3, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                LIMIT + 3, LIMIT + 3, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
         List<CompletableFuture<ResponseEntity<String>>> admitted = new ArrayList<>();
         try {
             // 1. Fire LIMIT requests that block inside the agent — they hold the quota
@@ -120,15 +122,7 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
                     .isEqualTo(LIMIT);
 
             // 2. Extra requests must be rejected with HTTP 503 (not queued, not admitted)
-            List<CompletableFuture<Integer>> rejected = new ArrayList<>();
-            for (int i = 0; i < 3; i++) {
-                final String convId = "limited-reject-" + i;
-                final String text = "extra-" + i;
-                rejected.add(CompletableFuture.supplyAsync(() -> rest.postForEntity(
-                        "http://localhost:" + port + "/a2a/",
-                        new HttpEntity<>(jsonRpc("SendStreamingMessage", convId, text), jsonHeaders()),
-                        String.class).getStatusCode().value(), pool));
-            }
+            List<CompletableFuture<Integer>> rejected = fireRejectedRequests(pool);
             for (CompletableFuture<Integer> status : rejected) {
                 assertThat(status.get(15, TimeUnit.SECONDS))
                         .as("Request beyond the limit must be rejected with HTTP 503")
@@ -156,7 +150,9 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
     @Test
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void quotaDrainedAfterParallelCompletion_newRequestAdmitted() throws Exception {
-        ExecutorService pool = new ThreadPoolExecutor(LIMIT, LIMIT, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                LIMIT, LIMIT, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
         try {
             List<CompletableFuture<ResponseEntity<String>>> held = new ArrayList<>();
             for (int i = 0; i < LIMIT; i++) {
@@ -255,6 +251,8 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
                         streamEnded = true;
                     } else if (line.contains("TASK_STATE_CANCELED")) {
                         canceledSeen = true;
+                    } else {
+                        /* other state line — continue */
                     }
                 } else if (canceledSeen) {
                     // give the server a moment to close, then re-check
@@ -277,6 +275,19 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
                 "http://localhost:" + port + "/a2a/",
                 new HttpEntity<>(jsonRpc("SendMessage", "after-cancel", "hello"), jsonHeaders()), String.class);
         assertThat(next.getStatusCode().is2xxSuccessful()).isTrue();
+    }
+
+    private List<CompletableFuture<Integer>> fireRejectedRequests(ExecutorService pool) {
+        List<CompletableFuture<Integer>> rejected = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            final String convId = "limited-reject-" + i;
+            final String text = "extra-" + i;
+            rejected.add(CompletableFuture.supplyAsync(() -> rest.postForEntity(
+                    "http://localhost:" + port + "/a2a/",
+                    new HttpEntity<>(jsonRpc("SendStreamingMessage", convId, text), jsonHeaders()),
+                    String.class).getStatusCode().value(), pool));
+        }
+        return rejected;
     }
 
     private void awaitCountZero() throws InterruptedException {
@@ -357,15 +368,19 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
                 // Park until released OR cancelled — cancellation (S-21) must
                 // be able to unblock an in-flight streaming task
                 while (!releaseLatch.await(100, TimeUnit.MILLISECONDS) && !observer.isCancelled()) {
-                    // poll
+                    // no-op: release gate only
                 }
                 observer.onComplete();
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt(); // preserve interrupt status
+                preserveInterrupt(); // preserve interrupt status
             } finally {
                 quotaTracker.onTaskReleased(request.getConversationId());
             }
         }
+    }
+
+    private static void preserveInterrupt() {
+        Thread.currentThread().interrupt();
     }
 
     private static HttpHeaders jsonHeaders() {

@@ -14,7 +14,6 @@ import org.junit.jupiter.api.Test;
  * @since 0.1.0
  */
 class ConcurrencyPropertiesTest {
-
     @Test
     void defaultValue_isUnlimited() {
         ConcurrencyProperties properties = new ConcurrencyProperties();

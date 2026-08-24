@@ -4,6 +4,8 @@
 
 package com.openjiuwen.service.adapters.agentcore.ext.concurrency;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -12,8 +14,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Unit tests for {@link TaskAdmissionControl}.
@@ -69,7 +69,9 @@ class TaskAdmissionControlTest {
     void tryAcquire_concurrent_doesNotExceedLimit() throws InterruptedException {
         TaskAdmissionControl gate = new TaskAdmissionControl(10);
         int threadCount = 50;
-        ExecutorService pool = new ThreadPoolExecutor(threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                threadCount, threadCount, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
         CountDownLatch startLatch = new CountDownLatch(1);
         CountDownLatch doneLatch = new CountDownLatch(threadCount);
         AtomicInteger successCount = new AtomicInteger();
@@ -82,7 +84,7 @@ class TaskAdmissionControlTest {
                         successCount.incrementAndGet();
                     }
                 } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt(); // preserve interrupt status
+                    preserveInterrupt(); // preserve interrupt status
                 } finally {
                     doneLatch.countDown();
                 }
@@ -140,5 +142,9 @@ class TaskAdmissionControlTest {
     @Test
     void limit_returnsMinusOne_whenUnlimited() {
         assertThat(new TaskAdmissionControl(-1).limit()).isEqualTo(-1);
+    }
+
+    private static void preserveInterrupt() {
+        Thread.currentThread().interrupt();
     }
 }

@@ -11,23 +11,10 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
-
-import com.openjiuwen.service.app.controller.probe.ActiveTaskController;
-import com.openjiuwen.service.adapters.agentcore.ext.autoconfigure.ConcurrencyAutoConfiguration;
-import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
-import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
-import com.openjiuwen.service.spec.dto.QueryChunk;
-import com.openjiuwen.service.spec.dto.QueryResponse;
-import com.openjiuwen.service.spec.dto.ServeRequest;
-import com.openjiuwen.service.spec.spi.AgentHandler;
-import com.openjiuwen.service.spec.spi.QueryStreamObserver;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -43,6 +30,19 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.annotation.DirtiesContext;
+
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+
+import com.openjiuwen.service.app.controller.probe.ActiveTaskController;
+import com.openjiuwen.service.adapters.agentcore.ext.autoconfigure.ConcurrencyAutoConfiguration;
+import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
+import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
+import com.openjiuwen.service.spec.dto.QueryChunk;
+import com.openjiuwen.service.spec.dto.QueryResponse;
+import com.openjiuwen.service.spec.dto.ServeRequest;
+import com.openjiuwen.service.spec.spi.AgentHandler;
+import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
 /**
  * End-to-end integration tests verifying the full admission-control chain:
@@ -63,6 +63,8 @@ import org.springframework.test.annotation.DirtiesContext;
     properties = "openjiuwen.service.concurrency.max-concurrent-tasks=1")
 @AutoConfigureTestRestTemplate
 class ConcurrencyE2EIntegrationTest {
+
+    private static final Logger log = LoggerFactory.getLogger(ConcurrencyE2EIntegrationTest.class);
 
     @LocalServerPort
     private int port;
@@ -106,7 +108,7 @@ class ConcurrencyE2EIntegrationTest {
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendStreamingMessage", "e2e-slow", "slow"), headers), String.class);
         });
-        first.setUncaughtExceptionHandler((t, e) -> e.printStackTrace());
+        first.setUncaughtExceptionHandler((t, e) -> logError("rejected503", e));
         first.start();
         assertThat(SlowAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
@@ -115,7 +117,7 @@ class ConcurrencyE2EIntegrationTest {
                 new HttpEntity<>(jsonRpc("SendMessage", "e2e-reject", "reject"), headers), String.class);
 
         assertThat(response.getStatusCode().value()).isEqualTo(503);
-        first.interrupt(); // signal thread to stop
+        SlowAgent.stopSlow(); // signal thread to stop
         first.join(2000);
     }
 
@@ -143,7 +145,7 @@ class ConcurrencyE2EIntegrationTest {
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendStreamingMessage", "e2e-active", "slow"), headers), String.class);
         });
-        slow.setUncaughtExceptionHandler((t, e) -> e.printStackTrace());
+        slow.setUncaughtExceptionHandler((t, e) -> logError("activeTaskEndpoint", e));
         slow.start();
         assertThat(SlowAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
@@ -156,7 +158,7 @@ class ConcurrencyE2EIntegrationTest {
         assertThat(body).containsEntry("maxConcurrentTasks", 1);
         assertThat(body).containsEntry("currentActiveTasks", 1);
 
-        slow.interrupt(); // signal thread to stop
+        SlowAgent.stopSlow(); // signal thread to stop
         slow.join(2000);
     }
 
@@ -169,7 +171,7 @@ class ConcurrencyE2EIntegrationTest {
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendStreamingMessage", "e2e-slow2", "slow"), headers), String.class);
         });
-        slow.setUncaughtExceptionHandler((t, e) -> e.printStackTrace());
+        slow.setUncaughtExceptionHandler((t, e) -> logError("getTask-notThrottled", e));
         slow.start();
         assertThat(SlowAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
@@ -183,7 +185,7 @@ class ConcurrencyE2EIntegrationTest {
 
         assertThat(response.getStatusCode().value()).isNotEqualTo(503);
 
-        slow.interrupt(); // signal thread to stop
+        SlowAgent.stopSlow(); // signal thread to stop
         slow.join(2000);
     }
 
@@ -206,9 +208,9 @@ class ConcurrencyE2EIntegrationTest {
     @Test
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void concurrencyLogs_emittedOnAdmitAndRelease() {
-        Object loggerObj = org.slf4j.LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
-        assertThat(loggerObj).isInstanceOf(Logger.class);
-        Logger rootLogger = (Logger) loggerObj;
+        ch.qos.logback.classic.Logger rootLogger =
+                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
+        assertThat(rootLogger).isNotNull();
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
         rootLogger.addAppender(appender);
@@ -235,9 +237,9 @@ class ConcurrencyE2EIntegrationTest {
     @Test
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void concurrencyLogs_emittedOnRejection() throws InterruptedException {
-        Object loggerObj = org.slf4j.LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
-        assertThat(loggerObj).isInstanceOf(Logger.class);
-        Logger rootLogger = (Logger) loggerObj;
+        ch.qos.logback.classic.Logger rootLogger =
+                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
+        assertThat(rootLogger).isNotNull();
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
         rootLogger.addAppender(appender);
@@ -249,7 +251,7 @@ class ConcurrencyE2EIntegrationTest {
                 rest.postForEntity("http://localhost:" + port + "/a2a/",
                         new HttpEntity<>(jsonRpc("SendStreamingMessage", "e2e-log-slow", "slow"), headers), String.class);
             });
-            slow.setUncaughtExceptionHandler((t, e) -> e.printStackTrace());
+            slow.setUncaughtExceptionHandler((t, e) -> logError("rejection-logs", e));
             slow.start();
             assertThat(SlowAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
@@ -265,7 +267,7 @@ class ConcurrencyE2EIntegrationTest {
                     .as("should contain task_rejected log, total captured=%d", appender.list.size())
                     .anyMatch(m -> m.contains("task_rejected"));
 
-            slow.interrupt(); // signal thread to stop
+            SlowAgent.stopSlow(); // signal thread to stop
             slow.join(2000);
         } finally {
             rootLogger.detachAppender(appender);
@@ -290,6 +292,7 @@ class ConcurrencyE2EIntegrationTest {
 
     static final class SlowAgent implements AgentHandler {
         private static volatile CountDownLatch startedLatch = new CountDownLatch(1);
+        private static volatile boolean stopped;
 
         private final TaskQuotaTracker quotaTracker;
 
@@ -299,6 +302,11 @@ class ConcurrencyE2EIntegrationTest {
 
         static void reset() {
             startedLatch = new CountDownLatch(1);
+            stopped = false;
+        }
+
+        static void stopSlow() {
+            stopped = true;
         }
 
         static boolean awaitStarted(long timeout, TimeUnit unit) throws InterruptedException {
@@ -325,16 +333,24 @@ class ConcurrencyE2EIntegrationTest {
                 quotaTracker.onTaskWorking(request.getConversationId(), "task-" + request.getConversationId());
                 observer.onNext(new QueryChunk("chunk", Map.of("content", "tick")));
                 startedLatch.countDown();
-                while (!observer.isCancelled()) {
+                while (!observer.isCancelled() && !stopped) {
                     Thread.sleep(50);
                 }
                 observer.onComplete();
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt(); // preserve interrupt status
+                preserveInterrupt(); // preserve interrupt status
             } finally {
                 quotaTracker.onTaskReleased(request.getConversationId());
             }
         }
+    }
+
+    private static void logError(String context, Throwable e) {
+        log.error("test error in {}: {}", context, e.getMessage(), e);
+    }
+
+    private static void preserveInterrupt() {
+        Thread.currentThread().interrupt();
     }
 
     private static HttpHeaders jsonHeaders() {

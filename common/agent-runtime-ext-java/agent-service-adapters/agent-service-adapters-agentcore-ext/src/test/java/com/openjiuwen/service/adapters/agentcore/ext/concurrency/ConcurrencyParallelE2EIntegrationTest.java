@@ -19,16 +19,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.openjiuwen.service.app.controller.probe.ActiveTaskController;
-import com.openjiuwen.service.adapters.agentcore.ext.autoconfigure.ConcurrencyAutoConfiguration;
-import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
-import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
-import com.openjiuwen.service.spec.dto.QueryChunk;
-import com.openjiuwen.service.spec.dto.QueryResponse;
-import com.openjiuwen.service.spec.dto.ServeRequest;
-import com.openjiuwen.service.spec.spi.AgentHandler;
-import com.openjiuwen.service.spec.spi.QueryStreamObserver;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -48,6 +38,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.web.client.RestTemplate;
+
+import com.openjiuwen.service.app.controller.probe.ActiveTaskController;
+import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
+import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
+import com.openjiuwen.service.spec.dto.QueryChunk;
+import com.openjiuwen.service.spec.dto.QueryResponse;
+import com.openjiuwen.service.spec.dto.ServeRequest;
+import com.openjiuwen.service.spec.spi.AgentHandler;
+import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
 /**
  * End-to-end integration tests for concurrent task execution (DFX-002 NF-1~NF-3, S-17~S-22).
@@ -106,7 +105,9 @@ class ConcurrencyParallelE2EIntegrationTest {
             tac.reset();
         }
 
-        ExecutorService pool = new ThreadPoolExecutor(threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                threadCount, threadCount, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
         CountDownLatch ready = new CountDownLatch(threadCount);
         CountDownLatch start = new CountDownLatch(1);
         ConcurrentLinkedQueue<Integer> results = new ConcurrentLinkedQueue<>();
@@ -149,7 +150,9 @@ class ConcurrencyParallelE2EIntegrationTest {
         CountDownLatch releaseAll = new CountDownLatch(1);
         ParallelAgent.configure(allStarted, releaseAll);
 
-        ExecutorService pool = new ThreadPoolExecutor(taskCount, taskCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                taskCount, taskCount, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
         List<CompletableFuture<Void>> futures = new ArrayList<>();
 
         try {
@@ -186,7 +189,9 @@ class ConcurrencyParallelE2EIntegrationTest {
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void parallelTasks_noContextLeak() throws Exception {
         int taskCount = 10;
-        ExecutorService pool = new ThreadPoolExecutor(taskCount, taskCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                taskCount, taskCount, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
         List<CompletableFuture<String>> futures = new ArrayList<>();
 
         try {
@@ -227,7 +232,9 @@ class ConcurrencyParallelE2EIntegrationTest {
     @Test
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void taskAFailure_doesNotAffectTaskB() throws Exception {
-        ExecutorService pool = new ThreadPoolExecutor(2, 2, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                2, 2, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
         CountDownLatch bothStarted = new CountDownLatch(2);
         CountDownLatch releaseBoth = new CountDownLatch(1);
         ParallelAgent.configure(bothStarted, releaseBoth);
@@ -276,7 +283,9 @@ class ConcurrencyParallelE2EIntegrationTest {
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void concurrentAdmissionAndRelease_countStaysAccurate() throws Exception {
         int threadCount = 20;
-        ExecutorService pool = new ThreadPoolExecutor(threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                threadCount, threadCount, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
         AtomicInteger successCount = new AtomicInteger(0);
         String baseUrl = "http://localhost:" + port + "/a2a/";
 
@@ -374,7 +383,7 @@ class ConcurrencyParallelE2EIntegrationTest {
                                 "concurrent_peak", concurrent),
                         convId);
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt(); // preserve interrupt status
+                preserveInterrupt(); // preserve interrupt status
                 throw new IllegalStateException(e);
             } finally {
                 ACTIVE_COUNT.decrementAndGet();
@@ -399,13 +408,21 @@ class ConcurrencyParallelE2EIntegrationTest {
                 }
                 observer.onComplete();
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt(); // preserve interrupt status
+                preserveInterrupt(); // preserve interrupt status
             } finally {
                 ACTIVE_COUNT.decrementAndGet();
                 quotaTracker.onTaskReleased(convId);
                 admissionGate.release();
             }
         }
+    }
+
+    private static void logError(String context, Throwable e) {
+        System.err.println("test error in " + context + ": " + e.getMessage());
+    }
+
+    private static void preserveInterrupt() {
+        Thread.currentThread().interrupt();
     }
 
     private static HttpHeaders jsonHeaders() {

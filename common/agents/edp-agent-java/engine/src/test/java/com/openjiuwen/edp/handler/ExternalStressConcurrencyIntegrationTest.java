@@ -12,6 +12,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -63,6 +65,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @EnabledIfSystemProperty(named = "external.e2e.stress.enabled", matches = "true")
 class ExternalStressConcurrencyIntegrationTest {
+    private static final Logger log = LoggerFactory.getLogger(ExternalStressConcurrencyIntegrationTest.class);
 
     private static final String BASE_URL = System.getProperty("external.e2e.url", "http://localhost:8190");
 
@@ -134,7 +137,7 @@ class ExternalStressConcurrencyIntegrationTest {
                 r -> {
                     Thread t = new Thread(r);
                     t.setUncaughtExceptionHandler((thr, e) ->
-                            System.err.println("Uncaught in " + thr.getName() + ": " + e));
+                            log.error("Uncaught in {}: {}", thr.getName(), e.getMessage()));
                     return t;
                 });
         CountingLatch done = new CountingLatch();
@@ -151,75 +154,101 @@ class ExternalStressConcurrencyIntegrationTest {
             boolean finished = done.await(RUN_SECONDS + TIMEOUT.getSeconds() + 60, TimeUnit.SECONDS);
             assertThat(finished).as("all workers must finish within the run window").isTrue();
 
-            // invariant 4: accounting — issued == all accounted responses
-            assertThat(issued.get())
-                    .as("issued requests must equal accounted responses (issued=%d, ok=%d, 503=%d, "
-                            + "executor-rejected=%d, failed=%d, hangs=%d, unexpected=%d)",
-                            issued.get(), terminalOk.get(), rejected503.get(), rejectedExecutor.get(),
-                            failedTasks.get(), streamHang.get(), unexpected.get())
-                    .isEqualTo(terminalOk.get() + rejected503.get() + rejectedExecutor.get()
-                            + failedTasks.get() + unexpected.get());
-
-            // invariant 2: no unexpected errors; for streaming, "hang" is itself an error
-            assertThat(unexpected.get())
-                    .as("unexpected responses must be zero; first issues: %s",
-                            unexpectedDetails.subList(0, Math.min(3, unexpectedDetails.size())))
-                    .isZero();
-            if (streaming) {
-                assertThat(streamHang.get())
-                        .as("no SSE stream must hang past its terminal-state timeout")
-                        .isZero();
-            }
-
-            // invariant 2b: FAILED tasks are tolerated only when a quota is
-            // configured (executor-side rejection in the race window);
-            // with unlimited quota they would be surfaced as unexpected above.
-            // Streaming is exempt — some streaming paths legitimately end
-            // FAILED (e.g. resume-after-interrupt is known to fail on
-            // streaming while succeeding on the blocking path).
-            if (!quotaLimited && !streaming) {
-                assertThat(failedTasks.get())
-                        .as("blocking mode with unlimited quota: no task should end FAILED")
-                        .isZero();
-            }
-
-            // invariant 3: context isolation — no conversation saw more than
-            // one response (fresh conversation per request)
-            List<String> crossTalk = new ArrayList<>();
-            responsesByContext.forEach((ctx, count) -> {
-                if (count.get() > 1) {
-                    crossTalk.add(ctx + " x" + count.get());
-                }
-            });
-            assertThat(crossTalk)
-                    .as("no conversation may receive another conversation's response")
-                    .isEmpty();
-
-            // invariant 1: quota hygiene — counter drains to zero after load
-            if (quotaLimited) {
-                awaitQuotaDrained();
-            }
-            JsonNode active = fetchActiveTasks().orElseThrow(
-                    () -> new AssertionError("active tasks endpoint unavailable"));
-            assertThat(active).as("active tasks endpoint must be available").isNotNull();
-            assertThat(active.get("currentActiveTasks").asInt())
-                    .as("quota must drain to zero after sustained load (no leak)")
-                    .isZero();
-
-            // "exercised real flows" gate: at least 10 requests must have
-            // been admitted and reached a terminal state (success OR failure).
-            // FAILED tasks count here — concurrency stability is the focus
-            // of this suite, functional correctness belongs to the functional
-            // E2E suite. A FAILED terminal state still proves the path ran.
-            assertThat(terminalOk.get() + failedTasks.get())
-                    .as("the load must actually exercise real flows (need >= 10 admitted-to-terminal "
-                            + "responses; got ok=%d, failed=%d; with a small quota most requests are "
-                            + "legitimately rejected)", terminalOk.get(), failedTasks.get())
-                    .isGreaterThanOrEqualTo(10);
+            assertStabilityInvariants(streaming, quotaLimited, issued, rejected503,
+                    rejectedExecutor, failedTasks, terminalOk, streamHang, unexpected,
+                    unexpectedDetails, responsesByContext);
         } finally {
             pool.shutdownNow();
             pool.awaitTermination(30, TimeUnit.SECONDS);
         }
+    }
+
+    /**
+     * Asserts the four stability invariants after all workers complete.
+     *
+     * @param streaming          whether the test ran in streaming mode
+     * @param quotaLimited       whether a quota admission limit is configured
+     * @param issued             counter for total requests issued
+     * @param rejected503        counter for HTTP 503 rejections
+     * @param rejectedExecutor   counter for JSON-RPC executor-side rejections
+     * @param failedTasks        counter for tasks ending in FAILED state
+     * @param terminalOk         counter for tasks reaching a successful terminal state
+     * @param streamHang         counter for streams that hung past timeout
+     * @param unexpected         counter for unexpected outcomes
+     * @param unexpectedDetails  list collecting details of unexpected outcomes
+     * @param responsesByContext map tracking response counts per conversation id
+     * @throws Exception if the quota drain or active tasks probe fails
+     */
+    private void assertStabilityInvariants(boolean streaming, boolean quotaLimited,
+            AtomicInteger issued, AtomicInteger rejected503, AtomicInteger rejectedExecutor,
+            AtomicInteger failedTasks, AtomicInteger terminalOk, AtomicInteger streamHang,
+            AtomicInteger unexpected, List<String> unexpectedDetails,
+            Map<String, AtomicInteger> responsesByContext) throws Exception {
+        // invariant 4: accounting — issued == all accounted responses
+        assertThat(issued.get())
+                .as("issued requests must equal accounted responses (issued=%d, ok=%d, 503=%d, "
+                        + "executor-rejected=%d, failed=%d, hangs=%d, unexpected=%d)",
+                        issued.get(), terminalOk.get(), rejected503.get(), rejectedExecutor.get(),
+                        failedTasks.get(), streamHang.get(), unexpected.get())
+                .isEqualTo(terminalOk.get() + rejected503.get() + rejectedExecutor.get()
+                        + failedTasks.get() + unexpected.get());
+
+        // invariant 2: no unexpected errors; for streaming, "hang" is itself an error
+        assertThat(unexpected.get())
+                .as("unexpected responses must be zero; first issues: %s",
+                        unexpectedDetails.subList(0, Math.min(3, unexpectedDetails.size())))
+                .isZero();
+        if (streaming) {
+            assertThat(streamHang.get())
+                    .as("no SSE stream must hang past its terminal-state timeout")
+                    .isZero();
+        }
+
+        // invariant 2b: FAILED tasks are tolerated only when a quota is
+        // configured (executor-side rejection in the race window);
+        // with unlimited quota they would be surfaced as unexpected above.
+        // Streaming is exempt — some streaming paths legitimately end
+        // FAILED (e.g. resume-after-interrupt is known to fail on
+        // streaming while succeeding on the blocking path).
+        if (!quotaLimited && !streaming) {
+            assertThat(failedTasks.get())
+                    .as("blocking mode with unlimited quota: no task should end FAILED")
+                    .isZero();
+        }
+
+        // invariant 3: context isolation — no conversation saw more than
+        // one response (fresh conversation per request)
+        List<String> crossTalk = new ArrayList<>();
+        responsesByContext.forEach((ctx, count) -> {
+            if (count.get() > 1) {
+                crossTalk.add(ctx + " x" + count.get());
+            }
+        });
+        assertThat(crossTalk)
+                .as("no conversation may receive another conversation's response")
+                .isEmpty();
+
+        // invariant 1: quota hygiene — counter drains to zero after load
+        if (quotaLimited) {
+            awaitQuotaDrained();
+        }
+        JsonNode active = fetchActiveTasks().orElseThrow(
+                () -> new AssertionError("active tasks endpoint unavailable"));
+        assertThat(active).as("active tasks endpoint must be available").isNotNull();
+        assertThat(active.get("currentActiveTasks").asInt())
+                .as("quota must drain to zero after sustained load (no leak)")
+                .isZero();
+
+        // "exercised real flows" gate: at least 10 requests must have
+        // been admitted and reached a terminal state (success OR failure).
+        // FAILED tasks count here — concurrency stability is the focus
+        // of this suite, functional correctness belongs to the functional
+        // E2E suite. A FAILED terminal state still proves the path ran.
+        assertThat(terminalOk.get() + failedTasks.get())
+                .as("the load must actually exercise real flows (need >= 10 admitted-to-terminal "
+                        + "responses; got ok=%d, failed=%d; with a small quota most requests are "
+                        + "legitimately rejected)", terminalOk.get(), failedTasks.get())
+                .isGreaterThanOrEqualTo(10);
     }
 
     /**
@@ -394,6 +423,18 @@ class ExternalStressConcurrencyIntegrationTest {
             String body = new String(resp.body().readAllBytes(), StandardCharsets.UTF_8);
             return new RequestOutcome(resp.statusCode(), "", "", false, false, 0, body);
         }
+        return readSseStream(resp);
+    }
+
+    /**
+     * Reads an SSE stream incrementally until a terminal task state is
+     * observed, the timeout elapses (hang), or the stream ends.
+     *
+     * @param resp the HTTP response with an InputStream body
+     * @return the outcome containing terminal state, echoed context id, and hang flag
+     * @throws Exception if the SSE stream reading or JSON parsing fails
+     */
+    private RequestOutcome readSseStream(HttpResponse<InputStream> resp) throws Exception {
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(resp.body(), StandardCharsets.UTF_8))) {
             long deadline = System.currentTimeMillis() + TIMEOUT.toMillis() * 3 / 4;
@@ -551,8 +592,10 @@ class ExternalStressConcurrencyIntegrationTest {
                 all.get(timeout, unit);
                 return true;
             } catch (java.util.concurrent.TimeoutException e) {
+                // timed out waiting for all workers to complete
                 return false;
             } catch (java.util.concurrent.ExecutionException e) {
+                // propagate underlying worker failure as unchecked
                 throw new IllegalStateException(e);
             }
         }

@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -21,13 +22,16 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * External end-to-end tests that run against a real edp-agent instance
@@ -110,9 +114,17 @@ class ExternalE2EIntegrationTest {
     @Test
     void sendStreamingMessage_wealthPurchase_fullThreeRoundFlow() throws Exception {
         String contextId = "ext-stream-wealth-" + UUID.randomUUID().toString().substring(0, 8);
+        wealthPurchaseStreamRound1(contextId);
+        wealthPurchaseStreamRound2(contextId);
+    }
+
+    private void wealthPurchaseStreamRound1(String contextId) throws IOException, InterruptedException {
         // Round 1: recommend products
         StreamResult r1 = sendA2AStreamRaw(contextId, "帮我推荐一些理财产品");
         assertThat(r1.terminalState).isEqualTo("TASK_STATE_COMPLETED");
+    }
+
+    private void wealthPurchaseStreamRound2(String contextId) throws IOException, InterruptedException {
         // Round 2: select product (may trigger INPUT_REQUIRED from ask_user)
         StreamResult r2 = sendA2AStreamRaw(contextId, "购买1号产品，金额5000元");
         assertThat(r2.terminalState)
@@ -120,10 +132,14 @@ class ExternalE2EIntegrationTest {
                 .isIn("TASK_STATE_COMPLETED", "TASK_STATE_INPUT_REQUIRED");
         // Round 3: confirm purchase (only if R2 was INPUT_REQUIRED)
         if ("TASK_STATE_INPUT_REQUIRED".equals(r2.terminalState)) {
-            StreamResult r3 = sendA2AStreamRaw(contextId,
-                    "确认购买1号339现管DXXJ-1339，5000元，请继续执行");
-            assertThat(r3.terminalState).isEqualTo("TASK_STATE_COMPLETED");
+            wealthPurchaseStreamRound3(contextId);
         }
+    }
+
+    private void wealthPurchaseStreamRound3(String contextId) throws IOException, InterruptedException {
+        StreamResult r3 = sendA2AStreamRaw(contextId,
+                "确认购买1号339现管DXXJ-1339，5000元，请继续执行");
+        assertThat(r3.terminalState).isEqualTo("TASK_STATE_COMPLETED");
     }
 
     /**
@@ -150,19 +166,20 @@ class ExternalE2EIntegrationTest {
     void sendStreamingMessage_parallelTasks_noContextLeak() throws Exception {
         String ctxA = "ext-stream-par-a-" + UUID.randomUUID().toString().substring(0, 8);
         String ctxB = "ext-stream-par-b-" + UUID.randomUUID().toString().substring(0, 8);
-        ExecutorService pool = new ThreadPoolExecutor(2, 2, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                2, 2, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         try {
             CompletableFuture<StreamResult> futureA = CompletableFuture.supplyAsync(() -> {
                 try {
                     return sendA2AStreamRaw(ctxA, "帮我查询账户余额");
-                } catch (Exception e) {
+                } catch (IOException | InterruptedException e) {
                     throw new CompletionException(e);
                 }
             }, pool);
             CompletableFuture<StreamResult> futureB = CompletableFuture.supplyAsync(() -> {
                 try {
                     return sendA2AStreamRaw(ctxB, "帮我推荐一些理财产品");
-                } catch (Exception e) {
+                } catch (IOException | InterruptedException e) {
                     throw new CompletionException(e);
                 }
             }, pool);
@@ -189,7 +206,8 @@ class ExternalE2EIntegrationTest {
     @Test
     void sendStreamingMessage_concurrentAgentCreation_allSucceed() throws Exception {
         int count = 5;
-        ExecutorService pool = new ThreadPoolExecutor(count, count, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                count, count, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         try {
             List<CompletableFuture<StreamResult>> futures = new ArrayList<>();
             for (int i = 0; i < count; i++) {
@@ -197,7 +215,7 @@ class ExternalE2EIntegrationTest {
                 futures.add(CompletableFuture.supplyAsync(() -> {
                     try {
                         return sendA2AStreamRaw(ctx, "帮我查询账户余额");
-                    } catch (Exception e) {
+                    } catch (IOException | InterruptedException e) {
                         throw new CompletionException(e);
                     }
                 }, pool));
@@ -218,6 +236,25 @@ class ExternalE2EIntegrationTest {
         } finally {
             pool.shutdownNow();
         }
+    }
+
+    /**
+     * Verify push notification callback endpoint is alive.
+     *
+     * @throws Exception if the test fails
+     */
+    @Test
+    void pushNotificationCallback_endpointAlive() throws Exception {
+        Assumptions.assumeTrue(pushNotificationEnabled(), "Push notifications not configured");
+        HttpResponse<String> resp = http.send(
+                HttpRequest.newBuilder(URI.create(BASE_URL + "/a2a/push-notifications/callback"))
+                        .header("Content-Type", "application/json")
+                        .timeout(Duration.ofSeconds(10))
+                        .POST(HttpRequest.BodyPublishers.ofString("{}"))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(resp.statusCode()).isIn(400, 404, 500);
+        assertThat(resp.statusCode()).isNotEqualTo(404);
     }
 
     /**
@@ -272,19 +309,20 @@ class ExternalE2EIntegrationTest {
     void parallelTasks_noContextLeak() throws Exception {
         String ctxA = "ext-parallel-a-" + UUID.randomUUID().toString().substring(0, 8);
         String ctxB = "ext-parallel-b-" + UUID.randomUUID().toString().substring(0, 8);
-        ExecutorService pool = new ThreadPoolExecutor(2, 2, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                2, 2, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         try {
             CompletableFuture<JsonNode> futureA = CompletableFuture.supplyAsync(() -> {
                 try {
                     return sendA2AMessage(ctxA, "帮我查询账户余额");
-                } catch (Exception e) {
+                } catch (IOException | InterruptedException e) {
                     throw new CompletionException(e);
                 }
             }, pool);
             CompletableFuture<JsonNode> futureB = CompletableFuture.supplyAsync(() -> {
                 try {
                     return sendA2AMessage(ctxB, "帮我推荐一些理财产品");
-                } catch (Exception e) {
+                } catch (IOException | InterruptedException e) {
                     throw new CompletionException(e);
                 }
             }, pool);
@@ -319,7 +357,8 @@ class ExternalE2EIntegrationTest {
     @Test
     void concurrentAgentCreation_allSucceed() throws Exception {
         int count = 5;
-        ExecutorService pool = new ThreadPoolExecutor(count, count, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                count, count, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         try {
             List<CompletableFuture<JsonNode>> futures = new ArrayList<>();
             for (int i = 0; i < count; i++) {
@@ -327,7 +366,7 @@ class ExternalE2EIntegrationTest {
                 futures.add(CompletableFuture.supplyAsync(() -> {
                     try {
                         return sendA2AMessage(ctx, "帮我查询账户余额");
-                    } catch (Exception e) {
+                    } catch (IOException | InterruptedException e) {
                         throw new CompletionException(e);
                     }
                 }, pool));
@@ -381,9 +420,9 @@ class ExternalE2EIntegrationTest {
                     .as("resumed task must reach terminal state")
                     .isEqualTo("TASK_STATE_COMPLETED");
             // Verify admission released: active tasks endpoint should show 0
-            JsonNode active = fetchActiveTasks();
-            assertThat(active).as("active tasks endpoint must be available").isNotNull();
-            assertThat(active.get("currentActiveTasks").asInt())
+            Optional<JsonNode> active = fetchActiveTasks();
+            assertThat(active.isPresent()).as("active tasks endpoint must be available").isTrue();
+            assertThat(active.get().get("currentActiveTasks").asInt())
                     .as("admission must be released after task completion")
                     .isZero();
         } else {
@@ -400,15 +439,15 @@ class ExternalE2EIntegrationTest {
      */
     @Test
     void activeTaskEndpoint_returnsValidData() throws Exception {
-        JsonNode active = fetchActiveTasks();
-        assertThat(active).isNotNull();
-        assertThat(active.has("maxConcurrentTasks")).isTrue();
-        assertThat(active.has("currentActiveTasks")).isTrue();
-        assertThat(active.get("currentActiveTasks").asInt()).isGreaterThanOrEqualTo(0);
+        Optional<JsonNode> active = fetchActiveTasks();
+        assertThat(active.isPresent()).isTrue();
+        assertThat(active.get().has("maxConcurrentTasks")).isTrue();
+        assertThat(active.get().has("currentActiveTasks")).isTrue();
+        assertThat(active.get().get("currentActiveTasks").asInt()).isGreaterThanOrEqualTo(0);
     }
 
     /**
-     * §7.1 per-Task Agent 实例隔离 — 验证 per-task 模式下每次 A2A 请求创建独立 Agent.
+     * §7.1 per-Task Agent 实例隔離 — 验证 per-task 模式下每次 A2A 请求创建独立 Agent.
      * Two sequential requests on different conversations should each work independently.
      *
      * @throws Exception if the test fails
@@ -446,7 +485,8 @@ class ExternalE2EIntegrationTest {
                         + MAX_AFFORDABLE_ADMISSION_LIMIT
                         + " (larger limits are too expensive for external E2E)");
         String ctxRejected = "ext-rejected-" + UUID.randomUUID().toString().substring(0, 8);
-        ExecutorService pool = new ThreadPoolExecutor(limit, limit, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                limit, limit, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         try {
             // Hold every quota slot (recommend products takes time)
             List<CompletableFuture<JsonNode>> blockers = startBlockers(pool, limit, "ext-blocker-");
@@ -478,7 +518,8 @@ class ExternalE2EIntegrationTest {
                         + MAX_AFFORDABLE_ADMISSION_LIMIT
                         + " (larger limits are too expensive for external E2E)");
         String ctxRejected = "ext-rejected-body-" + UUID.randomUUID().toString().substring(0, 8);
-        ExecutorService pool = new ThreadPoolExecutor(limit, limit, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                limit, limit, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         try {
             List<CompletableFuture<JsonNode>> blockers = startBlockers(pool, limit, "ext-blocker-body-");
             awaitQuotaFull(limit);
@@ -521,7 +562,8 @@ class ExternalE2EIntegrationTest {
         Assumptions.assumeTrue("TASK_STATE_INPUT_REQUIRED".equals(extractState(r2)),
                 "requires the backend ask_user flow to pause the task in INPUT_REQUIRED");
         // Step 2: fill every quota slot with blockers on other conversations
-        ExecutorService pool = new ThreadPoolExecutor(limit, limit, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                limit, limit, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         try {
             List<CompletableFuture<JsonNode>> blockers = startBlockers(pool, limit, "ext-resume-blocker-");
             awaitQuotaFull(limit);
@@ -559,39 +601,15 @@ class ExternalE2EIntegrationTest {
                 "requires unlimited quota or max-concurrent-tasks >= 2 (with limit=1 the "
                         + "concurrent request is rejected at the controller pre-check with 503 "
                         + "before the conversation-busy failure can surface)");
-        ExecutorService pool = new ThreadPoolExecutor(2, 2, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                2, 2, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         try {
-            HttpResponse<String> failedResp = null;
-            JsonNode firstResult = null;
-            for (int attempt = 1; attempt <= 3 && failedResp == null; attempt++) {
-                String convId = "ext-busy-" + attempt + "-" + UUID.randomUUID().toString().substring(0, 8);
-                // 1. Start a request on the conversation — it activates the session
-                CompletableFuture<JsonNode> first = CompletableFuture.supplyAsync(() -> {
-                    try {
-                        return sendA2AMessage(convId, "帮我查询账户余额");
-                    } catch (Exception e) {
-                        throw new CompletionException(e);
-                    }
-                }, pool);
-                if (!awaitQuotaFull(1)) {
-                    first.get(120, TimeUnit.SECONDS); // probe never saw it — settle and retry
-                    continue;
-                }
-                // 2. A concurrent request on the SAME conversation is admitted
-                // by the executor but rejected by the agent layer (session busy)
-                HttpResponse<String> resp = sendA2ARaw(convId, "帮我查询账户余额");
-                if (isFailedTask(resp)) {
-                    failedResp = resp;
-                    firstResult = first.get(120, TimeUnit.SECONDS);
-                } else {
-                    // The first request completed before the second arrived
-                    // (session released) — settle and retry with a fresh conversation
-                    first.get(120, TimeUnit.SECONDS);
-                }
-            }
-            Assumptions.assumeTrue(failedResp != null,
+            ConversationBusyResult busyResult = triggerConversationBusyFailure(pool);
+            Assumptions.assumeTrue(busyResult != null,
                     "conversation-busy failure not triggered in 3 attempts "
                             + "(first request completed before the concurrent one arrived)");
+            HttpResponse<String> failedResp = busyResult.failedResponse;
+            JsonNode firstResult = busyResult.firstResult;
             // 3. The busy request must surface as HTTP 200 + terminal FAILED task
             assertThat(failedResp.statusCode())
                     .as("agent-layer rejection must surface as HTTP 200 with a FAILED task")
@@ -619,6 +637,40 @@ class ExternalE2EIntegrationTest {
         }
     }
 
+    private record ConversationBusyResult(HttpResponse<String> failedResponse, JsonNode firstResult) {
+    }
+
+    private ConversationBusyResult triggerConversationBusyFailure(
+            ExecutorService pool)
+            throws InterruptedException, ExecutionException, TimeoutException, IOException {
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            String convId = "ext-busy-" + attempt + "-" + UUID.randomUUID().toString().substring(0, 8);
+            // 1. Start a request on the conversation — it activates the session
+            CompletableFuture<JsonNode> first = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return sendA2AMessage(convId, "帮我查询账户余额");
+                } catch (IOException | InterruptedException e) {
+                    throw new CompletionException(e);
+                }
+            }, pool);
+            if (!awaitQuotaFull(1)) {
+                first.get(120, TimeUnit.SECONDS); // probe never saw it — settle and retry
+                continue;
+            }
+            // 2. A concurrent request on the SAME conversation is admitted
+            // by the executor but rejected by the agent layer (session busy)
+            HttpResponse<String> resp = sendA2ARaw(convId, "帮我查询账户余额");
+            if (isFailedTask(resp)) {
+                JsonNode firstResult = first.get(120, TimeUnit.SECONDS);
+                return new ConversationBusyResult(resp, firstResult);
+            }
+            // The first request completed before the second arrived
+            // (session released) — settle and retry with a fresh conversation
+            first.get(120, TimeUnit.SECONDS);
+        }
+        return null;
+    }
+
     /**
      * §7.2 活跃任务列表 — active tasks visible during execution.
      *
@@ -627,30 +679,31 @@ class ExternalE2EIntegrationTest {
     @Test
     void activeTaskEndpoint_showsTaskDuringExecution() throws Exception {
         String ctx = "ext-active-" + UUID.randomUUID().toString().substring(0, 8);
-        ExecutorService pool = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         try {
             // Start a request in background
             CompletableFuture<JsonNode> future = CompletableFuture.supplyAsync(() -> {
                 try {
                     return sendA2AMessage(ctx, "帮我推荐一些理财产品");
-                } catch (Exception e) {
+                } catch (IOException | InterruptedException e) {
                     throw new CompletionException(e);
                 }
             }, pool);
             // Poll until the running task registers on the endpoint (instead of
             // a fixed sleep that may miss the window or assert too early)
             int activeCount = 0;
-            JsonNode active = null;
+            Optional<JsonNode> active = Optional.empty();
             long deadline = System.currentTimeMillis() + 15_000;
             while (System.currentTimeMillis() < deadline) {
                 active = fetchActiveTasks();
-                if (active != null && active.path("currentActiveTasks").asInt(0) > 0) {
-                    activeCount = active.get("currentActiveTasks").asInt();
+                if (active.isPresent() && active.get().path("currentActiveTasks").asInt(0) > 0) {
+                    activeCount = active.get().get("currentActiveTasks").asInt();
                     break;
                 }
                 Thread.sleep(500);
             }
-            assertThat(active).as("active tasks endpoint must be available").isNotNull();
+            assertThat(active.isPresent()).as("active tasks endpoint must be available").isTrue();
             assertThat(activeCount)
                     .as("should show at least 1 active task during execution")
                     .isGreaterThanOrEqualTo(1);
@@ -673,9 +726,9 @@ class ExternalE2EIntegrationTest {
         assertThat(extractState(result)).isIn("TASK_STATE_COMPLETED", "TASK_STATE_INPUT_REQUIRED");
         // After task completes, admission should be released — unconditional:
         // a null endpoint response is itself a failure, not a reason to skip
-        JsonNode active = fetchActiveTasks();
-        assertThat(active).as("active tasks endpoint must be available").isNotNull();
-        assertThat(active.get("currentActiveTasks").asInt())
+        Optional<JsonNode> active = fetchActiveTasks();
+        assertThat(active.isPresent()).as("active tasks endpoint must be available").isTrue();
+        assertThat(active.get().get("currentActiveTasks").asInt())
                 .as("admission must be released after task completion")
                 .isZero();
     }
@@ -722,27 +775,6 @@ class ExternalE2EIntegrationTest {
                 .isIn("TASK_STATE_COMPLETED", "TASK_STATE_FAILED", "TASK_STATE_INPUT_REQUIRED");
     }
 
-    // ── Push notification callback endpoint ────────────────────────────
-
-    /**
-     * Verify push notification callback endpoint is alive.
-     *
-     * @throws Exception if the test fails
-     */
-    @Test
-    void pushNotificationCallback_endpointAlive() throws Exception {
-        Assumptions.assumeTrue(pushNotificationEnabled(), "Push notifications not configured");
-        HttpResponse<String> resp = http.send(
-                HttpRequest.newBuilder(URI.create(BASE_URL + "/a2a/push-notifications/callback"))
-                        .header("Content-Type", "application/json")
-                        .timeout(Duration.ofSeconds(10))
-                        .POST(HttpRequest.BodyPublishers.ofString("{}"))
-                        .build(),
-                HttpResponse.BodyHandlers.ofString());
-        assertThat(resp.statusCode()).isIn(400, 404, 500);
-        assertThat(resp.statusCode()).isNotEqualTo(404);
-    }
-
     // --- helpers ---
 
     /**
@@ -760,8 +792,8 @@ class ExternalE2EIntegrationTest {
      */
     private boolean admissionLimitConfigured() {
         try {
-            JsonNode active = fetchActiveTasks();
-            return active != null && active.path("maxConcurrentTasks").asInt(-1) > 0;
+            Optional<JsonNode> active = fetchActiveTasks();
+            return active.isPresent() && active.get().path("maxConcurrentTasks").asInt(-1) > 0;
         } catch (Exception e) {
             // safe default: treat probe failure as "no limit configured"
             return false;
@@ -777,11 +809,11 @@ class ExternalE2EIntegrationTest {
      */
     private int affordableAdmissionLimit() {
         try {
-            JsonNode active = fetchActiveTasks();
-            if (active == null) {
+            Optional<JsonNode> active = fetchActiveTasks();
+            if (active.isEmpty()) {
                 return 0;
             }
-            int limit = active.path("maxConcurrentTasks").asInt(-1);
+            int limit = active.get().path("maxConcurrentTasks").asInt(-1);
             return (limit > 0 && limit <= MAX_AFFORDABLE_ADMISSION_LIMIT) ? limit : 0;
         } catch (Exception e) {
             // safe default: treat probe failure as "unlimited or unreachable"
@@ -798,11 +830,11 @@ class ExternalE2EIntegrationTest {
      */
     private int rawAdmissionLimit() {
         try {
-            JsonNode active = fetchActiveTasks();
-            if (active == null) {
+            Optional<JsonNode> active = fetchActiveTasks();
+            if (active.isEmpty()) {
                 return 0;
             }
-            int limit = active.path("maxConcurrentTasks").asInt(-1);
+            int limit = active.get().path("maxConcurrentTasks").asInt(-1);
             return limit == 0 ? 0 : limit;
         } catch (Exception e) {
             // safe default: treat probe failure as "unreachable"
@@ -826,7 +858,7 @@ class ExternalE2EIntegrationTest {
             blockers.add(CompletableFuture.supplyAsync(() -> {
                 try {
                     return sendA2AMessage(ctx, "帮我推荐一些理财产品");
-                } catch (Exception e) {
+                } catch (IOException | InterruptedException e) {
                     throw new CompletionException(e);
                 }
             }, pool));
@@ -841,13 +873,13 @@ class ExternalE2EIntegrationTest {
      *
      * @param limit the target active-task count to observe
      * @return {@code true} if the quota was observed as full, {@code false} on timeout
-     * @throws Exception if the polling is interrupted
+     * @throws InterruptedException if the polling is interrupted
      */
-    private boolean awaitQuotaFull(int limit) throws Exception {
+    private boolean awaitQuotaFull(int limit) throws InterruptedException {
         long deadline = System.currentTimeMillis() + 30_000;
         while (System.currentTimeMillis() < deadline) {
-            JsonNode active = fetchActiveTasks();
-            if (active != null && active.path("currentActiveTasks").asInt(0) >= limit) {
+            Optional<JsonNode> active = fetchActiveTasks();
+            if (active.isPresent() && active.get().path("currentActiveTasks").asInt(0) >= limit) {
                 return true;
             }
             Thread.sleep(200);
@@ -871,20 +903,22 @@ class ExternalE2EIntegrationTest {
     /**
      * Polls the probe until the active count drains to zero.
      *
-     * @throws Exception if the polling is interrupted or the quota does not drain in time
+     * @throws InterruptedException if the polling is interrupted
      */
-    private void awaitQuotaDrained() throws Exception {
+    private void awaitQuotaDrained() throws InterruptedException {
         long deadline = System.currentTimeMillis() + 60_000;
         while (System.currentTimeMillis() < deadline) {
-            JsonNode active = fetchActiveTasks();
-            if (active != null && active.path("currentActiveTasks").asInt(0) == 0) {
+            Optional<JsonNode> active = fetchActiveTasks();
+            if (active.isPresent() && active.get().path("currentActiveTasks").asInt(0) == 0) {
                 return;
             }
             Thread.sleep(300);
         }
-        JsonNode active = fetchActiveTasks();
-        assertThat(active).as("active tasks endpoint must be available").isNotNull();
-        assertThat(active.get("currentActiveTasks").asInt())
+        Optional<JsonNode> active = fetchActiveTasks();
+        assertThat(active.isPresent())
+                .as("active tasks endpoint must be available")
+                .isTrue();
+        assertThat(active.get().get("currentActiveTasks").asInt())
                 .as("quota must drain to zero after terminal tasks (no leak, failure path included)")
                 .isZero();
     }
@@ -903,7 +937,7 @@ class ExternalE2EIntegrationTest {
         try {
             return "TASK_STATE_FAILED".equals(
                     MAPPER.readTree(resp.body()).at("/result/task/status/state").asText(""));
-        } catch (Exception e) {
+        } catch (IOException e) {
             // safe default: treat parse failure as "not a failed task"
             return false;
         }
@@ -915,9 +949,10 @@ class ExternalE2EIntegrationTest {
      * @param contextId the conversation context ID
      * @param text      the message text
      * @return the parsed JSON response
-     * @throws Exception if the HTTP request or JSON parsing fails
+     * @throws IOException          if the HTTP request or JSON parsing fails
+     * @throws InterruptedException if the HTTP request is interrupted
      */
-    private JsonNode sendA2AMessage(String contextId, String text) throws Exception {
+    private JsonNode sendA2AMessage(String contextId, String text) throws IOException, InterruptedException {
         String body = MAPPER.writeValueAsString(MAPPER.createObjectNode()
                 .put("jsonrpc", "2.0")
                 .put("id", UUID.randomUUID().toString())
@@ -974,9 +1009,10 @@ class ExternalE2EIntegrationTest {
      * @param contextId the conversation context ID
      * @param text      the message text
      * @return the streaming result with terminal state and echoed context ID
-     * @throws Exception if the HTTP request or SSE reading fails
+     * @throws IOException          if the HTTP request or SSE reading fails
+     * @throws InterruptedException if the request is interrupted
      */
-    private StreamResult sendA2AStreamRaw(String contextId, String text) throws Exception {
+    private StreamResult sendA2AStreamRaw(String contextId, String text) throws IOException, InterruptedException {
         String body = MAPPER.writeValueAsString(MAPPER.createObjectNode()
                 .put("jsonrpc", "2.0")
                 .put("id", UUID.randomUUID().toString())
@@ -1039,7 +1075,7 @@ class ExternalE2EIntegrationTest {
                             break;
                         }
                     }
-                } catch (Exception ignored) {
+                } catch (IOException ignored) {
                     // best-effort: skip malformed SSE events
                 }
             }
@@ -1050,9 +1086,9 @@ class ExternalE2EIntegrationTest {
     /**
      * Fetches the current active tasks from the monitoring endpoint.
      *
-     * @return the parsed JSON response, or {@code null} if the endpoint is unavailable
+     * @return the parsed JSON response, or empty if the endpoint is unavailable
      */
-    private JsonNode fetchActiveTasks() {
+    private Optional<JsonNode> fetchActiveTasks() {
         try {
             HttpResponse<String> resp = http.send(
                     HttpRequest.newBuilder(URI.create(BASE_URL + "/v1/current_active_tasks"))
@@ -1060,12 +1096,12 @@ class ExternalE2EIntegrationTest {
                             .GET().build(),
                     HttpResponse.BodyHandlers.ofString());
             if (resp.statusCode() == 200) {
-                return MAPPER.readTree(resp.body());
+                return Optional.of(MAPPER.readTree(resp.body()));
             }
-        } catch (Exception e) {
+        } catch (IOException | InterruptedException e) {
             // best-effort probe: endpoint may not be available in all configurations
         }
-        return null;
+        return Optional.empty();
     }
 
     /**
@@ -1074,9 +1110,10 @@ class ExternalE2EIntegrationTest {
      * @param contextId the conversation context ID
      * @param text      the message text
      * @return the raw HTTP response
-     * @throws Exception if the HTTP request fails
+     * @throws IOException          if the HTTP request fails
+     * @throws InterruptedException if the request is interrupted
      */
-    private HttpResponse<String> sendA2ARaw(String contextId, String text) throws Exception {
+    private HttpResponse<String> sendA2ARaw(String contextId, String text) throws IOException, InterruptedException {
         String body = MAPPER.writeValueAsString(MAPPER.createObjectNode()
                 .put("jsonrpc", "2.0")
                 .put("id", UUID.randomUUID().toString())
@@ -1114,7 +1151,7 @@ class ExternalE2EIntegrationTest {
                             .build(),
                     HttpResponse.BodyHandlers.ofString());
             return resp.statusCode() != 404;
-        } catch (Exception e) {
+        } catch (IOException | InterruptedException e) {
             // safe default: treat connection failure as "not enabled"
             return false;
         }
@@ -1135,7 +1172,7 @@ class ExternalE2EIntegrationTest {
                             .build(),
                     HttpResponse.BodyHandlers.ofString());
             return resp.statusCode() != 404;
-        } catch (Exception e) {
+        } catch (IOException | InterruptedException e) {
             // safe default: treat connection failure as "not enabled"
             return false;
         }
@@ -1157,9 +1194,11 @@ class ExternalE2EIntegrationTest {
      * @param conversationId the conversation ID
      * @param text           the message text
      * @return the raw HTTP response
-     * @throws Exception if the HTTP request fails
+     * @throws IOException          if the HTTP request fails
+     * @throws InterruptedException if the request is interrupted
      */
-    private HttpResponse<String> sendCustomRestBlocking(String conversationId, String text) throws Exception {
+    private HttpResponse<String> sendCustomRestBlocking(
+            String conversationId, String text) throws IOException, InterruptedException {
         return http.send(
                 HttpRequest.newBuilder(URI.create(customRestUrl(conversationId)))
                         .header("Content-Type", "application/json")
@@ -1176,9 +1215,11 @@ class ExternalE2EIntegrationTest {
      * @param body    the input stream of SSE events
      * @param timeout the maximum time to wait for a terminal state
      * @return the terminal state string, or empty string if not reached
-     * @throws Exception if reading the stream fails
+     * @throws IOException          if reading the stream fails
+     * @throws InterruptedException if the thread is interrupted while waiting
      */
-    private String readSseTerminalState(java.io.InputStream body, Duration timeout) throws Exception {
+    private String readSseTerminalState(java.io.InputStream body, Duration timeout)
+            throws IOException, InterruptedException {
         long deadline = System.currentTimeMillis() + timeout.toMillis();
         try (var reader = new java.io.BufferedReader(
                 new java.io.InputStreamReader(body, java.nio.charset.StandardCharsets.UTF_8))) {
@@ -1216,7 +1257,7 @@ class ExternalE2EIntegrationTest {
                             return s;
                         }
                     }
-                } catch (Exception ignored) {
+                } catch (IOException ignored) {
                     // best-effort: skip malformed SSE events
                 }
             }

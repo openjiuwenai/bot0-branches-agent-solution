@@ -4,6 +4,15 @@
 
 package com.openjiuwen.service.adapters.agentcore.ext.concurrency;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -16,15 +25,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link AgentInstanceManager}.
@@ -83,7 +83,9 @@ class AgentInstanceManagerTest {
         }).thenReturn(fastAgent);
 
         AgentInstanceManager manager = new AgentInstanceManager(factory);
-        ExecutorService executor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService executor = new ThreadPoolExecutor(
+                1, 1, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
         try {
             Future<Object> slow = executor.submit(() -> manager.acquire("conv-1"));
             assertThat(enteredCreate.await(5, TimeUnit.SECONDS)).isTrue();
@@ -108,7 +110,9 @@ class AgentInstanceManagerTest {
         SpyAgentFactory factory = new SpyAgentFactory();
         AgentInstanceManager manager = new AgentInstanceManager(factory);
         int threads = 8;
-        ExecutorService executor = new ThreadPoolExecutor(threads, threads, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService executor = new ThreadPoolExecutor(
+                threads, threads, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
         try {
             CountDownLatch start = new CountDownLatch(1);
             List<Future<Object>> futures = new ArrayList<>();

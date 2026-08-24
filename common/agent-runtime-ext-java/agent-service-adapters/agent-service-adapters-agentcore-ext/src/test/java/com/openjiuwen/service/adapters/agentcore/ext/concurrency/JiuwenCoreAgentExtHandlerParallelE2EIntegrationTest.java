@@ -10,7 +10,6 @@ import com.openjiuwen.core.session.Session;
 import com.openjiuwen.core.session.stream.OutputSchema;
 import com.openjiuwen.core.session.stream.StreamMode;
 import com.openjiuwen.service.adapters.agentcore.ext.agentfw.JiuwenCoreAgentExtHandler;
-import com.openjiuwen.service.adapters.agentcore.ext.autoconfigure.ConcurrencyAutoConfiguration;
 import com.openjiuwen.service.app.controller.probe.ActiveTaskController;
 import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
 import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
@@ -105,7 +104,9 @@ class JiuwenCoreAgentExtHandlerParallelE2EIntegrationTest {
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void parallelTasks_eachGetsDifferentPerTaskAgent() throws Exception {
         int taskCount = 5;
-        ExecutorService pool = new ThreadPoolExecutor(taskCount, taskCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                taskCount, taskCount, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
         List<CompletableFuture<String>> futures = new ArrayList<>();
 
         try {
@@ -153,7 +154,9 @@ class JiuwenCoreAgentExtHandlerParallelE2EIntegrationTest {
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void parallelTasks_noContextLeak() throws Exception {
         int taskCount = 10;
-        ExecutorService pool = new ThreadPoolExecutor(taskCount, taskCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                taskCount, taskCount, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
         List<CompletableFuture<String>> futures = new ArrayList<>();
 
         try {
@@ -204,7 +207,9 @@ class JiuwenCoreAgentExtHandlerParallelE2EIntegrationTest {
     @Test
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void taskAFailure_doesNotAffectTaskB() throws Exception {
-        ExecutorService pool = new ThreadPoolExecutor(2, 2, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                2, 2, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
         List<CompletableFuture<String>> futures = new ArrayList<>();
 
         try {
@@ -256,7 +261,9 @@ class JiuwenCoreAgentExtHandlerParallelE2EIntegrationTest {
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void highConcurrency_allTasksComplete_allAgentsDestroyed() throws Exception {
         int threadCount = 20;
-        ExecutorService pool = new ThreadPoolExecutor(threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ExecutorService pool = new ThreadPoolExecutor(
+                threadCount, threadCount, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
         AtomicInteger successCount = new AtomicInteger(0);
         String baseUrl = "http://localhost:" + port + "/a2a/";
 

@@ -161,7 +161,7 @@ class CustomRestA2ABridgeAdmissionTest {
     @Test
     void executeStream_success_returnsPublisher_withoutGateRelease() {
         RequestHandler handler = mock(RequestHandler.class);
-        Flow.Publisher<StreamingEventKind> publisher = subscriber -> { /* no-op */ };
+        Flow.Publisher<StreamingEventKind> publisher = subscriber -> {/* no-op */};
         when(handler.onMessageSendStream(any(), any())).thenReturn(publisher);
         TaskAdmissionGate gate = mock(TaskAdmissionGate.class);
         when(gate.limit()).thenReturn(5);

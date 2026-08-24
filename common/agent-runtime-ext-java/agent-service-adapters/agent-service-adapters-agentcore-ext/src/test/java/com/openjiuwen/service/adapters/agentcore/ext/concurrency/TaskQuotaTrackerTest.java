@@ -6,7 +6,6 @@ package com.openjiuwen.service.adapters.agentcore.ext.concurrency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.openjiuwen.service.spec.concurrency.ActiveTaskInfo;
 import com.openjiuwen.service.spec.concurrency.ConcurrencyLoadSnapshot;
 
 import org.junit.jupiter.api.Test;
