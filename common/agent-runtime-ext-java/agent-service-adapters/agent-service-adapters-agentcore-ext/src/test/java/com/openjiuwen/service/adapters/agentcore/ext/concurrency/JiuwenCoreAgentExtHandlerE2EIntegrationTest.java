@@ -469,8 +469,9 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
         return () -> {
             try {
                 task.run();
-            } catch (Throwable t) {
-                logError(context, t);
+            } catch (AssertionError | RuntimeException e) {
+                logError(context, e);
+                throw e;
             }
         };
     }
