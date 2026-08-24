@@ -324,8 +324,8 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
     static class LimitedTestApp {
         @Bean
         @Primary
-        AgentHandler gatedAgentHandler(TaskQuotaTracker quotaTracker) {
-            return new GatedAgent(quotaTracker);
+        AgentHandler gatedAgentHandler() {
+            return new GatedAgent();
         }
 
         @Bean
@@ -337,18 +337,13 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
     /**
      * Blocking agent stub: streaming requests park on a release latch so tests
      * can deterministically hold the admission quota open. Does NOT touch the
-     * admission gate — permit release belongs to {@code A2AAgentExecutor}.
+     * admission gate or the quota tracker — permit lifecycle and probe
+     * recording both belong to {@code A2AAgentExecutor}.
      */
     static final class GatedAgent implements AgentHandler {
         private static volatile CountDownLatch startedLatch = new CountDownLatch(LIMIT);
         private static volatile CountDownLatch releaseLatch = new CountDownLatch(1);
         private static final AtomicInteger ENTERED = new AtomicInteger();
-
-        private final TaskQuotaTracker quotaTracker;
-
-        GatedAgent(TaskQuotaTracker quotaTracker) {
-            this.quotaTracker = quotaTracker;
-        }
 
         static void reset() {
             startedLatch = new CountDownLatch(LIMIT);
@@ -366,19 +361,13 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
 
         @Override
         public QueryResponse query(ServeRequest request) {
-            try {
-                quotaTracker.onTaskWorking(request.getConversationId(), "task-" + request.getConversationId());
-                return new QueryResponse(Map.of("role", "assistant", "content", "sync-" + request.getConversationId()),
-                        request.getConversationId());
-            } finally {
-                quotaTracker.onTaskReleased(request.getConversationId());
-            }
+            return new QueryResponse(Map.of("role", "assistant", "content", "sync-" + request.getConversationId()),
+                    request.getConversationId());
         }
 
         @Override
         public void streamQuery(ServeRequest request, QueryStreamObserver observer) {
             try {
-                quotaTracker.onTaskWorking(request.getConversationId(), "task-" + request.getConversationId());
                 observer.onNext(new QueryChunk("chunk", Map.of("content", "tick-" + request.getConversationId())));
                 if (ENTERED.incrementAndGet() <= LIMIT) {
                     startedLatch.countDown();
@@ -393,8 +382,6 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
                 // The parking loop exits cooperatively via releaseLatch or
                 // observer.isCancelled(); workers are never interrupted here —
                 // a failed wait just ends the stream early.
-            } finally {
-                quotaTracker.onTaskReleased(request.getConversationId());
             }
         }
     }

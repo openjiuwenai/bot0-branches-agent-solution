@@ -9,7 +9,6 @@ import com.openjiuwen.core.session.stream.StreamMode;
 import com.openjiuwen.service.adapters.agentcore.agentfw.JiuwenCoreAgentHandler;
 import com.openjiuwen.service.adapters.agentcore.ext.concurrency.AgentInstanceManager;
 import com.openjiuwen.service.adapters.agentcore.ext.concurrency.ConversationBusyException;
-import com.openjiuwen.service.adapters.agentcore.ext.concurrency.TaskQuotaTracker;
 import com.openjiuwen.service.adapters.agentcore.ext.external.ClientToolRail;
 import com.openjiuwen.service.adapters.agentcore.ext.external.RemoteA2aToolInstaller;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.OtelRailBinding;
@@ -57,8 +56,6 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     private SkillHubManager skillHubManager;
     @Autowired(required = false)
     private AgentInstanceManager agentManager;
-    @Autowired(required = false)
-    private TaskQuotaTracker quotaTracker;
 
     /**
      * Task-level agent cache, keyed by conversationId.
@@ -116,10 +113,6 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
         this.agentManager = agentManager;
     }
 
-    void setQuotaTracker(TaskQuotaTracker quotaTracker) {
-        this.quotaTracker = quotaTracker;
-    }
-
     @Override
     public void start() {
         if (skillHubManager != null) {
@@ -155,14 +148,13 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
             OtelRailBinding otelBinding = bindOtel(agent, request);
             try (var binding = ClientToolRail.bind(agent, request)) {
                 currentTaskAgent.set(agent);
-                onTaskWorking(request);
                 super.streamQuery(request, observer);
             } finally {
                 closeOtelQuietly(otelBinding);
             }
         } finally {
             currentTaskAgent.remove();
-            releaseTaskResources(request, agent);
+            releaseAgentIfUnmanaged(request, agent);
         }
     }
 
@@ -174,14 +166,13 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
             OtelRailBinding otelBinding = bindOtel(agent, request);
             try (var binding = ClientToolRail.bind(agent, request)) {
                 currentTaskAgent.set(agent);
-                onTaskWorking(request);
                 return super.query(request);
             } finally {
                 closeOtelQuietly(otelBinding);
             }
         } finally {
             currentTaskAgent.remove();
-            releaseTaskResources(request, agent);
+            releaseAgentIfUnmanaged(request, agent);
         }
     }
 
@@ -256,23 +247,9 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
         return getAgent();
     }
 
-    private void onTaskWorking(ServeRequest request) {
-        if (quotaTracker != null) {
-            String taskId = null;
-            if (request.getMetadata() != null
-                    && request.getMetadata().get("runtime.parentTaskId") instanceof String tid) {
-                taskId = tid;
-            }
-            quotaTracker.onTaskWorking(request.getConversationId(), taskId);
-        }
-    }
-
-    private void releaseTaskResources(ServeRequest request, Object agent) {
-        String conversationId = request.getConversationId();
-        if (quotaTracker != null) {
-            quotaTracker.onTaskReleased(conversationId);
-        }
+    private void releaseAgentIfUnmanaged(ServeRequest request, Object agent) {
         // Only release agent if NOT managed by prepareTask/completeTask lifecycle
+        String conversationId = request.getConversationId();
         if (agentManager != null && !taskAgentCache.containsKey(conversationId)) {
             agentManager.release(conversationId, agent);
         }

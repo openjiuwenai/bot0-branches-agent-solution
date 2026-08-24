@@ -157,7 +157,14 @@ class ConcurrencyE2EIntegrationTest {
         Map<String, Object> body = snapshot.getBody();
         assertThat(body).isNotNull();
         assertThat(body).containsEntry("maxConcurrentTasks", 1);
+        // Admission-driven probe: the in-flight task is visible while it
+        // occupies quota, with a stable (SDK-generated) taskId.
         assertThat(body).containsEntry("currentActiveTasks", 1);
+        assertThat(admissionGate.currentCount()).isEqualTo(1);
+        List<Map<String, Object>> tasks = (List<Map<String, Object>>) body.get("tasks");
+        assertThat(tasks).hasSize(1);
+        assertThat(tasks.get(0).get("taskId")).asString().isNotBlank();
+        assertThat(tasks.get(0).get("conversationId")).isEqualTo("e2e-active");
 
         SlowAgent.stopSlow(); // signal thread to stop
         slow.shutdown();
@@ -286,8 +293,8 @@ class ConcurrencyE2EIntegrationTest {
     static class E2ETestApp {
         @Bean
         @Primary
-        AgentHandler slowAgentHandler(TaskQuotaTracker quotaTracker) {
-            return new SlowAgent(quotaTracker);
+        AgentHandler slowAgentHandler() {
+            return new SlowAgent();
         }
 
         @Bean
@@ -299,12 +306,6 @@ class ConcurrencyE2EIntegrationTest {
     static final class SlowAgent implements AgentHandler {
         private static volatile CountDownLatch startedLatch = new CountDownLatch(1);
         private static volatile boolean stopped;
-
-        private final TaskQuotaTracker quotaTracker;
-
-        SlowAgent(TaskQuotaTracker quotaTracker) {
-            this.quotaTracker = quotaTracker;
-        }
 
         static void reset() {
             startedLatch = new CountDownLatch(1);
@@ -321,22 +322,16 @@ class ConcurrencyE2EIntegrationTest {
 
         @Override
         public QueryResponse query(ServeRequest request) {
-            try {
-                if ("fail-sync-query".equals(request.lastUserQuery())) {
-                    throw new IllegalStateException("intentional failure");
-                }
-                quotaTracker.onTaskWorking(request.getConversationId(), "task-" + request.getConversationId());
-                return new QueryResponse(Map.of("role", "assistant", "content", "sync-reply"),
-                        request.getConversationId());
-            } finally {
-                quotaTracker.onTaskReleased(request.getConversationId());
+            if ("fail-sync-query".equals(request.lastUserQuery())) {
+                throw new IllegalStateException("intentional failure");
             }
+            return new QueryResponse(Map.of("role", "assistant", "content", "sync-reply"),
+                    request.getConversationId());
         }
 
         @Override
         public void streamQuery(ServeRequest request, QueryStreamObserver observer) {
             try {
-                quotaTracker.onTaskWorking(request.getConversationId(), "task-" + request.getConversationId());
                 observer.onNext(new QueryChunk("chunk", Map.of("content", "tick")));
                 startedLatch.countDown();
                 while (!observer.isCancelled() && !stopped) {
@@ -347,8 +342,6 @@ class ConcurrencyE2EIntegrationTest {
                 // The slow agent parks on sleep and exits via the cooperative
                 // stopped/observer.isCancelled() flags; workers are never
                 // interrupted here — a failed sleep just ends the stream early.
-            } finally {
-                quotaTracker.onTaskReleased(request.getConversationId());
             }
         }
     }

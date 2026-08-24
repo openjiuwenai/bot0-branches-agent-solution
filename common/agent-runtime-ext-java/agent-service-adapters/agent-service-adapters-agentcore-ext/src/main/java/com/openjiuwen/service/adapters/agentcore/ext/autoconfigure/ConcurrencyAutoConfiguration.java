@@ -12,6 +12,8 @@ import com.openjiuwen.service.adapters.agentcore.ext.concurrency.TaskQuotaTracke
 import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
 import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
 
+import java.util.Locale;
+
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -35,13 +37,20 @@ public class ConcurrencyAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(TaskAdmissionGate.class)
     TaskAdmissionControl taskAdmissionControl(ConcurrencyProperties props) {
-        return new TaskAdmissionControl(props.getMaxConcurrentTasks());
+        int maxConcurrentTasks = props.getMaxConcurrentTasks();
+        if (maxConcurrentTasks == 0 || maxConcurrentTasks < -1) {
+            throw new IllegalStateException(String.format(Locale.ROOT,
+                    "Invalid openjiuwen.service.concurrency.max-concurrent-tasks=%d; "
+                            + "expected -1 (unlimited) or a positive limit. 0 would reject every task.",
+                    maxConcurrentTasks));
+        }
+        return new TaskAdmissionControl(maxConcurrentTasks);
     }
 
     @Bean
     @ConditionalOnMissingBean(ActiveTaskQuery.class)
-    TaskQuotaTracker taskQuotaTracker(TaskAdmissionControl admissionControl) {
-        return new TaskQuotaTracker(admissionControl);
+    TaskQuotaTracker taskQuotaTracker(TaskAdmissionGate admissionGate) {
+        return new TaskQuotaTracker(admissionGate);
     }
 
     @Bean

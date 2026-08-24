@@ -17,25 +17,25 @@ import org.junit.jupiter.api.Test;
  */
 class TaskQuotaTrackerTest {
     @Test
-    void onTaskWorking_recordsActiveTask() {
+    void onAdmitted_recordsActiveTask() {
         TaskAdmissionControl gate = new TaskAdmissionControl(5);
         TaskQuotaTracker tracker = new TaskQuotaTracker(gate);
-        tracker.onTaskWorking("conv-1", "task-1");
+        tracker.onAdmitted("task-1", "conv-1");
         ConcurrencyLoadSnapshot snapshot = tracker.snapshot();
         assertThat(snapshot.getTasks()).hasSize(1);
-        assertThat(snapshot.getTasks().get(0).getConversationId()).isEqualTo("conv-1");
         assertThat(snapshot.getTasks().get(0).getTaskId()).isEqualTo("task-1");
+        assertThat(snapshot.getTasks().get(0).getConversationId()).isEqualTo("conv-1");
         // Entry contract (L2 §2.3): WORKING status with a non-empty start time
         assertThat(snapshot.getTasks().get(0).getStatus()).isEqualTo("WORKING");
         assertThat(snapshot.getTasks().get(0).getStartedAt()).isNotBlank();
     }
 
     @Test
-    void onTaskReleased_removesActiveTask() {
+    void onReleased_removesActiveTask() {
         TaskAdmissionControl gate = new TaskAdmissionControl(5);
         TaskQuotaTracker tracker = new TaskQuotaTracker(gate);
-        tracker.onTaskWorking("conv-1", "task-1");
-        tracker.onTaskReleased("conv-1");
+        tracker.onAdmitted("task-1", "conv-1");
+        tracker.onReleased("task-1", "conv-1");
         assertThat(tracker.snapshot().getTasks()).isEmpty();
     }
 
@@ -43,8 +43,8 @@ class TaskQuotaTrackerTest {
     void snapshot_returnsCorrectCount() {
         TaskAdmissionControl gate = new TaskAdmissionControl(5);
         TaskQuotaTracker tracker = new TaskQuotaTracker(gate);
-        tracker.onTaskWorking("conv-1", "task-1");
-        tracker.onTaskWorking("conv-2", "task-2");
+        tracker.onAdmitted("task-1", "conv-1");
+        tracker.onAdmitted("task-2", "conv-2");
         ConcurrencyLoadSnapshot snapshot = tracker.snapshot();
         assertThat(snapshot.getCurrentActiveTasks()).isEqualTo(2);
         // Snapshot aggregates the configured limit from the admission control
@@ -61,21 +61,59 @@ class TaskQuotaTrackerTest {
     }
 
     @Test
-    void onTaskWorking_overwritesSameConversation() {
+    void sameConversation_concurrentTasks_trackedIndependently() {
+        // taskId keying: two in-flight tasks from one conversation must both
+        // be visible (previously the conversationId key overwrote task-A).
         TaskAdmissionControl gate = new TaskAdmissionControl(5);
         TaskQuotaTracker tracker = new TaskQuotaTracker(gate);
-        tracker.onTaskWorking("conv-1", "task-A");
-        tracker.onTaskWorking("conv-1", "task-B");
+        tracker.onAdmitted("task-A", "conv-1");
+        tracker.onAdmitted("task-B", "conv-1");
+        ConcurrencyLoadSnapshot snapshot = tracker.snapshot();
+        assertThat(snapshot.getTasks()).hasSize(2);
+        assertThat(snapshot.getTasks()).extracting(t -> t.getTaskId())
+                .containsExactlyInAnyOrder("task-A", "task-B");
+    }
+
+    @Test
+    void onReleased_onlyRemovesMatchingTask() {
+        // Releasing task-A must not evict task-B even within one conversation.
+        TaskAdmissionControl gate = new TaskAdmissionControl(5);
+        TaskQuotaTracker tracker = new TaskQuotaTracker(gate);
+        tracker.onAdmitted("task-A", "conv-1");
+        tracker.onAdmitted("task-B", "conv-1");
+        tracker.onReleased("task-A", "conv-1");
         ConcurrencyLoadSnapshot snapshot = tracker.snapshot();
         assertThat(snapshot.getTasks()).hasSize(1);
         assertThat(snapshot.getTasks().get(0).getTaskId()).isEqualTo("task-B");
     }
 
     @Test
-    void onTaskReleased_idempotent_forUnknownConversation() {
+    void nullTaskId_fallsBackToConversationKey() {
         TaskAdmissionControl gate = new TaskAdmissionControl(5);
         TaskQuotaTracker tracker = new TaskQuotaTracker(gate);
-        tracker.onTaskReleased("never-seen");
+        tracker.onAdmitted(null, "conv-no-task");
+        assertThat(tracker.snapshot().getTasks()).hasSize(1);
+        tracker.onReleased(null, "conv-no-task");
         assertThat(tracker.snapshot().getTasks()).isEmpty();
+    }
+
+    @Test
+    void onReleased_idempotent_forUnknownTask() {
+        TaskAdmissionControl gate = new TaskAdmissionControl(5);
+        TaskQuotaTracker tracker = new TaskQuotaTracker(gate);
+        tracker.onReleased("never-seen", "conv-x");
+        assertThat(tracker.snapshot().getTasks()).isEmpty();
+    }
+
+    @Test
+    void taskId_reusedAcrossSequentialAdmissions_notStale() {
+        // An INPUT_REQUIRED resume re-admits the same taskId; the stale entry
+        // must be replaced, not duplicated.
+        TaskAdmissionControl gate = new TaskAdmissionControl(5);
+        TaskQuotaTracker tracker = new TaskQuotaTracker(gate);
+        tracker.onAdmitted("task-r", "conv-1");
+        tracker.onReleased("task-r", "conv-1");
+        tracker.onAdmitted("task-r", "conv-1");
+        assertThat(tracker.snapshot().getTasks()).hasSize(1);
     }
 }

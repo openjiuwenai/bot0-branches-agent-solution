@@ -12,6 +12,7 @@ import com.openjiuwen.service.adapters.agentcore.ext.concurrency.TaskAdmissionCo
 import com.openjiuwen.service.adapters.agentcore.ext.concurrency.TaskQuotaTracker;
 import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
 import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
+import com.openjiuwen.service.spec.concurrency.TaskAdmissionListener;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -82,6 +83,87 @@ class ConcurrencyAutoConfigurationTest {
             assertThat(context).hasSingleBean(ActiveTaskQuery.class);
             assertThat(context.getBean(ActiveTaskQuery.class)).isInstanceOf(TaskQuotaTracker.class);
         });
+    }
+
+    @Test
+    void tracker_isAdmissionListenerDriven() {
+        // The tracker must be registered as a TaskAdmissionListener so the
+        // A2A executor (not the AgentHandler) drives probe recording.
+        runner.run(context -> {
+            assertThat(context).hasSingleBean(TaskAdmissionListener.class);
+            assertThat(context.getBean(TaskAdmissionListener.class)).isSameAs(context.getBean(TaskQuotaTracker.class));
+            context.getBean(TaskAdmissionListener.class).onAdmitted("t-1", "c-1");
+            assertThat(context.getBean(ActiveTaskQuery.class).snapshot().getCurrentActiveTasks()).isEqualTo(1);
+            context.getBean(TaskAdmissionListener.class).onReleased("t-1", "c-1");
+            assertThat(context.getBean(ActiveTaskQuery.class).snapshot().getCurrentActiveTasks()).isZero();
+        });
+    }
+
+    @Test
+    void customGate_backsOffDefaultControl_trackerStillRegistered() {
+        // A user-defined TaskAdmissionGate must back off the default
+        // TaskAdmissionControl without breaking context startup: the tracker
+        // switches to the gate interface and reports the custom limit.
+        TaskAdmissionGate customGate = new TaskAdmissionGate() {
+            @Override
+            public boolean tryAcquire() {
+                return true;
+            }
+
+            @Override
+            public void release() {
+                // no-op
+            }
+
+            @Override
+            public int currentCount() {
+                return 0;
+            }
+
+            @Override
+            public int limit() {
+                return 7;
+            }
+
+            @Override
+            public void shutdown() {
+                // no-op
+            }
+
+            @Override
+            public void reset() {
+                // no-op
+            }
+        };
+        runner.withBean("customAdmissionGate", TaskAdmissionGate.class, () -> customGate).run(context -> {
+            assertThat(context).doesNotHaveBean(TaskAdmissionControl.class);
+            assertThat(context.getBean(TaskAdmissionGate.class)).isSameAs(customGate);
+            assertThat(context).hasSingleBean(TaskQuotaTracker.class);
+            assertThat(context).hasSingleBean(ActiveTaskQuery.class);
+            assertThat(context.getBean(TaskAdmissionListener.class)).isSameAs(context.getBean(TaskQuotaTracker.class));
+            assertThat(context.getBean(ActiveTaskQuery.class).snapshot().getMaxConcurrentTasks())
+                    .isEqualTo(7);
+        });
+    }
+
+    @Test
+    void maxConcurrentTasks_zero_failsStartup() {
+        runner.withPropertyValues("openjiuwen.service.concurrency.max-concurrent-tasks=0")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasMessageContaining(
+                            "openjiuwen.service.concurrency.max-concurrent-tasks=0");
+                });
+    }
+
+    @Test
+    void maxConcurrentTasks_belowMinusOne_failsStartup() {
+        runner.withPropertyValues("openjiuwen.service.concurrency.max-concurrent-tasks=-2")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasMessageContaining(
+                            "openjiuwen.service.concurrency.max-concurrent-tasks=-2");
+                });
     }
 
     @Test

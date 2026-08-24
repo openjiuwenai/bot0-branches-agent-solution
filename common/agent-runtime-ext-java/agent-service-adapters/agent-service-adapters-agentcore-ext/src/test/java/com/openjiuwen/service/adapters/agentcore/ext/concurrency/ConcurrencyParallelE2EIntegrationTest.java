@@ -325,8 +325,8 @@ class ConcurrencyParallelE2EIntegrationTest {
     static class ParallelTestApp {
         @Bean
         @Primary
-        AgentHandler parallelAgentHandler(TaskAdmissionGate admissionGate, TaskQuotaTracker quotaTracker) {
-            return new ParallelAgent(admissionGate, quotaTracker);
+        AgentHandler parallelAgentHandler() {
+            return new ParallelAgent();
         }
 
         @Bean
@@ -341,14 +341,6 @@ class ConcurrencyParallelE2EIntegrationTest {
         private static final AtomicInteger ACTIVE_COUNT = new AtomicInteger(0);
         private static final ConcurrentHashMap<String, String> conversationByThread =
                 new ConcurrentHashMap<>();
-
-        private final TaskAdmissionGate admissionGate;
-        private final TaskQuotaTracker quotaTracker;
-
-        ParallelAgent(TaskAdmissionGate admissionGate, TaskQuotaTracker quotaTracker) {
-            this.admissionGate = admissionGate;
-            this.quotaTracker = quotaTracker;
-        }
 
         static void configure(CountDownLatch started, CountDownLatch release) {
             allStarted = started;
@@ -379,7 +371,6 @@ class ConcurrencyParallelE2EIntegrationTest {
                 if ("fail-sync-query".equals(request.lastUserQuery())) {
                     throw new IllegalStateException("intentional failure");
                 }
-                quotaTracker.onTaskWorking(convId, "task-" + convId);
                 return new QueryResponse(
                         Map.of("role", "assistant", "content", "reply-" + convId, "conversation_id", convId,
                                 "concurrent_peak", concurrent),
@@ -391,8 +382,6 @@ class ConcurrencyParallelE2EIntegrationTest {
                 throw new IllegalStateException(e);
             } finally {
                 ACTIVE_COUNT.decrementAndGet();
-                quotaTracker.onTaskReleased(convId);
-                admissionGate.release();
             }
         }
 
@@ -413,11 +402,9 @@ class ConcurrencyParallelE2EIntegrationTest {
                 observer.onComplete();
             } catch (InterruptedException e) {
                 // The release gate uses a bounded await; workers are never
-                // interrupted here — a failed wait just ends the stream early.
+                // interrupted here, so a failed wait just ends the stream early.
             } finally {
                 ACTIVE_COUNT.decrementAndGet();
-                quotaTracker.onTaskReleased(convId);
-                admissionGate.release();
             }
         }
     }

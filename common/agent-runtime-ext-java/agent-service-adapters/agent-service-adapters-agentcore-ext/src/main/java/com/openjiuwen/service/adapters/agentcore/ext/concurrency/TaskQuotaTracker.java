@@ -7,6 +7,8 @@ package com.openjiuwen.service.adapters.agentcore.ext.concurrency;
 import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
 import com.openjiuwen.service.spec.concurrency.ActiveTaskInfo;
 import com.openjiuwen.service.spec.concurrency.ConcurrencyLoadSnapshot;
+import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
+import com.openjiuwen.service.spec.concurrency.TaskAdmissionListener;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -16,52 +18,62 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Tracks active task information for quota lifecycle management (DFX-002).
  *
- * <p>Maintains a map of conversationId to ActiveTaskInfo. The quota count
- * (tryAcquire/release) is managed by {@link TaskAdmissionControl}; this
- * class only records and removes task metadata for the query interface.
+ * <p>Implements {@link TaskAdmissionListener} so the A2A executor drives the
+ * recording at the exact points where an admission quota slot is acquired and
+ * released. A task is therefore visible from {@code snapshot()} for precisely
+ * as long as it occupies admission quota ({@code TaskAdmissionGate#currentCount()}
+ * and the probe's {@code currentActiveTasks} can never diverge), which spans
+ * the whole orchestrated processing — including agent construction and any
+ * orchestrator re-drive — not just the AgentHandler invocation.
+ *
+ * <p>Entries are keyed by taskId (falling back to the conversationId when a
+ * transport provides no task id), so concurrent tasks from the same
+ * conversation are tracked independently instead of overwriting each other.
+ * The quota count itself (tryAcquire/release) is managed by the
+ * {@link TaskAdmissionGate}; this class only records task metadata.
  *
  * @since 0.1.0
  */
-public class TaskQuotaTracker implements ActiveTaskQuery {
+public class TaskQuotaTracker implements ActiveTaskQuery, TaskAdmissionListener {
     private final ConcurrentHashMap<String, ActiveTaskInfo> activeTasks = new ConcurrentHashMap<>();
-    private final TaskAdmissionControl admissionControl;
+
+    private final TaskAdmissionGate admissionGate;
 
     /**
-     * Creates a tracker linked to the given admission control for snapshot max.
+     * Creates a tracker linked to the given admission gate for snapshot max.
      *
-     * @param admissionControl the admission control providing maxConcurrentTasks
+     * <p>Accepts any {@link TaskAdmissionGate} implementation (default or
+     * user-defined) so the tracker keeps working when the default
+     * {@code TaskAdmissionControl} is backed off by a custom gate bean.
+     *
+     * @param admissionGate the admission gate providing the concurrency limit
      */
-    public TaskQuotaTracker(TaskAdmissionControl admissionControl) {
-        this.admissionControl = admissionControl;
+    public TaskQuotaTracker(TaskAdmissionGate admissionGate) {
+        this.admissionGate = admissionGate;
     }
 
-    /**
-     * Record a task entering WORKING state.
-     *
-     * @param conversationId conversation identifier
-     * @param taskId A2A task identifier
-     */
-    public void onTaskWorking(String conversationId, String taskId) {
+    @Override
+    public void onAdmitted(String taskId, String conversationId) {
         ActiveTaskInfo info = new ActiveTaskInfo(taskId, conversationId, "WORKING",
                 Instant.now().toString());
-        activeTasks.put(conversationId, info);
+        activeTasks.put(key(taskId, conversationId), info);
     }
 
-    /**
-     * Remove a task from the active map.
-     *
-     * @param conversationId conversation identifier
-     */
-    public void onTaskReleased(String conversationId) {
-        activeTasks.remove(conversationId);
+    @Override
+    public void onReleased(String taskId, String conversationId) {
+        activeTasks.remove(key(taskId, conversationId));
     }
 
     @Override
     public ConcurrencyLoadSnapshot snapshot() {
         List<ActiveTaskInfo> tasks = new ArrayList<>(activeTasks.values());
         return new ConcurrencyLoadSnapshot(
-                admissionControl != null ? admissionControl.maxConcurrentTasks() : -1,
+                admissionGate != null ? admissionGate.limit() : -1,
                 tasks.size(),
                 tasks);
+    }
+
+    private static String key(String taskId, String conversationId) {
+        return taskId != null ? taskId : "conversation:" + conversationId;
     }
 }

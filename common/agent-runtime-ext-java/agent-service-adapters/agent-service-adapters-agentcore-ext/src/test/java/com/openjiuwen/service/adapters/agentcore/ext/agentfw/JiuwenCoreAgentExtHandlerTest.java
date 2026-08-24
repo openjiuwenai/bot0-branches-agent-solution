@@ -18,7 +18,6 @@ import com.openjiuwen.core.session.stream.OutputSchema;
 import com.openjiuwen.core.session.stream.StreamMode;
 import com.openjiuwen.service.adapters.agentcore.ext.concurrency.AgentInstanceManager;
 import com.openjiuwen.service.adapters.agentcore.ext.concurrency.ConversationBusyException;
-import com.openjiuwen.service.adapters.agentcore.ext.concurrency.TaskQuotaTracker;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.dto.QueryResponse;
 import com.openjiuwen.service.spec.dto.ServeRequest;
@@ -81,50 +80,30 @@ class JiuwenCoreAgentExtHandlerTest {
 
     @Test
     void streamQuery_exception_finally_releasesAll() {
-        TaskQuotaTracker quotaTracker = mock(TaskQuotaTracker.class);
         AgentInstanceManager agentManager = mock(AgentInstanceManager.class);
         ThrowingStreamAgent throwingAgent = new ThrowingStreamAgent();
         when(agentManager.acquire("c-except")).thenReturn(throwingAgent);
 
         JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityStreamAgent("unused"));
-        handler.setQuotaTracker(quotaTracker);
         handler.setAgentManager(agentManager);
 
         handler.streamQuery(request("c-except", "fail"), collectingObserver(new ArrayList<>()));
 
-        verify(quotaTracker).onTaskReleased("c-except");
         verify(agentManager).release("c-except", throwingAgent);
     }
 
     @Test
     void query_exception_finally_releasesAll() {
-        TaskQuotaTracker quotaTracker = mock(TaskQuotaTracker.class);
         AgentInstanceManager agentManager = mock(AgentInstanceManager.class);
         ThrowingInvokeAgent throwingAgent = new ThrowingInvokeAgent();
         when(agentManager.acquire("c-except-q")).thenReturn(throwingAgent);
 
         JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityInvokeAgent("unused"));
-        handler.setQuotaTracker(quotaTracker);
         handler.setAgentManager(agentManager);
 
         catchThrowable(() -> handler.query(request("c-except-q", "fail")));
 
-        verify(quotaTracker).onTaskReleased("c-except-q");
         verify(agentManager).release("c-except-q", throwingAgent);
-    }
-
-    @Test
-    void streamQuery_callsQuotaTracker_onTaskWorking() {
-        TaskQuotaTracker quotaTracker = mock(TaskQuotaTracker.class);
-        JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityStreamAgent("ok"));
-        handler.setQuotaTracker(quotaTracker);
-
-        ServeRequest req = request("c-quota", "hello");
-        req.setMetadata(Map.of("runtime.parentTaskId", "task-123"));
-
-        handler.streamQuery(req, collectingObserver(new ArrayList<>()));
-
-        verify(quotaTracker).onTaskWorking("c-quota", "task-123");
     }
 
     @Test
