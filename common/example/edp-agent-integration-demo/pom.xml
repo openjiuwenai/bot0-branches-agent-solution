@@ -44,6 +44,75 @@
             <groupId>com.openjiuwen</groupId>
             <artifactId>agent-core-java</artifactId>
             <version>${agent-core-java.version}</version>
+            <exclusions>
+                <!-- ========== A 组：RAG/检索相关 ========== -->
+                <exclusion>
+                    <groupId>org.apache.poi</groupId>
+                    <artifactId>poi-ooxml</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.milvus</groupId>
+                    <artifactId>milvus-sdk-java</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.alibaba</groupId>
+                    <artifactId>dashscope-sdk-java</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.pdfbox</groupId>
+                    <artifactId>pdfbox</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.postgresql</groupId>
+                    <artifactId>postgresql</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.pgvector</groupId>
+                    <artifactId>pgvector</artifactId>
+                </exclusion>
+                <!-- ========== B 组：Memory 相关 ========== -->
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcprov-jdk18on</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcpkix-jdk18on</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcutil-jdk18on</artifactId>
+                </exclusion>
+                <!-- ========== C 组：其他重型依赖 ========== -->
+                <exclusion>
+                    <groupId>org.apache.pulsar</groupId>
+                    <artifactId>pulsar-client</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.grpc</groupId>
+                    <artifactId>grpc-netty-shaded</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.xerial</groupId>
+                    <artifactId>sqlite-jdbc</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.openai</groupId>
+                    <artifactId>openai-java</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-exporter-otlp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-exporter-sender-jdk</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-exporter-sender-grpc-managed-channel</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- OpenJiuwen agent-service-app（A2A Runtime） -->
@@ -58,6 +127,16 @@
             <groupId>com.openjiuwen</groupId>
             <artifactId>agent-service-adapters-agentcore-ext</artifactId>
             <version>0.1.0</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.openjiuwen</groupId>
+                    <artifactId>agent-core-java</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-exporter-otlp</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- OpenJiuwen agent-service-spec（SPI 接口） -->

@@ -18,7 +18,7 @@
 FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
-COPY target/adapter-versatile-agent-java-*.jar app.jar
+COPY target/adapter-versatile-agent-java-*-exec.jar app.jar
 
 ENV VERSATILE_AGENT_PORT=8191
 EXPOSE 8191

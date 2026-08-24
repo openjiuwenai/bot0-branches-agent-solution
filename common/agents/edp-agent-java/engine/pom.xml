@@ -20,47 +20,38 @@
       <groupId>com.openjiuwen</groupId>
       <artifactId>agent-service-adapters-agentcore-ext</artifactId>
       <version>${agent-runtime-ext-java.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>com.openjiuwen</groupId>
+          <artifactId>agent-core-java</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.opentelemetry</groupId>
+          <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>com.openjiuwen</groupId>
       <artifactId>agent-core-java</artifactId>
       <version>${agent-core-java.version}</version>
       <exclusions>
+        <!-- ========== A 组：RAG/检索相关 ========== -->
         <exclusion>
-          <groupId>com.openai</groupId>
-          <artifactId>openai-java</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.apache.pulsar</groupId>
-          <artifactId>pulsar-client</artifactId>
+          <groupId>org.apache.poi</groupId>
+          <artifactId>poi-ooxml</artifactId>
         </exclusion>
         <exclusion>
           <groupId>io.milvus</groupId>
           <artifactId>milvus-sdk-java</artifactId>
         </exclusion>
         <exclusion>
-          <groupId>org.xerial</groupId>
-          <artifactId>sqlite-jdbc</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>io.grpc</groupId>
-          <artifactId>grpc-netty-shaded</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.apache.poi</groupId>
-          <artifactId>poi-ooxml</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.apache.pdfbox</groupId>
-          <artifactId>pdfbox</artifactId>
-        </exclusion>
-        <exclusion>
           <groupId>com.alibaba</groupId>
           <artifactId>dashscope-sdk-java</artifactId>
         </exclusion>
         <exclusion>
-          <groupId>org.bouncycastle</groupId>
-          <artifactId>bcprov-jdk18on</artifactId>
+          <groupId>org.apache.pdfbox</groupId>
+          <artifactId>pdfbox</artifactId>
         </exclusion>
         <exclusion>
           <groupId>org.postgresql</groupId>
@@ -69,6 +60,36 @@
         <exclusion>
           <groupId>com.pgvector</groupId>
           <artifactId>pgvector</artifactId>
+        </exclusion>
+        <!-- ========== B 组：Memory 相关 ========== -->
+        <exclusion>
+          <groupId>org.bouncycastle</groupId>
+          <artifactId>bcprov-jdk18on</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.bouncycastle</groupId>
+          <artifactId>bcpkix-jdk18on</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.bouncycastle</groupId>
+          <artifactId>bcutil-jdk18on</artifactId>
+        </exclusion>
+        <!-- ========== C 组：其他重型依赖 ========== -->
+        <exclusion>
+          <groupId>org.apache.pulsar</groupId>
+          <artifactId>pulsar-client</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.grpc</groupId>
+          <artifactId>grpc-netty-shaded</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.xerial</groupId>
+          <artifactId>sqlite-jdbc</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.openai</groupId>
+          <artifactId>openai-java</artifactId>
         </exclusion>
         <exclusion>
           <groupId>io.opentelemetry</groupId>
@@ -93,25 +114,15 @@
       <artifactId>spring-boot-starter-data-redis</artifactId>
     </dependency>
     <!--
-      agent-core 的 RedisKVStoreProvider 通过反射创建 redis.clients.jedis.Jedis / JedisCluster，
-      而 agent-core-java 发布的 POM 是不含 <dependencies> 的元数据 stub，不传递 jedis，
-      运行时不可用，故在此显式引入。
+      agent-core-java 的发布 POM 已声明 jedis 5.1.5 为 compile 依赖，
+      且未在上方 exclusion 列表中排除，会通过传递依赖正常引入，无需显式补充。
+      agent-core 的 RedisKVStoreProvider 通过反射创建 redis.clients.jedis.Jedis / JedisCluster。
     -->
-    <dependency>
-      <groupId>redis.clients</groupId>
-      <artifactId>jedis</artifactId>
-      <version>5.1.5</version>
-    </dependency>
     <!--
-      agent-core-java 的 LLM 客户端（OpenAiCompatibleModelClient 等）通过 OkHttp 调用 LLM，
       agent-core-java 的发布 POM 已声明 okhttp 4.12.0 为 compile 依赖，
-      此处显式引入以强化版本确定性（与 agent-core-java 内部使用的 okhttp 版本一致）。
+      且未在上方 exclusion 列表中排除，会通过传递依赖正常引入，无需显式补充。
+      agent-core-java 的 LLM 客户端（OpenAiCompatibleModelClient 等）通过 OkHttp 调用 LLM。
     -->
-    <dependency>
-      <groupId>com.squareup.okhttp3</groupId>
-      <artifactId>okhttp</artifactId>
-      <version>4.12.0</version>
-    </dependency>
     <!-- milvus 链路把 okio 拉到 3.6.0，与 otlp okhttp sender 所需的 3.16+ API 冲突，显式 pin -->
     <dependency>
       <groupId>com.squareup.okio</groupId>

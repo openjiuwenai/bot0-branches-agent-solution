@@ -111,6 +111,7 @@
         <artifactId>spring-boot-maven-plugin</artifactId>
         <configuration>
           <mainClass>com.openjiuwen.versatile.VersatileAgentApplication</mainClass>
+          <classifier>exec</classifier>
         </configuration>
         <executions>
           <execution>
