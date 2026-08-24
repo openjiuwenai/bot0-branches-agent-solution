@@ -246,7 +246,7 @@ class ControllerHandoffIntegrationTest {
         controllerSays(handoffLine("L1_TO_L2", "intent_flight", "flight", "agent_card_rogue", "d5"),
                 "{\"event\":\"end\"}");
         RecordingObserver observer = new RecordingObserver();
-        handler().streamQuery(request("我的工号是 990011 请保密"), observer);
+        handler().streamQuery(request("我的取件码是 990011 请勿外传"), observer);
         String payload = String.valueOf(observer.chunks.get(0).getData());
         assertThat(payload).contains("VERSATILE_HANDOFF_TARGET_NOT_ALLOWED");
         assertThat(payload).doesNotContain("990011").doesNotContain("handoff_type");
