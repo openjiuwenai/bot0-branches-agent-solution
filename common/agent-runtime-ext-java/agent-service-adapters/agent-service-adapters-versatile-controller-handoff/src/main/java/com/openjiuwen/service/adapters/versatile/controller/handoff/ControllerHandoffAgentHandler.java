@@ -166,7 +166,7 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
     /**
      * 消费控制器 SSE 流。逐行先分类：命中转调的行被抑制（不进基线 extractor，不会被
      * 映射为 TYPE_CHUNK/TYPE_INTERRUPT/TYPE_ERROR —— 识别先于异常映射，spec 2.2），
-     * 未命中行走基线 consumeLine。有命中时基线 finish() 终态事件整组抑制；
+     * 未命中的行进入基线 consumeLine。有命中时基线 finish() 终态事件整组抑制；
      * 无命中时与基线 VersatileAgentHandler.execute 行为一致。
      */
     private ControllerExecution execute(ServeRequest request, QueryStreamObserver observer) {
