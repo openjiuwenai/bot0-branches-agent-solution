@@ -18,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Set;
+import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
@@ -26,6 +27,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -46,6 +48,7 @@ class EdpAgentFactoryConcurrencyTest {
 
     private static final int THREAD_COUNT = 10;
 
+    @SuppressWarnings("java:S2142")
     private static void preserveInterrupt() {
         Thread.currentThread().interrupt();
     }
@@ -122,9 +125,12 @@ class EdpAgentFactoryConcurrencyTest {
                         barrier.await(5, TimeUnit.SECONDS);
                         Object agent = factory.create();
                         identityHashCodes.add(System.identityHashCode(agent));
-                    } catch (Exception t) {
-                        // capture any error from worker thread — test asserts firstError is null
-                        firstError.compareAndSet(null, t);
+                    } catch (InterruptedException | BrokenBarrierException | TimeoutException e) {
+                        // capture barrier errors from worker thread — test asserts firstError is null
+                        firstError.compareAndSet(null, e);
+                    } catch (IllegalStateException e) {
+                        // capture factory.create() failures from worker thread
+                        firstError.compareAndSet(null, e);
                     } finally {
                         done.countDown();
                     }
@@ -167,8 +173,10 @@ class EdpAgentFactoryConcurrencyTest {
                     try {
                         barrier.await(5, TimeUnit.SECONDS);
                         factory.create();
-                    } catch (Exception ignored) {
-                        // expected in concurrent test scenarios
+                    } catch (InterruptedException | BrokenBarrierException | TimeoutException e) {
+                        // expected barrier interruption in concurrent test scenarios
+                    } catch (IllegalStateException e) {
+                        // expected factory failure in concurrent test scenarios
                     } finally {
                         done.countDown();
                     }
@@ -195,7 +203,7 @@ class EdpAgentFactoryConcurrencyTest {
         // First call throws — lock must be released via finally
         try {
             factory.create();
-        } catch (RuntimeException expected) {
+        } catch (IllegalStateException expected) {
             // expected — verifies exception path releases the lock
         }
 

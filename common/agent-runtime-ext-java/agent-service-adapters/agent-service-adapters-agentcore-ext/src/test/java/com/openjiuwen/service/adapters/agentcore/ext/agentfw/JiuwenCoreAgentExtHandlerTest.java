@@ -6,6 +6,7 @@ package com.openjiuwen.service.adapters.agentcore.ext.agentfw;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -106,11 +107,7 @@ class JiuwenCoreAgentExtHandlerTest {
         handler.setQuotaTracker(quotaTracker);
         handler.setAgentManager(agentManager);
 
-        try {
-            handler.query(request("c-except-q", "fail"));
-        } catch (RuntimeException expected) {
-            // expected: RunnerImpl wraps IllegalStateException in RuntimeException
-        }
+        catchThrowable(() -> handler.query(request("c-except-q", "fail")));
 
         verify(quotaTracker).onTaskReleased("c-except-q");
         verify(agentManager).release("c-except-q", throwingAgent);

@@ -58,6 +58,8 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     @Autowired(required = false)
     private TaskQuotaTracker quotaTracker;
 
+    final ThreadLocal<Object> currentTaskAgent = new ThreadLocal<>();
+
     /**
      * Task-level agent cache, keyed by conversationId.
      * Populated by {@link #prepareTask(ServeRequest)}, drained by
@@ -66,12 +68,6 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
      * creating a new instance, and {@link #releaseTaskResources} skips the agent release.
      */
     private final ConcurrentHashMap<String, TaskAgentEntry> taskAgentCache = new ConcurrentHashMap<>();
-
-    final ThreadLocal<Object> currentTaskAgent = new ThreadLocal<>();
-
-    /** Cache value binding a cached agent to the token of the task that owns it. */
-    private record TaskAgentEntry(Object token, Object agent) {
-    }
 
     public JiuwenCoreAgentExtHandler(Object agent) {
         super(requireAgentInstance(agent));
@@ -88,6 +84,10 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     public JiuwenCoreAgentExtHandler(Object agent, MiddlewareAdapterRegistrar middlewareAdapterRegistrar,
             ExternalSvcAdapterRegistrar externalSvcAdapterRegistrar) {
         super(requireAgentInstance(agent), middlewareAdapterRegistrar, externalSvcAdapterRegistrar);
+    }
+
+    /** Cache value binding a cached agent to the token of the task that owns it. */
+    private record TaskAgentEntry(Object token, Object agent) {
     }
 
     @Autowired(required = false)
@@ -304,7 +304,7 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
 
     @Override
     public void completeTask(Optional<Object> taskToken) {
-        if (agentManager == null || taskToken == null || taskToken.isEmpty()) {
+        if (agentManager == null || taskToken.isEmpty()) {
             return; // nothing acquired for this task (busy rejection or singleton mode)
         }
         Object token = taskToken.get();

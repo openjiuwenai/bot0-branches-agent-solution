@@ -207,64 +207,16 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
                 HttpResponse.BodyHandlers.ofInputStream());
         assertThat(sse.statusCode()).isEqualTo(200);
 
-        String taskId = null;
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(sse.body(), StandardCharsets.UTF_8))) {
-            // Non-blocking read loop: reader.readLine() would hang forever if
-            // the server stops sending events, so poll reader.ready() instead.
-            long deadline = System.currentTimeMillis() + 10_000;
-            while (System.currentTimeMillis() < deadline && taskId == null) {
-                if (reader.ready()) {
-                    String line = reader.readLine();
-                    if (line == null) {
-                        break;
-                    }
-                    Matcher matcher = TASK_ID_PATTERN.matcher(line);
-                    if (matcher.find()) {
-                        taskId = matcher.group(1);
-                    }
-                } else {
-                    Thread.sleep(50);
-                }
-            }
-            assertThat(taskId).as("task id must appear in the early SSE events").isNotNull();
+            String taskId = readTaskIdFromSse(reader);
 
             // 2. Cancel the task through the A2A protocol (CancelTask)
-            String cancelBody = "{\"jsonrpc\":\"2.0\",\"id\":\"req-cancel\",\"method\":\"CancelTask\","
-                    + "\"params\":{\"id\":\"" + taskId + "\"}}";
-            HttpResponse<String> cancelResp = client.send(
-                    HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/a2a/"))
-                            .header("Content-Type", "application/json").timeout(Duration.ofSeconds(10))
-                            .POST(HttpRequest.BodyPublishers.ofString(cancelBody)).build(),
-                    HttpResponse.BodyHandlers.ofString());
-            assertThat(cancelResp.statusCode()).as("CancelTask must return 2xx").isEqualTo(200);
+            sendCancelTask(client, taskId);
 
             // 3. Drain the SSE stream (non-blocking): the task must reach
             // CANCELED and the stream must end
-            boolean canceledSeen = false;
-            boolean streamEnded = false;
-            long drainDeadline = System.currentTimeMillis() + 15_000;
-            while (System.currentTimeMillis() < drainDeadline && !streamEnded) {
-                if (reader.ready()) {
-                    String line = reader.readLine();
-                    if (line == null) {
-                        streamEnded = true;
-                    } else if (line.contains("TASK_STATE_CANCELED")) {
-                        canceledSeen = true;
-                    } else {
-                        Thread.onSpinWait(); /* other state line — continue */
-                    }
-                } else if (canceledSeen) {
-                    // give the server a moment to close, then re-check
-                    Thread.sleep(100);
-                } else {
-                    /* non-state line, continue */
-                    Thread.sleep(50);
-                }
-            }
-            assertThat(canceledSeen)
-                    .as("canceled task must emit a TASK_STATE_CANCELED status event")
-                    .isTrue();
+            drainSseForCanceledState(reader);
         } finally {
             GatedAgent.release();
         }
@@ -275,6 +227,69 @@ class ConcurrencyLimitedParallelE2EIntegrationTest {
                 "http://localhost:" + port + "/a2a/",
                 new HttpEntity<>(jsonRpc("SendMessage", "after-cancel", "hello"), jsonHeaders()), String.class);
         assertThat(next.getStatusCode().is2xxSuccessful()).isTrue();
+    }
+
+    /**
+     * Non-blocking read loop: {@code reader.readLine()} would hang forever if
+     * the server stops sending events, so poll {@code reader.ready()} instead.
+     */
+    private String readTaskIdFromSse(BufferedReader reader) throws Exception {
+        String taskId = null;
+        long deadline = System.currentTimeMillis() + 10_000;
+        while (System.currentTimeMillis() < deadline && taskId == null) {
+            if (reader.ready()) {
+                String line = reader.readLine();
+                if (line == null) {
+                    break;
+                }
+                Matcher matcher = TASK_ID_PATTERN.matcher(line);
+                if (matcher.find()) {
+                    taskId = matcher.group(1);
+                }
+            } else {
+                Thread.sleep(50);
+            }
+        }
+        assertThat(taskId).as("task id must appear in the early SSE events").isNotNull();
+        return taskId;
+    }
+
+    private void sendCancelTask(HttpClient client, String taskId) throws Exception {
+        String cancelBody = "{\"jsonrpc\":\"2.0\",\"id\":\"req-cancel\",\"method\":\"CancelTask\","
+                + "\"params\":{\"id\":\"" + taskId + "\"}}";
+        HttpResponse<String> cancelResp = client.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/a2a/"))
+                        .header("Content-Type", "application/json").timeout(Duration.ofSeconds(10))
+                        .POST(HttpRequest.BodyPublishers.ofString(cancelBody)).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(cancelResp.statusCode()).as("CancelTask must return 2xx").isEqualTo(200);
+    }
+
+    private void drainSseForCanceledState(BufferedReader reader) throws Exception {
+        boolean canceledSeen = false;
+        boolean streamEnded = false;
+        long drainDeadline = System.currentTimeMillis() + 15_000;
+        while (System.currentTimeMillis() < drainDeadline && !streamEnded) {
+            if (reader.ready()) {
+                String line = reader.readLine();
+                if (line == null) {
+                    streamEnded = true;
+                } else if (line.contains("TASK_STATE_CANCELED")) {
+                    canceledSeen = true;
+                } else {
+                    Thread.onSpinWait(); /* other state line — continue */
+                }
+            } else if (canceledSeen) {
+                // give the server a moment to close, then re-check
+                Thread.sleep(100);
+            } else {
+                /* non-state line, continue */
+                Thread.sleep(50);
+            }
+        }
+        assertThat(canceledSeen)
+                .as("canceled task must emit a TASK_STATE_CANCELED status event")
+                .isTrue();
     }
 
     private List<CompletableFuture<Integer>> fireRejectedRequests(ExecutorService pool) {

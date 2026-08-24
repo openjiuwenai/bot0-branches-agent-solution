@@ -85,7 +85,10 @@ public class EdpAgentFactory implements AgentFactory {
         try {
             agent.ensureInitialized();
             EdpaExtHandler.initPerTaskAgent(agent, initResult);
-        } catch (RuntimeException e) { // cleanup agent on partial init failure; re-throw to propagate
+        } catch (RuntimeException e) {
+            // Cleanup on partial init failure: destroy agent to prevent ResourceMgr leaks.
+            // Broad catch required because ensureInitialized() and initPerTaskAgent() throw
+            // various unchecked exceptions (NPE, IllegalArgumentException, framework errors).
             agent.destroy();
             throw e;
         }

@@ -50,6 +50,13 @@ class ExternalE2EIntegrationTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final Duration TIMEOUT = Duration.ofSeconds(120);
 
+    /**
+     * Upper bound for the adaptive admission tests: filling the quota needs
+     * {@code limit} concurrent real backend conversations, so limits above
+     * this bound are too slow/expensive for external E2E and are skipped.
+     */
+    private static final int MAX_AFFORDABLE_ADMISSION_LIMIT = 8;
+
     private HttpClient http;
 
     @BeforeEach
@@ -777,13 +784,6 @@ class ExternalE2EIntegrationTest {
     // --- helpers ---
 
     /**
-     * Upper bound for the adaptive admission tests: filling the quota needs
-     * {@code limit} concurrent real backend conversations, so limits above
-     * this bound are too slow/expensive for external E2E and are skipped.
-     */
-    private static final int MAX_AFFORDABLE_ADMISSION_LIMIT = 8;
-
-    /**
      * Checks whether an admission limit is configured on the live service.
      *
      * @return {@code true} if {@code max-concurrent-tasks > 0} is detected,
@@ -793,7 +793,7 @@ class ExternalE2EIntegrationTest {
         try {
             Optional<JsonNode> active = fetchActiveTasks();
             return active.isPresent() && active.get().path("maxConcurrentTasks").asInt(-1) > 0;
-        } catch (RuntimeException e) {
+        } catch (IllegalArgumentException | IllegalStateException e) {
             // safe default: treat probe failure as "no limit configured"
             return false;
         }
@@ -814,7 +814,7 @@ class ExternalE2EIntegrationTest {
             }
             int limit = active.get().path("maxConcurrentTasks").asInt(-1);
             return (limit > 0 && limit <= MAX_AFFORDABLE_ADMISSION_LIMIT) ? limit : 0;
-        } catch (RuntimeException e) {
+        } catch (IllegalArgumentException | IllegalStateException e) {
             // safe default: treat probe failure as "unlimited or unreachable"
             return 0;
         }
@@ -835,7 +835,7 @@ class ExternalE2EIntegrationTest {
             }
             int limit = active.get().path("maxConcurrentTasks").asInt(-1);
             return limit == 0 ? 0 : limit;
-        } catch (RuntimeException e) {
+        } catch (IllegalArgumentException | IllegalStateException e) {
             // safe default: treat probe failure as "unreachable"
             return 0;
         }

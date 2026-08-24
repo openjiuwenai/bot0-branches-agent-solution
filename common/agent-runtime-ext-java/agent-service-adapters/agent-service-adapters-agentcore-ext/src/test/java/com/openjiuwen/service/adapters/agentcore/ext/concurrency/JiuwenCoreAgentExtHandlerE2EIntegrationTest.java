@@ -43,6 +43,7 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -176,7 +177,7 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
         HttpHeaders headers = jsonHeaders();
 
         ExecutorService first = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
-                r -> { Thread t = new Thread(r, "ext-block"); t.setUncaughtExceptionHandler((tt, e) -> logError("throttled503", e)); return t; });
+                namedThreadFactory("ext-block", "throttled503"));
         first.submit(() -> {
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendMessage", "ext-block", "block"), headers), String.class);
@@ -219,7 +220,7 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
         HttpHeaders headers = jsonHeaders();
 
         ExecutorService slow = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
-                r -> { Thread t = new Thread(r, "ext-active"); t.setUncaughtExceptionHandler((tt, e) -> logError("activeTaskEndpoint", e)); return t; });
+                namedThreadFactory("ext-active", "activeTaskEndpoint"));
         slow.submit(() -> {
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendMessage", "ext-active", "block"), headers), String.class);
@@ -309,7 +310,7 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
 
         // Step 2: start a blocking task with different contextId → fills quota (limit=1)
         ExecutorService blocker = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
-                r -> { Thread t = new Thread(r, "ext-blocker"); t.setUncaughtExceptionHandler((tt, e) -> logError("resumeRejected", e)); return t; });
+                namedThreadFactory("ext-blocker", "resumeRejected"));
         blocker.submit(() -> {
             rest.postForEntity("http://localhost:" + port + "/a2a/",
                     new HttpEntity<>(jsonRpc("SendMessage", "ext-blocker", "block"), headers), String.class);
@@ -465,6 +466,14 @@ class JiuwenCoreAgentExtHandlerE2EIntegrationTest {
                 preserveInterrupt(); // preserve interrupt status
             }
         }
+    }
+
+    private static ThreadFactory namedThreadFactory(String name, String context) {
+        return r -> {
+            Thread t = new Thread(r, name);
+            t.setUncaughtExceptionHandler((tt, e) -> logError(context, e));
+            return t;
+        };
     }
 
     private static void logError(String context, Throwable e) {
