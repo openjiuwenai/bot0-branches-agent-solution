@@ -25,10 +25,6 @@
           <groupId>com.openjiuwen</groupId>
           <artifactId>agent-core-java</artifactId>
         </exclusion>
-        <exclusion>
-          <groupId>io.opentelemetry</groupId>
-          <artifactId>opentelemetry-exporter-otlp</artifactId>
-        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -90,10 +86,6 @@
         <exclusion>
           <groupId>com.openai</groupId>
           <artifactId>openai-java</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>io.opentelemetry</groupId>
-          <artifactId>opentelemetry-exporter-otlp</artifactId>
         </exclusion>
         <exclusion>
           <groupId>io.opentelemetry</groupId>
