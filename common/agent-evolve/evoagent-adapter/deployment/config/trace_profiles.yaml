@@ -153,7 +153,7 @@ profiles:
   # 须经转换器先扁平化为 adapter 统一 span 形状（见《EDPAgent_Java_trace_接入adapter_可行性分析》），
   # 本 profile 描述扁平化后的字段提取规则。
   edp_agent_java:
-    service_name: "edp-agent"
+    service_name: "edp_agent"
     service_language: "java"            # telemetry.sdk.language 消歧
     ingest_filter:
       include_prefixes: ["llm.", "tool.", "http.request", "chain."]

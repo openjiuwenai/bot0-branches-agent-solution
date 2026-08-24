@@ -55,6 +55,11 @@ match_tags:                              # Tags to extract from log lines
 # （PUT /api/v1/config/agents/{name}）热更新写回本文件（写回为具体值，不影响其它条目的占位）。
 agents:
   - name: "edp_agent"
+    # 多 Agent 轨迹 profile 引用：对应 trace_profiles.yaml 中的 profile 名。
+    # Java 版 EDPAgent 上报的 gen_ai.completion 无 "outputs" 键（回复文本在 content 下），
+    # 必须用 edp_agent_java profile（sub_key=content, format=json）才能取到大模型输出；
+    # 缺省/留空会回退 legacy 硬编码（取 outputs 键 → output 为 null，助手回复被丢弃）。
+    trace_profile: ${EDP_AGENT_TRACE_PROFILE:edp_agent_java}
     log_dir: ${EDP_AGENT_LOG_DIR:/data/logs/edp_agent}      # 绝对路径 → 宿主 HOST_LOG_ROOT/edp_agent
     skills_dir: ${EDP_AGENT_SKILLS_DIR:/data/skills/edp_agent}  # 绝对路径 → 宿主 HOST_SKILLS_ROOT/edp_agent
     # ── Skill backend（可选；默认 local 走宿主 bind-mount；切 jiuwenbox 走沙箱文件 API）──
