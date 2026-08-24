@@ -32,7 +32,6 @@ import java.util.Optional;
  * @since 2026-08-20
  */
 public final class TraceparentResolver {
-
     static final String TRACEPARENT_HEADER = "traceparent";
 
     private static final String VERSION_FLAGS = "01";
