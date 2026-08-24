@@ -70,7 +70,8 @@ public class OtelRemoteAgentCallerDecorator implements RemoteAgentCaller {
         long startNanos = System.nanoTime();
         // 接口不声明受检异常、实现可抛任意运行时异常——用成功标记 finally 代替 broad catch
         boolean invoked = false;
-        try {
+        // makeCurrent 让 SDK/装饰层在该线程读到 dispatch span 的上下文（SPI header 注入取值为它）
+        try (io.opentelemetry.context.Scope ignored = span.makeCurrent()) {
             CompletableFuture<RemoteCallOutcome> future = delegate.callOutcome(call, eventObserver);
             invoked = true;
             future.whenComplete((outcome, error) -> {
@@ -101,6 +102,8 @@ public class OtelRemoteAgentCallerDecorator implements RemoteAgentCaller {
         // coordinator 线程无 SessionContextHolder，SessionIdSpanProcessor 注入不到——显式补 session.id
         Optional<String> conversationId = EgressContextStash.findConversationId(call.contextId());
         conversationId.ifPresent(id -> span.setAttribute("session.id", id));
+        // dispatch 上下文单独暂存：供 SPI header 注入解析出 dispatch span 的 id（异步发送线程无线程上下文）
+        conversationId.ifPresent(id -> EgressContextStash.putOutbound(id, span.storeInContext(Context.root())));
         if (versatile) {
             span.setAttribute("openjiuwen.va.dispatch_mode", "single");
             Map<String, Object> args = parseMessage(call.message());
