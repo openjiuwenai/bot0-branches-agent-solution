@@ -420,7 +420,6 @@ bash common/agents/edp-agent-java/deploy/start.sh
 
 ### 排错
 
-- **开 OTel 后启动失败（`NoClassDefFoundError`）**：检查构建所用的 `engine/pom.xml` 是否排除了 `opentelemetry-exporter-otlp`——该 jar 为运行时必需，排除后 fat jar 缺少导出类。
 - **Collector 收不到 span**：① 确认 `OPENJIUWEN_SERVICE_OTEL_ENABLED=true`；② endpoint 协议与端口匹配（grpc→4317）；③ 请求体需带 conversationId（无会话标识的请求不产轨迹）；④ 容器内代理环境变量会劫持 Java 客户端，内网 Collector 地址需清空代理或配置 no_proxy。
 - **需要更细配置**：除环境变量外也支持 yaml 配置树 `openjiuwen.service.otel.*`（优先级：yaml > 环境变量 > 默认值，逐项回退），各项说明见 `engine/src/main/resources/application.yml` 的 OTel 注释段。
 
