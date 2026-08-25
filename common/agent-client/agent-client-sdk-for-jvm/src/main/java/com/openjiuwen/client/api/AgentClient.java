@@ -65,6 +65,16 @@ public interface AgentClient extends AutoCloseable {
     java.util.concurrent.CompletionStage<InvocationSnapshot> getInvocation(String invocationRef);
 
     /**
+     * Returns the cumulative number of raw response observations dropped by the optional observer queue.
+     * This is a best-effort diagnostic counter and does not represent server-side data loss.
+     *
+     * @return dropped observation count
+     */
+    default long rawResponseDroppedCount() {
+        return 0L;
+    }
+
+    /**
      * 声明某个会话级别的工具暴露策略，对该会话后续的所有调用生效。
      *
      * @param conversationId 会话标识

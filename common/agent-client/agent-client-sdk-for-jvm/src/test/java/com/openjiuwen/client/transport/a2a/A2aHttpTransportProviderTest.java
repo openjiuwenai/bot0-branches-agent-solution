@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.openjiuwen.client.api.AgentClient;
 import com.openjiuwen.client.api.AgentClients;
@@ -18,8 +19,10 @@ import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.api.InvocationRequest;
 import com.openjiuwen.client.api.InvocationSnapshot;
 import com.openjiuwen.client.api.ObservationTimeoutException;
+import com.openjiuwen.client.api.RetryPolicy;
 import com.openjiuwen.client.api.TaskState;
 import com.openjiuwen.client.api.ErrorCodes;
+import com.openjiuwen.client.transport.spi.RawResponseEvent;
 import com.openjiuwen.client.tool.spi.LocalToolDescriptor;
 import com.openjiuwen.client.tool.spi.ToolExecutionRecord;
 import com.openjiuwen.client.tool.spi.ToolExposurePolicy;
@@ -41,6 +44,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Flow;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -52,6 +57,60 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 class A2aHttpTransportProviderTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    @Test
+    void rawResponseObserverReceivesUnaryAndGetTaskResponses() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/a2a", exchange -> {
+            JsonNode request = MAPPER.readTree(exchange.getRequestBody());
+            String method = request.path("method").asText();
+            String state = "GetTask".equals(method) ? "TASK_STATE_COMPLETED" : "TASK_STATE_WORKING";
+            String body = "{\"jsonrpc\":\"2.0\",\"id\":\"obs\",\"result\":{\"task\":{"
+                    + "\"id\":\"task-observed\",\"contextId\":\"observed\","
+                    + "\"status\":{\"state\":\"" + state + "\"}}}}";
+            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.getResponseHeaders().set("X-Observation-Test", "yes");
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        });
+        server.start();
+        ExecutorService observerExecutor = Executors.newSingleThreadExecutor();
+        List<RawResponseEvent> observed = new CopyOnWriteArrayList<>();
+        CountDownLatch received = new CountDownLatch(2);
+        try {
+            String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
+            try (AgentClient client = AgentClients.builder()
+                    .endpointType(com.openjiuwen.client.api.EndpointType.RUNTIME)
+                    .endpointUrl(baseUrl)
+                    .rawResponseObserver(event -> {
+                        observed.add(event);
+                        received.countDown();
+                    })
+                    .rawResponseExecutor(observerExecutor)
+                    .rawResponseFlushTimeout(Duration.ofSeconds(2))
+                    .build()) {
+                InvocationCall call = client.invoke(InvocationRequest.builder()
+                        .conversationId("observed")
+                        .mode(InvocationMode.ASYNC)
+                        .input("observe")
+                        .build());
+                call.accepted().toCompletableFuture().get(3, TimeUnit.SECONDS);
+                client.getInvocation(call.invocationRef()).toCompletableFuture().get(3, TimeUnit.SECONDS);
+                assertTrue(received.await(3, TimeUnit.SECONDS));
+            }
+            assertEquals(2, observed.size());
+            assertEquals(RawResponseEvent.Source.CREATE_UNARY, observed.get(0).source());
+            assertEquals(RawResponseEvent.Source.GET_TASK, observed.get(1).source());
+            assertEquals(200, observed.get(0).httpStatus());
+            assertEquals("yes", observed.get(0).headers().get("x-observation-test").get(0));
+            assertTrue(observed.get(0).body().contains("task-observed"));
+        } finally {
+            server.stop(0);
+            observerExecutor.shutdownNow();
+        }
+    }
 
     @Test
     void runtimeBlockingNonTerminalResponseAutomaticallyPollsGetTask() throws Exception {
@@ -477,6 +536,51 @@ class A2aHttpTransportProviderTest {
         } finally {
             server.stop(0);
         }
+    }
+
+    @Test
+    void rawResponseObserverReceivesCompleteSseBlocksForCreateAndResume() throws Exception {
+        AtomicInteger sendMessageCalls = new AtomicInteger();
+        AtomicInteger streamingResumeCalls = new AtomicInteger();
+        AtomicInteger getTaskCalls = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/a2a", exchange -> handleStreamingResume(exchange, sendMessageCalls,
+                streamingResumeCalls, getTaskCalls));
+        server.start();
+        ExecutorService observerExecutor = Executors.newSingleThreadExecutor();
+        List<RawResponseEvent> observed = new CopyOnWriteArrayList<>();
+        CountDownLatch received = new CountDownLatch(2);
+        String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
+        A2aHttpTransportProvider transport = new A2aHttpTransportProvider(baseUrl, MAPPER,
+                Duration.ofSeconds(5), RuntimeEndpointPolicy.INSTANCE, Duration.ofSeconds(5),
+                RetryPolicy.defaults(), event -> {
+                    observed.add(event);
+                    received.countDown();
+                }, observerExecutor, 100, Duration.ofSeconds(2));
+        try (AgentClient client = AgentClients.builder().transport(transport).build()) {
+            InvocationCall initial = client.invoke(InvocationRequest.builder()
+                    .conversationId("observe-stream")
+                    .mode(InvocationMode.STREAMING)
+                    .input("need user input")
+                    .build());
+            AtomicReference<InvocationCall> continuation = new AtomicReference<>();
+            CountDownLatch prompted = new CountDownLatch(1);
+            initial.events().subscribe(streamingPromptSubscriber(client, initial, continuation, prompted));
+            assertTrue(prompted.await(5, TimeUnit.SECONDS));
+            InvocationCall resumed = continuation.get();
+            assertNotNull(resumed);
+            assertEquals(TaskState.COMPLETED,
+                    resumed.completion().toCompletableFuture().get(5, TimeUnit.SECONDS).state());
+            assertTrue(received.await(3, TimeUnit.SECONDS));
+        } finally {
+            server.stop(0);
+            observerExecutor.shutdownNow();
+        }
+        assertEquals(2, observed.size());
+        assertEquals(RawResponseEvent.Source.CREATE_STREAM, observed.get(0).source());
+        assertEquals(RawResponseEvent.Source.RESUME_STREAM, observed.get(1).source());
+        assertTrue(observed.get(0).body().contains("data:"));
+        assertTrue(observed.get(0).body().contains("task-streaming"));
     }
 
     @Test

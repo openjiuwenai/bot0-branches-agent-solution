@@ -11,6 +11,8 @@ import com.openjiuwen.client.spi.Governance;
 import com.openjiuwen.client.state.spi.ClientStateStore;
 import com.openjiuwen.client.tool.spi.LocalToolRegistry;
 import com.openjiuwen.client.transport.spi.CredentialProvider;
+import com.openjiuwen.client.transport.spi.RawFrameConsumer;
+import com.openjiuwen.client.transport.spi.RawResponseObserver;
 import com.openjiuwen.client.transport.spi.TransportProvider;
 import com.openjiuwen.client.transport.a2a.GatewayTransportProvider;
 import com.openjiuwen.client.transport.a2a.RuntimeTransportProvider;
@@ -19,6 +21,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
+import java.time.Duration;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -59,6 +63,11 @@ public final class AgentClients {
         private Governance.ApprovalProvider approvalProvider;
         private ExecutorService toolExecutor;
         private CredentialProvider credentialProvider;
+        private RawFrameConsumer rawFrameConsumer;
+        private RawResponseObserver rawResponseObserver;
+        private Executor rawResponseExecutor;
+        private int rawResponseQueueCapacity = 65536;
+        private Duration rawResponseFlushTimeout = Duration.ofSeconds(5);
         private EndpointType endpointType = EndpointType.GATEWAY;
         private String endpointUrl;
         private RetryPolicy retryPolicy = RetryPolicy.defaults();
@@ -123,6 +132,53 @@ public final class AgentClients {
          */
         public Builder credentialProvider(CredentialProvider v) {
             this.credentialProvider = v;
+            return this;
+        }
+
+        /**
+         * 设置原始 wire 帧旁路消费器。
+         *
+         * <p>仅在使用内置 A2A Transport（通过 {@link #endpointUrl} 构建）时生效；自定义
+         * {@link #transport} 的实现若需要该能力，应自行注入并消费。
+         *
+         * @param v 原始帧消费器
+         * @return 本构造器
+         */
+        public Builder rawFrameConsumer(RawFrameConsumer v) {
+            this.rawFrameConsumer = v;
+            return this;
+        }
+
+        /** Sets the asynchronous structured wire-response observer. */
+        public Builder rawResponseObserver(RawResponseObserver v) {
+            this.rawResponseObserver = v;
+            return this;
+        }
+
+        /** Sets the executor used for observation callbacks. Both observer and executor are required to enable it. */
+        public Builder rawResponseExecutor(Executor v) {
+            this.rawResponseExecutor = v;
+            return this;
+        }
+
+        /**
+         * Sets the bounded best-effort observation queue capacity.
+         * When full, the newest observation is dropped immediately; the HTTP/SSE path is never blocked.
+         */
+        public Builder rawResponseQueueCapacity(int v) {
+            if (v < 1) {
+                throw new IllegalArgumentException("raw response queue capacity must be positive");
+            }
+            this.rawResponseQueueCapacity = v;
+            return this;
+        }
+
+        /** Sets the maximum time close() waits for queued observations to drain. */
+        public Builder rawResponseFlushTimeout(Duration v) {
+            this.rawResponseFlushTimeout = Objects.requireNonNull(v, "rawResponseFlushTimeout");
+            if (v.isNegative()) {
+                throw new IllegalArgumentException("rawResponseFlushTimeout must not be negative");
+            }
             return this;
         }
 
@@ -193,14 +249,34 @@ public final class AgentClients {
             if (transport != null && endpointUrl != null) {
                 throw new IllegalArgumentException("transport and endpointUrl are mutually exclusive");
             }
+            if (transport != null && (rawFrameConsumer != null || rawResponseObserver != null
+                    || rawResponseExecutor != null)) {
+                throw new IllegalArgumentException(
+                        "raw response observation must be configured on the custom TransportProvider");
+            }
             TransportProvider resolvedTransport = transport;
             if (resolvedTransport == null) {
                 if (endpointUrl == null || endpointUrl.isBlank()) {
                     throw new NullPointerException("transport or endpointUrl must be provided");
                 }
+                if (rawFrameConsumer != null && rawResponseObserver != null) {
+                    throw new IllegalArgumentException("rawFrameConsumer and rawResponseObserver are mutually exclusive");
+                }
+                RawResponseObserver observer = rawResponseObserver;
+                if (rawFrameConsumer != null) {
+                    observer = event -> rawFrameConsumer.accept(event.invocationRef(), event.conversationId(),
+                            event.body(), event.source().name());
+                }
+                if (observer != null && rawResponseExecutor == null && rawFrameConsumer == null) {
+                    throw new IllegalArgumentException("rawResponseExecutor is required when observation is enabled");
+                }
+                Executor observerExecutor = rawResponseExecutor != null ? rawResponseExecutor
+                        : java.util.concurrent.ForkJoinPool.commonPool();
                 resolvedTransport = endpointType == EndpointType.RUNTIME
-                        ? new RuntimeTransportProvider(endpointUrl, retryPolicy)
-                        : new GatewayTransportProvider(endpointUrl, retryPolicy);
+                        ? new RuntimeTransportProvider(endpointUrl, retryPolicy, observer, observerExecutor,
+                                rawResponseQueueCapacity, rawResponseFlushTimeout)
+                        : new GatewayTransportProvider(endpointUrl, retryPolicy, observer, observerExecutor,
+                                rawResponseQueueCapacity, rawResponseFlushTimeout);
             }
             LocalToolRegistry reg = (registry != null) ? registry : new DefaultToolRegistry();
             ClientStateStore store = (stateStore != null) ? stateStore : new InMemoryStateStore();

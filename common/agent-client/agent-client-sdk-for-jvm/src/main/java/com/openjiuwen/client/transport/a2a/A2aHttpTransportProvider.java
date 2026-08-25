@@ -15,6 +15,8 @@ import com.openjiuwen.client.api.TaskState;
 import com.openjiuwen.client.api.calltree.CallTreeSnapshot;
 import com.openjiuwen.client.transport.spi.CallTreeTransportProvider;
 import com.openjiuwen.client.transport.spi.InvocationOutputTransportProvider;
+import com.openjiuwen.client.transport.spi.RawResponseEvent;
+import com.openjiuwen.client.transport.spi.RawResponseObserver;
 import com.openjiuwen.client.transport.spi.TransportProvider;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -110,6 +112,8 @@ public class A2aHttpTransportProvider
     private final Duration blockingObservationTimeout;
     private final RetryPolicy retryPolicy;
     private final EndpointPolicy endpointPolicy;
+    private final RawResponseDispatcher rawResponseDispatcher;
+    private final Duration rawResponseFlushTimeout;
 
     private final ConcurrentMap<String, Channel> byInvocationRef = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Channel> byTaskRef = new ConcurrentHashMap<>();
@@ -170,7 +174,16 @@ public class A2aHttpTransportProvider
     A2aHttpTransportProvider(String baseUrl, ObjectMapper mapper, Duration sseIdleTimeout,
             EndpointPolicy endpointPolicy, RetryPolicy retryPolicy) {
         this(baseUrl, mapper, sseIdleTimeout, endpointPolicy,
-                DEFAULT_BLOCKING_OBSERVATION_TIMEOUT, retryPolicy);
+                DEFAULT_BLOCKING_OBSERVATION_TIMEOUT, retryPolicy, null, null, 1, Duration.ZERO);
+    }
+
+    A2aHttpTransportProvider(String baseUrl, ObjectMapper mapper, Duration sseIdleTimeout,
+            EndpointPolicy endpointPolicy, RetryPolicy retryPolicy, RawResponseObserver observer,
+            java.util.concurrent.Executor observerExecutor, int observerQueueCapacity,
+            Duration observerFlushTimeout) {
+        this(baseUrl, mapper, sseIdleTimeout, endpointPolicy,
+                DEFAULT_BLOCKING_OBSERVATION_TIMEOUT, retryPolicy, observer, observerExecutor,
+                observerQueueCapacity, observerFlushTimeout);
     }
 
     A2aHttpTransportProvider(String baseUrl, ObjectMapper mapper, Duration sseIdleTimeout,
@@ -181,12 +194,23 @@ public class A2aHttpTransportProvider
 
     A2aHttpTransportProvider(String baseUrl, ObjectMapper mapper, Duration sseIdleTimeout,
             EndpointPolicy endpointPolicy, Duration blockingObservationTimeout, RetryPolicy retryPolicy) {
+        this(baseUrl, mapper, sseIdleTimeout, endpointPolicy,
+                blockingObservationTimeout, retryPolicy, null, null, 1, Duration.ZERO);
+    }
+
+    A2aHttpTransportProvider(String baseUrl, ObjectMapper mapper, Duration sseIdleTimeout,
+            EndpointPolicy endpointPolicy, Duration blockingObservationTimeout, RetryPolicy retryPolicy,
+            RawResponseObserver observer, java.util.concurrent.Executor observerExecutor,
+            int observerQueueCapacity, Duration observerFlushTimeout) {
         String normalized = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.endpoint = URI.create(normalized.endsWith("/a2a") ? normalized : normalized + "/a2a");
         this.sseIdleTimeout = sseIdleTimeout;
         this.blockingObservationTimeout = blockingObservationTimeout;
         this.retryPolicy = java.util.Objects.requireNonNull(retryPolicy, "retryPolicy");
         this.endpointPolicy = endpointPolicy;
+        this.rawResponseFlushTimeout = observerFlushTimeout == null ? Duration.ZERO : observerFlushTimeout;
+        this.rawResponseDispatcher = observer == null ? null
+                : new RawResponseDispatcher(observer, observerExecutor, observerQueueCapacity);
         this.io = new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
                 new SynchronousQueue<>(), daemonFactory("a2a-transport-io"));
         this.scheduler = Executors.newSingleThreadScheduledExecutor(daemonFactory("a2a-transport-watchdog"));
@@ -283,7 +307,8 @@ public class A2aHttpTransportProvider
         if (cmd.mode() == InvocationMode.STREAMING) {
             return sendResumeStreaming(ch, sink, body, credential, snapshotRef);
         }
-        return sendUnary(resolvedChannel, sink, body, credential, snapshotRef).thenCompose(snapshot -> {
+        return sendUnary(resolvedChannel, sink, body, credential, snapshotRef,
+                RawResponseEvent.Source.RESUME_UNARY).thenCompose(snapshot -> {
             if (cmd.mode() != InvocationMode.BLOCKING
                     || snapshot == null || snapshot.state() == TaskState.INPUT_REQUIRED
                     || snapshot.terminal() || resolvedChannel.taskRef == null) {
@@ -320,6 +345,11 @@ public class A2aHttpTransportProvider
         if (ch != null) {
             cancelLocalObservation(ch);
         }
+    }
+
+    /** Returns the cumulative number of raw response observations dropped by the bounded queue. */
+    public long rawResponseDroppedCount() {
+        return rawResponseDispatcher == null ? 0L : rawResponseDispatcher.droppedCount();
     }
 
     @Override
@@ -367,6 +397,9 @@ public class A2aHttpTransportProvider
         byTaskRef.clear();
         completedTrees.clear();
         completedOutputs.clear();
+        if (rawResponseDispatcher != null) {
+            rawResponseDispatcher.close(rawResponseFlushTimeout);
+        }
         scheduler.shutdownNow();
         io.shutdownNow();
     }
@@ -419,19 +452,25 @@ public class A2aHttpTransportProvider
                         return;
                     }
                     if (resp.statusCode() / 100 != 2) {
-                        A2aTransportException e = governanceError(resp.statusCode(), readAll(resp.body()));
+                        String errorBody = readAll(resp.body());
+                        emitRawResponse(ch, RawResponseEvent.Source.RESUME_STREAM, resp.statusCode(),
+                                resp.headers(), errorBody, null, false);
+                        A2aTransportException e = governanceError(resp.statusCode(), errorBody);
                         ack.completeExceptionally(e);
                         failStream(sink, e);
                         return;
                     }
                     A2aTransportException notStreaming = rejectIfNotStreaming(resp).orElse(null);
                     if (notStreaming != null) {
-                        closeQuietly(resp.body());
+                        String responseBody = readAll(resp.body());
+                        emitRawResponse(ch, RawResponseEvent.Source.RESUME_STREAM, resp.statusCode(),
+                                resp.headers(), responseBody, null, false);
                         ack.completeExceptionally(notStreaming);
                         failStream(sink, notStreaming);
                         return;
                     }
-                    io.execute(() -> readResumeSse(ch, sink, resp.body(), ack, snapshotRef));
+                    io.execute(() -> readResumeSse(ch, sink, resp.body(), ack, snapshotRef,
+                            resp.statusCode(), resp.headers()));
                 });
         return ack;
     }
@@ -449,11 +488,12 @@ public class A2aHttpTransportProvider
      * @param snapshotRef 返回快照使用的 invocationRef
      */
     private void readResumeSse(Channel ch, Channel sink, InputStream in,
-                               CompletableFuture<InvocationSnapshot> ack, String snapshotRef) {
+                               CompletableFuture<InvocationSnapshot> ack, String snapshotRef,
+                               int httpStatus, java.net.http.HttpHeaders headers) {
         ch.touch();
         ch.idleTimedOut.set(false);
         ScheduledFuture<?> watchdog = armWatchdog(ch, in);
-        ResumeTail tail = readResumeLines(ch, sink, in, ack, snapshotRef);
+        ResumeTail tail = readResumeLines(ch, sink, in, ack, snapshotRef, httpStatus, headers);
         if (watchdog != null) {
             watchdog.cancel(false);
         }
@@ -475,15 +515,19 @@ public class A2aHttpTransportProvider
      * @return 流尾观测结果（最后帧与读取异常）
      */
     private ResumeTail readResumeLines(Channel ch, Channel sink, InputStream in,
-                                       CompletableFuture<InvocationSnapshot> ack, String snapshotRef) {
+                                       CompletableFuture<InvocationSnapshot> ack, String snapshotRef,
+                                       int httpStatus, java.net.http.HttpHeaders headers) {
         A2aJsonCodec.Frame[] lastFrame = {null};
         Throwable failure = null;
         try (BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
             StringBuilder data = new StringBuilder();
+            StringBuilder eventBlock = new StringBuilder();
             String line;
             while ((line = r.readLine()) != null && !ack.isDone()) {
                 ch.touch();
-                Optional<A2aJsonCodec.Frame> parsed = onResumeLine(ch, sink, data, line);
+                eventBlock.append(line).append('\n');
+                Optional<A2aJsonCodec.Frame> parsed = onResumeLine(ch, sink, data, eventBlock, line,
+                        httpStatus, headers);
                 if (parsed.isPresent()) {
                     lastFrame[0] = parsed.get();
                     if (maybeSettleResume(ch, ack, snapshotRef, parsed.get())) {
@@ -494,7 +538,8 @@ public class A2aHttpTransportProvider
             // 流正常关闭但未到终态/INPUT_REQUIRED：尝试最后一帧结算，否则走查询兜底。
             // 已结算（终态/等待点触发了 break）则不再 flush，避免向已关闭的 publisher 投递。
             if (!ack.isDone()) {
-                flushResumeFrame(ch, sink, data).ifPresent(f -> lastFrame[0] = f);
+                flushResumeFrame(ch, sink, data, eventBlock, httpStatus, headers)
+                        .ifPresent(f -> lastFrame[0] = f);
             }
         } catch (IOException | RuntimeException e) {
             failure = e;
@@ -511,9 +556,10 @@ public class A2aHttpTransportProvider
      * @param line 当前 SSE 行
      * @return 空行触发并解析出的帧；其他情况为空
      */
-    private Optional<A2aJsonCodec.Frame> onResumeLine(Channel ch, Channel sink, StringBuilder data, String line) {
+    private Optional<A2aJsonCodec.Frame> onResumeLine(Channel ch, Channel sink, StringBuilder data,
+            StringBuilder eventBlock, String line, int httpStatus, java.net.http.HttpHeaders headers) {
         if (line.isEmpty()) {
-            return flushResumeFrame(ch, sink, data);
+            return flushResumeFrame(ch, sink, data, eventBlock, httpStatus, headers);
         }
         if (line.startsWith("data:")) {
             data.append(line.substring(5).trim());
@@ -563,12 +609,17 @@ public class A2aHttpTransportProvider
      * @param data 累积的 data 行内容（会被清空）
      * @return 解析出的帧；无内容时为空
      */
-    private Optional<A2aJsonCodec.Frame> flushResumeFrame(Channel ch, Channel sink, StringBuilder data) {
+    private Optional<A2aJsonCodec.Frame> flushResumeFrame(Channel ch, Channel sink, StringBuilder data,
+            StringBuilder eventBlock, int httpStatus, java.net.http.HttpHeaders headers) {
         if (data.length() == 0) {
+            eventBlock.setLength(0);
             return Optional.empty();
         }
         String json = data.toString();
         data.setLength(0);
+        String wireBlock = eventBlock.length() == 0 ? json : eventBlock.toString();
+        eventBlock.setLength(0);
+        emitRawResponse(ch, RawResponseEvent.Source.RESUME_STREAM, httpStatus, headers, wireBlock, null, false);
         JsonNode result = extractResult(codec.readTree(json));
         A2aJsonCodec.Frame f = codec.parseFrame(result).orElse(null);
         bindTaskRef(ch, f);
@@ -647,7 +698,8 @@ public class A2aHttpTransportProvider
      * @return 完整下一状态快照
      */
     private CompletionStage<InvocationSnapshot> sendUnary(Channel ch, Channel sink, String body,
-                                                         String credential, String snapshotRef) {
+                                                         String credential, String snapshotRef,
+                                                         RawResponseEvent.Source source) {
         HttpRequest req = base("application/json", credential, true)
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build();
@@ -665,6 +717,7 @@ public class A2aHttpTransportProvider
                         }
                         return;
                     }
+                    emitRawResponse(ch, source, resp.statusCode(), resp.headers(), resp.body(), null, false);
                     if (resp.statusCode() / 100 != 2) {
                         A2aTransportException e = governanceError(resp.statusCode(), resp.body());
                         ack.completeExceptionally(e);
@@ -729,7 +782,8 @@ public class A2aHttpTransportProvider
      * @param credential 凭据
      */
     private void startUnaryCreate(Channel ch, String body, String credential) {
-        sendUnary(ch, ch, body, credential, ch.invocationRef).whenComplete((snap, ex) -> {
+        sendUnary(ch, ch, body, credential, ch.invocationRef,
+                RawResponseEvent.Source.CREATE_UNARY).whenComplete((snap, ex) -> {
             if (ex != null || snap == null) {
                 return; // 失败已由 sendUnary 传播到事件流
             }
@@ -887,18 +941,23 @@ public class A2aHttpTransportProvider
                         return;
                     }
                     if (resp.statusCode() / 100 != 2) {
-                        onCreateHttpError(ch, governanceError(resp.statusCode(), readAll(resp.body())));
+                        String errorBody = readAll(resp.body());
+                        emitRawResponse(ch, RawResponseEvent.Source.CREATE_STREAM, resp.statusCode(),
+                                resp.headers(), errorBody, null, false);
+                        onCreateHttpError(ch, governanceError(resp.statusCode(), errorBody));
                         return;
                     }
                     // 声明了 STREAMING 却拿到非流式响应：明确报错，不静默降级（FEAT-006 §5.1.4）。
                     // 否则读循环找不到任何 data: 行，表现为一条诡异的空流，问题被掩盖。
                     A2aTransportException notStreaming = rejectIfNotStreaming(resp).orElse(null);
                     if (notStreaming != null) {
-                        closeQuietly(resp.body());
+                        String responseBody = readAll(resp.body());
+                        emitRawResponse(ch, RawResponseEvent.Source.CREATE_STREAM, resp.statusCode(),
+                                resp.headers(), responseBody, null, false);
                         failStream(ch, notStreaming);
                         return;
                     }
-                    io.execute(() -> readSse(ch, resp.body(), false));
+                    io.execute(() -> readSse(ch, resp.body(), false, resp.statusCode(), resp.headers()));
                 });
     }
 
@@ -923,7 +982,8 @@ public class A2aHttpTransportProvider
                 null, ErrorCodes.STREAMING_UNAVAILABLE, resp.statusCode(), false));
     }
 
-    private void readSse(Channel ch, InputStream in, boolean subscription) {
+    private void readSse(Channel ch, InputStream in, boolean subscription, int httpStatus,
+            java.net.http.HttpHeaders headers) {
         ch.activeInput.set(in);
         ch.touch();
         ch.idleTimedOut.set(false);
@@ -933,12 +993,14 @@ public class A2aHttpTransportProvider
         int acceptedFrames = 0;
         try (BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
             StringBuilder data = new StringBuilder();
+            StringBuilder eventBlock = new StringBuilder();
             String eventId = null;
             String line;
             while ((line = r.readLine()) != null) {
                 ch.touch();
+                eventBlock.append(line).append('\n');
                 if (line.isEmpty()) {
-                    if (flushFrame(ch, data, eventId, subscription)) {
+                    if (flushFrame(ch, data, eventId, subscription, eventBlock, httpStatus, headers)) {
                         acceptedFrames++;
                     }
                     eventId = null;
@@ -951,7 +1013,7 @@ public class A2aHttpTransportProvider
                     continue;
                 }
             }
-            if (flushFrame(ch, data, eventId, subscription)) {
+            if (flushFrame(ch, data, eventId, subscription, eventBlock, httpStatus, headers)) {
                 acceptedFrames++;
             }
             if (subscription && acceptedFrames > 0) {
@@ -1073,12 +1135,17 @@ public class A2aHttpTransportProvider
                 return;
             }
             if (resp.statusCode() / 100 != 2) {
-                onSubscriptionFailure(ch, reason, governanceError(resp.statusCode(), readAll(resp.body())));
+                String errorBody = readAll(resp.body());
+                emitRawResponse(ch, RawResponseEvent.Source.SUBSCRIBE, resp.statusCode(),
+                        resp.headers(), errorBody, null, true);
+                onSubscriptionFailure(ch, reason, governanceError(resp.statusCode(), errorBody));
                 return;
             }
             String contentType = resp.headers().firstValue("Content-Type").orElse("");
             if (contentType.toLowerCase(java.util.Locale.ROOT).contains("application/json")) {
                 String body = readAll(resp.body());
+                emitRawResponse(ch, RawResponseEvent.Source.SUBSCRIBE, resp.statusCode(),
+                        resp.headers(), body, null, true);
                 try {
                     extractResult(codec.readTree(body));
                     onObservationFailure(ch, reason, new IllegalStateException("SubscribeToTask returned JSON"));
@@ -1098,7 +1165,7 @@ public class A2aHttpTransportProvider
                 return;
             }
             ch.recovering.set(false);
-            io.execute(() -> readSse(ch, resp.body(), true));
+            io.execute(() -> readSse(ch, resp.body(), true, resp.statusCode(), resp.headers()));
         });
     }
 
@@ -1346,12 +1413,36 @@ public class A2aHttpTransportProvider
         return (msg != null && !msg.isBlank()) ? msg : cur.getClass().getSimpleName();
     }
 
-    private boolean flushFrame(Channel ch, StringBuilder data, String eventId, boolean replayed) {
+    private void emitRawResponse(Channel ch, RawResponseEvent.Source source, int status,
+            java.net.http.HttpHeaders headers, String body, String eventId, boolean replayed) {
+        emitRawResponse(ch == null ? null : ch.invocationRef, ch == null ? null : ch.conversationId,
+                ch == null ? null : ch.taskRef, source, status, headers, body, eventId, replayed);
+    }
+
+    private void emitRawResponse(String invocationRef, String conversationId, String taskRef,
+            RawResponseEvent.Source source, int status, java.net.http.HttpHeaders headers,
+            String body, String eventId, boolean replayed) {
+        if (rawResponseDispatcher == null || body == null) {
+            return;
+        }
+        rawResponseDispatcher.offer(new RawResponseEvent(invocationRef, conversationId, taskRef,
+                endpointPolicy.type(), source, status,
+                headers == null ? java.util.Map.of() : headers.map(), body, eventId, replayed,
+                java.time.Instant.now(), 0L));
+    }
+
+    private boolean flushFrame(Channel ch, StringBuilder data, String eventId, boolean replayed,
+            StringBuilder eventBlock, int httpStatus, java.net.http.HttpHeaders headers) {
         if (data.length() == 0) {
+            eventBlock.setLength(0);
             return false;
         }
         String json = data.toString();
         data.setLength(0);
+        String wireBlock = eventBlock.length() == 0 ? json : eventBlock.toString();
+        eventBlock.setLength(0);
+        emitRawResponse(ch, replayed ? RawResponseEvent.Source.SUBSCRIBE : RawResponseEvent.Source.CREATE_STREAM,
+                httpStatus, headers, wireBlock, eventId, replayed);
         if (endpointPolicy.cursorReplaySupported() && eventId != null && !eventId.isBlank()
                 && ch.seenEventIds.contains(eventId)) {
             return false;
@@ -1402,6 +1493,11 @@ public class A2aHttpTransportProvider
                 .build();
         return http.sendAsync(httpReq, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
                 .thenApply(resp -> {
+                    emitRawResponse(channel == null ? invocationRef : channel.invocationRef,
+                            channel == null ? null : channel.conversationId,
+                            channel == null ? (req.path("params").path("id").asText(null)) : channel.taskRef,
+                            RawResponseEvent.Source.GET_TASK, resp.statusCode(),
+                            resp.headers(), resp.body(), null, false);
                     if (resp.statusCode() / 100 != 2) {
                         throw governanceError(resp.statusCode(), resp.body());
                     }
