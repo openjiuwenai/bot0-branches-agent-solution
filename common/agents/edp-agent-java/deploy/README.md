@@ -381,6 +381,49 @@ docker logs edp-agent | grep -i "container.*acquire"
 - **沙箱创建超时**：增大 `EDPA_SANDBOX_CREATE_TIMEOUT`（默认30秒），或检查沙箱服务资源是否充足。
 - **降级到本地执行**：`EDPA_SANDBOX_FALLBACK_ON_FAILURE=true`（默认）时，沙箱不可用会自动降级。设为 `false` 可强制隔离语义，沙箱不可用时直接报错。
 
+## 5c. OTel 轨迹上报配置
+
+EDPA 支持将 Agent 运行轨迹（运行入口、模型调用、工具调用、下游委托）以标准 OpenTelemetry span 树经 OTLP 上报外部 Collector，并在 A2A 出站调用时自动携带 W3C `traceparent` header 实现跨进程 trace 串联（DFX-001，下游标准 OTel 实现可零定制续根）。能力由 `agent-service-adapters-agentcore-ext` 的 `middleware/otel` 提供，**默认关闭**，无需引入新依赖。
+
+### 启用步骤
+
+#### 步骤 1：准备 OTLP Collector
+
+自备一个标准 OTLP 接收端（gRPC 4317 / HTTP 4318），确认 EDP 容器到 Collector 网络可路由。同一 Docker 主机时建议将 Collector 容器加入 `agent-net`。
+
+#### 步骤 2：编辑 `.env`
+
+```dotenv
+# 开启 OTel 轨迹上报
+OPENJIUWEN_SERVICE_OTEL_ENABLED=true
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+OTEL_SERVICE_NAME=edp-agent
+# 可选
+# OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer <token>
+# OTEL_EXPORTER_OTLP_TIMEOUT=10000
+# OTEL_SERVICE_VERSION=1.0.0
+# OTEL_SERVICE_INSTANCE_ID=edp-01
+# OTEL_TRACES_SAMPLER_ARG=1.0
+```
+
+> **注意**：`OTEL_EXPORTER_OTLP_ENDPOINT` 不要填写 `localhost` 或 `127.0.0.1`，在容器内它指向 EDP 容器自身。同一 Docker 主机使用容器名，跨主机使用可路由的 DNS/IP。
+
+#### 步骤 3：重启并验证
+
+```bash
+bash common/agents/edp-agent-java/deploy/stop.sh
+bash common/agents/edp-agent-java/deploy/start.sh
+```
+
+发送一条业务请求后，在 Collector 侧应看到同一 trace 下的 span 树：`http.request → chain.EDPAgent → llm.<model> / tool.<name>`，每个 span 带 `session.id`；触发 versatile 委托时出现 `service.versatile_adapter` span，且出站请求 `traceparent` header 中的 span_id 与该 dispatch span 一致。
+
+### 排错
+
+- **开 OTel 后启动失败（`NoClassDefFoundError`）**：检查构建所用的 `engine/pom.xml` 是否排除了 `opentelemetry-exporter-otlp`——该 jar 为运行时必需，排除后 fat jar 缺少导出类。
+- **Collector 收不到 span**：① 确认 `OPENJIUWEN_SERVICE_OTEL_ENABLED=true`；② endpoint 协议与端口匹配（grpc→4317）；③ 请求体需带 conversationId（无会话标识的请求不产轨迹）；④ 容器内代理环境变量会劫持 Java 客户端，内网 Collector 地址需清空代理或配置 no_proxy。
+- **需要更细配置**：除环境变量外也支持 yaml 配置树 `openjiuwen.service.otel.*`（优先级：yaml > 环境变量 > 默认值，逐项回退），各项说明见 `engine/src/main/resources/application.yml` 的 OTel 注释段。
+
 ## 6. EDP 与 adapter 的网络契约
 
 ### 同一台 Docker 主机
