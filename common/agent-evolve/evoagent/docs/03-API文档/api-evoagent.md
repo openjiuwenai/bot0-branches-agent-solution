@@ -179,6 +179,69 @@ curl -X POST http://localhost:8000/evaluate/dataset \
 
 SSE 通用格式见 §4.2。progress 事件 data:`{phase, done, total}`,phase ∈ {ingest, scoring, aggregate};终态 `completed`/`error`。
 
+### 1.6 提交 Agent-as-a-judge 评估 POST /evaluate/agent-judge
+
+
+**请求体** `AgentJudgeRequest`
+
+| 字段 | 类型 | 必填 | 默认 | 说明 |
+| --- | --- |:---:| --- | --- |
+| `trajectory_path` | string | ✓ | — | 轨迹 JSON 文件的服务器路径 |
+| `preset` | string | ✓ | — | 预置维度组合(如 `default` / `jiuwenswarm_default`) |
+| `skill_names` | string[] | ✓ | — | skill 名列表(min 1) |
+| `expected_result` | object \| null | | null | 期望结果 |
+| `runtime` | `"claude"` \| `"codex"` \| `"jiuwenswarm"` \| null | | null | 裁判 Agent CLI;缺省按配置 |
+| `tool_allowlist` | string[] \| null | | null | 裁判子进程工具白名单 |
+| `skill_source` | `"local"` \| `"adapter"` \| `"none"` | | `"none"` | 维度 helper skill 挂载来源 |
+| `skill_root` | string \| null | | null | `local` 模式的 skill 根目录 |
+| `max_concurrent` | int \| null | | null | 并发维度数(默认 6) |
+| `run_timeout` | float \| null | | null | 单维度超时秒数(默认 300) |
+| `keep_on_error` | bool | | false | 维度失败是否保留判定 |
+| `extra_env` | object \| null | | null | 注入裁判子进程的环境变量 |
+| `agent_profile` | string \| null | | null | `jiuwenswarm` 运行时的 ACP agent 配置名(claude/codex 忽略) |
+| `trajectory_budget` | int \| null | | `4000` | 压缩轨迹 token 预算(>0);超预算报 `prompt_budget_exceeded` |
+| `dimension_thresholds` | object | ✓ | — | 各维度阈值(0-1);`is_pass` = 全部维度 ≥ 阈值 |
+
+**响应** `200` `AgentJudgeSubmitResponse`:`job_id`、`status`。
+
+**状态码**:200、422(轨迹文件不存在/格式无效/messages 空/preset 未知)、500(评估失败)。
+
+```bash
+curl -X POST http://localhost:8000/evaluate/agent-judge \
+  -H "Content-Type: application/json" \
+  -d '{
+    "trajectory_path": "/data/t.json",
+    "preset": "default",
+    "skill_names": ["s1"],
+    "dimension_thresholds": {"task_completion": 0.8}
+  }'
+```
+
+### 1.7 查询 Agent-as-a-judge 任务 GET /evaluate/agent-judge/jobs/{job_id}
+
+**响应** `200` `JobResponse`(与 dataset 同形:`job_id`、`status`、`progress`、`result`、`error`)。`progress` 为 `{phase:"judge", done, total}`。
+
+`result`(`AgentJudgeResultBody`)结构:
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `score` | float | 综合分 [0,1](确定性 WeightedSumScorer 计算) |
+| `is_pass` | bool | 全部维度 ≥ 各自阈值 |
+| `per_metric` | object | 各维度分 |
+| `dimensions` | object | 维度名 → 分数 |
+| `dimension_checks` | object[] | 维度判定明细 |
+| `skill_attributions` | object[] | 复数 Skill 归因 |
+| `attribution_status` | string | 归因状态 |
+| `attribution_error` | string \| null | 归因错误信息 |
+| `attributed_skill` | string | 单数归因 skill(兼容字段) |
+| `reason` | string | 评估理由(含复数归因 JSON) |
+
+**响应** `404` `{"detail":"Job not found: <id>"}`
+
+### 1.8 Agent-as-a-judge SSE GET /evaluate/agent-judge/jobs/{job_id}/stream
+
+SSE 通用格式见 §4.2。progress 事件 data:`{phase:"judge", done, total}`;终态 `completed`/`error`(含 `category`)/`cancelled`。
+
 ---
 
 ## 2. 数据集生成器
@@ -279,7 +342,7 @@ SSE 通用格式见 §4.2。progress 事件 data:`{phase:"build", done, total}`;
 | 字段            | 类型     | 必填  | 默认    | 说明                                                   |
 | ------------- | ------ |:---:| ----- | ---------------------------------------------------- |
 | `name`        | string | ✓   | —     | 模板名/显示名；仅当 scenario 为空时才回退为场景键                                     |
-| `scenario`    | string | ✓   | —     | 算法名称（加载 examples/scenarios/<scenario>/），如 skillopt / tf_grpo                                               |
+| `scenario`    | string | ✓   | —     | 算法名称（加载 examples/scenarios/<scenario>/），如 skillopt / tf_grpo / gepa                                               |
 | `hyperparams` | object |     | `{}`  | 超参;`num_epochs`(1-100)、`batch_size`(1-64) 会被提取为强类型字段 |
 | `rollout`     | object |     | —     | `rollout.extra_data: object`                         |
 | `train_split` | float  |     | `0.8` | 训练集比例                                                |
@@ -310,6 +373,7 @@ SSE 通用格式见 §4.2。progress 事件 data:`{phase:"build", done, total}`;
 | `error`                  | string \| null | 失败原因                                                        |
 | `error_code`             | string \| null | 失败错误码                                                       |
 | `cancellation_requested` | bool           | 默认 `false`                                                  |
+
 
 ### 3.2 查询任务状态 GET /optimize/{job_id}
 
@@ -374,7 +438,7 @@ Base URL:`http://<adapter-host>:8900`。FastAPI 应用 `title="Agent Adapter", v
 | --- | ------ | -------------------------------------------------------------- | ------------------------- |
 | 1   | GET    | `/health`                                                      | 健康检查                      |
 | 2   | POST   | `/api/v1/agents/{agent_name}/conversations/{conversation_id}`  | 代理调用业务 Agent(聚合或 SSE 透传)  |
-| 3   | POST   | `/api/v1/skills`                                               | Skill 列表/读内容/更新/恢复        |
+| 3   | POST   | `/api/v1/skills`                                               | Skill 列表/读内容/更新/恢复 + SkillHub 发布/拉取(北向) |
 | 4   | POST   | `/api/v1/managed-docs`                                         | managed-doc 读内容/更新/恢复     |
 | 5   | GET    | `/api/v1/agents/{agent_name}/managed-docs`                     | 列出 Agent 已注册文档(restart 类) |
 | 6   | GET    | `/api/v1/managed-docs/tasks/{task_id}`                         | 轮询异步 apply/restart 任务     |
@@ -421,7 +485,7 @@ curl -N -H "Accept: text/event-stream" -X POST   http://localhost:8900/api/v1/ag
 
 ## 3. Skill 热更新
 
-### POST /api/v1/skills
+### 3.1 POST /api/v1/skills
 
 **请求体** `SkillActionRequest`:`agent_name: string`(必填)、`action`(必填,见下)、`skill_name`(skill_content/update_skill 必填)、`skill_names`(restore_skill 必填)、`skill_content`(update_skill 必填)。
 
@@ -436,6 +500,27 @@ curl -N -H "Accept: text/event-stream" -X POST   http://localhost:8900/api/v1/ag
 
 ```bash
 curl -X POST http://localhost:8900/api/v1/skills -H "Content-Type: application/json"   -d '{"agent_name":"xxx_agent","action":"skill_list"}'
+```
+
+### 3.2 SkillHub 市场对接（北向）
+
+复用 `POST /api/v1/skills`,新增 hub 类 action,实现优化后 Skill 的发布/拉取/版本管理。**默认关闭**,需配置 `ADAPTER_SKILLHUB_ENABLED=true` 及 token 等(见 §7.2);未启用时返回 `SKILLHUB_DISABLED`(503)。
+
+**新增 action**
+
+| action | 必填字段 | 响应要点 |
+| --- | --- | --- |
+| `list_hub_skills` | —(`page` 默认 1、`page_size` 默认 20、`keyword`) | Hub 插件分页列表 |
+| `get_hub_version` | `asset_id`、`version` | 版本详情 |
+| `pull_skill` | `asset_id`、`version`(`overwrite` 默认 true) | `{asset_id, skill_name, version, local_path, revision}` |
+| `publish_skill` | `skill_name`(`plugin_version`/`asset_id`/`version_desc`/`force` 默认 false) | `{asset_id, skill_name, version, plugin_type, publish_result, moderation_status, checksum_sha256, version_desc, local_revision}` |
+| `delete_hub_version` | `asset_id`、`version` | `{asset_id, version, deleted}` |
+
+**错误码**:`SKILLHUB_DISABLED`(503)、`INVALID_ACTION`(400,参数/action 非法)、`HUB_AUTH_FAILED`(401)、`HUB_NOT_FOUND`(404)、`HUB_CONFLICT`(409,版本冲突)、`HUB_ERROR`(502,Hub 调用失败)、`AGENT_NOT_FOUND`(404,agent 未配置)。
+
+```bash
+curl -X POST http://localhost:8900/api/v1/skills -H "Content-Type: application/json" \
+  -d '{"agent_name":"xxx_agent","action":"publish_skill","skill_name":"s1","version_desc":"优化后发布"}'
 ```
 
 ---
@@ -500,6 +585,8 @@ curl http://localhost:8900/api/v1/managed-docs/tasks/<task_id>
 
 **`complete` 信号**:standard 模式先轮询 PG 等根 span(`trace_wait_timeout` 默认 10s),根 span 到达且 `end_time` 已设 → `true`;log 模式 = 无 `_incomplete` 记录。
 
+**attribution(Skill 归属)**:standard(OTel/PG)模式下,`calls[]` 各调用记录内联携带 `parent_span_id` 与 `attribution`(如 `{skill, source, confidence, candidates}`),由 `AttributionRunner` 在 trace 完整后写回 spans;log 模式无此字段。子 agent session 按 `<主session>-sub-entity_<id>` 同源后缀纳入查询。
+
 ```bash
 curl http://localhost:8900/api/v1/agents/xxx_agent/traces
 curl "http://localhost:8900/api/v1/traces/conv-001?complete=true&limit=10"
@@ -555,5 +642,11 @@ curl http://localhost:8900/api/v1/status
 | `poll_interval` | `ADAPTER_POLL_INTERVAL` | `60`            | 轮询间隔(秒)                                  |
 | `start_from`    | `ADAPTER_START_FROM`    | `tail`          | 首次读取位置                                   |
 | `trace_source`  | `ADAPTER_TRACE_SOURCE`  | `log`           | `log`(读归档日志,零依赖)/ `standard`(读 PG+Kafka) |
+| `skillhub_enabled` | `ADAPTER_SKILLHUB_ENABLED` | `false` | SkillHub 对接开关 |
+| `skillhub_base_url` | `ADAPTER_SKILLHUB_BASE_URL` | `""` | SkillHub 服务地址 |
+| `skillhub_auth_mode` | `ADAPTER_SKILLHUB_AUTH_MODE` | `system_token` | 认证方式(`bearer`/`system_token`) |
+| `skillhub_token` | `ADAPTER_SKILLHUB_TOKEN` | `""` | 认证 token |
+| `skillhub_token_env` | `ADAPTER_SKILLHUB_TOKEN_ENV` | `SKILLHUB_TOKEN` | token 来源环境变量名 |
+| `skillhub_version_strategy` | `ADAPTER_SKILLHUB_VERSION_STRATEGY` | `manual` | 版本策略(`patch`/`manual`) |
 
 > README 示例与部署 YAML 中部分默认值与源码不一致(如 `start_from`、`poll_interval`、`match_tags` 列表),以源码为准(详见部署指南"配置一致性"节)。
