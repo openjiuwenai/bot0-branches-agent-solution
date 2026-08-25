@@ -1,0 +1,139 @@
+# 意图转调出站机制迁移设计：executor 自调 → runtime a2a_delegate 中断续跑
+
+> 状态：阶段 1 已落地（2026-08-20，见第 5 章）。对应 L2 设计
+> `agent-solution-docs/develop/03-architecture/L2-Low-Level-Design/agent-runtime/Feat-Func-002-versatile-controller-intent-message-routing.md`
+> 的 2.3 / 2.4 / 3.8 / 4.4 / 4.5 / 4.6 章修订。
+> 前置：`DUPLICATE_MESSAGE` 挂死安全修复已先行落地（见 git log）。
+
+## 1. 背景与动机
+
+### 1.1 生产旅程约束
+
+客户端永远只面对 L1 runtime；所有轮次（含中断后的续接轮）都经由 runtime 的
+A2A 转发机制与中断机制完成，不存在客户端直连 L2。
+
+### 1.2 现状缺口
+
+- executor 自调出站（`RemoteAgentCaller.callOutcome`），下游 `INPUT_REQUIRED`
+  依赖模块内部 `CrossAgentResumePort` 续接——该 port 无默认实现，旅程终止于
+  `VERSATILE_HANDOFF_CROSS_AGENT_RESUME_UNSUPPORTED`（demo 场景 8 验收现状）。
+- runtime 已有完整的中断-续跑链（`A2AEnabledServeOrchestrator` +
+  `RemoteInvocationBatchCoordinator`）：shadow task 持久化、`remoteTaskId` 续调
+  同一远端 task、push notification 断线恢复。但只消费
+  `context._interrupt_kind="a2a_delegate"` 形状的中断。
+- 形状不匹配：handoff 中断是 `{message, _interrupt:{targetAgentId, remoteTaskId}}`，
+  runtime 视其为本地中断直接转发客户端，不建立可续跑状态。
+
+### 1.3 为什么不能只换 payload
+
+`RemoteInvocationBatchMapper.parseBatch`（runtime）从 item 只读
+`toolCallId` / `toolName` / `context.agentName` / `message`，**不接受外部
+`remoteTaskId`**——member 的 remoteTaskId 只能由协调器自己发调用后捕获，或从
+shadow 快照恢复。因此把现有中断改成 a2a_delegate 形状只会让 runtime 对 L2
+**再发一次全新调用**，executor 已发出的那次成为孤儿。正确含义是：**把出站调用
+本身移交给 runtime**，与基线 delegate（`VersatileResponseExtractor.buildA2aDelegateInterrupt`
+契约）统一管道。
+
+## 2. 目标架构
+
+```
+控制器 SSE → IntentHandoffClassifier 识别（不变）
+          → HandoffTargetResolver 目标解析（不变）
+          → 产出单 item a2a_delegate 中断（agentName=目标， message=用户 query，
+            resume=true）替代 executor 出站
+          → runtime 协调器发调用/捕获 remoteTaskId/存 shadow task
+第一轮 L2 INPUT_REQUIRED → 中断呈现给客户端（runtime 现有行为）
+第二轮客户端补 input → L1 task resume → 协调器用 remoteTaskId 续调同一 L2 task
+          → L2 判不在范围 → not-in-scope 信封作为 remote 结果回传
+          → resume=true 触发 runtime re-invoke 本层 handler（remoteToolResults 进 metadata）
+          → handler 入口识别信封 → 重跑控制器重新识别（upstream-signal 语义平移）
+```
+
+`CrossAgentResumePort` 及 executor 出站段（`buildRemoteCall`/超时/终态映射）退役。
+
+## 3. 关键语义迁移表
+
+| 现机制（executor 路径） | 迁移后（runtime 路径） |
+| --- | --- |
+| NOT_IN_SCOPE 后 handler 链内 while 重跑控制器 | runtime re-invoke handler + handler 入口检查 `runtime.remoteToolResults` 中是否含 `HandoffSignals` 信封 |
+| `HandoffSignals` 信封由 executor 在 outcome 上识别 | 信封作为 L2 终答交给协调器；识别逻辑移到 handler 入口（metadata 检查），识别后抑制信封不透传用户/控制器 |
+| 单请求 dedup / redirect / DUPLICATE_TARGET guard | 单 item 批内无链内重发，`DUPLICATE_MESSAGE` 链路整体消失；「续接弹回后再转调同一目标」由 handler 依据 `runtime.remoteBatchId` / `runtime.remoteToolResults` 把弹回 target 记入本轮 state，再转调同目标 → `DUPLICATE_TARGET` 明确报错 |
+| 跨请求 trace（hopCount/routeTrace/sourceAgentId）由 `prepareOutbound` 构造进 `RemoteCall.metadata` | **已裁剪（2026-08-20 复核）**：FEAT-002 拓扑固定两层、二级 upstream-signal 不出站、下游不做转发，不存在跨请求回环；spec §2.1 循环保护（SHOULD）由 re-invoke 轮 toolCallId 无状态解析的 `DUPLICATE_TARGET` 等价满足。`HandoffLoopGuard`/`self-agent-id`/`loop.*`/`loop-trace-metadata.*`/`VERSATILE_HANDOFF_LOOP_LIMIT` 整体退役 |
+| 错误码 `VERSATILE_HANDOFF_TIMEOUT/TARGET_UNAVAILABLE/...` | 协调器 member fail 语义（`REMOTE_TIMEOUT/REMOTE_UNAVAILABLE/REMOTE_RATE_LIMITED/REMOTE_PROTOCOL_ERROR`）；需在 handler 层映射回 `VERSATILE_HANDOFF_*` 或重新定义错误码分层 |
+| 流式 chunk 经 `DownstreamEventBridge` 直推 observer | 协调器 `MemberEventObserver` → `SerialQueryStreamObserver` 转发；需验证事件顺序/完整性等价 |
+| 下游超时 `handoff.timeout` | 协调器调度超时（队列/并发参数）语义不同，需对齐 |
+
+## 4. runtime 侧行为确认（2026-08-20 调研结论）
+
+1. **resume=true 的 re-invoke 请求构造**（已确认）：`buildBatchResumeRequest`
+   保留原 messages、把 remote 结果注入 `runtime.remoteToolResults` metadata。
+   Versatile request extractor **不读该键**（无任何引用）——不会自动进入控制器会话，
+   handler 必须在入口自行消费；信封抑制天然成立（识别逻辑在 handler，extractor 之前）。
+2. **request metadata 透传链**（已确认）：协调器 `outboundMetadata` 仅剔除
+   `RESERVED_METADATA`（`_interrupt` / `runtime.parentTaskId` /
+   `runtime.remoteToolInputs` / `runtime.remoteBatchId` / `runtime.remoteToolResults`），
+   其余键**原样透传**到 `RemoteCall.metadata`。trace 键
+   （`handoffHopCount` / `handoffRouteTrace` / `sourceAgentId`）走 request metadata 可行：
+   handler 产出中断前把更新后的 trace 写入 `request.metadata` 即可（`ServeRequest`
+   可变，协调器 `start()` 取 `batch.request` 的 metadata 构造出站）。
+3. **单 item 批的中断呈现形状**（已确认）：客户端看到
+   `publicInterrupt` 形状 `{message: <inputPrompt>, items:[{toolCallId, toolName, message}]}`
+   ——干净、无 `context._interrupt_kind` 泄漏。demo 场景 8 断言改为该形状。
+   单 item 输入形式：`interruptItems` 对无 `items` 键的中断 map 整体作为单 item
+   （基线 `buildA2aDelegateInterrupt` 即此形式）。
+4. **流式转发形状**（已确认，与现行为有差异）：remote 事件经 `MemberEventObserver`
+   投影为 `TYPE_REMOTE_AGENT_OUTPUT`（携带 `TaskArtifactUpdateEvent`）推送
+   `SerialQueryStreamObserver` → 父 observer，**不是** executor 路径的 `TYPE_CHUNK`
+   （`DownstreamEventBridge`）。非流式请求不投影（`shouldProjectEvents=false`），
+   结果仅存在于 `remoteToolResults`。含义：happy-path re-invoke 时 handler 对
+   `remoteToolResults` 无信封的处理必须区分流式（内容已投影，仅 `onComplete()`）
+   与非流式（需把结果作为 `TYPE_CHUNK` 下发）。
+5. **第二轮路由**（已确认）：A2A 层 `A2AProtocolAdapter.trustedMetadata` 把
+   `ctx.getTaskId()` 注入为 `runtime.parentTaskId`（保留键剥离不可信来源）→
+   `tryResumePending` → 协调器按 shadow task 恢复 batch → `member.remoteTaskId`
+   续调同一远端 task。客户端只需向同一 L1 task 发消息，单 member 批无需
+   targeted inputs（pending member 默认吃 `lastUserQuery`）。
+
+## 5. 分阶段落地
+
+- **阶段 0（已完成）**：`DUPLICATE_MESSAGE` 弹回链补驱动终态，现网不挂死。
+- **阶段 1（已完成 2026-08-20）**：executor 产出 a2a_delegate 中断（resume=true），打通第一轮：
+  转调 → L2 INPUT_REQUIRED → 中断呈现客户端；错误码映射对齐。
+  demo 场景 8 断言从 `RESUME_UNSUPPORTED` 改为可续接中断。
+  落地内容与计划的偏差：
+  - handler 入口的信封识别/失败映射/终答直通（原计划阶段 2）随入口短路一并落地，
+    `runtime.remoteToolResults` 解析为 `RemoteToolResults` 类；
+  - executor/bridge/mapper/CrossAgentResumePort/RequestHandoffState 退役（原计划阶段 3 的
+    退役项一并完成）；
+  - 计划外的必要修复：re-invoke 轮 metadata 携带自身出站写入的 trace 三键（含 self），
+    `checkInbound` 会误判回环重入——入口以 `remoteToolResults` 在场为标记跳过 inbound
+    guard（该键只在自身委派的续接轮出现）；
+  - `buildBatchResumeRequest` 实际保留原 metadata 全部键（含 trace 三键），多跳轨迹在
+    re-invoke 链上连续累计（原"已知限制"第 1 条不成立，行为优于预期）；
+  - 配置面瘦身：`handoff.timeout`/`cross-agent-resume`/`loop.max-redirects`/
+    `loop.duplicate-target-detection` 删除，超时语义移交 remote-agents
+    `timeout-seconds`；错误码表删去 executor 专属四码（REMOTE_REJECTED/
+    REMOTE_BUSINESS_FAILURE/RESULT_INVALID/CALLER_UNAVAILABLE）。
+  - 追加裁剪（2026-08-20 晚，对照 FEAT-002 spec 复核）：阶段 1 引入的跨请求
+    trace 体系（`HandoffLoopGuard`、`self-agent-id`、`loop.max-route-trace-hops`、
+    `loop-trace-metadata.*`、`VERSATILE_HANDOFF_LOOP_LIMIT`、入站回环检测）整体
+    退役——spec 无跨请求轨迹/多跳累计要求，upstream-signal 语义下链深恒为 1，
+    spec 的循环保护 SHOULD 由无状态 `DUPLICATE_TARGET` 等价满足；出站 metadata
+    仅保留 `forward-metadata-keys` 与执行上下文（tenant/user/space）。
+    「re-invoke 轮携带自身 trace 触发误判」的 guard 跳过补丁随之失去存在前提。
+  验收：模块全量单测 + demo 十场景 e2e 全过（场景 2/3/8/9/10 断言已对齐新链路）。
+- **阶段 2（已完成，并入阶段 1）**：第二轮续接旅程：客户端补 input → 协调器 remoteTaskId
+  续调 L2 → L2 弹回信封 → re-invoke 重识别；handler 入口信封识别 + 弹回 target 记入
+  本轮 state（`DUPLICATE_TARGET` 保护，toolCallId 无状态解析）。
+- **阶段 3（剩余）**：L2 spec 2.3/2.4/4.5/4.6 改写、流式对齐细化
+  （REMOTE_AGENT_OUTPUT 投影与 TYPE_CHUNK 的客户端渲染差异由 demo 断言钉住）。
+- **验收**：L2 spec 7.2 场景旅程全量 + 新增「中断→续接→弹回→重识别」旅程（demo
+  场景 3/9 覆盖）。
+
+## 6. 风险
+
+- 协调器错误语义与模块错误码不一致，客户端可观测性回归。
+- 双形态并存期（基线 delegate 三字段信封中断 vs 意图转调中断）识别优先级
+  需明确：转调识别仍先于基线错误映射（spec 3.1-3.7 顺序不变）。
+- resume 请求的 metadata 注入对控制器会话的副作用（第 4.1 项）。
+- runtime 与本模块分仓演进，协调器契约变更无编译期约束，需以集成测试钉住。

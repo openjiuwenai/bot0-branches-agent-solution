@@ -1,0 +1,48 @@
+server:
+  port: ${SERVER_PORT:18091}
+
+# url-template 里的 {conversation_id} 占位符必须经嵌套属性引用：
+# Spring 解析 ${VAR:default} 时会把默认值后第一个裸 '}'（即 {conversation_id}
+# 的 '}'）误认为占位符结束符；嵌套 ${...} 会被计数跳过（同 versatile-a2a-adapter-demo）。
+versatile-demo:
+  conversation-id-placeholder: "{conversation_id}"
+  l1-port: ${L1_PORT:18091}
+  l2-port: ${L2_PORT:18092}
+
+# 通用配置：L1 与 L2 两个 profile 共享的转调识别条件与循环保护参数。
+# 报文样例（生产 message 格式，值为 data.summary，dedup-key 为顶层 createdTime）：
+#   L1 意图转调  {"event":"message","data":{"node_name":"意图返回","summary":"3",...},"createdTime":...}
+#   L2 退回一级  {"event":"message","data":{"node_name":"不在范围","summary":"不在范围",...},"createdTime":...}
+openjiuwen:
+  service:
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    versatile:
+      timeout: 600s
+      result-node-name: ABCDEResponseNode
+      interrupt:
+        signal-match: need_user_input
+        prompt-get: /data/question
+        input-requirement-get: /data/input_schema
+        resume-token-get: /data/resume_token
+      handoff:
+        enabled: true
+        classify:
+          event-type: message
+          field-path: /data/node_name
+          field-value: [意图返回, 不在范围]
+        fields:
+          handoff-type: /data/node_name
+          intent-id: /data/summary
+          dedup-key: /createdTime
+        target:
+          # direct 不参与解析：真实报文无独立目标字段（target-agent-id 与 node_name 同路径，仅提取不使用）
+          resolution-priority: [intent]
+          allowed-agents: [agent_card_l1, agent_card_l2, agent_card_dead]
+
+logging:
+  level:
+    com.openjiuwen.service.adapters.versatile: INFO
+    com.openjiuwen.example.handoff: INFO

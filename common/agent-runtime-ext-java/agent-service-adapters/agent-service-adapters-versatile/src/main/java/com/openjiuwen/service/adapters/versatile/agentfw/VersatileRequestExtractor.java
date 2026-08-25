@@ -25,18 +25,25 @@ import java.util.Set;
  *
  * @since 2026-06-30
  */
-final class VersatileRequestExtractor {
+public final class VersatileRequestExtractor {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
 
     private final VersatileProperties properties;
 
-    VersatileRequestExtractor(VersatileProperties properties) {
+    public VersatileRequestExtractor(VersatileProperties properties) {
         this.properties = Objects.requireNonNull(properties, "properties");
     }
 
-    RemoteRequest extract(ServeRequest request) {
+    /**
+     * 从服务请求抽取 Versatile 远端请求（url/headers/params/body）。
+     *
+     * @param request 服务请求（metadata 携带 body/headers/query 原始数据）
+     * @return 远端请求
+     * @throws IllegalArgumentException url-template 缺失或必填输入不完整
+     */
+    public RemoteRequest extract(ServeRequest request) {
         Map<String, Object> sourceBody = mapValue(request.getMetadata().get("body"));
         Map<String, Object> remoteBody = new LinkedHashMap<>(mapValue(sourceBody.get("custom_data")));
         Map<String, Object> inputs = new LinkedHashMap<>(mapValue(remoteBody.get("inputs")));
@@ -292,7 +299,7 @@ final class VersatileRequestExtractor {
     private record SemanticInput(String query, String intent) {
     }
 
-    record RemoteRequest(
+    public record RemoteRequest(
             String url,
             Map<String, String> headers,
             Map<String, String> params,
