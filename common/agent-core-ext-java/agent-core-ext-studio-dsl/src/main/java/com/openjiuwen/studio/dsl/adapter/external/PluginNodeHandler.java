@@ -15,8 +15,8 @@ import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.MediaPart;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
-import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
-import com.openjiuwen.studio.dsl.spi.ToolRegistry;
+import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
+import com.openjiuwen.studio.dsl.contract.ToolRegistry;
 import com.openjiuwen.studio.dsl.util.MediaSupport;
 import com.openjiuwen.studio.dsl.util.TemplateRenderer;
 

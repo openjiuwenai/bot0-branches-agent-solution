@@ -30,7 +30,9 @@ class DataAndMediaTest {
     void media_passthrough_preserved() {
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
         ComponentExecutable exec =
-                registry.create(AssembledNode.of("m1", "jiuwen.message", Map.of()), NodeBuildContext.defaults("wf"));
+                registry.create(
+                        AssembledNode.of("m1", "jiuwen.message", Map.of("template", "{{text}}")),
+                        NodeBuildContext.defaults("wf"));
         MediaPart img = new MediaPart("image", "image/png", "file:///a.png", null, Map.of());
         @SuppressWarnings("unchecked")
         Map<String, Object> out = (Map<String, Object>) exec.invoke(

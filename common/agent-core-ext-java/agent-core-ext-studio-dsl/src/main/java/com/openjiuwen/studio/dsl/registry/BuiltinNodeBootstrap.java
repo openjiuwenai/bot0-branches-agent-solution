@@ -15,19 +15,22 @@ import com.openjiuwen.studio.dsl.adapter.control.StartNodeHandler;
 import com.openjiuwen.studio.dsl.adapter.external.AgentNodeHandler;
 import com.openjiuwen.studio.dsl.adapter.external.CodeNodeHandler;
 import com.openjiuwen.studio.dsl.adapter.external.McpNodeHandler;
+import com.openjiuwen.studio.dsl.adapter.external.ParamOutputNodeHandler;
 import com.openjiuwen.studio.dsl.adapter.external.PluginNodeHandler;
 import com.openjiuwen.studio.dsl.adapter.external.StreamTransformNodeHandler;
 import com.openjiuwen.studio.dsl.adapter.interact.CardNodeHandler;
 import com.openjiuwen.studio.dsl.adapter.interact.InputNodeHandler;
 import com.openjiuwen.studio.dsl.adapter.interact.MessageNodeHandler;
+import com.openjiuwen.studio.dsl.adapter.interact.QaNodeHandler;
 import com.openjiuwen.studio.dsl.adapter.interact.QuestionerNodeHandler;
+import com.openjiuwen.studio.dsl.adapter.model.ComplexIntentDetectionNodeHandler;
 import com.openjiuwen.studio.dsl.adapter.model.ExtractorNodeHandler;
 import com.openjiuwen.studio.dsl.adapter.model.IntentDetectionNodeHandler;
 import com.openjiuwen.studio.dsl.adapter.model.KnowledgeRetrievalNodeHandler;
 import com.openjiuwen.studio.dsl.adapter.model.LlmNodeHandler;
 
 /**
- * Registers FEAT-031 21 built-in IR types with Studio-aligned adapters (L2 §4.3).
+ * Registers FEAT-031 21 built-in IR types plus EI.* studio extensions (P6).
  *
  * @since 2026-08-17
  */
@@ -61,5 +64,9 @@ public final class BuiltinNodeBootstrap {
         registry.register(new McpNodeHandler());
         registry.register(new AgentNodeHandler());
         registry.register(new StreamTransformNodeHandler());
+        // P6 EI.* (directory-covered, outside FEAT-031 21)
+        registry.register(new QaNodeHandler());
+        registry.register(new ParamOutputNodeHandler());
+        registry.register(new ComplexIntentDetectionNodeHandler());
     }
 }

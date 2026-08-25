@@ -11,8 +11,8 @@ import com.openjiuwen.studio.dsl.exec.WorkflowAssemblyBridge;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.AssembledWorkflow;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
-import com.openjiuwen.studio.dsl.spi.CodeLogic;
-import com.openjiuwen.studio.dsl.spi.CodeLogicContext;
+import com.openjiuwen.studio.dsl.contract.CodeLogic;
+import com.openjiuwen.studio.dsl.contract.CodeLogicContext;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -148,7 +148,7 @@ public final class FakeHostMain {
     }
 
     /**
-     * Host registers CodeLogic SPI, then runs jiuwen.code in a linear mini-graph.
+     * Host registers CodeLogic, then runs jiuwen.code in a linear mini-graph.
      */
     private static void scenarioCode() {
         StudioDslModule module = StudioDslModule.create();

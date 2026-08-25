@@ -17,8 +17,8 @@ import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.registry.CodeLogicRegistry;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
-import com.openjiuwen.studio.dsl.spi.CodeLogic;
-import com.openjiuwen.studio.dsl.spi.CodeLogicContext;
+import com.openjiuwen.studio.dsl.contract.CodeLogic;
+import com.openjiuwen.studio.dsl.contract.CodeLogicContext;
 
 import org.junit.jupiter.api.Test;
 
@@ -31,7 +31,7 @@ import java.util.Map;
  */
 class CodeNodeTest {
     @Test
-    void javaSpi_executesAndReturnsUserFields() throws Exception {
+    void javaCodeLogic_executesAndReturnsUserFields() throws Exception {
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
         CodeLogicRegistry logics = new CodeLogicRegistry();
         logics.register(new CodeLogic() {

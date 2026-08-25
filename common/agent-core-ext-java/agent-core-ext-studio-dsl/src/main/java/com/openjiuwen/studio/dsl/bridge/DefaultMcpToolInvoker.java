@@ -4,7 +4,7 @@
 
 package com.openjiuwen.studio.dsl.bridge;
 
-import com.openjiuwen.studio.dsl.spi.McpToolInvoker;
+import com.openjiuwen.studio.dsl.contract.McpToolInvoker;
 
 import java.io.InputStream;
 import java.io.OutputStream;

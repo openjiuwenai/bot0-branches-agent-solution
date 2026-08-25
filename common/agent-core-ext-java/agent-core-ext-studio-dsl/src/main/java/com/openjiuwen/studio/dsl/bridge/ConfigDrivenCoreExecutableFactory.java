@@ -22,7 +22,7 @@ import com.openjiuwen.core.workflow.component.llm.QuestionerExecutable;
 import com.openjiuwen.core.workflow.component.resource.KnowledgeRetrievalCompConfig;
 import com.openjiuwen.core.workflow.component.resource.KnowledgeRetrievalExecutable;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
-import com.openjiuwen.studio.dsl.spi.CoreExecutableFactory;
+import com.openjiuwen.studio.dsl.contract.CoreExecutableFactory;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

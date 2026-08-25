@@ -15,12 +15,15 @@ import java.util.List;
 public final class StudioDslNodeProperties {
     private int maxNestingDepth = 5;
     private String pythonExecutor = "subprocess";
+    /** Python LOCAL_CODE_EXEC_MODE analogue: inprocess|subprocess (default inprocess). */
+    private String localExecMode = "inprocess";
     private String pythonInterpreter = "python3";
     private long pythonDefaultTimeoutMs = 30_000L;
     private String pythonWorkdirRoot;
     private boolean pythonInheritEnv = false;
     private List<String> pythonEnvWhitelist = new ArrayList<>(List.of("PATH", "LANG"));
-    private boolean javaSpiEnabled = true;
+    /** Whether Java {@code CodeLogic} path is allowed for {@code jiuwen.code}. */
+    private boolean javaCodeLogicEnabled = true;
     private String unsupportedModalityPolicy = "passthrough";
     private String variablesScope = "workflow-execution";
 
@@ -58,6 +61,24 @@ public final class StudioDslNodeProperties {
      */
     public void setPythonExecutor(String pythonExecutor) {
         this.pythonExecutor = pythonExecutor;
+    }
+
+    /**
+     * getLocalExecMode.
+     *
+     * @return inprocess|subprocess
+     */
+    public String getLocalExecMode() {
+        return localExecMode;
+    }
+
+    /**
+     * setLocalExecMode.
+     *
+     * @param localExecMode localExecMode
+     */
+    public void setLocalExecMode(String localExecMode) {
+        this.localExecMode = localExecMode;
     }
 
     /**
@@ -152,21 +173,21 @@ public final class StudioDslNodeProperties {
     }
 
     /**
-     * isJavaSpiEnabled.
+     * isJavaCodeLogicEnabled.
      *
      * @return result
      */
-    public boolean isJavaSpiEnabled() {
-        return javaSpiEnabled;
+    public boolean isJavaCodeLogicEnabled() {
+        return javaCodeLogicEnabled;
     }
 
     /**
-     * setJavaSpiEnabled.
+     * setJavaCodeLogicEnabled.
      *
-     * @param javaSpiEnabled javaSpiEnabled
+     * @param javaCodeLogicEnabled javaCodeLogicEnabled
      */
-    public void setJavaSpiEnabled(boolean javaSpiEnabled) {
-        this.javaSpiEnabled = javaSpiEnabled;
+    public void setJavaCodeLogicEnabled(boolean javaCodeLogicEnabled) {
+        this.javaCodeLogicEnabled = javaCodeLogicEnabled;
     }
 
     /**

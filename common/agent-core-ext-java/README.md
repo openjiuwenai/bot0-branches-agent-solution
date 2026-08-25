@@ -26,7 +26,7 @@ Agent 适配；运行时相关扩展见 [`../agent-runtime-ext-java`](../agent-r
 | `agent-core-ext-java` | Maven 聚合父工程 | 统一组织 AgentCore 扩展子模块及其公共构建配置 |
 | [`agent-core-ext-react-rails`](agent-core-ext-react-rails/README.md) | Java SDK | 为 AgentCore 的 ReAct Agent 补充认知控制、收敛和可观测能力 |
 | [`agent-core-ext-intent-suite`](agent-core-ext-intent-suite/README.md) | Java SDK | 为 AgentCore DeepAgent 提供意图匹配、结果路由和 A2A Agent Card 意图适配 |
-| `agent-core-ext-studio-dsl` | Java SDK | Studio DSL 节点类型扩展与节点执行（FEAT-031）：统一 SPI、21 种 `jiuwen.*` 内置节点、Java/Python 代码节点 |
+| [`agent-core-ext-studio-dsl`](agent-core-ext-studio-dsl/README.md) | Java SDK | Studio DSL 节点类型扩展与节点执行（FEAT-031）：统一 SPI、21 种 `jiuwen.*` 内置节点、Java/Python 代码节点 |
 
 `agent-core-ext-react-rails` 当前覆盖以下功能方向：
 
@@ -44,6 +44,11 @@ Agent 适配；运行时相关扩展见 [`../agent-runtime-ext-java`](../agent-r
 `intent_match` 工具接入；远端 Agent Card 注册、`a2a_delegate` 执行和 Spring 配置由
 `agent-runtime-ext-java` 提供。具体接入方式和行为边界以
 [`agent-core-ext-intent-suite` 模块文档](agent-core-ext-intent-suite/README.md)为准。
+
+`agent-core-ext-studio-dsl` 负责 Studio DSL 已组装节点的类型扩展与执行：统一
+`NodeHandlerFactory` SPI、21 种内置 `jiuwen.*` 节点、Java/Python 代码节点、嵌套深度守卫
+与可区分失败码。DSL 加载、边调度和协议入口由宿主提供。具体接入方式和行为边界以
+[`agent-core-ext-studio-dsl` 模块文档](agent-core-ext-studio-dsl/README.md)为准。
 
 ## 前置条件
 

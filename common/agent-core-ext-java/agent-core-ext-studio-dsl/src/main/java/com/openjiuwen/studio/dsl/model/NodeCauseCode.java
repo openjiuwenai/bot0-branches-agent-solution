@@ -37,6 +37,6 @@ public enum NodeCauseCode {
     /** Code path is ambiguous. */
     CODE_PATH_AMBIGUOUS,
 
-    /** CodeLogic SPI not found. */
+    /** CodeLogic not found. */
     CODE_LOGIC_NOT_FOUND
 }

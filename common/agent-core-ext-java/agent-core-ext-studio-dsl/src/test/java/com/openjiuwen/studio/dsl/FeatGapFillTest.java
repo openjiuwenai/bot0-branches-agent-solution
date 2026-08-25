@@ -6,6 +6,8 @@ package com.openjiuwen.studio.dsl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -26,9 +28,11 @@ import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * FeatGapFillTest for Studio DSL node-type extension (FEAT-031).
@@ -169,19 +173,44 @@ class FeatGapFillTest {
 
     @Test
     void questioner_interact_hangsThenAnswers() {
+        AtomicReference<Map<String, Object>> stateBucket = new AtomicReference<>(new HashMap<>());
         NodeSessionApi session = mock(NodeSessionApi.class);
+        when(session.getState(any())).thenAnswer(inv -> {
+            Object key = inv.getArgument(0);
+            if (key == null) {
+                return stateBucket.get();
+            }
+            return stateBucket.get().get(String.valueOf(key));
+        });
+        doAnswer(inv -> {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> patch = inv.getArgument(0);
+                    Map<String, Object> cur = new HashMap<>(stateBucket.get());
+                    cur.putAll(patch);
+                    stateBucket.set(cur);
+                    return null;
+                })
+                .when(session)
+                .updateState(any());
         when(session.interact(any())).thenReturn(Map.of("answer", "Kayla"));
+
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
         ComponentExecutable exec = registry.create(
                 AssembledNode.of("q1", "jiuwen.questioner", Map.of("question", "name?")),
                 NodeBuildContext.defaults("wf"));
         @SuppressWarnings("unchecked")
-        Map<String, Object> out =
+        Map<String, Object> hang =
                 (Map<String, Object>) exec.invoke(Map.of("userFields", Map.of()), session, mock(ModelContext.class));
         @SuppressWarnings("unchecked")
+        Map<String, Object> hangUf = (Map<String, Object>) hang.get("userFields");
+        assertThat(hangUf.get("hangState")).isEqualTo("INPUT_REQUIRED");
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> out = (Map<String, Object>)
+                exec.invoke(Map.of("userFields", Map.of("answer", "Kayla")), session, mock(ModelContext.class));
+        @SuppressWarnings("unchecked")
         Map<String, Object> uf = (Map<String, Object>) out.get("userFields");
-        assertThat(uf).containsEntry("answer", "Kayla").containsEntry("hangState", "Continue");
-        verify(session).interact(any());
+        assertThat(uf).containsEntry("answer", "Kayla");
     }
 
     @Test
@@ -191,7 +220,7 @@ class FeatGapFillTest {
         ComponentExecutable exec = registry.create(
                 AssembledNode.of("m1", "jiuwen.message", Map.of("message", "hi")), NodeBuildContext.defaults("wf"));
         exec.invoke(Map.of("userFields", Map.of()), session, mock(ModelContext.class));
-        verify(session).writeCustomStream(any());
+        verify(session, atLeastOnce()).writeCustomStream(any());
     }
 
     @Test

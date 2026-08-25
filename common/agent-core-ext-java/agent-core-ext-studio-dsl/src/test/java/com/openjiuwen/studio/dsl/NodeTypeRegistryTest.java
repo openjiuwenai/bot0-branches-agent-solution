@@ -14,10 +14,11 @@ import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.registry.BuiltinNodeBootstrap;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
-import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
+import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -28,19 +29,23 @@ import java.util.Set;
  */
 class NodeTypeRegistryTest {
     @Test
-    void builtins_coverTwentyOneCanonicalTypes() {
+    void builtins_coverTwentyOnePlusEiCanonicalTypes() {
         NodeTypeRegistry registry = new NodeTypeRegistry();
         BuiltinNodeBootstrap.registerAll(registry);
-        assertThat(registry.canonicalTypes()).hasSize(21);
+        assertThat(registry.canonicalTypes()).hasSize(24);
         assertThat(registry.canonicalize("jiuwen.llm")).isEqualTo("jiuwen.LLMComponent");
         assertThat(registry.canonicalize("jiuwen.flowApi")).isEqualTo("jiuwen.plugin");
         assertThat(registry.canonicalize("jiuwen.workflowComposite")).isEqualTo("jiuwen.subWorkflow");
+        assertThat(registry.canonicalize("EI.qa")).isEqualTo("EI.qa");
+        assertThat(registry.canonicalize("EI.ParamOutput")).isEqualTo("EI.ParamOutput");
+        assertThat(registry.canonicalize("EI.ComplexIntentDetection"))
+                .isEqualTo("EI.ComplexIntentDetection");
     }
 
     @Test
     void unknownType_failsWithSurface() {
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
-        assertThatThrownBy(() -> registry.canonicalize("EI.qa"))
+        assertThatThrownBy(() -> registry.canonicalize("EI.notAThing"))
                 .isInstanceOf(NodeExecutionException.class)
                 .extracting(e -> e instanceof NodeExecutionException ne ? ne.causeCode() : null)
                 .isEqualTo(NodeCauseCode.UNKNOWN_NODE_TYPE);
@@ -71,7 +76,7 @@ class NodeTypeRegistryTest {
     }
 
     @Test
-    void customCannotOverrideBuiltinCanonical() {
+    void register_stillRejectsDuplicateWithoutReplace() {
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
         assertThatThrownBy(() -> registry.register(new NodeHandlerFactory() {
                     @Override
@@ -89,7 +94,7 @@ class NodeTypeRegistryTest {
     }
 
     @Test
-    void allTwentyOne_canCreate() {
+    void allBuiltinTypes_canCreate() {
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
         NodeBuildContext ctx = NodeBuildContext.defaults("wf");
         // nested needs resolver — use non-nested types here
@@ -104,7 +109,13 @@ class NodeTypeRegistryTest {
                 assertThat(registry.create(code, ctx)).isNotNull();
                 continue;
             }
-            assertThat(registry.create(AssembledNode.of("n-" + type, type, Map.of()), ctx))
+            Map<String, Object> configs = Map.of();
+            if ("jiuwen.message".equals(type)) {
+                configs = Map.of("template", "ok");
+            } else if ("jiuwen.aggregate".equals(type)) {
+                configs = Map.of("groups", Map.of("o", List.of("a")));
+            }
+            assertThat(registry.create(AssembledNode.of("n-" + type, type, configs), ctx))
                     .as(type)
                     .isNotNull();
         }

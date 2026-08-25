@@ -9,10 +9,11 @@ import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.adapter.AbstractStudioNode;
 import com.openjiuwen.studio.dsl.adapter.PassthroughStudioNode;
+import com.openjiuwen.studio.dsl.adapter.StudioStreamFrames;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
-import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
+import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -80,6 +81,14 @@ public final class CardNodeHandler implements NodeHandlerFactory {
             uf.put("componentType", "card");
             if (session != null) {
                 try {
+                    Map<String, Object> stream = new LinkedHashMap<>();
+                    stream.put("answer", card);
+                    stream.put("result", card);
+                    stream.put("card", card);
+                    stream.put("node_id", node.id());
+                    stream.put("node_type", "jiuwen.card");
+                    stream.put("should_interrupt", false);
+                    StudioStreamFrames.emitPartialAndMessageEnd(session, stream);
                     Map<String, Object> frame = new LinkedHashMap<>();
                     frame.put("type", "jiuwen.card");
                     frame.put("event", "card");
@@ -87,9 +96,9 @@ public final class CardNodeHandler implements NodeHandlerFactory {
                     frame.put("nodeId", node.id());
                     session.writeCustomStream(frame);
                 } catch (IllegalStateException
-                | NullPointerException
-                | ClassCastException
-                | UnsupportedOperationException ignored) {
+                        | NullPointerException
+                        | ClassCastException
+                        | UnsupportedOperationException ignored) {
                     // mock session
                 }
             }

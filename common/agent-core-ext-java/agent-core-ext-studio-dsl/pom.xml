@@ -12,10 +12,10 @@
     </parent>
 
     <artifactId>agent-core-ext-studio-dsl</artifactId>
-    <name>agent-core-ext-studio-dsl — Studio DSL node SPI and execution (FEAT-031)</name>
+    <name>agent-core-ext-studio-dsl — Studio DSL nodes and execution (FEAT-031)</name>
     <description>
-        Studio low-code DSL node type extension for agent-core-java: unified NodeHandlerFactory SPI,
-        21 built-in jiuwen.* nodes, Java/Python code node, nesting depth guard, multimodal payload.
+        Studio low-code DSL node type extension for agent-core-java: built-in jiuwen.* / EI.*
+        handlers, Java/Python code node, nesting depth guard, multimodal payload (no ServiceLoader).
     </description>
 
     <properties>
@@ -26,6 +26,12 @@
         <dependency>
             <groupId>com.openjiuwen</groupId>
             <artifactId>agent-core-java</artifactId>
+        </dependency>
+        <!-- Python workflow Start/SetVariable use Redis (get_redis_client); Jedis is the Java client. -->
+        <dependency>
+            <groupId>redis.clients</groupId>
+            <artifactId>jedis</artifactId>
+            <version>5.1.5</version>
         </dependency>
         <!-- Optional: L2 §4.6 / §6.3 Spring wiring; library usable without Spring -->
         <dependency>

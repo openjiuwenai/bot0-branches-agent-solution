@@ -71,12 +71,13 @@ public final class StudioDslProperties {
         StudioDslNodeProperties p = new StudioDslNodeProperties();
         p.setMaxNestingDepth(nestedWorkflow.getMaxDepth());
         p.setPythonExecutor(python.getExecutor());
+        p.setLocalExecMode(code.getLocalExecMode());
         p.setPythonInterpreter(python.getInterpreter());
         p.setPythonDefaultTimeoutMs(python.getDefaultTimeoutMs());
         p.setPythonWorkdirRoot(python.getWorkdirRoot());
         p.setPythonInheritEnv(python.isInheritEnv());
         p.setPythonEnvWhitelist(python.getEnvWhitelist());
-        p.setJavaSpiEnabled(code.isJavaSpiEnabled());
+        p.setJavaCodeLogicEnabled(code.isJavaCodeLogicEnabled());
         p.setUnsupportedModalityPolicy(media.getUnsupportedModalityPolicy());
         p.setVariablesScope(variables.getScope());
         return p;
@@ -230,27 +231,47 @@ public final class StudioDslProperties {
     }
 
     /**
-     * Java code SPI settings.
+     * Java {@code CodeLogic} settings for {@code jiuwen.code}.
      */
     public static final class Code {
-        private boolean javaSpiEnabled = true;
+        private boolean javaCodeLogicEnabled = true;
+        /** LOCAL_CODE_EXEC_MODE analogue. */
+        private String localExecMode = "inprocess";
 
         /**
-         * isJavaSpiEnabled.
+         * isJavaCodeLogicEnabled.
          *
          * @return result
          */
-        public boolean isJavaSpiEnabled() {
-            return javaSpiEnabled;
+        public boolean isJavaCodeLogicEnabled() {
+            return javaCodeLogicEnabled;
         }
 
         /**
-         * setJavaSpiEnabled.
+         * setJavaCodeLogicEnabled.
          *
-         * @param javaSpiEnabled javaSpiEnabled
+         * @param javaCodeLogicEnabled javaCodeLogicEnabled
          */
-        public void setJavaSpiEnabled(boolean javaSpiEnabled) {
-            this.javaSpiEnabled = javaSpiEnabled;
+        public void setJavaCodeLogicEnabled(boolean javaCodeLogicEnabled) {
+            this.javaCodeLogicEnabled = javaCodeLogicEnabled;
+        }
+
+        /**
+         * getLocalExecMode.
+         *
+         * @return result
+         */
+        public String getLocalExecMode() {
+            return localExecMode;
+        }
+
+        /**
+         * setLocalExecMode.
+         *
+         * @param localExecMode localExecMode
+         */
+        public void setLocalExecMode(String localExecMode) {
+            this.localExecMode = localExecMode;
         }
     }
 

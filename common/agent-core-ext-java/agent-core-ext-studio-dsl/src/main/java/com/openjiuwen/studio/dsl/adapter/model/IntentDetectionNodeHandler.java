@@ -12,7 +12,7 @@ import com.openjiuwen.studio.dsl.adapter.DelegatingStudioNode;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
-import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
+import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 import com.openjiuwen.studio.dsl.util.ConditionEvaluator;
 
 import java.util.LinkedHashMap;

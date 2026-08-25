@@ -10,91 +10,50 @@ import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.adapter.AbstractStudioNode;
 import com.openjiuwen.studio.dsl.adapter.DelegatingStudioNode;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
-import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
+import com.openjiuwen.studio.dsl.kb.KnowledgeRetrievalEngine;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
-import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
-import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
+import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 
-import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * jiuwen.knowledgeRetrieval — core bridge or configs.mockDocuments.
+ * jiuwen.knowledgeRetrieval — core bridge or FlowKnowledgeRetrieval engine + kb adapters (P4).
  *
  * @since 2026-08-17
  */
 public final class KnowledgeRetrievalNodeHandler implements NodeHandlerFactory {
-    /**
-     * canonicalType.
-     *
-     * @return result
-     */
     @Override
     public String canonicalType() {
         return "jiuwen.knowledgeRetrieval";
     }
 
-    /**
-     * aliases.
-     *
-     * @return result
-     */
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
 
-    /**
-     * create.
-     *
-     * @param node node
-     * @param ctx ctx
-     * @return result
-     */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         if (ctx.coreExecutableFactory() != null) {
             return ctx.coreExecutableFactory()
                     .createKnowledgeRetrieval(node)
                     .<ComponentExecutable>map(core -> new DelegatingStudioNode(node, core))
-                    .orElseGet(() -> new KnowledgeFallback(node));
+                    .orElseGet(() -> new KnowledgeExecutable(node));
         }
-        return new KnowledgeFallback(node);
+        return new KnowledgeExecutable(node);
     }
 
-    static final class KnowledgeFallback extends AbstractStudioNode {
-        KnowledgeFallback(AssembledNode node) {
+    static final class KnowledgeExecutable extends AbstractStudioNode {
+        KnowledgeExecutable(AssembledNode node) {
             super(node);
         }
 
-        /**
-         * doInvoke.
-         *
-         * @param inputs inputs
-         * @param session session
-         * @param context context
-         * @return result
-         */
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
-            Map<String, Object> uf = new LinkedHashMap<>(userFieldsOf(inputs));
-            // Explicit mock only — empty docs must not masquerade as successful retrieval (L2 §1.2).
-            Object docs = node.configs().get("mockDocuments");
-            if (docs instanceof List<?> list) {
-                uf.put("documents", list);
-                uf.put("knowledgeResults", list);
-                return NodePayload.userFields(uf);
-            }
-            throw new NodeExecutionException(
-                    node.id(),
-                    "jiuwen.knowledgeRetrieval",
-                    NodeCauseCode.NODE_CONFIG_INVALID,
-                    "KnowledgeRetrieval core executable unavailable; provide kbConfigs/kbId"
-                            + " (and optional embed/vectorStore) via ConfigDrivenCoreExecutableFactory,"
-                            + " or explicit mockDocuments");
+            KnowledgeRetrievalEngine engine = new KnowledgeRetrievalEngine(node.id(), node.configs());
+            return NodePayload.userFields(engine.invoke(inputs, session));
         }
     }
 }

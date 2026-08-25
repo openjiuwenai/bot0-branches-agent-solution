@@ -17,13 +17,13 @@ import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.python.SubprocessPythonCodeExecutor;
 import com.openjiuwen.studio.dsl.registry.CodeLogicRegistry;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
-import com.openjiuwen.studio.dsl.spi.AgentInvoker;
-import com.openjiuwen.studio.dsl.spi.AgentRegistry;
-import com.openjiuwen.studio.dsl.spi.CoreExecutableFactory;
-import com.openjiuwen.studio.dsl.spi.McpToolInvoker;
-import com.openjiuwen.studio.dsl.spi.PythonCodeExecutor;
-import com.openjiuwen.studio.dsl.spi.SubWorkflowResolver;
-import com.openjiuwen.studio.dsl.spi.ToolRegistry;
+import com.openjiuwen.studio.dsl.contract.AgentInvoker;
+import com.openjiuwen.studio.dsl.contract.AgentRegistry;
+import com.openjiuwen.studio.dsl.contract.CoreExecutableFactory;
+import com.openjiuwen.studio.dsl.contract.McpToolInvoker;
+import com.openjiuwen.studio.dsl.contract.PythonCodeExecutor;
+import com.openjiuwen.studio.dsl.contract.SubWorkflowResolver;
+import com.openjiuwen.studio.dsl.contract.ToolRegistry;
 
 /**
  * Programmatic module bootstrap (L2 §4.6 / §6.3 without requiring Spring).

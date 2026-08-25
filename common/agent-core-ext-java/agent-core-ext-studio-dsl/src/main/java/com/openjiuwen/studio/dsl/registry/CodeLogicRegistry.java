@@ -4,15 +4,14 @@
 
 package com.openjiuwen.studio.dsl.registry;
 
-import com.openjiuwen.studio.dsl.spi.CodeLogic;
+import com.openjiuwen.studio.dsl.contract.CodeLogic;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.ServiceLoader;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * CodeLogicRegistry for Studio DSL node-type extension (FEAT-031).
+ * Explicit registration of Java {@link CodeLogic} implementations (no ServiceLoader).
  *
  * @since 2026-08-17
  */
@@ -26,15 +25,6 @@ public final class CodeLogicRegistry {
      */
     public void register(CodeLogic logic) {
         byName.put(logic.name(), logic);
-    }
-
-    /**
-     * loadServiceLoader.
-     */
-    public void loadServiceLoader() {
-        for (CodeLogic logic : ServiceLoader.load(CodeLogic.class)) {
-            register(logic);
-        }
     }
 
     /**

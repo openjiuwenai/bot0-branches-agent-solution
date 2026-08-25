@@ -6,7 +6,7 @@ package com.openjiuwen.studio.dsl.python;
 
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
-import com.openjiuwen.studio.dsl.spi.PythonCodeExecutor;
+import com.openjiuwen.studio.dsl.contract.PythonCodeExecutor;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -256,7 +256,7 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
     }
 
     @SuppressWarnings("unchecked")
-    private static Map<String, Object> parseJsonObject(String stdout) throws IOException {
+    public static Map<String, Object> parseJsonObject(String stdout) throws IOException {
         String trimmed = stdout == null ? "" : stdout.trim();
         if (trimmed.isEmpty()) {
             return Map.of();
@@ -283,7 +283,7 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
         private JsonNull() {}
     }
 
-    static final class SimpleJson {
+    public static final class SimpleJson {
         private final String s;
         private int i;
 
@@ -291,7 +291,7 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
             this.s = s;
         }
 
-        static Object parse(String s) throws IOException {
+        public static Object parse(String s) throws IOException {
             SimpleJson p = new SimpleJson(s.trim());
             Object v = p.parseValue();
             p.skipWs();

@@ -11,7 +11,7 @@ import com.openjiuwen.studio.dsl.config.StudioDslNodeProperties;
 import com.openjiuwen.studio.dsl.config.StudioDslProperties;
 import com.openjiuwen.studio.dsl.exec.WorkflowAssemblyBridge;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
-import com.openjiuwen.studio.dsl.spi.PythonCodeExecutor;
+import com.openjiuwen.studio.dsl.contract.PythonCodeExecutor;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -47,12 +47,12 @@ class StudioDslAutoConfigurationTest {
         runner.withPropertyValues(
                         "studio-dsl.nested-workflow.max-depth=3",
                         "studio-dsl.python.interpreter=python3.11",
-                        "studio-dsl.code.java-spi-enabled=false")
+                        "studio-dsl.code.java-code-logic-enabled=false")
                 .run(ctx -> {
                     StudioDslNodeProperties props = ctx.getBean(StudioDslNodeProperties.class);
                     assertThat(props.getMaxNestingDepth()).isEqualTo(3);
                     assertThat(props.getPythonInterpreter()).isEqualTo("python3.11");
-                    assertThat(props.isJavaSpiEnabled()).isFalse();
+                    assertThat(props.isJavaCodeLogicEnabled()).isFalse();
                 });
     }
 

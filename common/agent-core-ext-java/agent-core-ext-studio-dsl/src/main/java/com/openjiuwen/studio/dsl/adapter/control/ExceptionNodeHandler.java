@@ -8,48 +8,36 @@ import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.adapter.AbstractStudioNode;
+import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
+import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
+import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
-import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * jiuwen.exception — carry exception branch payload (Studio ExceptionInfo).
+ * jiuwen.exception — Python ExceptionInfo (abort + workflow_exception) / soft defaultOutputs.
  *
  * @since 2026-08-17
  */
 public final class ExceptionNodeHandler implements NodeHandlerFactory {
-    /**
-     * canonicalType.
-     *
-     * @return result
-     */
+    static final String WORKFLOW_EXCEPTION = "workflow_exception";
+    static final String ABORT_FLAG = "__abort__";
+
     @Override
     public String canonicalType() {
         return "jiuwen.exception";
     }
 
-    /**
-     * aliases.
-     *
-     * @return result
-     */
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
 
-    /**
-     * create.
-     *
-     * @param node node
-     * @param ctx ctx
-     * @return result
-     */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         return new ExceptionExecutable(node);
@@ -60,14 +48,6 @@ public final class ExceptionNodeHandler implements NodeHandlerFactory {
             super(node);
         }
 
-        /**
-         * doInvoke.
-         *
-         * @param inputs inputs
-         * @param session session
-         * @param context context
-         * @return result
-         */
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
             Map<String, Object> uf = new LinkedHashMap<>(userFieldsOf(inputs));
@@ -85,12 +65,54 @@ public final class ExceptionNodeHandler implements NodeHandlerFactory {
             } else {
                 ex.put("message", uf.getOrDefault("error", uf.getOrDefault("message", "exception branch")));
             }
-            Object code = node.configs().get("errorCode");
+            Object code = node.configs().getOrDefault("errorCode", node.configs().get("error_code"));
             if (code != null) {
                 ex.putIfAbsent("errorCode", code);
             }
             uf.put("exception", ex);
-            return NodePayload.userFields(uf);
+            uf.put("jiuwen_exception_node_id", node.id());
+
+            String handleType =
+                    String.valueOf(
+                                    node.configs()
+                                            .getOrDefault(
+                                                    "handleType",
+                                                    node.configs().getOrDefault("handle_type", "")))
+                            .toLowerCase();
+            boolean soft =
+                    "default".equals(handleType)
+                            || "continue".equals(handleType)
+                            || "soft".equals(handleType)
+                            || "default_outputs".equals(handleType);
+            if (soft) {
+                Object defaults =
+                        node.configs().getOrDefault("defaultOutputs", node.configs().get("default_outputs"));
+                if (defaults instanceof Map<?, ?> dm) {
+                    dm.forEach((k, v) -> uf.putIfAbsent(String.valueOf(k), v));
+                }
+                return NodePayload.userFields(uf);
+            }
+
+            // Python ExceptionInfo: first abort emits workflow_exception; concurrent aborts skip frame
+            if (session != null) {
+                try {
+                    boolean alreadyAborted = session.getGlobalState(ABORT_FLAG) != null;
+                    if (!alreadyAborted) {
+                        session.updateGlobalState(Map.of(ABORT_FLAG, true));
+                        Map<String, Object> frameData = new LinkedHashMap<>(uf);
+                        frameData.put("jiuwen_exception_node_id", node.id());
+                        session.writeCustomStream(
+                                Map.of("type", WORKFLOW_EXCEPTION, "index", 0, "data", frameData));
+                    }
+                } catch (RuntimeException ignored) {
+                    // mock
+                }
+            }
+            throw new NodeExecutionException(
+                    node.id(),
+                    node.canonicalType(),
+                    NodeCauseCode.NODE_INVOKE_FAILED,
+                    String.valueOf(ex.getOrDefault("message", "exception abort")));
         }
     }
 }

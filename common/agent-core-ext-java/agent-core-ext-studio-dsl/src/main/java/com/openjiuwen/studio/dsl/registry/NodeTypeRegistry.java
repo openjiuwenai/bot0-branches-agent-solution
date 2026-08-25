@@ -5,21 +5,21 @@
 package com.openjiuwen.studio.dsl.registry;
 
 import com.openjiuwen.core.workflow.ComponentExecutable;
+import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
-import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.ServiceLoader;
 import java.util.Set;
 
 /**
- * alias → canonical → factory (L2 §4.1).
+ * alias → canonical → factory. Built-ins only via {@link BuiltinNodeBootstrap};
+ * no ServiceLoader / replace override path.
  *
  * @since 2026-08-17
  */
@@ -28,13 +28,14 @@ public final class NodeTypeRegistry {
     private final Map<String, String> aliasToCanonical = new LinkedHashMap<>();
 
     /**
-     * register.
+     * register — fails if canonical or any alias already occupied.
      *
      * @param factory factory
      */
     public synchronized void register(NodeHandlerFactory factory) {
         Objects.requireNonNull(factory, "factory");
         String canonical = factory.canonicalType();
+        Objects.requireNonNull(canonical, "canonicalType");
         if (byCanonical.containsKey(canonical)) {
             throw new IllegalStateException("duplicate canonicalType: " + canonical);
         }
@@ -42,22 +43,17 @@ public final class NodeTypeRegistry {
             throw new IllegalStateException("canonical conflicts with existing alias: " + canonical);
         }
         for (String alias : factory.aliases()) {
-            if (byCanonical.containsKey(alias) || aliasToCanonical.containsKey(alias)) {
+            if (byCanonical.containsKey(alias)) {
+                throw new IllegalStateException("alias conflict: " + alias);
+            }
+            String owner = aliasToCanonical.get(alias);
+            if (owner != null && !owner.equals(canonical)) {
                 throw new IllegalStateException("alias conflict: " + alias);
             }
         }
         byCanonical.put(canonical, factory);
         for (String alias : factory.aliases()) {
             aliasToCanonical.put(alias, canonical);
-        }
-    }
-
-    /**
-     * loadServiceLoader.
-     */
-    public void loadServiceLoader() {
-        for (NodeHandlerFactory factory : ServiceLoader.load(NodeHandlerFactory.class)) {
-            register(factory);
         }
     }
 
@@ -114,15 +110,13 @@ public final class NodeTypeRegistry {
     }
 
     /**
-     * Builtins first, then ServiceLoader custom factories (L2 §4.1 / §4.7).
-     * Custom factories must not occupy built-in canonical or alias names.
+     * Built-in handlers only (no ServiceLoader).
      *
      * @return result
      */
     public static NodeTypeRegistry createWithBuiltins() {
         NodeTypeRegistry registry = new NodeTypeRegistry();
         BuiltinNodeBootstrap.registerAll(registry);
-        registry.loadServiceLoader();
         return registry;
     }
 }

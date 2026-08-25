@@ -9,12 +9,12 @@ import com.openjiuwen.studio.dsl.adapter.PassthroughStudioNode;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.schema.DslNodeShellValidator;
-import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
+import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 
 import java.util.Set;
 
 /**
- * Test-only custom Factory loaded via META-INF/services (L2 T4).
+ * Test-only custom factory registered via {@code NodeTypeRegistry.register}.
  *
  * @since 2026-08-17
  */

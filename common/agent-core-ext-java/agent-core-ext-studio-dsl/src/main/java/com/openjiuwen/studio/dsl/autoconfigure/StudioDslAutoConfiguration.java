@@ -10,7 +10,7 @@ import com.openjiuwen.studio.dsl.config.StudioDslProperties;
 import com.openjiuwen.studio.dsl.exec.WorkflowAssemblyBridge;
 import com.openjiuwen.studio.dsl.python.SubprocessPythonCodeExecutor;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
-import com.openjiuwen.studio.dsl.spi.PythonCodeExecutor;
+import com.openjiuwen.studio.dsl.contract.PythonCodeExecutor;
 
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;

@@ -14,51 +14,34 @@ import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
+import com.openjiuwen.studio.dsl.python.PythonCodeRunners;
 import com.openjiuwen.studio.dsl.python.PythonExecRequest;
 import com.openjiuwen.studio.dsl.python.PythonExecResult;
-import com.openjiuwen.studio.dsl.python.SubprocessPythonCodeExecutor;
-import com.openjiuwen.studio.dsl.spi.CodeLogic;
-import com.openjiuwen.studio.dsl.spi.CodeLogicContext;
-import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
-import com.openjiuwen.studio.dsl.spi.PythonCodeExecutor;
-import com.openjiuwen.studio.dsl.util.TypeCoercer;
+import com.openjiuwen.studio.dsl.contract.CodeLogic;
+import com.openjiuwen.studio.dsl.contract.CodeLogicContext;
+import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
+import com.openjiuwen.studio.dsl.contract.PythonCodeExecutor;
+import com.openjiuwen.studio.dsl.util.FlowCodeSchemaSupport;
 
 import java.util.Map;
 import java.util.Set;
 
 /**
- * jiuwen.code — Java SPI + Python subprocess (FEAT-031 / L2 §3.8 / §4.4).
+ * jiuwen.code — Java CodeLogic + Python runners (local/inprocess/subprocess/sandbox) (FEAT-031 / Python FlowCode).
  *
  * @since 2026-08-17
  */
 public final class CodeNodeHandler implements NodeHandlerFactory {
-    /**
-     * canonicalType.
-     *
-     * @return result
-     */
     @Override
     public String canonicalType() {
         return "jiuwen.code";
     }
 
-    /**
-     * aliases.
-     *
-     * @return result
-     */
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
 
-    /**
-     * create.
-     *
-     * @param node node
-     * @param ctx ctx
-     * @return result
-     */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         return new CodeExecutable(node, ctx);
@@ -72,15 +55,6 @@ public final class CodeNodeHandler implements NodeHandlerFactory {
             this.ctx = ctx;
         }
 
-        /**
-         * doInvoke.
-         *
-         * @param inputs inputs
-         * @param session session
-         * @param context context
-         * @return result
-         * @throws Exception when the call fails
-         */
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context)
                 throws Exception {
@@ -116,12 +90,12 @@ public final class CodeNodeHandler implements NodeHandlerFactory {
 
         private NodePayload runJava(String ref, Map<String, Object> inputs) throws Exception {
             StudioDslNodeProperties props = ctx.properties();
-            if (props != null && !props.isJavaSpiEnabled()) {
+            if (props != null && !props.isJavaCodeLogicEnabled()) {
                 throw new NodeExecutionException(
                         node.id(),
                         "jiuwen.code",
                         NodeCauseCode.NODE_CONFIG_INVALID,
-                        "java SPI disabled (studio-dsl.code.java-spi-enabled=false)");
+                        "java CodeLogic disabled (studio-dsl.code.java-code-logic-enabled=false)");
             }
             if (ref == null || ref.isBlank()) {
                 throw new NodeExecutionException(
@@ -131,16 +105,23 @@ public final class CodeNodeHandler implements NodeHandlerFactory {
                     .find(ref)
                     .orElseThrow(() -> new NodeExecutionException(
                             node.id(), "jiuwen.code", NodeCauseCode.CODE_LOGIC_NOT_FOUND, "ref=" + ref));
-            Map<String, Object> coerced = coerceInputs(userFieldsOf(inputs), node.configs());
+            Map<String, Object> coerced = FlowCodeSchemaSupport.coerceInputs(userFieldsOf(inputs), node.configs());
             Map<String, Object> result = logic.execute(coerced, new CodeLogicContext(node.id(), node.configs()));
-            return NodePayload.userFields(result);
+            return NodePayload.userFields(FlowCodeSchemaSupport.coerceOutputs(result, node.configs()));
         }
 
         private NodePayload runPython(String script, Map<String, Object> inputs, Map<String, Object> configs) {
-            PythonCodeExecutor executor = ctx.pythonExecutor() == null
-                    ? new SubprocessPythonCodeExecutor()
-                    : ctx.pythonExecutor();
+            FlowCodeSchemaSupport.checkBlacklist(node.id(), script);
+
             StudioDslNodeProperties props = ctx.properties();
+            String execEnv = stringVal(configs.get("exec_env"));
+            if (execEnv.isBlank()) {
+                execEnv = stringVal(configs.get("execEnv"));
+            }
+            String localMode = resolveLocalExecMode(configs, props);
+            PythonCodeExecutor executor =
+                    PythonCodeRunners.resolve(execEnv, localMode, ctx.pythonExecutor());
+
             long timeoutMs = props != null ? props.getPythonDefaultTimeoutMs() : 30_000L;
             Object t = configs.get("timeoutMs");
             if (t instanceof Number n) {
@@ -150,8 +131,8 @@ public final class CodeNodeHandler implements NodeHandlerFactory {
             if (interpreter.isBlank() && props != null) {
                 interpreter = props.getPythonInterpreter();
             }
-            Map<String, Object> coerced = coerceInputs(userFieldsOf(inputs), configs);
-            PythonExecResult result = executor.execute(new PythonExecRequest(
+            Map<String, Object> coerced = FlowCodeSchemaSupport.coerceInputs(userFieldsOf(inputs), configs);
+            PythonExecRequest request = new PythonExecRequest(
                     node.id(),
                     script,
                     coerced,
@@ -161,19 +142,44 @@ public final class CodeNodeHandler implements NodeHandlerFactory {
                     ctx.workflowId(),
                     props == null ? null : props.getPythonWorkdirRoot(),
                     props != null && props.isPythonInheritEnv(),
-                    props == null ? null : props.getPythonEnvWhitelist()));
-            return NodePayload.userFields(result.outputs());
+                    props == null ? null : props.getPythonEnvWhitelist());
+
+            PythonExecResult result;
+            try {
+                result = executor.execute(request);
+            } catch (NodeExecutionException e) {
+                // Python: sandbox non-timeout failure → fallback to local
+                boolean wantSandbox = "sandbox".equals(PythonCodeRunners.normalizeExecEnv(execEnv));
+                boolean isTimeout = e.causeCode() == NodeCauseCode.PYTHON_TIMEOUT;
+                if (wantSandbox && !isTimeout) {
+                    PythonCodeExecutor local = PythonCodeRunners.resolveLocal(localMode, ctx.pythonExecutor());
+                    result = local.execute(request);
+                } else {
+                    throw e;
+                }
+            }
+
+            Map<String, Object> outputs = FlowCodeSchemaSupport.coerceOutputs(result.outputs(), configs);
+            return NodePayload.userFields(outputs);
         }
 
-        @SuppressWarnings("unchecked")
-        private static Map<String, Object> coerceInputs(Map<String, Object> inputs, Map<String, Object> configs) {
-            Object schema = configs.getOrDefault("userFieldsSchema", configs.get("userFields"));
-            if (schema instanceof Map<?, ?> m) {
-                Map<String, Object> sch = new java.util.LinkedHashMap<>();
-                m.forEach((k, v) -> sch.put(String.valueOf(k), v));
-                return TypeCoercer.coerceMap(inputs, sch);
+        private static String resolveLocalExecMode(Map<String, Object> configs, StudioDslNodeProperties props) {
+            String fromConfig = stringVal(configs.get("localExecMode"));
+            if (!fromConfig.isBlank()) {
+                return fromConfig;
             }
-            return inputs;
+            if (props != null) {
+                String fromProps = props.getLocalExecMode();
+                if (fromProps != null && !fromProps.isBlank()) {
+                    return fromProps;
+                }
+                // legacy: pythonExecutor property sometimes stores inprocess|subprocess
+                String pe = props.getPythonExecutor();
+                if ("inprocess".equalsIgnoreCase(pe) || "subprocess".equalsIgnoreCase(pe)) {
+                    return pe;
+                }
+            }
+            return PythonCodeRunners.defaultLocalExecMode();
         }
 
         private static String stringVal(Object o) {

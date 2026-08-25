@@ -13,15 +13,15 @@ import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
-import com.openjiuwen.studio.dsl.spi.McpToolInvoker;
-import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
+import com.openjiuwen.studio.dsl.contract.McpToolInvoker;
+import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * jiuwen.mcp — invoke via McpToolInvoker SPI (Studio FlowMcp).
+ * jiuwen.mcp — invoke via McpToolInvoker (Studio FlowMcp).
  *
  * @since 2026-08-17
  */

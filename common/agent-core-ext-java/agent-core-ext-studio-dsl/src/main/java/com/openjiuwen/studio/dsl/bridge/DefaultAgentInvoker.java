@@ -4,8 +4,8 @@
 
 package com.openjiuwen.studio.dsl.bridge;
 
-import com.openjiuwen.studio.dsl.spi.AgentInvoker;
-import com.openjiuwen.studio.dsl.spi.AgentRegistry;
+import com.openjiuwen.studio.dsl.contract.AgentInvoker;
+import com.openjiuwen.studio.dsl.contract.AgentRegistry;
 
 import java.util.Map;
 

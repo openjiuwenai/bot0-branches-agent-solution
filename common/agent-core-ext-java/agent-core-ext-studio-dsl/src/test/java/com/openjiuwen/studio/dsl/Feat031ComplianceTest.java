@@ -127,9 +127,9 @@ class Feat031ComplianceTest {
     }
 
     @Test
-    void javaSpiDisabled_failsExplicitly() {
+    void javaCodeLogicDisabled_failsExplicitly() {
         StudioDslNodeProperties props = new StudioDslNodeProperties();
-        props.setJavaSpiEnabled(false);
+        props.setJavaCodeLogicEnabled(false);
         NodeBuildContext ctx = NodeBuildContext.defaults("wf", props);
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
         ComponentExecutable exec = registry.create(
@@ -142,7 +142,7 @@ class Feat031ComplianceTest {
                     if (!(e instanceof NodeExecutionException ne)) {
                         throw new AssertionError("expected NodeExecutionException");
                     }
-                    assertThat(ne.getMessage()).contains("java SPI disabled");
+                    assertThat(ne.getMessage()).contains("java CodeLogic disabled");
                 });
     }
 }

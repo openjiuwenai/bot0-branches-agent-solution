@@ -5,7 +5,7 @@
 package com.openjiuwen.studio.dsl.bridge;
 
 import com.openjiuwen.core.foundation.tool.Tool;
-import com.openjiuwen.studio.dsl.spi.ToolRegistry;
+import com.openjiuwen.studio.dsl.contract.ToolRegistry;
 
 import java.util.Map;
 import java.util.Optional;
