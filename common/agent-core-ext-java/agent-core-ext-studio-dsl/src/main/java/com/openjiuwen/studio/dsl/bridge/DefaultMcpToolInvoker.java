@@ -1,12 +1,11 @@
 package com.openjiuwen.studio.dsl.bridge;
 
 import com.openjiuwen.studio.dsl.spi.McpToolInvoker;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -35,16 +34,28 @@ public final class DefaultMcpToolInvoker implements McpToolInvoker {
         }
         String body = "{\"server\":\"" + esc(server) + "\",\"tool\":\"" + esc(tool) + "\",\"arguments\":"
                 + toJson(arguments) + "}";
-        HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
-        HttpRequest req = HttpRequest.newBuilder(URI.create(String.valueOf(endpoint)))
-                .timeout(Duration.ofSeconds(30))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-                .build();
-        HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        return postJson(String.valueOf(endpoint), body);
+    }
+
+    private static Map<String, Object> postJson(String endpoint, String json) throws Exception {
+        HttpURLConnection conn = (HttpURLConnection) URI.create(endpoint).toURL().openConnection();
+        conn.setConnectTimeout(10_000);
+        conn.setReadTimeout(30_000);
+        conn.setRequestMethod("POST");
+        conn.setDoOutput(true);
+        conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+        byte[] payload = json.getBytes(StandardCharsets.UTF_8);
+        conn.setFixedLengthStreamingMode(payload.length);
+        try (OutputStream os = conn.getOutputStream()) {
+            os.write(payload);
+        }
+        int status = conn.getResponseCode();
+        InputStream stream = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+        String respBody = stream == null ? "" : new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        conn.disconnect();
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("statusCode", resp.statusCode());
-        out.put("body", resp.body());
+        out.put("statusCode", status);
+        out.put("body", respBody);
         return out;
     }
 
