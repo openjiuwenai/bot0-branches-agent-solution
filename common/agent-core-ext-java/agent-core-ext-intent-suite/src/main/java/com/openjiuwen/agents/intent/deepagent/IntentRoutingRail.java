@@ -29,6 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Resolves the virtual intent Tool and routes the same ToolCall to its selected target.
@@ -125,6 +126,78 @@ public final class IntentRoutingRail extends AgentRail {
             return;
         }
         writeResult(context, inputs, decision, sessionId);
+    }
+
+    /**
+     * A remote delegate reports transport and business failures as an explicit
+     * {@code {ok:false}} envelope. Convert that envelope into a terminal,
+     * user-facing business-failure answer before the model gets another turn.
+     * The caller task has handled the failure, so this is an answer rather than
+     * an unhandled execution exception; the machine-readable fields preserve the
+     * distinction between business failure and agent-task failure.
+     *
+     * @param context callback context after tool execution
+     */
+    @Override
+    public void afterToolCall(AgentCallbackContext context) {
+        if (!(context.getInputs() instanceof ToolCallInputs inputs)
+                || !A2ADelegateIntentResultFunction.TOOL_NAME.equals(inputs.getToolName())) {
+            return;
+        }
+        Optional<Map<?, ?>> failure = failureEnvelope(inputs.getToolResult());
+        if (failure.isEmpty() || !Boolean.FALSE.equals(failure.get().get("ok"))) {
+            return;
+        }
+        Map<?, ?> result = failure.get();
+        String code = result.get("code") == null ? "REMOTE_FAILED" : String.valueOf(result.get("code"));
+        String detail = result.get("message") == null ? "" : String.valueOf(result.get("message"));
+        String message = friendlyFailureMessage(code, detail);
+        Map<String, Object> terminal = new LinkedHashMap<>();
+        terminal.put("output", message);
+        terminal.put("result_type", "answer");
+        terminal.put("ok", false);
+        terminal.put("businessSuccess", false);
+        terminal.put("code", code);
+        terminal.put("message", message);
+        terminal.put("detail", detail);
+        terminal.put("retryable", isRetryable(result));
+        if (result.get("remoteAgentId") != null) {
+            terminal.put("remoteAgentId", result.get("remoteAgentId"));
+        }
+        context.requestForceFinish(terminal);
+    }
+
+    private static String friendlyFailureMessage(String code, String detail) {
+        return switch (code) {
+            case "REMOTE_UNAVAILABLE" -> "当前服务暂时不可用，请稍后重试。";
+            case "REMOTE_TIMEOUT" -> "服务响应超时，请稍后重试。";
+            case "REMOTE_RATE_LIMITED", "REMOTE_OVERLOADED" -> "当前服务繁忙，请稍后重试。";
+            case "REMOTE_BUSINESS_FAILURE" -> detail.isBlank() ? "业务处理未成功，请核对信息后重试。" : detail;
+            default -> "远端业务处理未成功，请稍后重试。";
+        };
+    }
+
+    private static boolean isRetryable(Map<?, ?> result) {
+        if (result.get("retryable") instanceof Boolean retryable) {
+            return retryable;
+        }
+        return result.get("remoteError") instanceof Map<?, ?> remoteError
+                && Boolean.TRUE.equals(remoteError.get("retryable"));
+    }
+
+    private static Optional<Map<?, ?>> failureEnvelope(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            return Optional.of(map);
+        }
+        if (!(value instanceof String json) || json.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(OBJECT_MAPPER.readValue(json, new TypeReference<Map<String, Object>>() {
+            }));
+        } catch (JsonProcessingException exception) {
+            return Optional.empty();
+        }
     }
 
     private static String sessionId(AgentCallbackContext context) {

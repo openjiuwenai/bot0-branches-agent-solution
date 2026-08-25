@@ -153,6 +153,59 @@ class IntentRoutingRailTest {
         assertThat(downstreamObserved.get()).isEqualTo("a2a_delegate");
     }
 
+    @Test
+    void failedA2aToolResultForceFinishesWithoutAnotherModelTurn() {
+        IntentRoutingRail rail = new IntentRoutingRail(
+                suite(context -> new InvokeToolAction("a2a_delegate", Map.of("agentName", "balance"))));
+        ToolCallInputs inputs = inputs(intentCall("call-failure", "balance"));
+        inputs.setToolName("a2a_delegate");
+        inputs.setToolResult(Map.of("ok", false, "code", "REMOTE_UNAVAILABLE", "message", "connection refused",
+                "remoteError", Map.of("code", "BACKEND_DOWN", "retryable", true), "remoteAgentId", "balance-agent"));
+        AgentCallbackContext callback = AgentCallbackContext.builder().inputs(inputs).extra(new LinkedHashMap<>())
+                .build();
+
+        rail.afterToolCall(callback);
+
+        assertThat(callback.consumeForceFinish().getResult()).containsEntry("ok", false)
+                .containsEntry("businessSuccess", false).containsEntry("code", "REMOTE_UNAVAILABLE")
+                .containsEntry("result_type", "answer").containsEntry("output", "当前服务暂时不可用，请稍后重试。")
+                .containsEntry("detail", "connection refused").containsEntry("retryable", true)
+                .containsEntry("remoteAgentId", "balance-agent");
+    }
+
+    @Test
+    void ignoresNonFailureA2aToolResults() {
+        IntentRoutingRail rail = new IntentRoutingRail(
+                suite(context -> new InvokeToolAction("a2a_delegate", Map.of("agentName", "balance"))));
+        for (Object result : List.of(Map.of("ok", true), "not-json", "")) {
+            ToolCallInputs inputs = inputs(intentCall("call-success", "balance"));
+            inputs.setToolName("a2a_delegate");
+            inputs.setToolResult(result);
+            AgentCallbackContext callback = AgentCallbackContext.builder().inputs(inputs).extra(new LinkedHashMap<>())
+                    .build();
+
+            rail.afterToolCall(callback);
+
+            assertThat(callback.hasForceFinishRequest()).isFalse();
+        }
+    }
+
+    @Test
+    void preservesRemoteBusinessFailureMessageForUser() {
+        IntentRoutingRail rail = new IntentRoutingRail(
+                suite(context -> new InvokeToolAction("a2a_delegate", Map.of("agentName", "transfer"))));
+        ToolCallInputs inputs = inputs(intentCall("call-declined", "transfer"));
+        inputs.setToolName("a2a_delegate");
+        inputs.setToolResult(Map.of("ok", false, "code", "REMOTE_BUSINESS_FAILURE", "message", "余额不足，转账未成功。"));
+        AgentCallbackContext callback = AgentCallbackContext.builder().inputs(inputs).extra(new LinkedHashMap<>())
+                .build();
+
+        rail.afterToolCall(callback);
+
+        assertThat(callback.consumeForceFinish().getResult()).containsEntry("businessSuccess", false)
+                .containsEntry("result_type", "answer").containsEntry("output", "余额不足，转账未成功。");
+    }
+
     private static IntentSuite suite(com.openjiuwen.agents.intent.spi.IntentResultFunction resultFunction) {
         IntentSuite suite = IntentSuite.builder(IntentSuiteConfig.defaults())
                 .initializer(new DefaultIntentInitializer()).matcher(context -> Optional

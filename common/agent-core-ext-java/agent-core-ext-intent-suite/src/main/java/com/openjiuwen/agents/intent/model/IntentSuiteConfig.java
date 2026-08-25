@@ -25,8 +25,8 @@ public record IntentSuiteConfig(double matchThreshold, IntentPromptConfig prompt
      * Creates an immutable validated config.
      */
     public IntentSuiteConfig {
-        if (!Double.isFinite(matchThreshold)) {
-            throw new IllegalArgumentException("matchThreshold must be finite");
+        if (!Double.isFinite(matchThreshold) || matchThreshold < 0.0D || matchThreshold > 1.0D) {
+            throw new IllegalArgumentException("matchThreshold must be finite and within [0, 1]");
         }
         prompt = Objects.requireNonNull(prompt, "prompt");
         extensionOptions = Map
