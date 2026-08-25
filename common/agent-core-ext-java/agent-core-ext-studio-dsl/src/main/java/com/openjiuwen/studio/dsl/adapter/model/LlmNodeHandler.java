@@ -1,11 +1,13 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.adapter.model;
 
 import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.adapter.AbstractStudioNode;
-import com.openjiuwen.studio.dsl.adapter.DelegatingStudioNode;
-import com.openjiuwen.studio.dsl.adapter.PassthroughStudioNode;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
@@ -14,6 +16,7 @@ import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
 import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
 import com.openjiuwen.studio.dsl.util.MediaSupport;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,30 +25,43 @@ import java.util.Set;
 /**
  * jiuwen.LLMComponent — ConfigDrivenCoreExecutableFactory → LLMExecutable when model wired;
  * consumes MediaPart into prompt context (FEAT multimodal).
+ *
+ * @since 2026-08-17
  */
 public final class LlmNodeHandler implements NodeHandlerFactory {
+    /**
+     * canonicalType.
+     */
     @Override
     public String canonicalType() {
         return "jiuwen.LLMComponent";
     }
-
+    /**
+     * aliases.
+     */
     @Override
     public Set<String> aliases() {
         return Set.of("jiuwen.llm", "jiuwen.llm_chain", "jiuwen.llmChain");
     }
-
+    /**
+     * create.
+     * @param node node
+     * @param ctx ctx
+     */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         if (ctx.coreExecutableFactory() != null) {
-            ComponentExecutable core = ctx.coreExecutableFactory().createLlm(node);
-            if (core != null) {
-                return new MediaAwareDelegate(node, core);
-            }
+            return ctx.coreExecutableFactory()
+                    .createLlm(node)
+                    .map(core -> (ComponentExecutable) new MediaAwareDelegate(node, core))
+                    .orElseGet(() -> new LlmFallbackExecutable(node));
         }
         return new LlmFallbackExecutable(node);
     }
 
-    /** Inject consumable media into inputs before core invoke. */
+    /**
+     * Inject consumable media into inputs before core invoke.
+     */
     static final class MediaAwareDelegate extends AbstractStudioNode {
         private final ComponentExecutable delegate;
 
@@ -53,7 +69,13 @@ public final class LlmNodeHandler implements NodeHandlerFactory {
             super(node);
             this.delegate = delegate;
         }
-
+        /**
+         * doInvoke.
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @throws Exception when the call fails
+         */
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context)
                 throws Exception {
@@ -76,7 +98,12 @@ public final class LlmNodeHandler implements NodeHandlerFactory {
         LlmFallbackExecutable(AssembledNode node) {
             super(node);
         }
-
+        /**
+         * doInvoke.
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         */
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
             List<MediaPart> media = MediaSupport.mediaOf(inputs);

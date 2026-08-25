@@ -1,8 +1,11 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.adapter.control;
 
 import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.session.NodeSessionApi;
-import com.openjiuwen.core.workflow.BranchRouter;
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.core.workflow.component.BranchComponent;
 import com.openjiuwen.core.workflow.condition.AlwaysTrue;
@@ -12,6 +15,7 @@ import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
 import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
 import com.openjiuwen.studio.dsl.util.ConditionEvaluator;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,18 +27,29 @@ import java.util.function.BooleanSupplier;
  * jiuwen.branch — populate core BranchComponent/BranchRouter and select branchId (FEAT routing).
  *
  * <p>Core {@code Branch} only accepts Condition / String / BooleanSupplier — not Function.
+ *
+ * @since 2026-08-17
  */
 public final class BranchNodeHandler implements NodeHandlerFactory {
+    /**
+     * canonicalType.
+     */
     @Override
     public String canonicalType() {
         return "jiuwen.branch";
     }
-
+    /**
+     * aliases.
+     */
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
-
+    /**
+     * create.
+     * @param node node
+     * @param ctx ctx
+     */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         BranchComponent component = new BranchComponent();
@@ -48,7 +63,9 @@ public final class BranchNodeHandler implements NodeHandlerFactory {
         return executable;
     }
 
-    /** Map Studio condition shapes onto types Branch accepts. */
+    /**
+     * Map Studio condition shapes onto types Branch accepts.
+     */
     static Object toCoreCondition(BranchDef d, BranchExecutable executable) {
         if (d.isDefault) {
             return new AlwaysTrue();
@@ -56,9 +73,7 @@ public final class BranchNodeHandler implements NodeHandlerFactory {
         if (d.condition instanceof String s) {
             return s;
         }
-        BranchDef captured = d;
-        BooleanSupplier supplier = () -> ConditionEvaluator.matches(captured.condition, executable.lastUserFields());
-        return supplier;
+        return (BooleanSupplier) () -> ConditionEvaluator.matches(d.condition, executable.lastUserFields());
     }
 
     static final class BranchExecutable extends AbstractStudioNode {
@@ -75,23 +90,17 @@ public final class BranchNodeHandler implements NodeHandlerFactory {
         Map<String, Object> lastUserFields() {
             return lastUserFields;
         }
-
+        /**
+         * doInvoke.
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         */
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
             Map<String, Object> uf = userFieldsOf(inputs);
             lastUserFields = uf;
             String selected = select(defs, uf);
-            // Drive core router when possible (graph edges still wired by FEAT-027).
-            try {
-                BranchRouter router = component.router();
-                router.setSession(session);
-                Object routed = router.apply(inputs);
-                if (routed != null) {
-                    selected = String.valueOf(routed instanceof List<?> l && !l.isEmpty() ? l.get(0) : routed);
-                }
-            } catch (RuntimeException ignored) {
-                // fall back to local selection
-            }
             Map<String, Object> outUf = new LinkedHashMap<>(uf);
             outUf.put("__branchId__", selected);
             Map<String, Object> wrap = new LinkedHashMap<>();
@@ -100,7 +109,9 @@ public final class BranchNodeHandler implements NodeHandlerFactory {
             wrap.put("routeTargets", List.of(selected));
             return NodePayload.ofFields(wrap);
         }
-
+        /**
+         * branchComponent.
+         */
         public BranchComponent branchComponent() {
             return component;
         }

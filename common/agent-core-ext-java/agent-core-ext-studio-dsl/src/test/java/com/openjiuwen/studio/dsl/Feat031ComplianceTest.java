@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -16,24 +20,30 @@ import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.python.PythonExecRequest;
 import com.openjiuwen.studio.dsl.python.SubprocessPythonCodeExecutor;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Map;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** FEAT-031 / L2 gap regressions: no fake success, variable scope, Python isolation keys. */
-class Feat031ComplianceTest {
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Map;
 
+/**
+ * FEAT-031 / L2 gap regressions: no fake success, variable scope, Python isolation keys.
+ *
+ * @since 2026-08-17
+ */
+class Feat031ComplianceTest {
     @Test
     void llm_withoutWiringOrMock_failsNotFakeSuccess() {
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
         ComponentExecutable exec = registry.create(
                 AssembledNode.of("llm1", "jiuwen.LLMComponent", Map.of("prompt", "hi")),
                 NodeBuildContext.defaults("wf"));
-        assertThatThrownBy(() -> exec.invoke(Map.of("userFields", Map.of()), mock(NodeSessionApi.class), mock(ModelContext.class)))
+        assertThatThrownBy(() -> exec.invoke(
+                Map.of("userFields", Map.of()), mock(NodeSessionApi.class), mock(ModelContext.class)))
                 .isInstanceOf(NodeExecutionException.class)
-                .extracting(e -> ((NodeExecutionException) e).causeCode())
+                .extracting(e -> e instanceof NodeExecutionException ne ? ne.causeCode() : null)
                 .isEqualTo(NodeCauseCode.NODE_CONFIG_INVALID);
     }
 
@@ -43,9 +53,10 @@ class Feat031ComplianceTest {
         ComponentExecutable exec = registry.create(
                 AssembledNode.of("k1", "jiuwen.knowledgeRetrieval", Map.of()),
                 NodeBuildContext.defaults("wf"));
-        assertThatThrownBy(() -> exec.invoke(Map.of("userFields", Map.of()), mock(NodeSessionApi.class), mock(ModelContext.class)))
+        assertThatThrownBy(() -> exec.invoke(
+                Map.of("userFields", Map.of()), mock(NodeSessionApi.class), mock(ModelContext.class)))
                 .isInstanceOf(NodeExecutionException.class)
-                .extracting(e -> ((NodeExecutionException) e).causeCode())
+                .extracting(e -> e instanceof NodeExecutionException ne ? ne.causeCode() : null)
                 .isEqualTo(NodeCauseCode.NODE_CONFIG_INVALID);
     }
 
@@ -55,9 +66,10 @@ class Feat031ComplianceTest {
         ComponentExecutable exec = registry.create(
                 AssembledNode.of("c1", "jiuwen.code", Map.of("language", "javascript", "code", "1")),
                 NodeBuildContext.defaults("wf"));
-        assertThatThrownBy(() -> exec.invoke(Map.of("userFields", Map.of()), mock(NodeSessionApi.class), mock(ModelContext.class)))
+        assertThatThrownBy(() -> exec.invoke(
+                Map.of("userFields", Map.of()), mock(NodeSessionApi.class), mock(ModelContext.class)))
                 .isInstanceOf(NodeExecutionException.class)
-                .extracting(e -> ((NodeExecutionException) e).causeCode())
+                .extracting(e -> e instanceof NodeExecutionException ne ? ne.causeCode() : null)
                 .isEqualTo(NodeCauseCode.NODE_CONFIG_INVALID);
     }
 
@@ -123,8 +135,14 @@ class Feat031ComplianceTest {
         ComponentExecutable exec = registry.create(
                 AssembledNode.of("c1", "jiuwen.code", Map.of("language", "java", "codeLogicRef", "x")),
                 ctx);
-        assertThatThrownBy(() -> exec.invoke(Map.of("userFields", Map.of()), mock(NodeSessionApi.class), mock(ModelContext.class)))
+        assertThatThrownBy(() -> exec.invoke(
+                Map.of("userFields", Map.of()), mock(NodeSessionApi.class), mock(ModelContext.class)))
                 .isInstanceOf(NodeExecutionException.class)
-                .satisfies(e -> assertThat(((NodeExecutionException) e).getMessage()).contains("java SPI disabled"));
+                .satisfies(e -> {
+                    if (!(e instanceof NodeExecutionException ne)) {
+                        throw new AssertionError("expected NodeExecutionException");
+                    }
+                    assertThat(ne.getMessage()).contains("java SPI disabled");
+                });
     }
 }

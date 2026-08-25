@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -12,16 +16,19 @@ import com.openjiuwen.studio.dsl.exec.WorkflowAssemblyBridge;
 import com.openjiuwen.studio.dsl.exec.WorkflowVariableScope;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.AssembledWorkflow;
+
+import org.junit.jupiter.api.Test;
+
 import java.util.List;
 import java.util.Map;
-import org.junit.jupiter.api.Test;
 
 /**
  * Host-style IT: consume assembled products (no DSL loader) via {@link WorkflowAssemblyBridge}
  * and verify variable scope closes when the workflow run completes (L2 §7.4 StudioDslHostIT).
+ *
+ * @since 2026-08-17
  */
 class StudioDslHostIT {
-
     @Test
     void host_assemblesAndRunsLinearWorkflow_thenVariableScopeClosed() {
         StudioDslModule module = StudioDslModule.create();

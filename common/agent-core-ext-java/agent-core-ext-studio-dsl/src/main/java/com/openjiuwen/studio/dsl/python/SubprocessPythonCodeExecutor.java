@@ -1,83 +1,131 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.python;
 
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.spi.PythonCodeExecutor;
-import java.io.BufferedReader;
+
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Process-level Python isolation aligned with Studio LocalCodeRunner wrap contract (L2 §4.3.2).
  * User code must define {@code main(args: dict) -> dict}; stdout must be JSON only.
+ *
+ * @since 2026-08-17
  */
 public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
-
+    /**
+     * execute.
+     *
+     * @param request request
+     * @return result
+     * @throws NodeExecutionException when the call fails
+     */
     @Override
     public PythonExecResult execute(PythonExecRequest request) throws NodeExecutionException {
         Path workDir = null;
         try {
             workDir = createIsolationWorkDir(request);
-            Path scriptFile = workDir.resolve("script.py");
-            String wrapped = buildWrappedCode(request.script(), request.inputs());
-            Files.writeString(scriptFile, wrapped, StandardCharsets.UTF_8);
-
-            ProcessBuilder pb = new ProcessBuilder(request.interpreter(), "-I", scriptFile.toAbsolutePath().toString());
-            pb.directory(workDir.toFile());
-            pb.redirectErrorStream(false);
-            applyEnvironment(pb, request);
-            Process process = pb.start();
-
-            boolean finished = process.waitFor(Math.max(1L, request.timeoutMs()), TimeUnit.MILLISECONDS);
-            if (!finished) {
-                process.destroyForcibly();
-                throw new NodeExecutionException(
-                        request.nodeId(),
-                        "jiuwen.code",
-                        NodeCauseCode.PYTHON_TIMEOUT,
-                        "python exceeded timeoutMs=" + request.timeoutMs());
-            }
-
-            String stdout = readFully(process.getInputStream());
-            String stderr = readFully(process.getErrorStream());
-            int code = process.exitValue();
-            if (code != 0) {
-                throw new NodeExecutionException(
-                        request.nodeId(),
-                        "jiuwen.code",
-                        NodeCauseCode.PYTHON_NON_ZERO,
-                        "exitCode=" + code + ", stderr=" + truncate(stderr));
-            }
-            Map<String, Object> outputs = parseJsonObject(stdout);
-            return new PythonExecResult(outputs, stdout, stderr, code);
+            return runProcess(request, workDir);
         } catch (NodeExecutionException e) {
             throw e;
-        } catch (Exception e) {
+        } catch (IOException | InterruptedException | IllegalArgumentException e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             throw new NodeExecutionException(
                     request.nodeId(), "jiuwen.code", NodeCauseCode.PYTHON_IO, e.getMessage(), e);
         } finally {
-            if (workDir != null) {
+            cleanup(workDir);
+        }
+    }
+
+    private static PythonExecResult runProcess(PythonExecRequest request, Path workDir)
+            throws IOException, InterruptedException, NodeExecutionException {
+        Path scriptFile = workDir.resolve("script.py");
+        Files.writeString(scriptFile, buildWrappedCode(request.script(), request.inputs()), StandardCharsets.UTF_8);
+        ProcessBuilder pb = new ProcessBuilder(request.interpreter(), "-I", scriptFile.toAbsolutePath().toString());
+        pb.directory(workDir.toFile());
+        pb.redirectErrorStream(false);
+        applyEnvironment(pb, request);
+        Process process = pb.start();
+        ByteArrayOutputStream stdoutBuf = new ByteArrayOutputStream();
+        ByteArrayOutputStream stderrBuf = new ByteArrayOutputStream();
+        Thread tOut = drain(process.getInputStream(), stdoutBuf);
+        Thread tErr = drain(process.getErrorStream(), stderrBuf);
+        boolean finished = process.waitFor(Math.max(1L, request.timeoutMs()), TimeUnit.MILLISECONDS);
+        if (!finished) {
+            process.destroyForcibly();
+            joinQuiet(tOut);
+            joinQuiet(tErr);
+            throw new NodeExecutionException(
+                    request.nodeId(),
+                    "jiuwen.code",
+                    NodeCauseCode.PYTHON_TIMEOUT,
+                    "python exceeded timeoutMs=" + request.timeoutMs());
+        }
+        joinQuiet(tOut);
+        joinQuiet(tErr);
+        String stdout = stdoutBuf.toString(StandardCharsets.UTF_8);
+        String stderr = stderrBuf.toString(StandardCharsets.UTF_8);
+        int code = process.exitValue();
+        if (code != 0) {
+            throw new NodeExecutionException(
+                    request.nodeId(),
+                    "jiuwen.code",
+                    NodeCauseCode.PYTHON_NON_ZERO,
+                    "exitCode=" + code + ", stderr=" + truncate(stderr));
+        }
+        return new PythonExecResult(parseJsonObject(stdout), stdout, stderr, code);
+    }
+
+    private static Thread drain(InputStream in, ByteArrayOutputStream buf) {
+        Thread t = new Thread(() -> {
+            try {
+                in.transferTo(buf);
+            } catch (IOException ignored) {
+                // process ended
+            }
+        });
+        t.setDaemon(true);
+        t.start();
+        return t;
+    }
+
+    private static void joinQuiet(Thread t) {
+        try {
+            t.join(2_000L);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static void cleanup(Path workDir) {
+        if (workDir == null) {
+            return;
+        }
+        try (Stream<Path> walk = Files.walk(workDir)) {
+            walk.sorted((a, b) -> b.compareTo(a)).forEach(p -> {
                 try {
-                    Files.walk(workDir)
-                            .sorted((a, b) -> b.compareTo(a))
-                            .forEach(p -> {
-                                try {
-                                    Files.deleteIfExists(p);
-                                } catch (IOException ignored) {
-                                    // best-effort cleanup
-                                }
-                            });
+                    Files.deleteIfExists(p);
                 } catch (IOException ignored) {
                     // best-effort cleanup
                 }
-            }
+            });
+        } catch (IOException ignored) {
+            // best-effort cleanup
         }
     }
 
@@ -205,12 +253,6 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
         return (Map<String, Object>) SimpleJson.parse(trimmed);
     }
 
-    private static String readFully(java.io.InputStream in) throws IOException {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
-            return reader.lines().collect(Collectors.joining("\n"));
-        }
-    }
-
     private static String truncate(String s) {
         if (s == null) {
             return "";
@@ -219,6 +261,12 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
     }
 
     /** Tiny JSON subset parser sufficient for python json.dumps(dict) results. */
+    private static final class JsonNull {
+        private static final JsonNull INSTANCE = new JsonNull();
+
+        private JsonNull() {}
+    }
+
     static final class SimpleJson {
         private final String s;
         private int i;
@@ -271,7 +319,7 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
                 String key = parseString();
                 skipWs();
                 expect(':');
-                Object val = parseValue();
+                Object val = unwrapNull(parseValue());
                 map.put(key, val);
                 skipWs();
                 if (peek('}')) {
@@ -291,7 +339,7 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
                 return list;
             }
             while (true) {
-                list.add(parseValue());
+                list.add(unwrapNull(parseValue()));
                 skipWs();
                 if (peek(']')) {
                     i++;
@@ -343,7 +391,7 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
                 return Boolean.FALSE;
             }
             if ("null".equals(lit)) {
-                return null;
+                return JsonNull.INSTANCE;
             }
             if (lit.contains(".")) {
                 return Double.valueOf(lit);
@@ -357,6 +405,10 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
                 throw new IOException("expected " + c);
             }
             i++;
+        }
+
+        private static Object unwrapNull(Object v) {
+            return v instanceof JsonNull ? null : v;
         }
 
         private boolean peek(char c) {

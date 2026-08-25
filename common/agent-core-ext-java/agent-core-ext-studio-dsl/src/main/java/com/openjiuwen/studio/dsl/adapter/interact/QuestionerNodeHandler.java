@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.adapter.interact;
 
 import com.openjiuwen.core.context.ModelContext;
@@ -9,6 +13,7 @@ import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
 import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -16,25 +21,36 @@ import java.util.Set;
 /**
  * jiuwen.questioner — interaction node (FEAT-031 §5.1 / L2 Interaction group).
  * Prefers core QuestionerExecutable when model wired; else session.interact hang (FEAT-008 INPUT_REQUIRED).
+ *
+ * @since 2026-08-17
  */
 public final class QuestionerNodeHandler implements NodeHandlerFactory {
+    /**
+     * canonicalType.
+     */
     @Override
     public String canonicalType() {
         return "jiuwen.questioner";
     }
-
+    /**
+     * aliases.
+     */
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
-
+    /**
+     * create.
+     * @param node node
+     * @param ctx ctx
+     */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         if (ctx.coreExecutableFactory() != null) {
-            ComponentExecutable core = ctx.coreExecutableFactory().createQuestioner(node);
-            if (core != null) {
-                return new DelegatingStudioNode(node, core);
-            }
+            return ctx.coreExecutableFactory()
+                    .createQuestioner(node)
+                    .map(core -> (ComponentExecutable) new DelegatingStudioNode(node, core))
+                    .orElseGet(() -> new QuestionerFallback(node));
         }
         return new QuestionerFallback(node);
     }
@@ -43,7 +59,12 @@ public final class QuestionerNodeHandler implements NodeHandlerFactory {
         QuestionerFallback(AssembledNode node) {
             super(node);
         }
-
+        /**
+         * doInvoke.
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         */
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
             Map<String, Object> uf = new LinkedHashMap<>(userFieldsOf(inputs));
@@ -66,7 +87,10 @@ public final class QuestionerNodeHandler implements NodeHandlerFactory {
                     hang.put("nodeId", node.id());
                     hang.put("feat008", "INPUT_REQUIRED");
                     session.updateState(hang);
-                } catch (RuntimeException ignored) {
+                } catch (IllegalStateException
+                | NullPointerException
+                | ClassCastException
+                | UnsupportedOperationException ignored) {
                     // mock session
                 }
                 try {
@@ -85,11 +109,17 @@ public final class QuestionerNodeHandler implements NodeHandlerFactory {
                         uf.put("hangState", "Continue");
                         try {
                             session.updateState(Map.of("hangState", "Continue", "questionerState", "answered"));
-                        } catch (RuntimeException ignored) {
+                        } catch (IllegalStateException
+                | NullPointerException
+                | ClassCastException
+                | UnsupportedOperationException ignored) {
                             // mock session
                         }
                     }
-                } catch (RuntimeException ignored) {
+                } catch (IllegalStateException
+                | NullPointerException
+                | ClassCastException
+                | UnsupportedOperationException ignored) {
                     // mock / no hang support — leave INPUT_REQUIRED fields
                 }
             }

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -9,6 +13,11 @@ import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.python.PythonExecRequest;
 import com.openjiuwen.studio.dsl.python.PythonExecResult;
 import com.openjiuwen.studio.dsl.python.SubprocessPythonCodeExecutor;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,10 +25,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
+/**
+ * PythonCodeExecutorTest for Studio DSL node-type extension (FEAT-031).
+ *
+ * @since 2026-08-17
+ */
 class PythonCodeExecutorTest {
     private static boolean pythonAvailable;
 
@@ -27,7 +38,11 @@ class PythonCodeExecutorTest {
     static void checkPython() throws Exception {
         try {
             Process p = new ProcessBuilder("python3", "-c", "print(1)").start();
-            pythonAvailable = p.waitFor(5, TimeUnit.SECONDS) && p.exitValue() == 0;
+            try (java.io.InputStream out = p.getInputStream(); java.io.InputStream err = p.getErrorStream()) {
+                out.transferTo(java.io.OutputStream.nullOutputStream());
+                err.transferTo(java.io.OutputStream.nullOutputStream());
+                pythonAvailable = p.waitFor(5, TimeUnit.SECONDS) && p.exitValue() == 0;
+            }
         } catch (IOException e) {
             pythonAvailable = false;
         }
@@ -59,7 +74,7 @@ class PythonCodeExecutorTest {
                         200L,
                         "python3")))
                 .isInstanceOf(NodeExecutionException.class)
-                .extracting(e -> ((NodeExecutionException) e).causeCode())
+                .extracting(e -> e instanceof NodeExecutionException ne ? ne.causeCode() : null)
                 .isEqualTo(NodeCauseCode.PYTHON_TIMEOUT);
     }
 
@@ -72,7 +87,7 @@ class PythonCodeExecutorTest {
                         "def main(args):\n    raise RuntimeError('boom')\n",
                         tmp)))
                 .isInstanceOf(NodeExecutionException.class)
-                .extracting(e -> ((NodeExecutionException) e).causeCode())
+                .extracting(e -> e instanceof NodeExecutionException ne ? ne.causeCode() : null)
                 .isEqualTo(NodeCauseCode.PYTHON_NON_ZERO);
         assertNoLeftoverScripts(tmp);
     }
@@ -87,7 +102,7 @@ class PythonCodeExecutorTest {
                         "def main(args):\n    return [1, 2, 3]\n",
                         tmp)))
                 .isInstanceOf(NodeExecutionException.class)
-                .extracting(e -> ((NodeExecutionException) e).causeCode())
+                .extracting(e -> e instanceof NodeExecutionException ne ? ne.causeCode() : null)
                 .isEqualTo(NodeCauseCode.PYTHON_IO);
         assertNoLeftoverScripts(tmp);
     }
@@ -102,7 +117,7 @@ class PythonCodeExecutorTest {
                         tmp,
                         200L)))
                 .isInstanceOf(NodeExecutionException.class)
-                .extracting(e -> ((NodeExecutionException) e).causeCode())
+                .extracting(e -> e instanceof NodeExecutionException ne ? ne.causeCode() : null)
                 .isEqualTo(NodeCauseCode.PYTHON_TIMEOUT);
         assertNoLeftoverScripts(tmp);
     }

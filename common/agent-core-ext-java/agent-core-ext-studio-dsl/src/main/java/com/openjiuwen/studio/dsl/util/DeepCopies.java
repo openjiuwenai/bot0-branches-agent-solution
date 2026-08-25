@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.util;
 
 import java.util.ArrayList;
@@ -5,9 +9,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * DeepCopies for Studio DSL node-type extension (FEAT-031).
+ *
+ * @since 2026-08-17
+ */
 public final class DeepCopies {
     private DeepCopies() {}
-
+    /**
+     * map.
+     * @param in in
+     */
     @SuppressWarnings("unchecked")
     public static Map<String, Object> map(Map<String, Object> in) {
         if (in == null) {
@@ -19,7 +31,10 @@ public final class DeepCopies {
         }
         return out;
     }
-
+    /**
+     * value.
+     * @param v v
+     */
     @SuppressWarnings("unchecked")
     public static Object value(Object v) {
         if (v instanceof Map<?, ?> m) {

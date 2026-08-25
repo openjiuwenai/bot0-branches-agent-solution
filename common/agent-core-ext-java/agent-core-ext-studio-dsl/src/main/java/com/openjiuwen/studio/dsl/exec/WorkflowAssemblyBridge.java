@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.exec;
 
 import com.openjiuwen.core.context.ModelContext;
@@ -7,6 +11,7 @@ import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.AssembledWorkflow;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 import com.openjiuwen.studio.dsl.util.DeepCopies;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -14,15 +19,22 @@ import java.util.Objects;
 /**
  * AssembledWorkflow → executables (L2 {@code WorkflowAssemblyBridge}).
  * Prefer {@link #executeLinear} so {@link WorkflowVariableScope} is closed when the workflow ends.
+ *
+ * @since 2026-08-17
  */
 public final class WorkflowAssemblyBridge {
     private final NodeTypeRegistry registry;
-
+    /**
+     * WorkflowAssemblyBridge.
+     * @param registry registry
+     */
     public WorkflowAssemblyBridge(NodeTypeRegistry registry) {
         this.registry = Objects.requireNonNull(registry, "registry");
     }
 
-    /** Map assembled nodes to executables (edges / scheduling remain host responsibility). */
+    /**
+     * Map assembled nodes to executables (edges / scheduling remain host responsibility).
+     */
     public Map<String, ComponentExecutable> mapExecutables(AssembledWorkflow workflow, NodeBuildContext ctx) {
         Map<String, ComponentExecutable> map = new LinkedHashMap<>();
         for (AssembledNode node : workflow.nodes()) {

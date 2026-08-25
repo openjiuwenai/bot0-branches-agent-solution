@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -11,12 +15,18 @@ import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.registry.BuiltinNodeBootstrap;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
-import java.util.Map;
-import java.util.Set;
+
 import org.junit.jupiter.api.Test;
 
-class NodeTypeRegistryTest {
+import java.util.Map;
+import java.util.Set;
 
+/**
+ * NodeTypeRegistryTest for Studio DSL node-type extension (FEAT-031).
+ *
+ * @since 2026-08-17
+ */
+class NodeTypeRegistryTest {
     @Test
     void builtins_coverTwentyOneCanonicalTypes() {
         NodeTypeRegistry registry = new NodeTypeRegistry();
@@ -32,7 +42,7 @@ class NodeTypeRegistryTest {
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
         assertThatThrownBy(() -> registry.canonicalize("EI.qa"))
                 .isInstanceOf(NodeExecutionException.class)
-                .extracting(e -> ((NodeExecutionException) e).causeCode())
+                .extracting(e -> e instanceof NodeExecutionException ne ? ne.causeCode() : null)
                 .isEqualTo(NodeCauseCode.UNKNOWN_NODE_TYPE);
     }
 

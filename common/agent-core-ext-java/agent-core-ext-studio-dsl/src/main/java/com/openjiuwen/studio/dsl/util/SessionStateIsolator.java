@@ -1,6 +1,11 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.util;
 
 import com.openjiuwen.core.session.NodeSessionApi;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -8,10 +13,16 @@ import java.util.function.Supplier;
 /**
  * Snapshot / restore session local state around nested sub-workflow execution (FEAT §5.5).
  * Interact / stream still forward to the parent session (needed for questioner / message).
+ *
+ * @since 2026-08-17
  */
 public final class SessionStateIsolator {
     private SessionStateIsolator() {}
-
+    /**
+     * runIsolated.
+     * @param session session
+     * @param body body
+     */
     public static <T> T runIsolated(NodeSessionApi session, Supplier<T> body) {
         if (session == null) {
             return body.get();
@@ -32,7 +43,10 @@ public final class SessionStateIsolator {
                 return Map.of();
             }
             return DeepCopies.map(dumped);
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException
+                | NullPointerException
+                | ClassCastException
+                | UnsupportedOperationException e) {
             return Map.of();
         }
     }
@@ -48,7 +62,10 @@ public final class SessionStateIsolator {
                 cleared.put(k, null);
             }
             session.updateState(cleared);
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException
+                | NullPointerException
+                | ClassCastException
+                | UnsupportedOperationException ignored) {
             // mock / read-only session
         }
     }
@@ -68,7 +85,10 @@ public final class SessionStateIsolator {
             if (!patch.isEmpty()) {
                 session.updateState(patch);
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException
+                | NullPointerException
+                | ClassCastException
+                | UnsupportedOperationException ignored) {
             // mock / read-only session
         }
     }

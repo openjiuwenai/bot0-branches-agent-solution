@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.adapter;
 
 import com.openjiuwen.core.context.ModelContext;
@@ -6,19 +10,34 @@ import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.MediaPart;
 import com.openjiuwen.studio.dsl.model.NodePayload;
+
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-/** Wraps an agent-core-java ComponentExecutable while preserving Studio media passthrough. */
+/**
+ * Wraps an agent-core-java ComponentExecutable while preserving Studio media passthrough.
+ *
+ * @since 2026-08-17
+ */
 public final class DelegatingStudioNode extends AbstractStudioNode {
     private final ComponentExecutable delegate;
-
+    /**
+     * DelegatingStudioNode.
+     * @param node node
+     * @param delegate delegate
+     */
     public DelegatingStudioNode(AssembledNode node, ComponentExecutable delegate) {
         super(node);
         this.delegate = delegate;
     }
-
+    /**
+     * doInvoke.
+     * @param inputs inputs
+     * @param session session
+     * @param context context
+     * @throws Exception when the call fails
+     */
     @Override
     protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context)
             throws Exception {
@@ -34,17 +53,29 @@ public final class DelegatingStudioNode extends AbstractStudioNode {
         }
         return payload.withMediaPassthrough(media);
     }
-
+    /**
+     * stream.
+     * @param inputs inputs
+     * @param session session
+     * @param context context
+     */
     @Override
     public Iterator<Object> stream(Object inputs, NodeSessionApi session, ModelContext context) {
         return delegate.stream(inputs, session, context);
     }
-
+    /**
+     * transform.
+     * @param inputs inputs
+     * @param session session
+     * @param context context
+     */
     @Override
     public Iterator<Object> transform(Object inputs, NodeSessionApi session, ModelContext context) {
         return delegate.transform(inputs, session, context);
     }
-
+    /**
+     * delegate.
+     */
     public ComponentExecutable delegate() {
         return delegate;
     }

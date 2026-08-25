@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.bridge;
 
 import com.openjiuwen.core.foundation.llm.schema.ModelClientConfig;
@@ -19,22 +23,29 @@ import com.openjiuwen.core.workflow.component.resource.KnowledgeRetrievalCompCon
 import com.openjiuwen.core.workflow.component.resource.KnowledgeRetrievalExecutable;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.spi.CoreExecutableFactory;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Builds agent-core-java executables from Studio DSL configs when enough model/KB fields exist.
  * Returns null when configs are incomplete so handlers can fall back / mock.
+ *
+ * @since 2026-08-17
  */
 public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFactory {
-
+    /**
+     * createLlm.
+     * @param node node
+     */
     @Override
-    public ComponentExecutable createLlm(AssembledNode node) {
+    public Optional<ComponentExecutable> createLlm(AssembledNode node) {
         Map<String, Object> c = node.configs();
         if (!hasModelWiring(c)) {
-            return null;
+            return Optional.empty();
         }
         LLMCompConfig cfg = new LLMCompConfig();
         applyModel(cfg, c);
@@ -58,14 +69,17 @@ public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFa
                 cfg.setTemplateContent(parts);
             }
         }
-        return new LLMExecutable(cfg);
+        return Optional.of(new LLMExecutable(cfg));
     }
-
+    /**
+     * createIntentDetection.
+     * @param node node
+     */
     @Override
-    public ComponentExecutable createIntentDetection(AssembledNode node) {
+    public Optional<ComponentExecutable> createIntentDetection(AssembledNode node) {
         Map<String, Object> c = node.configs();
         if (!hasModelWiring(c)) {
-            return null;
+            return Optional.empty();
         }
         IntentDetectionCompConfig cfg = new IntentDetectionCompConfig();
         applyModelToIntent(cfg, c);
@@ -77,14 +91,17 @@ public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFa
         if (prompt != null) {
             cfg.setUserPrompt(String.valueOf(prompt));
         }
-        return new IntentDetectionExecutable(cfg);
+        return Optional.of(new IntentDetectionExecutable(cfg));
     }
-
+    /**
+     * createExtractor.
+     * @param node node
+     */
     @Override
-    public ComponentExecutable createExtractor(AssembledNode node) {
+    public Optional<ComponentExecutable> createExtractor(AssembledNode node) {
         Map<String, Object> c = node.configs();
         if (!hasModelWiring(c)) {
-            return null;
+            return Optional.empty();
         }
         // agent-core has no dedicated ExtractorExecutable — LLM with extraction prompt.
         LLMCompConfig cfg = new LLMCompConfig();
@@ -93,15 +110,18 @@ public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFa
                 "Extract structured fields as a JSON object. Reply with JSON only."));
         String userPrompt = extractionUserPrompt(c);
         cfg.setUserPromptTemplate(new UserMessage(userPrompt));
-        return new LLMExecutable(cfg);
+        return Optional.of(new LLMExecutable(cfg));
     }
-
+    /**
+     * createKnowledgeRetrieval.
+     * @param node node
+     */
     @Override
-    public ComponentExecutable createKnowledgeRetrieval(AssembledNode node) {
+    public Optional<ComponentExecutable> createKnowledgeRetrieval(AssembledNode node) {
         Map<String, Object> c = node.configs();
         List<KnowledgeBaseConfig> kbs = buildKbConfigs(c);
         if (kbs.isEmpty()) {
-            return null;
+            return Optional.empty();
         }
         KnowledgeRetrievalCompConfig cfg = new KnowledgeRetrievalCompConfig();
         cfg.setKbConfigs(kbs);
@@ -111,17 +131,20 @@ public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFa
         applyRetrieval(cfg, c);
         applyEmbed(cfg, c);
         applyVectorStore(cfg, c);
-        return new KnowledgeRetrievalExecutable(cfg);
+        return Optional.of(new KnowledgeRetrievalExecutable(cfg));
     }
-
+    /**
+     * createQuestioner.
+     * @param node node
+     */
     @Override
-    public ComponentExecutable createQuestioner(AssembledNode node) {
+    public Optional<ComponentExecutable> createQuestioner(AssembledNode node) {
         Map<String, Object> c = node.configs();
         if (!hasModelWiring(c) && c.get("question") == null && c.get("questionContent") == null) {
-            return null;
+            return Optional.empty();
         }
         if (!hasModelWiring(c)) {
-            return null; // hang path handled by QuestionerNodeHandler fallback + interact
+            return Optional.empty();
         }
         QuestionerConfig cfg = new QuestionerConfig();
         applyModelToQuestioner(cfg, c);
@@ -129,7 +152,7 @@ public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFa
         if (q != null) {
             cfg.setQuestionContent(String.valueOf(q));
         }
-        return new QuestionerExecutable(cfg);
+        return Optional.of(new QuestionerExecutable(cfg));
     }
 
     private static List<String> categoryNames(Map<String, Object> c) {
@@ -138,12 +161,11 @@ public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFa
         if (intents instanceof List<?> list) {
             for (Object item : list) {
                 if (item instanceof Map<?, ?> m) {
-                    Object id = first(m, "intentId", "id", "name", "category");
-                    if (id != null) {
-                        out.add(String.valueOf(id));
-                    }
+                    first(m, "intentId", "id", "name", "category").ifPresent(id -> out.add(String.valueOf(id)));
                 } else if (item != null) {
                     out.add(String.valueOf(item));
+                } else {
+                    continue;
                 }
             }
         }
@@ -175,12 +197,12 @@ public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFa
         if (raw instanceof List<?> list) {
             for (Object item : list) {
                 if (item instanceof Map<?, ?> m) {
-                    Object id = first(m, "kbId", "knowledgeBaseId", "id");
-                    if (id != null) {
-                        out.add(new KnowledgeBaseConfig(String.valueOf(id)));
-                    }
+                    first(m, "kbId", "knowledgeBaseId", "id")
+                            .ifPresent(id -> out.add(new KnowledgeBaseConfig(String.valueOf(id))));
                 } else if (item != null) {
                     out.add(new KnowledgeBaseConfig(String.valueOf(item)));
+                } else {
+                    continue;
                 }
             }
         }
@@ -201,6 +223,8 @@ public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFa
             cfg.setRetrievalConfig(rc);
         } else if (raw instanceof Map<?, ?>) {
             cfg.setRetrievalConfig(rc);
+        } else {
+            return;
         }
         Object threshold = src.get("scoreThreshold");
         if (threshold instanceof Number n) {
@@ -277,6 +301,8 @@ public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFa
             Map<String, Object> def = new LinkedHashMap<>();
             def.put("type", "text");
             cfg.setResponseFormat(def);
+        } else {
+            // already set
         }
         Object oc = c.getOrDefault("outputConfig", c.getOrDefault("outputs", c.get("outputs_config")));
         if (oc instanceof Map<?, ?> m && !m.isEmpty()) {
@@ -285,6 +311,8 @@ public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFa
             Map<String, Object> def = new LinkedHashMap<>();
             def.put("text", Map.of("type", "string"));
             cfg.setOutputConfig(def);
+        } else {
+            // already set
         }
     }
 
@@ -341,6 +369,8 @@ public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFa
             b.clientId(String.valueOf(clientId));
         } else if (c.get("model") != null || c.get("modelId") != null) {
             b.clientId(String.valueOf(c.getOrDefault("modelId", c.get("model"))));
+        } else {
+            b.clientId("studio-dsl");
         }
     }
 
@@ -363,14 +393,14 @@ public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFa
         return b.build();
     }
 
-    private static Object first(Map<?, ?> m, String... keys) {
+    private static Optional<Object> first(Map<?, ?> m, String... keys) {
         for (String k : keys) {
             Object v = m.get(k);
             if (v != null) {
-                return v;
+                return Optional.of(v);
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     private static Map<String, Object> cast(Map<?, ?> m) {

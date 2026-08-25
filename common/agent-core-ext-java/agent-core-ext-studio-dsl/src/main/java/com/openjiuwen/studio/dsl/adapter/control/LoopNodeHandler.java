@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.adapter.control;
 
 import com.openjiuwen.core.context.ModelContext;
@@ -14,6 +18,7 @@ import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
 import com.openjiuwen.studio.dsl.util.ConditionEvaluator;
 import com.openjiuwen.studio.dsl.util.DeepCopies;
 import com.openjiuwen.studio.dsl.util.PathResolver;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,24 +27,37 @@ import java.util.Set;
 
 /**
  * jiuwen.loop — iterate and execute loopBody child nodes when declared (FEAT MUST).
+ *
+ * @since 2026-08-17
  */
 public final class LoopNodeHandler implements NodeHandlerFactory {
     private final NodeTypeRegistry registry;
-
+    /**
+     * LoopNodeHandler.
+     * @param registry registry
+     */
     public LoopNodeHandler(NodeTypeRegistry registry) {
         this.registry = registry;
     }
-
+    /**
+     * canonicalType.
+     */
     @Override
     public String canonicalType() {
         return "jiuwen.loop";
     }
-
+    /**
+     * aliases.
+     */
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
-
+    /**
+     * create.
+     * @param node node
+     * @param ctx ctx
+     */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         return new LoopExecutable(node, registry, ctx);
@@ -54,7 +72,13 @@ public final class LoopNodeHandler implements NodeHandlerFactory {
             this.registry = registry;
             this.ctx = ctx;
         }
-
+        /**
+         * doInvoke.
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @throws Exception when the call fails
+         */
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context)
                 throws Exception {
@@ -70,48 +94,74 @@ public final class LoopNodeHandler implements NodeHandlerFactory {
             List<AssembledNode> body = parseBody(configs.get("loopBody"));
             List<Object> iterations = new ArrayList<>();
 
-            if (forEachKey != null && !forEachKey.isBlank()) {
-                Object arr = PathResolver.get(uf, forEachKey);
-                if (arr instanceof List<?> list) {
-                    int i = 0;
-                    for (Object item : list) {
-                        if (i >= max) {
-                            break;
-                        }
-                        Map<String, Object> frame = new LinkedHashMap<>(uf);
-                        frame.put("item", item);
-                        frame.put("index", i);
-                        if (breakCond != null && ConditionEvaluator.matches(breakCond, frame)) {
-                            break;
-                        }
-                        Map<String, Object> bodyOut = runBody(frame, session, context, body);
-                        Map<String, Object> rec = new LinkedHashMap<>();
-                        rec.put("index", i);
-                        rec.put("item", item);
-                        rec.put("bodyOutput", bodyOut);
-                        iterations.add(rec);
-                        uf.putAll(bodyOut);
-                        i++;
-                    }
-                }
+            if (!forEachKey.isBlank()) {
+                runForEach(uf, forEachKey, max, breakCond, body, session, context, iterations);
             } else {
-                for (int i = 0; i < max; i++) {
-                    Map<String, Object> frame = new LinkedHashMap<>(uf);
-                    frame.put("index", i);
-                    if (breakCond != null && ConditionEvaluator.matches(breakCond, frame)) {
-                        break;
-                    }
-                    Map<String, Object> bodyOut = runBody(frame, session, context, body);
-                    Map<String, Object> rec = new LinkedHashMap<>();
-                    rec.put("index", i);
-                    rec.put("bodyOutput", bodyOut);
-                    iterations.add(rec);
-                    uf.putAll(bodyOut);
-                }
+                runCounted(uf, max, breakCond, body, session, context, iterations);
             }
             uf.put("loopOutputs", iterations);
             uf.put("loopCount", iterations.size());
             return NodePayload.userFields(uf);
+        }
+
+        private void runForEach(
+                Map<String, Object> uf,
+                String forEachKey,
+                int max,
+                Object breakCond,
+                List<AssembledNode> body,
+                NodeSessionApi session,
+                ModelContext context,
+                List<Object> iterations)
+                throws Exception {
+            Object arr = PathResolver.get(uf, forEachKey).orElse(null);
+            if (!(arr instanceof List<?> list)) {
+                return;
+            }
+            int i = 0;
+            for (Object item : list) {
+                if (i >= max) {
+                    break;
+                }
+                Map<String, Object> frame = new LinkedHashMap<>(uf);
+                frame.put("item", item);
+                frame.put("index", i);
+                if (breakCond != null && ConditionEvaluator.matches(breakCond, frame)) {
+                    break;
+                }
+                Map<String, Object> bodyOut = runBody(frame, session, context, body);
+                Map<String, Object> rec = new LinkedHashMap<>();
+                rec.put("index", i);
+                rec.put("item", item);
+                rec.put("bodyOutput", bodyOut);
+                iterations.add(rec);
+                uf.putAll(bodyOut);
+                i++;
+            }
+        }
+
+        private void runCounted(
+                Map<String, Object> uf,
+                int max,
+                Object breakCond,
+                List<AssembledNode> body,
+                NodeSessionApi session,
+                ModelContext context,
+                List<Object> iterations)
+                throws Exception {
+            for (int i = 0; i < max; i++) {
+                Map<String, Object> frame = new LinkedHashMap<>(uf);
+                frame.put("index", i);
+                if (breakCond != null && ConditionEvaluator.matches(breakCond, frame)) {
+                    break;
+                }
+                Map<String, Object> bodyOut = runBody(frame, session, context, body);
+                Map<String, Object> rec = new LinkedHashMap<>();
+                rec.put("index", i);
+                rec.put("bodyOutput", bodyOut);
+                iterations.add(rec);
+                uf.putAll(bodyOut);
+            }
         }
 
         private Map<String, Object> runBody(
@@ -160,6 +210,8 @@ public final class LoopNodeHandler implements NodeHandlerFactory {
                     Object cfg = m.get("configs");
                     Map<String, Object> configs = cfg instanceof Map<?, ?> cm ? cast(cm) : Map.of();
                     out.add(AssembledNode.of(id, type, configs));
+                } else {
+                    continue;
                 }
                 i++;
             }
@@ -173,7 +225,7 @@ public final class LoopNodeHandler implements NodeHandlerFactory {
         }
 
         private static String stringVal(Object o) {
-            return o == null ? null : String.valueOf(o);
+            return o == null ? "" : String.valueOf(o);
         }
     }
 }

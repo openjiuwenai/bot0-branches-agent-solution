@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.adapter.external;
 
 import com.openjiuwen.core.context.ModelContext;
@@ -11,22 +15,36 @@ import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
 import com.openjiuwen.studio.dsl.spi.McpToolInvoker;
 import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
-/** jiuwen.mcp — invoke via McpToolInvoker SPI (Studio FlowMcp). */
+/**
+ * jiuwen.mcp — invoke via McpToolInvoker SPI (Studio FlowMcp).
+ *
+ * @since 2026-08-17
+ */
 public final class McpNodeHandler implements NodeHandlerFactory {
+    /**
+     * canonicalType.
+     */
     @Override
     public String canonicalType() {
         return "jiuwen.mcp";
     }
-
+    /**
+     * aliases.
+     */
     @Override
     public Set<String> aliases() {
         return Set.of("jiuwen.flowMcp");
     }
-
+    /**
+     * create.
+     * @param node node
+     * @param ctx ctx
+     */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         return new McpExecutable(node, ctx.mcpToolInvoker());
@@ -39,7 +57,13 @@ public final class McpNodeHandler implements NodeHandlerFactory {
             super(node);
             this.invoker = invoker;
         }
-
+        /**
+         * doInvoke.
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @throws Exception when the call fails
+         */
         @Override
         @SuppressWarnings("unchecked")
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context)
@@ -80,7 +104,7 @@ public final class McpNodeHandler implements NodeHandlerFactory {
         }
 
         private static String str(Object o) {
-            return o == null ? null : String.valueOf(o);
+            return o == null ? "" : String.valueOf(o);
         }
     }
 }

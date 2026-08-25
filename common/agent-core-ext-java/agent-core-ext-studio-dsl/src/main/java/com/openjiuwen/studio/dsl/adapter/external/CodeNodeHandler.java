@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.adapter.external;
 
 import com.openjiuwen.core.context.ModelContext;
@@ -18,21 +22,35 @@ import com.openjiuwen.studio.dsl.spi.CodeLogicContext;
 import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
 import com.openjiuwen.studio.dsl.spi.PythonCodeExecutor;
 import com.openjiuwen.studio.dsl.util.TypeCoercer;
+
 import java.util.Map;
 import java.util.Set;
 
-/** jiuwen.code — Java SPI + Python subprocess (FEAT-031 / L2 §3.8 / §4.4). */
+/**
+ * jiuwen.code — Java SPI + Python subprocess (FEAT-031 / L2 §3.8 / §4.4).
+ *
+ * @since 2026-08-17
+ */
 public final class CodeNodeHandler implements NodeHandlerFactory {
+    /**
+     * canonicalType.
+     */
     @Override
     public String canonicalType() {
         return "jiuwen.code";
     }
-
+    /**
+     * aliases.
+     */
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
-
+    /**
+     * create.
+     * @param node node
+     * @param ctx ctx
+     */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         return new CodeExecutable(node, ctx);
@@ -45,7 +63,13 @@ public final class CodeNodeHandler implements NodeHandlerFactory {
             super(node);
             this.ctx = ctx;
         }
-
+        /**
+         * doInvoke.
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @throws Exception when the call fails
+         */
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context)
                 throws Exception {
@@ -53,11 +77,10 @@ public final class CodeNodeHandler implements NodeHandlerFactory {
             String language = stringVal(configs.get("language"));
             String codeLogicRef = stringVal(configs.get("codeLogicRef"));
             String code = stringVal(configs.get("code"));
-            boolean javaPath = "java".equalsIgnoreCase(language) || (codeLogicRef != null && !codeLogicRef.isBlank());
-            boolean pyPath = "python".equalsIgnoreCase(language) || (code != null && !code.isBlank());
+            boolean javaPath = "java".equalsIgnoreCase(language) || !codeLogicRef.isBlank();
+            boolean pyPath = "python".equalsIgnoreCase(language) || !code.isBlank();
 
-            if (language != null
-                    && !language.isBlank()
+            if (!language.isBlank()
                     && !"java".equalsIgnoreCase(language)
                     && !"python".equalsIgnoreCase(language)) {
                 throw new NodeExecutionException(
@@ -66,11 +89,11 @@ public final class CodeNodeHandler implements NodeHandlerFactory {
                         NodeCauseCode.NODE_CONFIG_INVALID,
                         "unsupported language=" + language + " (only java|python; D13)");
             }
-            if (javaPath && pyPath && (language == null || language.isBlank())) {
+            if (javaPath && pyPath && language.isBlank()) {
                 throw new NodeExecutionException(
                         node.id(), "jiuwen.code", NodeCauseCode.CODE_PATH_AMBIGUOUS, "both java and python declared");
             }
-            if (javaPath && (language == null || "java".equalsIgnoreCase(language))) {
+            if (javaPath && (language.isBlank() || "java".equalsIgnoreCase(language))) {
                 return runJava(codeLogicRef, inputs);
             }
             if (pyPath) {
@@ -113,7 +136,7 @@ public final class CodeNodeHandler implements NodeHandlerFactory {
                 timeoutMs = n.longValue();
             }
             String interpreter = stringVal(configs.get("interpreter"));
-            if (interpreter == null && props != null) {
+            if (interpreter.isBlank() && props != null) {
                 interpreter = props.getPythonInterpreter();
             }
             Map<String, Object> coerced = coerceInputs(userFieldsOf(inputs), configs);
@@ -143,7 +166,7 @@ public final class CodeNodeHandler implements NodeHandlerFactory {
         }
 
         private static String stringVal(Object o) {
-            return o == null ? null : String.valueOf(o);
+            return o == null ? "" : String.valueOf(o);
         }
     }
 }

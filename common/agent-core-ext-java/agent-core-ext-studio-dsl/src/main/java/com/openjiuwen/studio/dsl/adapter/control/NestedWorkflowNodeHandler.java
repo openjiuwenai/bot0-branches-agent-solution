@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.adapter.control;
 
 import com.openjiuwen.core.context.ModelContext;
@@ -15,27 +19,44 @@ import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
 import com.openjiuwen.studio.dsl.util.DeepCopies;
 import com.openjiuwen.studio.dsl.util.SessionStateIsolator;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * NestedWorkflowNodeHandler for Studio DSL node-type extension (FEAT-031).
+ *
+ * @since 2026-08-17
+ */
 public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
     private final NodeTypeRegistry registry;
-
+    /**
+     * NestedWorkflowNodeHandler.
+     * @param registry registry
+     */
     public NestedWorkflowNodeHandler(NodeTypeRegistry registry) {
         this.registry = registry;
     }
-
+    /**
+     * canonicalType.
+     */
     @Override
     public String canonicalType() {
         return "jiuwen.subWorkflow";
     }
-
+    /**
+     * aliases.
+     */
     @Override
     public Set<String> aliases() {
         return Set.of("jiuwen.workflowComposite");
     }
-
+    /**
+     * create.
+     * @param node node
+     * @param ctx ctx
+     */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         int next = ctx.nestingDepth() + 1;
@@ -51,7 +72,7 @@ public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
             child = ctx.subWorkflowResolver().resolve(node.configs());
         } catch (NodeExecutionException e) {
             throw e;
-        } catch (Exception e) {
+        } catch (IllegalArgumentException | IllegalStateException | UnsupportedOperationException e) {
             throw new NodeExecutionException(
                     node.id(), "jiuwen.subWorkflow", NodeCauseCode.SUBWORKFLOW_REF_INVALID, e.getMessage(), e);
         }
@@ -73,7 +94,12 @@ public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
             this.childExec = childExec;
             this.depth = depth;
         }
-
+        /**
+         * doInvoke.
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         */
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
             // Isolated child frame (deep copy + session local state) — L2 §4.5.1 / FEAT §5.5.

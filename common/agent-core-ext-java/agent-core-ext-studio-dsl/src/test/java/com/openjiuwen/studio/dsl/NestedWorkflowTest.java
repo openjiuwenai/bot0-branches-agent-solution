@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -11,12 +15,18 @@ import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.AssembledWorkflow;
 import com.openjiuwen.studio.dsl.registry.CodeLogicRegistry;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
-import java.util.List;
-import java.util.Map;
+
 import org.junit.jupiter.api.Test;
 
-class NestedWorkflowTest {
+import java.util.List;
+import java.util.Map;
 
+/**
+ * NestedWorkflowTest for Studio DSL node-type extension (FEAT-031).
+ *
+ * @since 2026-08-17
+ */
+class NestedWorkflowTest {
     @Test
     void nested_invokesChildAndReturnsUserFields() {
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();

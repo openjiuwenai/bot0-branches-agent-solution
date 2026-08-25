@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.adapter.control;
 
 import com.openjiuwen.core.context.ModelContext;
@@ -9,22 +13,38 @@ import com.openjiuwen.studio.dsl.exec.WorkflowVariableScope;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
 import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
+/**
+ * SetVariableNodeHandler for Studio DSL node-type extension (FEAT-031).
+ *
+ * @since 2026-08-17
+ */
 public final class SetVariableNodeHandler implements NodeHandlerFactory {
+    /**
+     * canonicalType.
+     */
     @Override
     public String canonicalType() {
         return "jiuwen.setVariable";
     }
-
+    /**
+     * aliases.
+     */
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
-
+    /**
+     * create.
+     * @param node node
+     * @param ctx ctx
+     */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         return new SetVariableExecutable(node, ctx.variableScope());
@@ -37,7 +57,12 @@ public final class SetVariableNodeHandler implements NodeHandlerFactory {
             super(node);
             this.scope = scope;
         }
-
+        /**
+         * doInvoke.
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         */
         @Override
         @SuppressWarnings("unchecked")
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
@@ -49,11 +74,7 @@ public final class SetVariableNodeHandler implements NodeHandlerFactory {
                     if (item instanceof Map<?, ?> m) {
                         Object left = m.get("left");
                         Object right = m.get("right");
-                        String key = extractValue(left);
-                        Object val = extractRaw(right);
-                        if (key != null) {
-                            vars.put(key, val);
-                        }
+                        extractValue(left).ifPresent(key -> vars.put(key, extractRaw(right)));
                     }
                 }
             } else {
@@ -77,17 +98,20 @@ public final class SetVariableNodeHandler implements NodeHandlerFactory {
             }
             try {
                 session.updateState(Map.copyOf(vars));
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException
+                | NullPointerException
+                | ClassCastException
+                | UnsupportedOperationException ignored) {
                 // mock session in unit tests
             }
         }
 
-        private static String extractValue(Object side) {
+        private static Optional<String> extractValue(Object side) {
             if (side instanceof Map<?, ?> m) {
                 Object v = m.get("value");
-                return v == null ? null : String.valueOf(v);
+                return v == null ? Optional.empty() : Optional.of(String.valueOf(v));
             }
-            return side == null ? null : String.valueOf(side);
+            return side == null ? Optional.empty() : Optional.of(String.valueOf(side));
         }
 
         private static Object extractRaw(Object side) {

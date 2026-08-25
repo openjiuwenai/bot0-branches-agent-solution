@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -8,12 +12,17 @@ import com.openjiuwen.studio.dsl.config.StudioDslProperties;
 import com.openjiuwen.studio.dsl.exec.WorkflowAssemblyBridge;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 import com.openjiuwen.studio.dsl.spi.PythonCodeExecutor;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
+/**
+ * StudioDslAutoConfigurationTest for Studio DSL node-type extension (FEAT-031).
+ *
+ * @since 2026-08-17
+ */
 class StudioDslAutoConfigurationTest {
-
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(StudioDslAutoConfiguration.class));
 

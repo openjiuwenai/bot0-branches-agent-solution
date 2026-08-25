@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.adapter;
 
 import com.openjiuwen.core.context.ModelContext;
@@ -7,17 +11,33 @@ import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Shared invoke → userFields wrapping for Studio DSL nodes. */
+/**
+ * Shared invoke → userFields wrapping for Studio DSL nodes.
+ *
+ * @since 2026-08-17
+ */
 public abstract class AbstractStudioNode extends WorkflowComponent {
+    /**
+     * node.
+     */
     protected final AssembledNode node;
-
+    /**
+     * AbstractStudioNode.
+     * @param node node
+     */
     protected AbstractStudioNode(AssembledNode node) {
         this.node = node;
     }
-
+    /**
+     * invoke.
+     * @param inputs inputs
+     * @param session session
+     * @param context context
+     */
     @Override
     public Object invoke(Object inputs, NodeSessionApi session, ModelContext context) {
         try {
@@ -31,10 +51,19 @@ public abstract class AbstractStudioNode extends WorkflowComponent {
                     node.id(), node.canonicalType(), NodeCauseCode.NODE_INVOKE_FAILED, e.getMessage(), e);
         }
     }
-
+    /**
+     * doInvoke.
+     * @param inputs inputs
+     * @param session session
+     * @param context context
+     * @throws Exception when the call fails
+     */
     protected abstract NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context)
             throws Exception;
-
+    /**
+     * asMap.
+     * @param inputs inputs
+     */
     @SuppressWarnings("unchecked")
     protected static Map<String, Object> asMap(Object inputs) {
         if (inputs == null) {
@@ -47,7 +76,10 @@ public abstract class AbstractStudioNode extends WorkflowComponent {
         }
         return new LinkedHashMap<>(Map.of("value", inputs));
     }
-
+    /**
+     * userFieldsOf.
+     * @param inputs inputs
+     */
     protected static Map<String, Object> userFieldsOf(Map<String, Object> inputs) {
         Object uf = inputs.get("userFields");
         if (uf instanceof Map<?, ?> m) {

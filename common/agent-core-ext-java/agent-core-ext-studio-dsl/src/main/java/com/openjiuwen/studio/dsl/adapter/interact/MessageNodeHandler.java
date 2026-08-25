@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.adapter.interact;
 
 import com.openjiuwen.core.context.ModelContext;
@@ -11,24 +15,38 @@ import com.openjiuwen.studio.dsl.model.MediaPart;
 import com.openjiuwen.studio.dsl.model.NodePayload;
 import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
 import com.openjiuwen.studio.dsl.util.TemplateRenderer;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** jiuwen.message — template render + session.writeStream / writeCustomStream (Studio FlowMessage). */
+/**
+ * jiuwen.message — template render + session.writeStream / writeCustomStream (Studio FlowMessage).
+ *
+ * @since 2026-08-17
+ */
 public final class MessageNodeHandler implements NodeHandlerFactory {
+    /**
+     * canonicalType.
+     */
     @Override
     public String canonicalType() {
         return "jiuwen.message";
     }
-
+    /**
+     * aliases.
+     */
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
-
+    /**
+     * create.
+     * @param node node
+     * @param ctx ctx
+     */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         return new MessageExecutable(node);
@@ -38,7 +56,12 @@ public final class MessageNodeHandler implements NodeHandlerFactory {
         MessageExecutable(AssembledNode node) {
             super(node);
         }
-
+        /**
+         * doInvoke.
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         */
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
             Map<String, Object> uf = userFieldsOf(inputs);
@@ -47,7 +70,7 @@ public final class MessageNodeHandler implements NodeHandlerFactory {
                     node.configs().get("content"),
                     node.configs().get("text"),
                     uf.get("message"));
-            String rendered = TemplateRenderer.render(template == null ? "" : template, uf);
+            String rendered = TemplateRenderer.render(template, uf);
             Map<String, Object> out = new LinkedHashMap<>(uf);
             out.put("result", rendered);
             List<Map<String, Object>> outputs = new ArrayList<>();
@@ -75,22 +98,29 @@ public final class MessageNodeHandler implements NodeHandlerFactory {
                 frame.put("content", rendered);
                 frame.put("payload", rec);
                 session.writeCustomStream(frame);
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException
+                | NullPointerException
+                | ClassCastException
+                | UnsupportedOperationException ignored) {
                 try {
                     session.writeStream(rendered);
-                } catch (RuntimeException ignored2) {
+                } catch (IllegalStateException
+                | NullPointerException
+                | ClassCastException
+                | UnsupportedOperationException ignored2) {
                     // session may be mock in unit tests
                 }
             }
         }
 
-        private static String firstString(Object... vals) {
+        private static String firstString(Object a, Object b, Object c, Object d) {
+            Object[] vals = {a, b, c, d};
             for (Object v : vals) {
                 if (v != null && !String.valueOf(v).isBlank()) {
                     return String.valueOf(v);
                 }
             }
-            return null;
+            return "";
         }
     }
 }

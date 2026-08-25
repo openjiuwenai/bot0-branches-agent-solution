@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.adapter.external;
 
 import com.openjiuwen.core.context.ModelContext;
@@ -8,6 +12,7 @@ import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
 import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
+
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -15,18 +20,31 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** jiuwen.streamTransform — field include/exclude/mapping on invoke + transform. */
+/**
+ * jiuwen.streamTransform — field include/exclude/mapping on invoke + transform.
+ *
+ * @since 2026-08-17
+ */
 public final class StreamTransformNodeHandler implements NodeHandlerFactory {
+    /**
+     * canonicalType.
+     */
     @Override
     public String canonicalType() {
         return "jiuwen.streamTransform";
     }
-
+    /**
+     * aliases.
+     */
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
-
+    /**
+     * create.
+     * @param node node
+     * @param ctx ctx
+     */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         return new StreamTransformExecutable(node);
@@ -36,12 +54,22 @@ public final class StreamTransformNodeHandler implements NodeHandlerFactory {
         StreamTransformExecutable(AssembledNode node) {
             super(node);
         }
-
+        /**
+         * doInvoke.
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         */
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
             return NodePayload.userFields(transformFields(userFieldsOf(inputs), node.configs()));
         }
-
+        /**
+         * transform.
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         */
         @Override
         public Iterator<Object> transform(Object inputs, NodeSessionApi session, ModelContext context) {
             Map<String, Object> in = asMap(inputs);

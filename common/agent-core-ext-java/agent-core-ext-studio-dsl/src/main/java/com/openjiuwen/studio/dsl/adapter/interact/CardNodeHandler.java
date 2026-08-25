@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.adapter.interact;
 
 import com.openjiuwen.core.context.ModelContext;
@@ -9,22 +13,36 @@ import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
 import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
-/** jiuwen.card — emit card payload via session stream (Studio FlowCard). */
+/**
+ * jiuwen.card — emit card payload via session stream (Studio FlowCard).
+ *
+ * @since 2026-08-17
+ */
 public final class CardNodeHandler implements NodeHandlerFactory {
+    /**
+     * canonicalType.
+     */
     @Override
     public String canonicalType() {
         return "jiuwen.card";
     }
-
+    /**
+     * aliases.
+     */
     @Override
     public Set<String> aliases() {
         return Set.of("jiuwen.flowCard");
     }
-
+    /**
+     * create.
+     * @param node node
+     * @param ctx ctx
+     */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         return new CardExecutable(node);
@@ -34,7 +52,12 @@ public final class CardNodeHandler implements NodeHandlerFactory {
         CardExecutable(AssembledNode node) {
             super(node);
         }
-
+        /**
+         * doInvoke.
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         */
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
             Map<String, Object> uf = new LinkedHashMap<>(userFieldsOf(inputs));
@@ -52,7 +75,10 @@ public final class CardNodeHandler implements NodeHandlerFactory {
                     frame.put("card", card);
                     frame.put("nodeId", node.id());
                     session.writeCustomStream(frame);
-                } catch (RuntimeException ignored) {
+                } catch (IllegalStateException
+                | NullPointerException
+                | ClassCastException
+                | UnsupportedOperationException ignored) {
                     // mock session
                 }
             }

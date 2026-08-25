@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.support;
 
 import com.openjiuwen.core.workflow.ComponentExecutable;
@@ -6,9 +10,14 @@ import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.schema.DslNodeShellValidator;
 import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
+
 import java.util.Set;
 
-/** Test-only custom Factory loaded via META-INF/services (L2 T4). */
+/**
+ * Test-only custom Factory loaded via META-INF/services (L2 T4).
+ *
+ * @since 2026-08-17
+ */
 public final class AcmeEnrichNodeFactory implements NodeHandlerFactory {
     @Override
     public String canonicalType() {

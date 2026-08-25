@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.adapter.model;
 
 import com.openjiuwen.core.context.ModelContext;
@@ -11,30 +15,44 @@ import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
 import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** jiuwen.knowledgeRetrieval — core bridge or configs.mockDocuments. */
+/**
+ * jiuwen.knowledgeRetrieval — core bridge or configs.mockDocuments.
+ *
+ * @since 2026-08-17
+ */
 public final class KnowledgeRetrievalNodeHandler implements NodeHandlerFactory {
+    /**
+     * canonicalType.
+     */
     @Override
     public String canonicalType() {
         return "jiuwen.knowledgeRetrieval";
     }
-
+    /**
+     * aliases.
+     */
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
-
+    /**
+     * create.
+     * @param node node
+     * @param ctx ctx
+     */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         if (ctx.coreExecutableFactory() != null) {
-            ComponentExecutable core = ctx.coreExecutableFactory().createKnowledgeRetrieval(node);
-            if (core != null) {
-                return new DelegatingStudioNode(node, core);
-            }
+            return ctx.coreExecutableFactory()
+                    .createKnowledgeRetrieval(node)
+                    .map(core -> (ComponentExecutable) new DelegatingStudioNode(node, core))
+                    .orElseGet(() -> new KnowledgeFallback(node));
         }
         return new KnowledgeFallback(node);
     }
@@ -43,7 +61,12 @@ public final class KnowledgeRetrievalNodeHandler implements NodeHandlerFactory {
         KnowledgeFallback(AssembledNode node) {
             super(node);
         }
-
+        /**
+         * doInvoke.
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         */
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
             Map<String, Object> uf = new LinkedHashMap<>(userFieldsOf(inputs));

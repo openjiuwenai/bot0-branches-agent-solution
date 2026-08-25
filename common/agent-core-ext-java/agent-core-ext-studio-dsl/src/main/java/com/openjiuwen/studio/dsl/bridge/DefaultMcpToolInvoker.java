@@ -1,10 +1,16 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.bridge;
 
 import com.openjiuwen.studio.dsl.spi.McpToolInvoker;
+
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
+import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -13,15 +19,28 @@ import java.util.function.Function;
 
 /**
  * Default MCP invoker: local tool table first; optional HTTP JSON endpoint via arguments.__endpoint__.
+ *
+ * @since 2026-08-17
  */
 public final class DefaultMcpToolInvoker implements McpToolInvoker {
     private final Map<String, Function<Map<String, Object>, Map<String, Object>>> local =
             new ConcurrentHashMap<>();
-
+    /**
+     * register.
+     * @param server server
+     * @param tool tool
+     * @param fn fn
+     */
     public void register(String server, String tool, Function<Map<String, Object>, Map<String, Object>> fn) {
         local.put(key(server, tool), fn);
     }
-
+    /**
+     * invoke.
+     * @param server server
+     * @param tool tool
+     * @param arguments arguments
+     * @throws Exception when the call fails
+     */
     @Override
     public Map<String, Object> invoke(String server, String tool, Map<String, Object> arguments) throws Exception {
         Function<Map<String, Object>, Map<String, Object>> fn = local.get(key(server, tool));
@@ -38,7 +57,10 @@ public final class DefaultMcpToolInvoker implements McpToolInvoker {
     }
 
     private static Map<String, Object> postJson(String endpoint, String json) throws Exception {
-        HttpURLConnection conn = (HttpURLConnection) URI.create(endpoint).toURL().openConnection();
+        URLConnection raw = URI.create(endpoint).toURL().openConnection();
+        if (!(raw instanceof HttpURLConnection conn)) {
+            throw new IllegalStateException("endpoint is not HTTP: " + endpoint);
+        }
         conn.setConnectTimeout(10_000);
         conn.setReadTimeout(30_000);
         conn.setRequestMethod("POST");
@@ -50,9 +72,13 @@ public final class DefaultMcpToolInvoker implements McpToolInvoker {
             os.write(payload);
         }
         int status = conn.getResponseCode();
-        InputStream stream = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
-        String respBody = stream == null ? "" : new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-        conn.disconnect();
+        InputStream in = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+        String respBody;
+        try (InputStream stream = in) {
+            respBody = stream == null ? "" : new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        } finally {
+            conn.disconnect();
+        }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("statusCode", status);
         out.put("body", respBody);

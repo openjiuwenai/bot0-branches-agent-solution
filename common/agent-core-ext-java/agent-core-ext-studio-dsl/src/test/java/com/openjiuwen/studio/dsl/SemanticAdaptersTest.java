@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -12,12 +16,18 @@ import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
-import java.util.List;
-import java.util.Map;
+
 import org.junit.jupiter.api.Test;
 
-class SemanticAdaptersTest {
+import java.util.List;
+import java.util.Map;
 
+/**
+ * SemanticAdaptersTest for Studio DSL node-type extension (FEAT-031).
+ *
+ * @since 2026-08-17
+ */
+class SemanticAdaptersTest {
     private final NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
     private final NodeBuildContext ctx = NodeBuildContext.defaults("wf");
     private final NodeSessionApi session = mock(NodeSessionApi.class);
@@ -129,7 +139,7 @@ class SemanticAdaptersTest {
                 registry.create(AssembledNode.of("mcp1", "jiuwen.mcp", Map.of("tool", "x")), ctx);
         assertThatThrownBy(() -> exec.invoke(Map.of(), session, model))
                 .isInstanceOf(NodeExecutionException.class)
-                .extracting(e -> ((NodeExecutionException) e).causeCode())
+                .extracting(e -> e instanceof NodeExecutionException ne ? ne.causeCode() : null)
                 .isEqualTo(NodeCauseCode.NODE_CONFIG_INVALID);
     }
 

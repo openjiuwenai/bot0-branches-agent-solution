@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.studio.dsl.host;
 
 import com.openjiuwen.studio.dsl.StudioDslModule;
@@ -9,9 +13,12 @@ import com.openjiuwen.studio.dsl.model.AssembledWorkflow;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.spi.CodeLogic;
 import com.openjiuwen.studio.dsl.spi.CodeLogicContext;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Fake FEAT-031 host (期 0): no DSL loader, no HTTP, no edge scheduler.
@@ -21,9 +28,15 @@ import java.util.Map;
  * mvn -f ../../agent-core-ext-java/pom.xml -pl agent-core-ext-studio-dsl -am install -DskipTests
  * mvn -f pom.xml package exec:java
  * </pre>
+ *
+ * @since 2026-08-17
  */
 public final class FakeHostMain {
-
+    private static final Logger LOG = Logger.getLogger(FakeHostMain.class.getName());
+    /**
+     * main.
+     * @param args args
+     */
     public static void main(String[] args) {
         int failed = 0;
         failed += run("S0-1 linear setVariable+message", FakeHostMain::scenarioLinear);
@@ -31,25 +44,26 @@ public final class FakeHostMain {
         failed += run("S0-3 java code node", FakeHostMain::scenarioCode);
         failed += run("S0-4 unknown type fails loudly", FakeHostMain::scenarioUnknownType);
         if (failed > 0) {
-            System.err.println("FAIL: " + failed + " scenario(s)");
-            System.exit(1);
+            throw new IllegalStateException("FAIL: " + failed + " scenario(s)");
         }
-        System.out.println("OK: all fake-host scenarios passed");
+        LOG.info("OK: all fake-host scenarios passed");
     }
 
     private static int run(String name, Scenario s) {
         try {
             s.run();
-            System.out.println("[PASS] " + name);
+            LOG.info("[PASS] " + name);
             return 0;
-        } catch (AssertionError | RuntimeException e) {
-            System.err.println("[FAIL] " + name + " — " + e.getMessage());
-            e.printStackTrace(System.err);
+        } catch (AssertionError | IllegalStateException | IllegalArgumentException | NullPointerException
+                | ClassCastException e) {
+            LOG.log(Level.SEVERE, "[FAIL] " + name + " — " + e.getMessage(), e);
             return 1;
         }
     }
 
-    /** start → setVariable → message → end; variable scope closed by executeLinear. */
+    /**
+     * start → setVariable → message → end; variable scope closed by executeLinear.
+     */
     private static void scenarioLinear() {
         StudioDslModule module = StudioDslModule.create();
         AssembledWorkflow wf = new AssembledWorkflow(
@@ -67,12 +81,11 @@ public final class FakeHostMain {
         WorkflowAssemblyBridge bridge = module.assemblyBridge();
         Map<String, Object> out = bridge.executeLinear(wf, ctx, Map.of("seed", 1), null, null);
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> uf = (Map<String, Object>) out.get("userFields");
-        require(uf != null && "hello-host".equals(uf.get("greeting")), "greeting missing: " + uf);
+        Map<String, Object> uf = asUserFields(out);
+        require("hello-host".equals(uf.get("greeting")), "greeting missing: " + uf);
         require(Integer.valueOf(1).equals(uf.get("seed")) || Long.valueOf(1L).equals(uf.get("seed")), "seed lost");
         require(ctx.variableScope().isClosed(), "variable scope must close after executeLinear");
-        System.out.println("    userFields=" + uf);
+        LOG.info("    userFields=" + uf);
     }
 
     /**
@@ -125,21 +138,29 @@ public final class FakeHostMain {
                         AssembledNode.of("e", "jiuwen.end", Map.of())));
         Map<String, Object> pathOut =
                 bridge.executeLinear(vipPath, pathCtx, Map.of("tier", "gold"), null, null);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> uf = (Map<String, Object>) pathOut.get("userFields");
+        Map<String, Object> uf = asUserFields(pathOut);
         require(uf != null && "vip".equals(uf.get("lane")), "vip lane not set: " + uf);
-        System.out.println("    branchId=" + branchId + ", lane=" + uf.get("lane"));
+        LOG.info("    branchId=" + branchId + ", lane=" + uf.get("lane"));
     }
 
-    /** Host registers CodeLogic SPI, then runs jiuwen.code in a linear mini-graph. */
+    /**
+     * Host registers CodeLogic SPI, then runs jiuwen.code in a linear mini-graph.
+     */
     private static void scenarioCode() {
         StudioDslModule module = StudioDslModule.create();
         module.codeLogicRegistry().register(new CodeLogic() {
+            /**
+             * name.
+             */
             @Override
             public String name() {
                 return "double";
             }
-
+            /**
+             * execute.
+             * @param inputs inputs
+             * @param ctx ctx
+             */
             @Override
             public Map<String, Object> execute(Map<String, Object> inputs, CodeLogicContext ctx) {
                 Object v = inputs.get("n");
@@ -159,13 +180,14 @@ public final class FakeHostMain {
         NodeBuildContext ctx = module.newRootContext("smoke-code", "tenant-smoke");
         Map<String, Object> out =
                 module.assemblyBridge().executeLinear(wf, ctx, Map.of("n", 21), null, null);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> uf = (Map<String, Object>) out.get("userFields");
-        require(uf != null && Long.valueOf(42L).equals(toLong(uf.get("n"))), "code out n!=42: " + uf);
-        System.out.println("    n=" + uf.get("n"));
+        Map<String, Object> uf = asUserFields(out);
+        require(Long.valueOf(42L).equals(toLong(uf.get("n"))), "code out n!=42: " + uf);
+        LOG.info("    n=" + uf.get("n"));
     }
 
-    /** Unknown canonical type must surface a distinguishable failure (host can catch). */
+    /**
+     * Unknown canonical type must surface a distinguishable failure (host can catch).
+     */
     private static void scenarioUnknownType() {
         StudioDslModule module = StudioDslModule.create();
         AssembledWorkflow wf = new AssembledWorkflow(
@@ -179,8 +201,18 @@ public final class FakeHostMain {
             require(
                     e.causeCode() == NodeCauseCode.UNKNOWN_NODE_TYPE,
                     "unexpected causeCode=" + e.causeCode());
-            System.out.println("    causeCode=" + e.causeCode());
+            LOG.info("    causeCode=" + e.causeCode());
         }
+    }
+
+    private static Map<String, Object> asUserFields(Map<String, Object> out) {
+        Object raw = out.get("userFields");
+        if (!(raw instanceof Map<?, ?> m)) {
+            throw new AssertionError("userFields missing: " + out);
+        }
+        Map<String, Object> uf = new LinkedHashMap<>();
+        m.forEach((k, v) -> uf.put(String.valueOf(k), v));
+        return uf;
     }
 
     private static long toLong(Object v) {

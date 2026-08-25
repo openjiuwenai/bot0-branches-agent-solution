@@ -1,22 +1,36 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.util;
 
 import com.openjiuwen.studio.dsl.adapter.PassthroughStudioNode;
 import com.openjiuwen.studio.dsl.model.MediaPart;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/** Attach multimodal parts for model/plugin consumption (FEAT MUST). */
+/**
+ * Attach multimodal parts for model/plugin consumption (FEAT MUST).
+ *
+ * @since 2026-08-17
+ */
 public final class MediaSupport {
     private MediaSupport() {}
-
+    /**
+     * mediaOf.
+     * @param inputs inputs
+     */
     public static List<MediaPart> mediaOf(Map<String, Object> inputs) {
         return PassthroughStudioNode.extractMedia(inputs);
     }
 
-    /** Inject media into userFields so downstream model/plugin can read. */
+    /**
+     * Inject media into userFields so downstream model/plugin can read.
+     */
     public static Map<String, Object> withConsumableMedia(Map<String, Object> userFields, List<MediaPart> media) {
         Map<String, Object> uf = new LinkedHashMap<>(userFields == null ? Map.of() : userFields);
         if (media != null && !media.isEmpty()) {
@@ -82,7 +96,9 @@ public final class MediaSupport {
         return part;
     }
 
-    /** Flatten userFields into root inputs so core PromptTemplate can resolve {{query}} etc. */
+    /**
+     * Flatten userFields into root inputs so core PromptTemplate can resolve {{query}} etc.
+     */
     public static Map<String, Object> flattenForPrompt(Map<String, Object> inputs, Map<String, Object> userFields) {
         Map<String, Object> in = new LinkedHashMap<>(inputs == null ? Map.of() : inputs);
         if (userFields != null) {

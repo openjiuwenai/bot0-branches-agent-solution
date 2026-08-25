@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -19,13 +23,19 @@ import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.MediaPart;
 import com.openjiuwen.studio.dsl.registry.CodeLogicRegistry;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
+
+import org.junit.jupiter.api.Test;
+
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import org.junit.jupiter.api.Test;
 
+/**
+ * FeatGapFillTest for Studio DSL node-type extension (FEAT-031).
+ *
+ * @since 2026-08-17
+ */
 class FeatGapFillTest {
-
     @Test
     void loop_executesLoopBodyNodes() {
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
@@ -87,7 +97,10 @@ class FeatGapFillTest {
                 registry.create(AssembledNode.of("p1", "jiuwen.plugin", Map.of("apiId", "api-1")), ctx);
         @SuppressWarnings("unchecked")
         Map<String, Object> out = (Map<String, Object>)
-                exec.invoke(Map.of("userFields", Map.of("q", "hi")), mock(NodeSessionApi.class), mock(ModelContext.class));
+                exec.invoke(
+                        Map.of("userFields", Map.of("q", "hi")),
+                        mock(NodeSessionApi.class),
+                        mock(ModelContext.class));
         @SuppressWarnings("unchecked")
         Map<String, Object> uf = (Map<String, Object>) out.get("userFields");
         assertThat(uf).containsEntry("pluginOk", true).containsEntry("echo", "hi");
@@ -112,11 +125,12 @@ class FeatGapFillTest {
                 new InMemoryAgentRegistry(),
                 registry);
         ComponentExecutable exec = registry.create(
-                AssembledNode.of("m1", "jiuwen.mcp", Map.of("server", "s1", "tool", "echo", "arguments", Map.of("v", 7))),
+                AssembledNode.of(
+                        "m1", "jiuwen.mcp", Map.of("server", "s1", "tool", "echo", "arguments", Map.of("v", 7))),
                 ctx);
         @SuppressWarnings("unchecked")
-        Map<String, Object> out =
-                (Map<String, Object>) exec.invoke(Map.of("userFields", Map.of()), mock(NodeSessionApi.class), mock(ModelContext.class));
+        Map<String, Object> out = (Map<String, Object>) exec.invoke(
+                Map.of("userFields", Map.of()), mock(NodeSessionApi.class), mock(ModelContext.class));
         @SuppressWarnings("unchecked")
         Map<String, Object> uf = (Map<String, Object>) out.get("userFields");
         assertThat(uf).containsEntry("out", 7);
@@ -144,7 +158,10 @@ class FeatGapFillTest {
                 registry.create(AssembledNode.of("a1", "jiuwen.agent", Map.of("agentId", "agent-a")), ctx);
         @SuppressWarnings("unchecked")
         Map<String, Object> out = (Map<String, Object>)
-                exec.invoke(Map.of("userFields", Map.of("q", "1")), mock(NodeSessionApi.class), mock(ModelContext.class));
+                exec.invoke(
+                        Map.of("userFields", Map.of("q", "1")),
+                        mock(NodeSessionApi.class),
+                        mock(ModelContext.class));
         @SuppressWarnings("unchecked")
         Map<String, Object> uf = (Map<String, Object>) out.get("userFields");
         assertThat(uf).containsEntry("reply", "ok-1");
@@ -197,7 +214,7 @@ class FeatGapFillTest {
     @Test
     void coreFactory_buildsLlmWhenModelWired() {
         var factory = new com.openjiuwen.studio.dsl.bridge.ConfigDrivenCoreExecutableFactory();
-        ComponentExecutable core = factory.createLlm(AssembledNode.of(
+        var core = factory.createLlm(AssembledNode.of(
                 "n",
                 "jiuwen.LLMComponent",
                 Map.of(
@@ -205,7 +222,7 @@ class FeatGapFillTest {
                         "apiKey", "k",
                         "apiBase", "http://localhost:9",
                         "prompt", "hi")));
-        assertThat(core).isNotNull();
+        assertThat(core).isPresent();
     }
 
     @Test
@@ -238,7 +255,7 @@ class FeatGapFillTest {
                         "k",
                         "jiuwen.knowledgeRetrieval",
                         Map.of("kbId", "kb-1", "topK", 3))))
-                .isNotNull();
+                .isPresent();
         assertThat(factory.createIntentDetection(AssembledNode.of(
                         "i",
                         "jiuwen.intentDetection",
@@ -251,7 +268,7 @@ class FeatGapFillTest {
                                 "http://localhost:9",
                                 "intents",
                                 List.of(Map.of("intentId", "greet"))))))
-                .isNotNull();
+                .isPresent();
         assertThat(factory.createExtractor(AssembledNode.of(
                         "e",
                         "jiuwen.extractor",
@@ -264,7 +281,7 @@ class FeatGapFillTest {
                                 "http://localhost:9",
                                 "fields",
                                 List.of("name")))))
-                .isNotNull();
+                .isPresent();
     }
 
     @Test

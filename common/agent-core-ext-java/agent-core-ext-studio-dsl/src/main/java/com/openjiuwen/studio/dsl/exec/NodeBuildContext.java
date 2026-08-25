@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.exec;
 
 import com.openjiuwen.studio.dsl.bridge.ConfigDrivenCoreExecutableFactory;
@@ -16,6 +20,11 @@ import com.openjiuwen.studio.dsl.spi.PythonCodeExecutor;
 import com.openjiuwen.studio.dsl.spi.SubWorkflowResolver;
 import com.openjiuwen.studio.dsl.spi.ToolRegistry;
 
+/**
+ * NodeBuildContext for Studio DSL node-type extension (FEAT-031).
+ *
+ * @since 2026-08-17
+ */
 public final class NodeBuildContext {
     private final String workflowId;
     private final int nestingDepth;
@@ -32,7 +41,15 @@ public final class NodeBuildContext {
     private final WorkflowVariableScope variableScope;
     private final String tenantId;
     private final StudioDslNodeProperties properties;
-
+    /**
+     * NodeBuildContext.
+     * @param workflowId workflowId
+     * @param nestingDepth nestingDepth
+     * @param maxNestingDepth maxNestingDepth
+     * @param pythonExecutor pythonExecutor
+     * @param codeLogicRegistry codeLogicRegistry
+     * @param subWorkflowResolver subWorkflowResolver
+     */
     public NodeBuildContext(
             String workflowId,
             int nestingDepth,
@@ -57,7 +74,21 @@ public final class NodeBuildContext {
                 null,
                 new StudioDslNodeProperties());
     }
-
+    /**
+     * NodeBuildContext.
+     * @param workflowId workflowId
+     * @param nestingDepth nestingDepth
+     * @param maxNestingDepth maxNestingDepth
+     * @param pythonExecutor pythonExecutor
+     * @param codeLogicRegistry codeLogicRegistry
+     * @param subWorkflowResolver subWorkflowResolver
+     * @param coreExecutableFactory coreExecutableFactory
+     * @param mcpToolInvoker mcpToolInvoker
+     * @param agentInvoker agentInvoker
+     * @param toolRegistry toolRegistry
+     * @param agentRegistry agentRegistry
+     * @param nodeTypeRegistry nodeTypeRegistry
+     */
     public NodeBuildContext(
             String workflowId,
             int nestingDepth,
@@ -88,7 +119,24 @@ public final class NodeBuildContext {
                 null,
                 new StudioDslNodeProperties());
     }
-
+    /**
+     * NodeBuildContext.
+     * @param workflowId workflowId
+     * @param nestingDepth nestingDepth
+     * @param maxNestingDepth maxNestingDepth
+     * @param pythonExecutor pythonExecutor
+     * @param codeLogicRegistry codeLogicRegistry
+     * @param subWorkflowResolver subWorkflowResolver
+     * @param coreExecutableFactory coreExecutableFactory
+     * @param mcpToolInvoker mcpToolInvoker
+     * @param agentInvoker agentInvoker
+     * @param toolRegistry toolRegistry
+     * @param agentRegistry agentRegistry
+     * @param nodeTypeRegistry nodeTypeRegistry
+     * @param variableScope variableScope
+     * @param tenantId tenantId
+     * @param properties properties
+     */
     public NodeBuildContext(
             String workflowId,
             int nestingDepth,
@@ -122,11 +170,18 @@ public final class NodeBuildContext {
         this.tenantId = tenantId;
         this.properties = properties == null ? new StudioDslNodeProperties() : properties;
     }
-
+    /**
+     * defaults.
+     * @param workflowId workflowId
+     */
     public static NodeBuildContext defaults(String workflowId) {
         return defaults(workflowId, new StudioDslNodeProperties());
     }
-
+    /**
+     * defaults.
+     * @param workflowId workflowId
+     * @param props props
+     */
     public static NodeBuildContext defaults(String workflowId, StudioDslNodeProperties props) {
         StudioDslNodeProperties p = props == null ? new StudioDslNodeProperties() : props;
         return new NodeBuildContext(
@@ -152,7 +207,12 @@ public final class NodeBuildContext {
                 null,
                 p);
     }
-
+    /**
+     * defaults.
+     * @param workflowId workflowId
+     * @param tenantId tenantId
+     * @param props props
+     */
     public static NodeBuildContext defaults(String workflowId, String tenantId, StudioDslNodeProperties props) {
         StudioDslNodeProperties p = props == null ? new StudioDslNodeProperties() : props;
         return new NodeBuildContext(
@@ -179,9 +239,11 @@ public final class NodeBuildContext {
                 p);
     }
 
-    /** Bind registry after builtins registered (for loop body create). */
+    /**
+     * Bind registry after builtins registered (for loop body create).
+     */
     public NodeBuildContext withRegistry(NodeTypeRegistry registry) {
-        return copy(
+        return new NodeBuildContext(
                 workflowId,
                 nestingDepth,
                 maxNestingDepth,
@@ -198,70 +260,102 @@ public final class NodeBuildContext {
                 tenantId,
                 properties);
     }
-
+    /**
+     * workflowId.
+     */
     public String workflowId() {
         return workflowId;
     }
-
+    /**
+     * nestingDepth.
+     */
     public int nestingDepth() {
         return nestingDepth;
     }
-
+    /**
+     * maxNestingDepth.
+     */
     public int maxNestingDepth() {
         return maxNestingDepth;
     }
-
+    /**
+     * pythonExecutor.
+     */
     public PythonCodeExecutor pythonExecutor() {
         return pythonExecutor;
     }
-
+    /**
+     * codeLogicRegistry.
+     */
     public CodeLogicRegistry codeLogicRegistry() {
         return codeLogicRegistry;
     }
-
+    /**
+     * subWorkflowResolver.
+     */
     public SubWorkflowResolver subWorkflowResolver() {
         return subWorkflowResolver;
     }
-
+    /**
+     * coreExecutableFactory.
+     */
     public CoreExecutableFactory coreExecutableFactory() {
         return coreExecutableFactory;
     }
-
+    /**
+     * mcpToolInvoker.
+     */
     public McpToolInvoker mcpToolInvoker() {
         return mcpToolInvoker;
     }
-
+    /**
+     * agentInvoker.
+     */
     public AgentInvoker agentInvoker() {
         return agentInvoker;
     }
-
+    /**
+     * toolRegistry.
+     */
     public ToolRegistry toolRegistry() {
         return toolRegistry;
     }
-
+    /**
+     * agentRegistry.
+     */
     public AgentRegistry agentRegistry() {
         return agentRegistry;
     }
-
+    /**
+     * nodeTypeRegistry.
+     */
     public NodeTypeRegistry nodeTypeRegistry() {
         return nodeTypeRegistry;
     }
-
+    /**
+     * variableScope.
+     */
     public WorkflowVariableScope variableScope() {
         return variableScope;
     }
-
+    /**
+     * tenantId.
+     */
     public String tenantId() {
         return tenantId;
     }
-
+    /**
+     * properties.
+     */
     public StudioDslNodeProperties properties() {
         return properties;
     }
 
-    /** Nested child workflow: new depth + independent variable scope (L2 §3.7). */
+    /**
+     * Nested child workflow: new depth + independent variable scope (L2 §3.7).
+     */
     public NodeBuildContext childDepth() {
-        return copy(
+        return new NodeBuildContext(
                 workflowId + "/child@" + (nestingDepth + 1),
                 nestingDepth + 1,
                 maxNestingDepth,
@@ -275,40 +369,6 @@ public final class NodeBuildContext {
                 agentRegistry,
                 nodeTypeRegistry,
                 new WorkflowVariableScope(),
-                tenantId,
-                properties);
-    }
-
-    private static NodeBuildContext copy(
-            String workflowId,
-            int nestingDepth,
-            int maxNestingDepth,
-            PythonCodeExecutor pythonExecutor,
-            CodeLogicRegistry codeLogicRegistry,
-            SubWorkflowResolver subWorkflowResolver,
-            CoreExecutableFactory coreExecutableFactory,
-            McpToolInvoker mcpToolInvoker,
-            AgentInvoker agentInvoker,
-            ToolRegistry toolRegistry,
-            AgentRegistry agentRegistry,
-            NodeTypeRegistry nodeTypeRegistry,
-            WorkflowVariableScope variableScope,
-            String tenantId,
-            StudioDslNodeProperties properties) {
-        return new NodeBuildContext(
-                workflowId,
-                nestingDepth,
-                maxNestingDepth,
-                pythonExecutor,
-                codeLogicRegistry,
-                subWorkflowResolver,
-                coreExecutableFactory,
-                mcpToolInvoker,
-                agentInvoker,
-                toolRegistry,
-                agentRegistry,
-                nodeTypeRegistry,
-                variableScope,
                 tenantId,
                 properties);
     }

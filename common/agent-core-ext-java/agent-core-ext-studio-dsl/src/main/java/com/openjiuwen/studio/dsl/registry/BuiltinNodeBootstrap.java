@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.registry;
 
 import com.openjiuwen.studio.dsl.adapter.control.AggregateNodeHandler;
@@ -22,10 +26,17 @@ import com.openjiuwen.studio.dsl.adapter.model.IntentDetectionNodeHandler;
 import com.openjiuwen.studio.dsl.adapter.model.KnowledgeRetrievalNodeHandler;
 import com.openjiuwen.studio.dsl.adapter.model.LlmNodeHandler;
 
-/** Registers FEAT-031 21 built-in IR types with Studio-aligned adapters (L2 §4.3). */
+/**
+ * Registers FEAT-031 21 built-in IR types with Studio-aligned adapters (L2 §4.3).
+ *
+ * @since 2026-08-17
+ */
 public final class BuiltinNodeBootstrap {
     private BuiltinNodeBootstrap() {}
-
+    /**
+     * registerAll.
+     * @param registry registry
+     */
     public static void registerAll(NodeTypeRegistry registry) {
         registry.register(new StartNodeHandler());
         registry.register(new EndNodeHandler());

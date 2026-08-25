@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.registry;
 
 import com.openjiuwen.core.workflow.ComponentExecutable;
@@ -6,6 +10,7 @@ import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
+
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -13,11 +18,18 @@ import java.util.Objects;
 import java.util.ServiceLoader;
 import java.util.Set;
 
-/** alias → canonical → factory (L2 §4.1). */
+/**
+ * alias → canonical → factory (L2 §4.1).
+ *
+ * @since 2026-08-17
+ */
 public final class NodeTypeRegistry {
     private final Map<String, NodeHandlerFactory> byCanonical = new LinkedHashMap<>();
     private final Map<String, String> aliasToCanonical = new LinkedHashMap<>();
-
+    /**
+     * register.
+     * @param factory factory
+     */
     public synchronized void register(NodeHandlerFactory factory) {
         Objects.requireNonNull(factory, "factory");
         String canonical = factory.canonicalType();
@@ -37,13 +49,18 @@ public final class NodeTypeRegistry {
             aliasToCanonical.put(alias, canonical);
         }
     }
-
+    /**
+     * loadServiceLoader.
+     */
     public void loadServiceLoader() {
         for (NodeHandlerFactory factory : ServiceLoader.load(NodeHandlerFactory.class)) {
             register(factory);
         }
     }
-
+    /**
+     * canonicalize.
+     * @param irType irType
+     */
     public String canonicalize(String irType) {
         if (irType == null) {
             throw new NodeExecutionException("n/a", "unknown", NodeCauseCode.UNKNOWN_NODE_TYPE, "irType is null");
@@ -57,18 +74,26 @@ public final class NodeTypeRegistry {
         }
         return canonical;
     }
-
+    /**
+     * create.
+     * @param node node
+     * @param ctx ctx
+     */
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         String canonical = canonicalize(node.irType());
         NodeHandlerFactory factory = byCanonical.get(canonical);
         AssembledNode normalized = node.withCanonical(canonical);
         return factory.create(normalized, ctx);
     }
-
+    /**
+     * canonicalTypes.
+     */
     public Set<String> canonicalTypes() {
         return Set.copyOf(byCanonical.keySet());
     }
-
+    /**
+     * factories.
+     */
     public Collection<NodeHandlerFactory> factories() {
         return byCanonical.values();
     }

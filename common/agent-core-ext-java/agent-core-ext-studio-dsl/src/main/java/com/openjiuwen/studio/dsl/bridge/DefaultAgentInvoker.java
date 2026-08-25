@@ -1,17 +1,34 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.bridge;
 
 import com.openjiuwen.studio.dsl.spi.AgentInvoker;
 import com.openjiuwen.studio.dsl.spi.AgentRegistry;
-import java.util.LinkedHashMap;
+
 import java.util.Map;
 
+/**
+ * DefaultAgentInvoker for Studio DSL node-type extension (FEAT-031).
+ *
+ * @since 2026-08-17
+ */
 public final class DefaultAgentInvoker implements AgentInvoker {
     private final AgentRegistry registry;
-
+    /**
+     * DefaultAgentInvoker.
+     * @param registry registry
+     */
     public DefaultAgentInvoker(AgentRegistry registry) {
         this.registry = registry;
     }
-
+    /**
+     * invoke.
+     * @param agentId agentId
+     * @param inputs inputs
+     * @throws Exception when the call fails
+     */
     @Override
     public Map<String, Object> invoke(String agentId, Map<String, Object> inputs) throws Exception {
         return registry

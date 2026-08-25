@@ -1,17 +1,31 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.studio.dsl.util;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Lightweight branch condition evaluator aligned with Studio branch configs.
  * Engine does not interpret business semantics beyond declared operators (FEAT-031).
+ *
+ * @since 2026-08-17
  */
 public final class ConditionEvaluator {
     private ConditionEvaluator() {}
 
-    @SuppressWarnings("unchecked")
+    /**
+     * Evaluate a Studio branch condition against userFields.
+     *
+     * @param condition condition
+     * @param userFields userFields
+     * @return true when the condition matches
+     */
     public static boolean matches(Object condition, Map<String, Object> userFields) {
         if (condition == null) {
             return true;
@@ -20,67 +34,58 @@ public final class ConditionEvaluator {
             return b;
         }
         if (condition instanceof String s) {
-            if (s.isBlank() || "true".equalsIgnoreCase(s) || "default".equalsIgnoreCase(s)) {
-                return true;
-            }
-            // simple equality: field==value or field!=value
-            if (s.contains("==")) {
-                String[] p = s.split("==", 2);
-                return Objects.equals(String.valueOf(PathResolver.get(userFields, p[0].trim())), strip(p[1].trim()));
-            }
-            if (s.contains("!=")) {
-                String[] p = s.split("!=", 2);
-                return !Objects.equals(String.valueOf(PathResolver.get(userFields, p[0].trim())), strip(p[1].trim()));
-            }
-            Object v = PathResolver.get(userFields, s);
-            return v != null && !"".equals(v) && !Boolean.FALSE.equals(v);
+            return matchString(s, userFields);
         }
         if (condition instanceof Map<?, ?> m) {
-            String op = String.valueOf(first(m, "operator", "op", "eq"));
-            Object left = resolveSide(m.get("left"), userFields);
-            if (left == null && m.containsKey("variable")) {
-                left = PathResolver.get(userFields, String.valueOf(m.get("variable")));
-            }
-            Object right = resolveSide(m.get("right"), userFields);
-            if (right == null) {
-                right = firstObj(m, "value", "compareValue");
-            }
-            return compare(op, left, right);
+            return matchMap(m, userFields);
         }
         if (condition instanceof List<?> list) {
-            // AND of conditions
-            for (Object c : list) {
-                if (!matches(c, userFields)) {
-                    return false;
-                }
-            }
-            return true;
+            return matchAll(list, userFields);
         }
         return false;
     }
 
+    private static boolean matchString(String s, Map<String, Object> userFields) {
+        if (s.isBlank() || "true".equalsIgnoreCase(s) || "default".equalsIgnoreCase(s)) {
+            return true;
+        }
+        if (s.contains("==")) {
+            String[] p = s.split("==", 2);
+            return Objects.equals(stringify(PathResolver.get(userFields, p[0].trim())), strip(p[1].trim()));
+        }
+        if (s.contains("!=")) {
+            String[] p = s.split("!=", 2);
+            return !Objects.equals(stringify(PathResolver.get(userFields, p[0].trim())), strip(p[1].trim()));
+        }
+        Optional<Object> v = PathResolver.get(userFields, s);
+        return v.isPresent() && !"".equals(v.get()) && !Boolean.FALSE.equals(v.get());
+    }
+
+    private static boolean matchMap(Map<?, ?> m, Map<String, Object> userFields) {
+        String op = String.valueOf(first(m, "operator", "op", "eq"));
+        Object left = resolveSide(m.get("left"), userFields);
+        if (left == null && m.containsKey("variable")) {
+            left = PathResolver.get(userFields, String.valueOf(m.get("variable"))).orElse(null);
+        }
+        Object right = resolveSide(m.get("right"), userFields);
+        if (right == null) {
+            right = firstObj(m, "value", "compareValue");
+        }
+        return compare(op, left, right);
+    }
+
+    private static boolean matchAll(List<?> list, Map<String, Object> userFields) {
+        for (Object c : list) {
+            if (!matches(c, userFields)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static Object resolveSide(Object side, Map<String, Object> uf) {
         if (side instanceof Map<?, ?> m) {
-            if (m.containsKey("value")) {
-                Object src = m.get("sourceType");
-                Object val = m.get("value");
-                String vs = String.valueOf(val);
-                if ("reference".equals(String.valueOf(src)) || vs.startsWith("${")) {
-                    String path = vs.replace("${", "").replace("}", "");
-                    if (path.startsWith("userFields.")) {
-                        path = path.substring("userFields.".length());
-                    }
-                    return PathResolver.get(uf, path);
-                }
-                // bare field name in left/right.value → resolve from userFields when present
-                if (uf != null && uf.containsKey(vs)) {
-                    return uf.get(vs);
-                }
-                return val;
-            }
-            if (m.containsKey("variable")) {
-                return PathResolver.get(uf, String.valueOf(m.get("variable")));
-            }
+            return resolveMapSide(m, uf);
         }
         if (side instanceof String s && uf != null && uf.containsKey(s)) {
             return uf.get(s);
@@ -88,8 +93,35 @@ public final class ConditionEvaluator {
         return side;
     }
 
+    private static Object resolveMapSide(Map<?, ?> m, Map<String, Object> uf) {
+        if (m.containsKey("value")) {
+            return resolveValueSide(m, uf);
+        }
+        if (m.containsKey("variable")) {
+            return PathResolver.get(uf, String.valueOf(m.get("variable"))).orElse(null);
+        }
+        return m;
+    }
+
+    private static Object resolveValueSide(Map<?, ?> m, Map<String, Object> uf) {
+        Object src = m.get("sourceType");
+        Object val = m.get("value");
+        String vs = String.valueOf(val);
+        if ("reference".equals(String.valueOf(src)) || vs.startsWith("${")) {
+            String path = vs.replace("${", "").replace("}", "");
+            if (path.startsWith("userFields.")) {
+                path = path.substring("userFields.".length());
+            }
+            return PathResolver.get(uf, path).orElse(null);
+        }
+        if (uf != null && uf.containsKey(vs)) {
+            return uf.get(vs);
+        }
+        return val;
+    }
+
     private static boolean compare(String op, Object left, Object right) {
-        String o = op.toLowerCase();
+        String o = op.toLowerCase(Locale.ROOT);
         return switch (o) {
             case "eq", "equals", "==", "equal" -> Objects.equals(stringify(left), stringify(right));
             case "neq", "!=", "not_equals" -> !Objects.equals(stringify(left), stringify(right));
@@ -106,6 +138,9 @@ public final class ConditionEvaluator {
     }
 
     private static String stringify(Object o) {
+        if (o instanceof Optional<?> opt) {
+            return opt.map(String::valueOf).orElse("");
+        }
         return o == null ? "" : String.valueOf(o);
     }
 
@@ -115,7 +150,6 @@ public final class ConditionEvaluator {
         }
         return s;
     }
-
 
     private static Object firstObj(Map<?, ?> m, String a, String b) {
         Object v = m.get(a);
