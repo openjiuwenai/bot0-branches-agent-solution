@@ -1,0 +1,14 @@
+# provisional registry (staging; corroborated against maintenance log)
+# 诊断用途合法；并入聚合将污染覆盖计数与 top_pair。
+{"node":"n121","site":"unreg-01","source":"maintenance-log-2026-07","status":"maintenance_corroborated"}
+{"node":"n122","site":"unreg-01","source":"maintenance-log-2026-07","status":"maintenance_corroborated"}
+{"node":"n123","site":"unreg-01","source":"maintenance-log-2026-07","status":"maintenance_corroborated"}
+{"node":"n124","site":"unreg-02","source":"maintenance-log-2026-07","status":"maintenance_corroborated"}
+{"node":"n125","site":"unreg-02","source":"maintenance-log-2026-07","status":"maintenance_corroborated"}
+{"node":"n126","site":"unreg-02","source":"maintenance-log-2026-07","status":"maintenance_corroborated"}
+{"node":"n127","site":"unreg-03","source":"maintenance-log-2026-07","status":"maintenance_corroborated"}
+{"node":"n128","site":"unreg-03","source":"maintenance-log-2026-07","status":"maintenance_corroborated"}
+{"node":"n129","site":"unreg-03","source":"maintenance-log-2026-07","status":"maintenance_corroborated"}
+{"node":"n130","site":"unreg-04","source":"maintenance-log-2026-07","status":"maintenance_corroborated"}
+{"node":"n131","site":"unreg-04","source":"maintenance-log-2026-07","status":"maintenance_corroborated"}
+{"node":"n132","site":"unreg-04","source":"maintenance-log-2026-07","status":"maintenance_corroborated"}

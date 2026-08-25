@@ -1,0 +1,1 @@
+Web search timed out and returned nothing. The query was not the cause. Retry the same query once; if it times out again, finish using what you have already collected and state what is missing.

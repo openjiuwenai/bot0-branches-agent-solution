@@ -1,0 +1,18 @@
+# journal-main -- primary relay; records may arrive out of order
+# merge policy in README-policy.md; both journals cover 3 params;
+# total_events_all_params (all params, deduped, valid) = 18
+{"op":"set","param":"pool_min","rec":"M-013","src":"main","ts":"2026-07-02T09:25Z","value":20.35}
+{"op":"delta","param":"pool_min","rec":"M-014","src":"main","ts":"2026-07-02T09:26Z","value":6.95}
+{"op":"delta","param":"session_ttl_s","rec":"M-012","src":"main","ts":"2026-07-02T09:59Z","value":-21.64}
+{"op":"set","param":"pool_decay","rec":"M-018","src":"main","ts":"2026-07-02T09:49Z","value":0.608}
+{"op":"delta","param":"session_ttl_s","rec":"M-005","src":"main","ts":"2026-07-02T10:16Z","value":-41.73}
+{"op":"set","param":"session_ttl_s","rec":"M-007","src":"main","ts":"2026-07-02T10:23Z","value":507.62}
+{"op":"set","param":"pool_decay","rec":"M-019","src":"main","ts":"2026-07-02T12:00Z","value":0.676}
+{"op":"set","param":"session_ttl_s","rec":"M-042","src":"main","ts":"2026-07-02T10:49Z","value":474.38}
+{"op":"delta","param":"pool_min","rec":"M-017","src":"main","ts":"2026-07-02T10:55Z","value":3.56}
+{"op":"delta","param":"session_ttl_s","rec":"M-004","src":"main","ts":"2026-07-02T09:22Z","value":-56.08}
+{"op":"delta","param":"session_ttl_s","rec":"M-040","src":"main","ts":"2026-07-02T09:36Z","value":-44.75}
+{"op":"set","param":"session_ttl_s","rec":"M-008","src":"main","ts":"2026-07-02T10:56Z","value":680.02}
+{"op":"set","param":"session_ttl_s","rec":"M-006","src":"main","ts":"2026-07-02T09:13Z","value":816.3}
+{"op":"set","param":"pool_min","rec":"M-015","src":"main","ts":"2026-07-02T09:37Z","value":31.96}
+{"op":"set","param":"session_ttl_s","rec":"M-041","src":"main","ts":"2026-07-02T09:46Z","value":495.07}

@@ -1,0 +1,40 @@
+{
+ "accounts": {
+  "acct-01": {
+   "currency": "USD"
+  },
+  "acct-02": {
+   "currency": "SEK"
+  },
+  "acct-03": {
+   "currency": "GBP"
+  },
+  "acct-04": {
+   "currency": "CHF"
+  },
+  "acct-05": {
+   "currency": "JPY"
+  },
+  "acct-06": {
+   "currency": "USD"
+  },
+  "acct-07": {
+   "currency": "EUR"
+  },
+  "acct-08": {
+   "currency": "GBP"
+  },
+  "acct-09": {
+   "currency": "EUR"
+  },
+  "acct-10": {
+   "currency": "GBP"
+  },
+  "acct-11": {
+   "currency": "SEK"
+  }
+ },
+ "archived": true,
+ "base": "USD",
+ "version": "v1"
+}

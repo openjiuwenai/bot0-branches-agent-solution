@@ -1,0 +1,656 @@
+{
+ "corpus_sha256": {
+  "arm_a5/assembly/README.md": "f1f89642fa4cc57c4334f9f94e4a1e48a43d72f01f41d92806d62a24c3bd898c",
+  "arm_a5/assembly/constraints.md": "6b2de06124351fd3156dfa74681bcb64d612d525b82c5bda61979752d303f982",
+  "arm_a5/data/cand-k00.csv": "9c3cfd3cd04d62543eebbe5cd15062b8899e0a74b3537f65d338a66e7f0df30f",
+  "arm_a5/data/cand-k01.csv": "4c63fc50e49468860b58ed3625e234f8f923ff88c841e7b367fcf90d6fa73df9",
+  "arm_a5/data/cand-k02.csv": "ea230c5b0a8db63913eeb0190ed6f484b0b6647a49c583a6db8889fbc6a0adeb",
+  "arm_a5/data/cand-k03.csv": "967ef6194ac4c1f117ee85f5764034efbf9479c4d1060004c3ab496790f77914",
+  "arm_a5/data/cand-k04.csv": "4ab485a30e8c41affba6e2b03dd29af970e04698e1b476b0bc36bddd7b5a8430",
+  "arm_a5/data/cand-k05.csv": "5ddb779b61e78c501840ed089cc0d666064be416faecdf885c1ecc8f3c929f87",
+  "arm_a5/data/cand-k06.csv": "c07082c6422dfd2c6b314887eb1eedecf745addb354b23a08a55f7053cca8075",
+  "arm_a5/data/cand-k07.csv": "ec837e2afe21b81dd537845ca8a3f7f129462608e7b083da6d85f4602133cb60",
+  "arm_a5/data/cand-k08.csv": "05363e96e25465f0f6892da6b030689b1911766d8979712725e24fbcfbf26a53",
+  "arm_a5/data/cand-k09.csv": "444c1986cbc8288ff1a97dc9dee3d33fcc10f94ad082705bac646a78c7b575a4",
+  "arm_a5/data/cand-k10.csv": "0c6458b7b4cfe1c424e0d30ae8c6597691e69db93d0229b641ee07f474da9aed",
+  "arm_a5/data/cand-k11.csv": "0e4ce73e115812988fcafd041056b5454854d3c37a6c52879e5e3b6298e5cb78",
+  "arm_a5/data/cand-m00.csv": "f9107f848e26fe6939824c083cb4b9068bcff3a68ac5dbd250350de65b934aca",
+  "arm_a5/data/cand-m01.csv": "169519df8aa673804c2123821384fb2174ff5e64b97824de9324ca5a87b9ed73",
+  "arm_a5/data/cand-m02.csv": "0112367844ee19cad6e252a453fdf02e2a315382bece1889637bef427d043f54",
+  "arm_a5/data/cand-m03.csv": "f05d3145095db42b7cbab1d7dcd4ad758dbba6250cc459c47154e9d03e3b5a12",
+  "arm_a5/data/cand-m04.csv": "768d705e95f25c28961125a9da0716a31059396d9d981d9356b9e59f1cdc614e",
+  "arm_a5/data/cand-m05.csv": "44501840e4ac4d401c8e0c949059b4226329fa97c3bdc9d827494b3652dd5c80",
+  "arm_a5/data/cand-m06.csv": "c8edc00c76b8cc9cf811b64393bde5a3791a1cd34f65afdc059217658ba98389",
+  "arm_a5/data/cand-m07.csv": "8f6739ec1d4ebb316b9841ff15cf584a49d2e3fec53012a9ff3e9167cc0c8772",
+  "arm_a5/data/cand-m08.csv": "50efb95fa53f4fadc98591ef53b92c750cd93f1bbacb900a8c67b5a3fedf7a2c",
+  "arm_a5/data/cand-m09.csv": "68078791a12d146485a50de96c734cd7de8508d8e3802a934b1b4a26d63f84b0",
+  "arm_a5/data/cand-m10.csv": "786f60643cde95ad14c63c2e065797d487425aa139c496937a6f1309cb400be8",
+  "arm_a5/data/cand-m11.csv": "bc366e216d317414b2552533d8b19ac8105247d2ba8041e706274e285a8e3d92",
+  "arm_a5/data/cand-p00.csv": "5ccde232292a0b4c6788a830a68f80d5bbc139b94c9fbad344d339d217633d55",
+  "arm_a5/data/cand-p01.csv": "38bb4ae5cf5953659d34043756ad31f272d17a291c8d4a21e2822980dbff8043",
+  "arm_a5/data/cand-p02.csv": "e221e8e17b1e1e4ff535dd1da2394adb32c0ca8ddc24fbb5f1cdab26368b8686",
+  "arm_a5/data/cand-p03.csv": "5d9b8cf00f6345fe03315c9e14d6e26e9c02eda7aae2024924265d1e34888361",
+  "arm_a5/data/cand-p04.csv": "0494b3b151df331866d08ca54a5692821172dbec1fe0a01643fb0344a5ecf5da",
+  "arm_a5/data/cand-p05.csv": "b9b15e7724430578f5ef7904f80ac060d59c3dd14d5ed36c8b86661b9ea5b9a7",
+  "arm_a5/data/cand-p06.csv": "63b700be3c5c7e342a5823b2cf7100ffd67f06fd4398e74406adbe44db2c333e",
+  "arm_a5/data/cand-p07.csv": "45b3edd332b8d773e25bccef4af9a600fd1b83b09bd2d1abbbbb74dbd2559c07",
+  "arm_a5/data/cand-p08.csv": "759a0dbbc858618ecfb846e11cf1e946130a840c7f018aa9a069200d425aeb3a",
+  "arm_a5/data/cand-p09.csv": "7ce780a630c0a247417558319ca53dbdfc2eb9996521103d053bad3f230e74c7",
+  "arm_a5/data/cand-p10.csv": "007e033bdaf373d944e2ca7f3748883ff6bfadfa4bf5d51cec6b421e41a75634",
+  "arm_a5/data/cand-p11.csv": "dff1e4db61f18815161c3b7135653b576de1dfd6707ff7116d6f5ca9eb6dd297",
+  "arm_a5/errata.md": "36488bf2cff9cf6857f3cb70824cc5e80ab6a8c76c7ec5c217699fba92a709e0",
+  "arm_a5/registry.json": "42602cee0d59992df86a68bee75962a25e27ccc156b3eb667067630d5b5c795a",
+  "sdx_a3/evidence-pool.log": "3bd3a1e90e1944324df40bc64540e2901fb85f345b2ec5ce5ae8e50d0d6fd398",
+  "sdx_a3/incident.md": "91e70fba5d4de0d6924147777d2571f1ff6d3d044f983ae219e444fe944be9ef",
+  "sdx_a3/postmortem-draft.md": "4c9aa9006babb1d31c47acfaef17d37a84654fe0c9a58e96245e05e645221a45",
+  "sr_a2/README-policy.md": "781f63c2b2232fb83baace949770349f56e439c5aa3ff7f68b159066f2b00e3f",
+  "sr_a2/errata.md": "f93e7600ce8e517a1a4a9d23b5b91d14b23e37971a751dd53bc842a9140f3628",
+  "sr_a2/journal-main.jsonl": "1ec32a66bdd9d0a605852dcc54bb8a228c6e6ed8b5889873f6cc87207436ce80",
+  "sr_a2/journal-mirror.jsonl": "f5ba0a7976eb683238edd7c91f04c1e2bfefabb50f6942a6d5ed7f1704f27f29",
+  "sr_a7/errata.md": "7da5122865d41d51eb28f0c8c420d38181525550bf32728bb77aca142127751b",
+  "sr_a7/tuning-log.jsonl": "f6834ec1a4456b51039ef3ac3d6fac06ad48186acd9d301a1d4be8139e2bad1b",
+  "x_a1/bench.md": "ad01bbf1fc34a8106124debf00624e3be64ba4e37fc0496c69a64b3fc5a5c6ee",
+  "x_a1/errata.md": "e37818ed6c3925b10f14f8fdbcb5fcd6712f63c3c84bcec7f1202d967f1d6dc9",
+  "x_a1/logs.jsonl": "6763462717bc384b1b6e2259c4954e68718dc6221164557e47b3c97dcce6fb75",
+  "x_a4/fx_settlement.json": "cd37ced454ad3d89dedab9b6091a0548b384935c4d70ac42403f8e60d1c77857",
+  "x_a4/fx_spot.csv": "2b59fcb4e73da5ee2367bd8419bb930a34b37baef09c093920e536a773c4cae1",
+  "x_a4/ledger.jsonl": "c0111a64edc0fafc30195c07d6f8961c484a54e19687fdd3a2640221a4ec164c",
+  "x_a4/registry_v1.json": "1906a111a34dbb56db180621ecda15d2b8fcf82264c615dca6c538147b09278c",
+  "x_a4/registry_v2.json": "64106a650ceeddecfba73168bb5bc59dcca093818aa73c8506ce6c9b13e3e94f",
+  "x_a6/links.csv": "6129b75cf46dc8b39330569bb4a4bc8528ed89d261301b598f2235edb424407e",
+  "x_a6/nodes.csv": "6211d850b08472a0f2286faaa7f5f82780050139b63346ab46dfa1d352d5e024",
+  "x_a6/provisional_registry.jsonl": "f4b159180e04959d02fd71ca9f6d6d5b4cd8e78c4ce34af0a5ee0f6654e1e076",
+  "x_a6/registry.json": "3fdc4b2aaf55c193ce3d17b50608bb6b38844fda26c8cbd0e4c7406f79c54f5f"
+ },
+ "family": [
+  "X",
+  "SR/SDX",
+  "ARM"
+ ],
+ "seed": 20260819,
+ "v2A1": {
+  "bait": {
+   "echo_mean_pct": 73.005,
+   "echo_mean_printed": "73.0"
+  },
+  "errata_applied": [
+   "m07",
+   "m13",
+   "m19"
+  ],
+  "invariants": {
+   "affected_rows": 14,
+   "boundary_rows": 6,
+   "errata_entries": 2,
+   "knobs": {
+    "K1": 4,
+    "K2": 0.6,
+    "K3": 2
+   },
+   "rows": 40,
+   "top_margin_relative": 0.142169
+  },
+  "region_members": {
+   "amer": [
+    "m07",
+    "m12",
+    "m17"
+   ],
+   "apac": [
+    "m01",
+    "m06",
+    "m11",
+    "m21",
+    "m31"
+   ],
+   "emea": [
+    "m10",
+    "m15",
+    "m20"
+   ],
+   "latam": [
+    "m04",
+    "m24"
+   ],
+   "mea": [
+    "m08",
+    "m18"
+   ]
+  },
+  "region_scores": {
+   "amer": 67.108989,
+   "apac": 71.165741,
+   "emea": 81.283333,
+   "latam": 62.4,
+   "mea": 66.585
+  },
+  "selected_methods": [
+   "m01",
+   "m04",
+   "m06",
+   "m07",
+   "m08",
+   "m10",
+   "m11",
+   "m12",
+   "m15",
+   "m17",
+   "m18",
+   "m20",
+   "m21",
+   "m24",
+   "m31"
+  ],
+  "sum_n": 292,
+  "top_margin": 0.14216942713280176,
+  "top_region": "emea",
+  "weighted_score": 70.46815068493152
+ },
+ "v2A2": {
+  "bait": {
+   "total_events_all_params": 18
+  },
+  "bonus": {
+   "decoy_param": "pool_min",
+   "decoy_param_final": 29.24
+  },
+  "chain_len": 12,
+  "chain_records": [
+   [
+    "W-020"
+   ],
+   [
+    "M-006",
+    "W-006"
+   ],
+   [
+    "M-040"
+   ],
+   [
+    "M-041"
+   ],
+   [
+    "W-021"
+   ],
+   [
+    "M-012",
+    "W-012"
+   ],
+   [
+    "M-005",
+    "W-005"
+   ],
+   [
+    "M-007",
+    "W-007"
+   ],
+   [
+    "M-004",
+    "W-004"
+   ],
+   [
+    "W-022"
+   ],
+   [
+    "M-042"
+   ],
+   [
+    "M-008",
+    "W-008"
+   ]
+  ],
+  "dedup_map": [
+   [
+    "M-004",
+    "W-004"
+   ],
+   [
+    "M-005",
+    "W-005"
+   ],
+   [
+    "M-006",
+    "W-006"
+   ],
+   [
+    "M-007",
+    "W-007"
+   ],
+   [
+    "M-008",
+    "W-008"
+   ],
+   [
+    "M-012",
+    "W-012"
+   ]
+  ],
+  "final_value": 587.38,
+  "invalid_records": [
+   "M-019",
+   "W-019"
+  ],
+  "invariants": {
+   "chain_len": 12,
+   "cross_sources": 3,
+   "dedup_pairs": 6,
+   "knobs": {
+    "K_c": 1,
+    "K_j": 3,
+    "K_n": 12
+   },
+   "mirror_only_effective": 3,
+   "retracted_records": 2,
+   "same_ts_conflicts": 1
+  },
+  "mirror_only_count": 3,
+  "origin": [
+   "mirror",
+   "both",
+   "main",
+   "main",
+   "mirror",
+   "both",
+   "both",
+   "both",
+   "both",
+   "mirror",
+   "main",
+   "both"
+  ],
+  "param": "session_ttl_s",
+  "same_ts_conflicts": 1,
+  "value_series": [
+   577.11,
+   816.3,
+   771.55,
+   495.07,
+   575.39,
+   553.75,
+   512.02,
+   507.62,
+   451.54,
+   588.39,
+   474.38,
+   587.38
+  ]
+ },
+ "v2A3": {
+  "admissible_regions": [
+   {
+    "base": "evidence-pool.log",
+    "block": "EV-C",
+    "file": "sdx_a3/evidence-pool.log",
+    "hypothesis": "H2",
+    "le": 4,
+    "ls": 2,
+    "sig": "pool_saturation",
+    "stance": "support"
+   },
+   {
+    "base": "evidence-pool.log",
+    "block": "EV-B1",
+    "file": "sdx_a3/evidence-pool.log",
+    "hypothesis": "H1",
+    "le": 8,
+    "ls": 6,
+    "sig": "cache_hit_stable",
+    "stance": "eliminate"
+   },
+   {
+    "base": "evidence-pool.log",
+    "block": "EV-D",
+    "file": "sdx_a3/evidence-pool.log",
+    "hypothesis": "H3",
+    "le": 13,
+    "ls": 10,
+    "sig": "fx_p99_flat",
+    "stance": "eliminate"
+   },
+   {
+    "base": "incident.md",
+    "block": "EV-A",
+    "file": "sdx_a3/incident.md",
+    "hypothesis": "H2",
+    "le": 17,
+    "ls": 15,
+    "sig": "pool_saturation",
+    "stance": "support"
+   },
+   {
+    "base": "incident.md",
+    "block": "EV-B2",
+    "file": "sdx_a3/incident.md",
+    "hypothesis": "H1",
+    "le": 22,
+    "ls": 20,
+    "sig": "cache_hit_stable",
+    "stance": "eliminate"
+   }
+  ],
+  "bait": {
+   "postmortem_asserts": "H1"
+  },
+  "banned_regions": [
+   {
+    "base": "postmortem-draft.md",
+    "block": "BAN",
+    "file": "sdx_a3/postmortem-draft.md",
+    "le": 13,
+    "ls": 1
+   }
+  ],
+  "distractor_lines": 4,
+  "distractor_regions": [
+   {
+    "base": "evidence-pool.log",
+    "block": "DX-1",
+    "file": "sdx_a3/evidence-pool.log",
+    "le": 16,
+    "ls": 15,
+    "reason": "out-of-window (pool_saturation)",
+    "sig": "pool_saturation"
+   },
+   {
+    "base": "evidence-pool.log",
+    "block": "DX-2",
+    "file": "sdx_a3/evidence-pool.log",
+    "le": 19,
+    "ls": 18,
+    "reason": "unregistered signal (gw_retry_up); node unreachable in topology",
+    "sig": "gw_retry_up"
+   }
+  ],
+  "eliminate_target": "H1",
+  "evidence_lines": 20,
+  "file_line_counts": {
+   "sdx_a3/evidence-pool.log": 19,
+   "sdx_a3/incident.md": 26,
+   "sdx_a3/postmortem-draft.md": 13
+  },
+  "hyp_signals": {
+   "H1": {
+    "counter": "cache_hit_stable",
+    "predicted": "cache_hit_drop"
+   },
+   "H2": {
+    "counter": "pool_headroom",
+    "predicted": "pool_saturation"
+   },
+   "H3": {
+    "counter": "fx_p99_flat",
+    "predicted": "fx_p99_up"
+   }
+  },
+  "hypotheses": [
+   "H1",
+   "H2",
+   "H3"
+  ],
+  "invariants": {
+   "distractor_lines": 4,
+   "elim_blocks": 2,
+   "evidence_lines": 20,
+   "hypotheses": 3,
+   "joins": 1,
+   "knobs": {
+    "K1_H": 3,
+    "K2_J": 1,
+    "K3_rho": 0.2
+   },
+   "rho": 0.2,
+   "winner_blocks": 2,
+   "winner_files": 2
+  },
+  "verdict": "H2",
+  "window": [
+   "2026-08-04T14:00Z",
+   "2026-08-04T15:30Z"
+  ],
+  "winning_hypothesis": "H2"
+ },
+ "v2A4": {
+  "bait": {
+   "spot_total_uc": 30097.68
+  },
+  "conflict_count": 8,
+  "conflict_tx_ids": [
+   "t007",
+   "t009",
+   "t040",
+   "t044",
+   "t085",
+   "t103",
+   "t107",
+   "t110"
+  ],
+  "final_value_uc": 30071.93,
+  "invariants": {
+   "abs_diff_uc": 3779.84,
+   "conflicts": 8,
+   "default_accounts": [
+    "acct-12"
+   ],
+   "join_files": 4,
+   "knobs": {
+    "K1": 8,
+    "K2": 4,
+    "K3": 2
+   },
+   "ledger_rows": 120
+  },
+  "provisional_net_uc": 26292.09,
+  "repost_dedup_count": 8,
+  "rollback_executed": true
+ },
+ "v2A5": {
+  "bait": {
+   "certified_badges": 4
+  },
+  "d_eff": "2026-03-21",
+  "deadend_registry": [
+   {
+    "combo": {
+     "baseline": "data/cand-k10.csv",
+     "followup": "data/cand-p02.csv",
+     "intervention": "data/cand-m07.csv"
+    },
+    "label": "maxrows_trio",
+    "margin_days": 31,
+    "source": "assembly/README.md max-rows heuristic (public)",
+    "violation_days": 5,
+    "window_band": [
+     29,
+     33
+    ]
+   },
+   {
+    "combo": {
+     "baseline": "data/cand-k03.csv",
+     "followup": "data/cand-p11.csv",
+     "intervention": "data/cand-m04.csv"
+    },
+    "label": "certified_combo_1",
+    "margin_days": 29,
+    "source": "registry certified badges (public)",
+    "violation_days": 7,
+    "window_band": [
+     27,
+     31
+    ]
+   },
+   {
+    "combo": {
+     "baseline": "data/cand-k05.csv",
+     "followup": "data/cand-p11.csv",
+     "intervention": "data/cand-m04.csv"
+    },
+    "label": "certified_combo_2",
+    "margin_days": 29,
+    "source": "registry certified badges (public)",
+    "violation_days": 7,
+    "window_band": [
+     27,
+     31
+    ]
+   }
+  ],
+  "file_set": {
+   "baseline": "data/cand-k05.csv",
+   "followup": "data/cand-p10.csv",
+   "intervention": "data/cand-m02.csv"
+  },
+  "invariants": {
+   "base_margin_m0": 20,
+   "certified_badges": 4,
+   "deadend_violation_max": 7,
+   "join_depth": 3,
+   "knobs": {
+    "J": 3,
+    "M": 20,
+    "N": 12,
+    "rho": 4
+   },
+   "maxrows_violation_days": 5,
+   "near_miss_per_role": 4,
+   "pool_size_per_role": 12,
+   "threshold_days": 36,
+   "unique_solution": true
+  },
+  "joint_window": {
+   "days": 54,
+   "end": "2026-05-01",
+   "start": "2026-03-08"
+  },
+  "margin_days": 41,
+  "margin_threshold_days": 36,
+  "pool_sizes": {
+   "baseline": 12,
+   "followup": 12,
+   "intervention": 12
+  },
+  "rates": {
+   "baseline": "daily",
+   "followup": "daily",
+   "intervention": "daily"
+  },
+  "rows": {
+   "baseline": 50,
+   "followup": 51,
+   "intervention": 51
+  },
+  "stations": {
+   "baseline": "st-01",
+   "followup": "st-17",
+   "intervention": "st-09"
+  },
+  "threshold_parts": {
+   "audit_extension": 0,
+   "errata_freeze": 9,
+   "m0": 20,
+   "registry_freeze": 7
+  }
+ },
+ "v2A6": {
+  "alias_resolved_links": 10,
+  "ambiguous_family": [
+   "maintenance_pending",
+   "decommission_scheduled",
+   "unregistered_site"
+  ],
+  "coverage_ratio": 0.75,
+  "covered_links": 90,
+  "invariants": {
+   "aliases": 10,
+   "knobs": {
+    "K1_hole_pct": 20,
+    "K2_alias": 10,
+    "K3_depth": 2
+   },
+   "links": 120,
+   "nodes": 150,
+   "top_margin_relative": 0.095399,
+   "uncovered_nodes": 30
+  },
+  "polluted": {
+   "covered_links": 98,
+   "top_pair_gbps": 86.47,
+   "top_pair_qos": "gold",
+   "top_pair_sites": [
+    "unreg-01",
+    "unreg-04"
+   ]
+  },
+  "top_margin": 0.09539857420609202,
+  "top_pair": {
+   "gbps": 84.51,
+   "qos": "silver",
+   "sites": [
+    "can-03",
+    "can-07"
+   ]
+  },
+  "total_links": 120,
+  "uncovered_nodes": 30
+ },
+ "v2A7": {
+  "calibration": {
+   "high_conf_min": 4
+  },
+  "chain_len": 12,
+  "chain_records": [
+   "R-001",
+   "R-002",
+   "R-005",
+   "R-006",
+   "R-008",
+   "R-009",
+   "R-004",
+   "R-010",
+   "R-011",
+   "R-012",
+   "R-014",
+   "R-015"
+  ],
+  "coverage_undecidable": [
+   "provenance_summary",
+   "assumptions"
+  ],
+  "distractor_events": 3,
+  "distractor_keys": [
+   "pool_min",
+   "pool_decay"
+  ],
+  "distractor_params": [
+   "pool_min",
+   "pool_decay"
+  ],
+  "final_value": 2397.8,
+  "invariants": {
+   "chain_len": 12,
+   "distractor_events": 3,
+   "errata_fixes": 2,
+   "knobs": {
+    "K_d": 3,
+    "K_e": 2,
+    "K_n": 12
+   }
+  },
+  "param": "cache_size_mb",
+  "value_series": [
+   6650.8,
+   6372.2,
+   5965.4,
+   5651.4,
+   4035.0,
+   7103.6,
+   6046.6,
+   6363.9,
+   4829.2,
+   6692.0,
+   6483.3,
+   2397.8
+  ]
+ },
+ "version": 2
+}

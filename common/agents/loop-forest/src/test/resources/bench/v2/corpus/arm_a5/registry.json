@@ -1,0 +1,79 @@
+{
+ "note": "stream registry: stations map to stream classes (K2 role heterogeneity); certified badges mark audited stations.",
+ "site_freeze_days": 7,
+ "stations": {
+  "st-01": {
+   "certified": true,
+   "stream_class": "primary"
+  },
+  "st-03": {
+   "certified": true,
+   "stream_class": "primary"
+  },
+  "st-04": {
+   "certified": false,
+   "stream_class": "primary"
+  },
+  "st-05": {
+   "certified": false,
+   "stream_class": "primary"
+  },
+  "st-06": {
+   "certified": false,
+   "stream_class": "primary"
+  },
+  "st-07": {
+   "certified": false,
+   "stream_class": "primary"
+  },
+  "st-09": {
+   "certified": false,
+   "stream_class": "secondary"
+  },
+  "st-11": {
+   "certified": true,
+   "stream_class": "secondary"
+  },
+  "st-12": {
+   "certified": false,
+   "stream_class": "secondary"
+  },
+  "st-13": {
+   "certified": false,
+   "stream_class": "secondary"
+  },
+  "st-14": {
+   "certified": false,
+   "stream_class": "secondary"
+  },
+  "st-15": {
+   "certified": false,
+   "stream_class": "secondary"
+  },
+  "st-17": {
+   "certified": false,
+   "stream_class": "tertiary"
+  },
+  "st-19": {
+   "certified": true,
+   "stream_class": "tertiary"
+  },
+  "st-20": {
+   "certified": false,
+   "stream_class": "tertiary"
+  },
+  "st-21": {
+   "certified": false,
+   "stream_class": "tertiary"
+  },
+  "st-22": {
+   "certified": false,
+   "stream_class": "tertiary"
+  },
+  "st-23": {
+   "certified": false,
+   "stream_class": "tertiary"
+  }
+ },
+ "version": "2026-08"
+}

@@ -1,0 +1,1 @@
+write rejected: artifact contains fields outside the task signature; submit only the required fields. Check the task statement for the exact field list.

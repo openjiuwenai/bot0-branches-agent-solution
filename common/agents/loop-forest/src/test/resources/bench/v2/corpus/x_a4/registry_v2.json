@@ -1,0 +1,51 @@
+{
+ "accounts": {
+  "acct-01": {
+   "currency": "USD"
+  },
+  "acct-02": {
+   "currency": "SEK"
+  },
+  "acct-03": {
+   "currency": "SEK"
+  },
+  "acct-04": {
+   "currency": "CHF"
+  },
+  "acct-05": {
+   "currency": "JPY"
+  },
+  "acct-06": {
+   "currency": "USD"
+  },
+  "acct-07": {
+   "currency": "CHF"
+  },
+  "acct-08": {
+   "currency": "GBP"
+  },
+  "acct-09": {
+   "currency": "EUR"
+  },
+  "acct-10": {
+   "currency": "GBP"
+  },
+  "acct-11": {
+   "currency": "SEK"
+  }
+ },
+ "archived": false,
+ "base": "USD",
+ "notes": "\u4e0e v1 \u76f8\u6bd4\u9664 repost_map \u5916\u65e0\u53d8\u66f4",
+ "repost_map": {
+  "t113": "t100",
+  "t114": "t068",
+  "t115": "t109",
+  "t116": "t104",
+  "t117": "t011",
+  "t118": "t074",
+  "t119": "t024",
+  "t120": "t057"
+ },
+ "version": "v2"
+}

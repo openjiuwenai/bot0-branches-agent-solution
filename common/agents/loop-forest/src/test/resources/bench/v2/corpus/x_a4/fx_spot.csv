@@ -1,0 +1,6 @@
+currency,rate  # spot desk quotes (intraday); NOT the settlement channel
+CHF,0.8186
+EUR,0.1654
+GBP,0.3527
+JPY,0.1155
+SEK,0.6362

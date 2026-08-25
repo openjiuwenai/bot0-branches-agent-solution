@@ -1,0 +1,13 @@
+{
+ "base": "USD",
+ "channel": "settlement",
+ "rates": {
+  "CHF": 0.846,
+  "EUR": 0.1599,
+  "GBP": 0.3397,
+  "JPY": 0.1203,
+  "SEK": 0.6231,
+  "USD": 1.0
+ },
+ "version": "2026-07"
+}

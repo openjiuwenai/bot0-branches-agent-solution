@@ -1,0 +1,70 @@
+{
+ "aliases": {
+  "lgcy-01": "can-07",
+  "lgcy-02": "can-07",
+  "lgcy-03": "can-12",
+  "lgcy-04": "can-07",
+  "lgcy-05": "can-09",
+  "lgcy-06": "can-06",
+  "lgcy-07": "can-06",
+  "lgcy-08": "can-12",
+  "lgcy-09": "can-10",
+  "lgcy-10": "can-07"
+ },
+ "base": "USD",
+ "meta_note": "本注册表覆盖全部生产节点",
+ "sites": {
+  "can-01": {
+   "capacity_gbps": 887.7,
+   "maintenance_window": "2026-08-01..2026-08-14",
+   "region": "emea"
+  },
+  "can-02": {
+   "capacity_gbps": 566.4,
+   "maintenance_window": "2026-08-01..2026-08-14",
+   "region": "apac"
+  },
+  "can-03": {
+   "capacity_gbps": 748.7,
+   "maintenance_window": "2026-08-01..2026-08-14",
+   "region": "amer"
+  },
+  "can-04": {
+   "capacity_gbps": 502.3,
+   "region": "emea"
+  },
+  "can-05": {
+   "capacity_gbps": 213.1,
+   "region": "apac"
+  },
+  "can-06": {
+   "capacity_gbps": 306.1,
+   "region": "amer"
+  },
+  "can-07": {
+   "capacity_gbps": 551.9,
+   "region": "emea"
+  },
+  "can-08": {
+   "capacity_gbps": 628.4,
+   "region": "apac"
+  },
+  "can-09": {
+   "capacity_gbps": 406.6,
+   "region": "amer"
+  },
+  "can-10": {
+   "capacity_gbps": 727.8,
+   "region": "emea"
+  },
+  "can-11": {
+   "capacity_gbps": 788.7,
+   "region": "apac"
+  },
+  "can-12": {
+   "capacity_gbps": 319.8,
+   "region": "amer"
+  }
+ },
+ "version": "2026-07"
+}

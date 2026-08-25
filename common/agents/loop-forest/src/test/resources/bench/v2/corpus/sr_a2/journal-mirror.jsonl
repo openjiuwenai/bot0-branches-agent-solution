@@ -1,0 +1,15 @@
+# journal-mirror -- secondary relay (same events, own record ids)
+{"op":"delta","param":"session_ttl_s","rec":"W-012","src":"mirror","ts":"2026-07-02T09:59Z","value":-21.64}
+{"op":"delta","param":"session_ttl_s","rec":"W-005","src":"mirror","ts":"2026-07-02T10:16Z","value":-41.73}
+{"op":"set","param":"session_ttl_s","rec":"W-006","src":"mirror","ts":"2026-07-02T09:13Z","value":816.3}
+{"op":"delta","param":"pool_min","rec":"W-014","src":"mirror","ts":"2026-07-02T09:26Z","value":6.95}
+{"op":"set","param":"pool_decay","rec":"W-018","src":"mirror","ts":"2026-07-02T09:49Z","value":0.608}
+{"op":"set","param":"session_ttl_s","rec":"W-008","src":"mirror","ts":"2026-07-02T10:56Z","value":680.02}
+{"op":"set","param":"pool_min","rec":"W-013","src":"mirror","ts":"2026-07-02T09:25Z","value":20.35}
+{"op":"set","param":"session_ttl_s","rec":"W-021","src":"mirror","ts":"2026-07-02T09:59Z","value":575.39}
+{"op":"set","param":"pool_decay","rec":"W-019","src":"mirror","ts":"2026-07-02T12:00Z","value":0.676}
+{"op":"set","param":"session_ttl_s","rec":"W-020","src":"mirror","ts":"2026-07-02T09:00Z","value":577.11}
+{"op":"set","param":"session_ttl_s","rec":"W-007","src":"mirror","ts":"2026-07-02T10:23Z","value":507.62}
+{"op":"delta","param":"session_ttl_s","rec":"W-004","src":"mirror","ts":"2026-07-02T09:22Z","value":-56.08}
+{"op":"delta","param":"pool_min","rec":"W-016","src":"mirror","ts":"2026-07-02T09:52Z","value":-6.28}
+{"op":"set","param":"session_ttl_s","rec":"W-022","src":"mirror","ts":"2026-07-02T10:38Z","value":588.39}

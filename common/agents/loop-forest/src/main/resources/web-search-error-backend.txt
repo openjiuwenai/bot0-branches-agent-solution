@@ -1,0 +1,1 @@
+Web search failed with a backend error (HTTP {code}); the query was not the cause. Retry the same query once; if it fails again, finish using what you have already collected and state what is missing.

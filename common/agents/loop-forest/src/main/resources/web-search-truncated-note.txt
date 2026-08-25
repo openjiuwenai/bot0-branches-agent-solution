@@ -1,0 +1,1 @@
+(First {shown} of {total} results shown; these usually suffice — search again only if none contains the needed fact.)

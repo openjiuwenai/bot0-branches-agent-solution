@@ -1,0 +1,17 @@
+# tuning-log -- capacity params, single writer, chronological
+# chain target param: see task statement; errata.md supersedes
+{"op":"set","param":"cache_size_mb","rec":"R-001","ts":"2026-07-15T10:00Z","value":6650.8}
+{"op":"delta","param":"cache_size_mb","rec":"R-002","ts":"2026-07-15T10:11Z","value":-278.6}
+{"op":"set","param":"pool_min","rec":"R-003","ts":"2026-07-15T10:16Z","value":19.2}
+{"op":"set","param":"cache_size_mb","rec":"R-004","ts":"2026-07-15T10:19Z","value":6046.6}
+{"op":"set","param":"cache_size_mb","rec":"R-005","ts":"2026-07-15T10:32Z","value":5965.4}
+{"op":"set","param":"cache_size_mb","rec":"R-006","ts":"2026-07-15T10:37Z","value":5651.4}
+{"op":"delta","param":"pool_min","rec":"R-007","ts":"2026-07-15T10:39Z","value":-2.0}
+{"op":"set","param":"cache_size_mb","rec":"R-008","ts":"2026-07-15T10:42Z","value":4035.0}
+{"op":"set","param":"cache_size_mb","rec":"R-009","ts":"2026-07-15T10:48Z","value":7103.6}
+{"op":"delta","param":"cache_size_mb","rec":"R-010","ts":"2026-07-15T11:01Z","value":317.3}
+{"op":"set","param":"cache_size_mb","rec":"R-011","ts":"2026-07-15T11:14Z","value":4829.2}
+{"op":"set","param":"cache_size_mb","rec":"R-012","ts":"2026-07-15T11:22Z","value":6692.0}
+{"op":"set","param":"pool_decay","rec":"R-013","ts":"2026-07-15T11:24Z","value":0.794}
+{"op":"delta","param":"cache_size_mb","rec":"R-014","ts":"2026-07-15T11:29Z","value":-208.7}
+{"op":"set","param":"cache_size_mb","rec":"R-015","ts":"2026-07-15T11:40Z","value":1861.2}

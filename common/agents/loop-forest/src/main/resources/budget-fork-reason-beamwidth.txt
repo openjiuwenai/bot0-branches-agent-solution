@@ -1,0 +1,1 @@
+Fork not started: {active} of {width} branch slots are active; a slot frees when a branch finishes.
