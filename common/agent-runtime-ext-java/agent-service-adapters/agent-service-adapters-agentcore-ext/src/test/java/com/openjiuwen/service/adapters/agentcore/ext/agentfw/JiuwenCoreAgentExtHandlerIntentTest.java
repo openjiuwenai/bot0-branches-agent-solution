@@ -34,7 +34,7 @@ class JiuwenCoreAgentExtHandlerIntentTest {
         JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(fixture.deepAgent());
         handler.setRemoteA2aToolInstaller(fixture.remoteInstaller());
 
-        installBeforeRun(handler);
+        installBeforeRun(handler, fixture.deepAgent());
 
         assertToolNames(fixture.deepAgent(), "transfer-agent");
     }
@@ -46,7 +46,7 @@ class JiuwenCoreAgentExtHandlerIntentTest {
         handler.setRemoteA2aToolInstaller(fixture.remoteInstaller());
         handler.setIntentDeepAgentInstaller(fixture.intentInstaller(false));
 
-        installBeforeRun(handler);
+        installBeforeRun(handler, fixture.deepAgent());
 
         assertToolNames(fixture.deepAgent(), IntentRoutingRail.TOOL_NAME);
     }
@@ -58,7 +58,7 @@ class JiuwenCoreAgentExtHandlerIntentTest {
         handler.setRemoteA2aToolInstaller(fixture.remoteInstaller());
         handler.setIntentDeepAgentInstaller(fixture.intentInstaller(true));
 
-        installBeforeRun(handler);
+        installBeforeRun(handler, fixture.deepAgent());
 
         assertToolNames(fixture.deepAgent(), IntentRoutingRail.TOOL_NAME, "transfer-agent");
     }
@@ -80,10 +80,10 @@ class JiuwenCoreAgentExtHandlerIntentTest {
                 .skills(List.of(skill)).build();
     }
 
-    private static void installBeforeRun(JiuwenCoreAgentExtHandler handler) throws Exception {
-        Method method = JiuwenCoreAgentExtHandler.class.getDeclaredMethod("installBeforeRun");
+    private static void installBeforeRun(JiuwenCoreAgentExtHandler handler, Object agent) throws Exception {
+        Method method = JiuwenCoreAgentExtHandler.class.getDeclaredMethod("installBeforeRun", Object.class);
         method.setAccessible(true);
-        method.invoke(handler);
+        method.invoke(handler, agent);
     }
 
     private static void assertToolNames(DeepAgent deepAgent, String... names) {

@@ -1,4 +1,5 @@
 com.openjiuwen.service.adapters.agentcore.ext.autoconfigure.AgentCoreExtAutoConfiguration
 com.openjiuwen.service.adapters.agentcore.ext.autoconfigure.IntentAutoConfiguration
+com.openjiuwen.service.adapters.agentcore.ext.autoconfigure.ConcurrencyAutoConfiguration
 com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub.SkillHubMiddlewareAutoConfiguration
 com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.OtelAutoConfiguration

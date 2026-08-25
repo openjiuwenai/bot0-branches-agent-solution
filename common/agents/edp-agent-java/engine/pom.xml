@@ -29,6 +29,11 @@
     </dependency>
     <dependency>
       <groupId>com.openjiuwen</groupId>
+      <artifactId>agent-service-app-custom-rest</artifactId>
+      <version>${agent-runtime-ext-java.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.openjiuwen</groupId>
       <artifactId>agent-core-java</artifactId>
       <version>${agent-core-java.version}</version>
       <exclusions>
@@ -146,6 +151,10 @@
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-compress</artifactId>
       <version>1.26.0</version>
+    </dependency>
+    <dependency>
+      <groupId>commons-codec</groupId>
+      <artifactId>commons-codec</artifactId>
     </dependency>
   </dependencies>
   <build>
