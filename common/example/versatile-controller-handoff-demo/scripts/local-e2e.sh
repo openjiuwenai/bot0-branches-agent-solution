@@ -43,6 +43,10 @@
 #   13 流式中断后二级先答后退回  /a2a SendStreamingMessage → 同场景12但全程流式，L2 先流出部分
 #                                                     业务答案帧（terminal answer）再回退回信封 →
 #                                                     信封必须胜出，L1 重识别 → 本地答案（生产回归）
+#   14 转调目标无结果节点        /v1/query stream      → L2 流内无 result-node-name 结果帧、以 End
+#                                                     节点收尾、无转调信号（基线空终态）：L2 仍须发
+#                                                     终态事件，L1 以透传内容为终答，不得误报
+#                                                     TARGET_UNAVAILABLE（closed before terminal）
 #
 # Usage:
 #   ./scripts/local-e2e.sh              # build if needed, run all scenarios
@@ -168,6 +172,16 @@ assert_contains() {
   echo "    FAIL: $label expected to contain '$pattern'" >&2
   echo "    body: $(echo "$body" | head -c 800)" >&2
   return 1
+}
+
+assert_not_contains() {
+  local label="$1" body="$2" pattern="$3"
+  if echo "$body" | grep -q "$pattern"; then
+    echo "    FAIL: $label expected NOT to contain '$pattern'" >&2
+    echo "    body: $(echo "$body" | head -c 800)" >&2
+    return 1
+  fi
+  echo "    PASS: $label does not contain '$pattern'"
 }
 
 assert_log_contains() {
@@ -457,6 +471,20 @@ main() {
   assert_log_contains "s13-l2-resumed-call" "$LOG_DIR/layer2.log" "Mock controller agentId=agent_L2_controller conversationId=agent_card_l2-c13-a2a-stream-bounce invocation=2"
   l1_count_c=$(grep -c "Mock controller agentId=agent_L1_controller conversationId=c13-a2a-stream-bounce" "$LOG_DIR/layer1.log" || true)
   assert_eq 2 "$l1_count_c" "s13-l1-invocations"
+
+  echo
+  echo "==================== 场景14: 转调目标无结果节点流式收尾（生产回归） ===================="
+  # 生产回归（2026-08-25）：L1→L2 流式转调，L2 控制器流内无 result-node-name 结果帧
+  # （业务内容在非结果节点帧透传）、以 End 节点收尾、无转调信号 → 基线提取为空的空终态。
+  # L2 必须仍发出终态事件（COMPLETED），L1 以透传内容为终答；否则 L1 误报
+  # VERSATILE_HANDOFF_TARGET_UNAVAILABLE（closed the stream before a terminal event）
+  sse=$(send_query_sse "c14-no-result-node" "转调：无结果节点直通")
+  echo "    sse: $(echo "$sse" | head -c 800)"
+  assert_contains "s14-stream-answer" "$sse" "流式直通业务内容"
+  assert_not_contains "s14-no-unavailable" "$sse" "VERSATILE_HANDOFF_TARGET_UNAVAILABLE"
+  assert_log_contains "s14-l2-invoked" "$LOG_DIR/layer2.log" "Mock controller agentId=agent_L2_controller conversationId=agent_card_l2-c14-no-result-node"
+  # L2 出站调用正常终态：上游客户端不应看到 closed-before-terminal 报错
+  assert_log_not_contains "s14-l1-no-terminal-error" "$LOG_DIR/layer1.log" "closed the stream before a terminal event"
 
   echo
   echo "==> All §7.2 journeys passed."

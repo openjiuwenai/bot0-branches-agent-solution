@@ -150,6 +150,26 @@ class ControllerHandoffAgentHandlerTest {
         assertThat(observer.error).isNull();
     }
 
+    /**
+     * 生产问题回归（L1&rarr;L2 流式链路）：handoff 部署形态下控制器流不含
+     * result-node-name 节点（结果提取结构性不可用），流以 node_type=End 正常
+     * 收尾时基线 finish() 返回空终态。observer 必须仍收到 onComplete()——
+     * 否则 L2 侧 A2A 服务器不发终态事件，L1 报
+     * VERSATILE_HANDOFF_TARGET_UNAVAILABLE（closed the stream before a
+     * terminal event）。
+     */
+    @Test
+    void endNodeWithoutResultNodeStillCompletesObserver() {
+        controllerResponds(
+                "{\"node_type\":\"Start\",\"node_name\":\"开始\"}",
+                "{\"node_type\":\"End\",\"node_name\":\"结束\",\"event\":\"end\"}");
+        RecordingObserver observer = new RecordingObserver();
+        handler(handoffProperties()).streamQuery(request("查营业网点"), observer);
+        assertThat(observer.completed).as("基线空终态（End 节点 + 无 result-node-name）必须补 onComplete").isTrue();
+        assertThat(observer.error).isNull();
+        assertThat(observer.chunks).isNotEmpty(); // 透传内容 chunk 不受影响
+    }
+
     @Test
     void realExceptionStillMappedByBaseline() {
         controllerResponds(

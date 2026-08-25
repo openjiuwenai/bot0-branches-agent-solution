@@ -53,6 +53,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   <tr><th>query contains</th><th>agent_L1_controller</th><th>agent_L2_controller</th></tr>
  *   <tr><td>(default)</td><td>本地业务答案（无转调）</td><td>本域业务答案</td></tr>
  *   <tr><td>转调</td><td>意图返回 "3"</td><td>本域业务答案</td></tr>
+ *   <tr><td>无结果节点</td><td>意图返回 "3"</td><td>非结果节点内容帧透传 + End 节点收尾（无 result-node-name）</td></tr>
  *   <tr><td>退回</td><td>首次: 意图返回 "3"；再次(同会话): 本地业务答案</td><td>不在范围</td></tr>
  *   <tr><td>先答后退回</td><td>同"退回"</td><td>先 前置输出中间帧（透传泄漏），后 不在范围</td></tr>
  *   <tr><td>循环</td><td>始终 意图返回 "3"</td><td>始终 不在范围</td></tr>
@@ -154,6 +155,15 @@ public class MockControllerController {
             // 泄漏帧与 not-in-scope 信封背靠背拼接进 L1 的 re-invoke 结果，
             // 验证信封在 L1 容错识别下仍胜出（而非依赖信封独占结果串）
             sseLines(out, partialAnswerEvent(invocation), notInScopeEvent(invocation));
+            return;
+        }
+        if (query.contains("无结果节点")) {
+            // 生产问题复刻（2026-08-25 抓样形态）：流内无 result-node-name 结果帧，
+            // 业务内容在非结果节点帧正常透传，随后 End 结束节点 + workflow_end/end 收尾。
+            // 基线提取为空、无转调信号——终态只能由 handler 的 onComplete 驱动；
+            // 流式漏发终态事件会让上游误报 closed-before-terminal（TARGET_UNAVAILABLE）
+            sseLines(out, passthroughAnswerEvent(invocation), nodeEndEvent(invocation),
+                    prodWorkflowEndEvent(invocation), "{\"event\":\"end\"}");
             return;
         }
         if (query.contains("退回") || query.contains("循环")) {
@@ -305,6 +315,22 @@ public class MockControllerController {
     private static String partialAnswerEvent(int invocation) {
         return "{\"event\":\"message\",\"data\":{\"text\":\"前置业务输出：部分答案\",\"index\":0,"
                 + "\"node_id\":\"node_1787129452976\",\"node_type\":\"Q\",\"node_name\":\"前置输出\","
+                + "\"createdTime\":" + (createdTime(invocation) - 1) + ","
+                + "\"workflow_id\":\"81476c36-28e6-4ec1-84c5-247be51a9327\","
+                + "\"workflow_name\":\"erjimorengongzuoliu_fenbushiyanzheng\"}}";
+    }
+
+    /**
+     * 无结果节点场景的业务内容帧 — 生产报文复刻形态（message/Q/带 index 的文本帧）：
+     * {@code node_name} 不匹配 result-node-name（{@code ABCDEResponseNode}，不被基线
+     * 抽取拦截），也不命中转调识别字段值，因此流式正常透传；终答即透传内容。
+     *
+     * @param invocation 会话内第几次调用（驱动 createdTime 变化）
+     * @return message SSE 事件行
+     */
+    private static String passthroughAnswerEvent(int invocation) {
+        return "{\"event\":\"message\",\"data\":{\"text\":\"无结果节点场景：流式直通业务内容\",\"index\":0,"
+                + "\"node_id\":\"node_1787129452977\",\"node_type\":\"Q\",\"node_name\":\"业务输出\","
                 + "\"createdTime\":" + (createdTime(invocation) - 1) + ","
                 + "\"workflow_id\":\"81476c36-28e6-4ec1-84c5-247be51a9327\","
                 + "\"workflow_name\":\"erjimorengongzuoliu_fenbushiyanzheng\"}}";

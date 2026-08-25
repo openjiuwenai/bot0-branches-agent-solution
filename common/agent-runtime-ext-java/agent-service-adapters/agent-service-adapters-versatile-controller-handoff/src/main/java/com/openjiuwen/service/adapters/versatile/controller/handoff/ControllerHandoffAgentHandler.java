@@ -75,6 +75,25 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
     private record ControllerExecution(List<QueryChunk> finalEvents, HandoffClassification handoffHit) {
     }
 
+    /**
+     * 转调链执行结果。
+     *
+     * @param finalEvents 终态事件；基线路径可为空列表——基线空终态（控制器流以
+     *        End 节点收尾但无 result-node-name 提取，流式模式下调用方仍须补
+     *        onComplete，否则 L2 不发终态事件、上游误报 TARGET_UNAVAILABLE）
+     * @param observerDriven 转调/信号/错误路径已自行驱动 observer 到终态
+     *        （流式模式；此时 {@code finalEvents} 恒为空且调用方不得再收尾）
+     */
+    private record ChainOutcome(List<QueryChunk> finalEvents, boolean observerDriven) {
+        static ChainOutcome observerDrivenTerminal() {
+            return new ChainOutcome(List.of(), true);
+        }
+
+        static ChainOutcome baseline(List<QueryChunk> events) {
+            return new ChainOutcome(events, false);
+        }
+    }
+
     @Override
     public QueryResponse query(ServeRequest request) {
         log.info("Handling controller-handoff query conversation_id={} stream={} user_id={} tenant_id={} messages={}",
@@ -101,7 +120,7 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
                     request.getConversationId());
         }
         List<QueryChunk> finalEvents = runHandoffChain(request, null,
-                remote.map(RemoteToolResults::bouncedTargets).orElse(Set.of()));
+                remote.map(RemoteToolResults::bouncedTargets).orElse(Set.of())).finalEvents();
         return new QueryResponse(resolveQueryResult(request, finalEvents),
                 request.getConversationId());
     }
@@ -117,16 +136,17 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
             return;
         }
         try {
-            List<QueryChunk> finalEvents = runHandoffChain(request, observer,
+            ChainOutcome outcome = runHandoffChain(request, observer,
                     remote.map(RemoteToolResults::bouncedTargets).orElse(Set.of()));
             if (observer.isCancelled()) {
                 log.warn("controller-handoff streamQuery cancelled conversation_id={}",
                         request.getConversationId());
                 return;
             }
-            if (finalEvents.isEmpty()) {
+            if (outcome.observerDriven()) {
                 return; // 转调/信号/错误路径已驱动 observer 到终态
             }
+            List<QueryChunk> finalEvents = outcome.finalEvents();
             Optional<QueryChunk> terminalError = finalEvents.stream()
                     .filter(c -> QueryChunk.TYPE_ERROR.equals(c.getType()))
                     .findFirst();
@@ -273,10 +293,12 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
      * @param observer 流式观察者；{@code null} 表示 query 收集模式
      * @param bouncedTargets 本链已弹回过的目标（re-invoke 重入时来自
      *        remoteToolResults 解析）；再转调同目标 → DUPLICATE_TARGET
-     * @return 无转调命中时的基线终态事件；空列表表示流式模式下 observer
-     *         已被驱动到终态（query 收集模式不会为空，错误以异常上抛）
+     * @return 转调链执行结果：基线路径返回终态事件（流式模式下可为空列表——
+     *         基线空终态，调用方需补 onComplete）；转调/信号/错误路径在流式
+     *         模式下已自行驱动 observer 到终态（{@code observerDriven}），
+     *         query 收集模式（observer 为 null）返回事件列表、错误以异常上抛
      */
-    private List<QueryChunk> runHandoffChain(ServeRequest request, QueryStreamObserver observer,
+    private ChainOutcome runHandoffChain(ServeRequest request, QueryStreamObserver observer,
             Set<String> bouncedTargets) {
         ControllerExecution execution = execute(request, observer);
         while (execution.handoffHit() != null) {
@@ -290,21 +312,21 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
                 if (observer != null) {
                     observer.onNext(envelope);
                     observer.onComplete();
-                    return List.of();
+                    return ChainOutcome.observerDrivenTerminal();
                 }
-                return List.of(envelope);
+                return ChainOutcome.baseline(List.of(envelope));
             }
             ResolvedTarget target;
             try {
                 target = targetResolver.resolve(hit.handoff());
             } catch (HandoffTargetResolutionException ex) {
                 emitHandoffError(observer, ex.getErrorCode(), ex.getMessage());
-                return List.of();
+                return ChainOutcome.observerDrivenTerminal();
             }
             if (bouncedTargets.contains(target.agentId())) {
                 emitHandoffError(observer, "VERSATILE_HANDOFF_DUPLICATE_TARGET",
                         "target bounced in this chain: " + target.agentId());
-                return List.of();
+                return ChainOutcome.observerDrivenTerminal();
             }
             prepareDelegationMetadata(request);
             QueryChunk interrupt = handoffDelegateInterrupt(target, request);
@@ -313,11 +335,11 @@ public class ControllerHandoffAgentHandler implements AgentHandler {
             if (observer != null) {
                 observer.onNext(interrupt);
                 observer.onComplete();
-                return List.of();
+                return ChainOutcome.observerDrivenTerminal();
             }
-            return List.of(interrupt);
+            return ChainOutcome.baseline(List.of(interrupt));
         }
-        return execution.finalEvents();
+        return ChainOutcome.baseline(execution.finalEvents());
     }
 
     /**
