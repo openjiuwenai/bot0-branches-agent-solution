@@ -71,6 +71,23 @@ openjiuwen:
                       permissions: "0755"
               policy_mode: append
 
+    # ==================== OTel 轨迹上报（DFX-001，默认关闭） ====================
+    # 能力由 agent-service-adapters-agentcore-ext 的 middleware/otel 提供，无需引入新依赖。
+    # 取消注释并按需配置即可启用；运行时依赖 agent-runtime-java 含传播注册机制（PR !162）。
+    # 优先级：本 yaml > OTEL_* 环境变量 > 内置默认（逐项回退）。
+    # otel:
+    #   enabled: true                        # 总开关，默认 false；关闭时零行为零开销
+    #   endpoint: http://collector:4317      # OTLP 端点；grpc 默认 4317，http 默认 4318（自动补 /v1/traces）
+    #   protocol: grpc                       # 导出协议：grpc / http
+    #   timeout: 10s                         # 导出超时（Spring Duration：10s / 500ms / 纯毫秒数）
+    #   service-name: edp-agent              # resource service.name，平台侧按此检索
+    #   service-version: ""                  # 可选，resource service.version
+    #   service-instance-id: ""              # 可选，resource service.instance.id；不配则随机 UUID
+    #   sample-rate: 1.0                     # 采样率 [0.0, 1.0]，父采样决策继承
+    #   headers: {}                          # 可选导出请求头（map 形态，设置后整体替代 OTEL_EXPORTER_OTLP_HEADERS）
+    # 对应环境变量回退：OTEL_EXPORTER_OTLP_ENDPOINT / _PROTOCOL / _HEADERS / _TIMEOUT（毫秒）、
+    # OTEL_SERVICE_NAME / OTEL_SERVICE_VERSION / OTEL_SERVICE_INSTANCE_ID、OTEL_TRACES_SAMPLER_ARG。
+
 deep-agent:
   # 模型配置（backend 定义服务端连接，model 定义模型参数）
   # 与 DeepAgent Starter 标准一致，放在 deep-agent 顶层
