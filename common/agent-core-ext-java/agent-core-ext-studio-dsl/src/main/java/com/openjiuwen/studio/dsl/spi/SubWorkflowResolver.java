@@ -15,9 +15,12 @@ import java.util.Map;
  */
 @FunctionalInterface
 public interface SubWorkflowResolver {
+
     /**
      * resolve.
+     *
      * @param configs configs
+     * @return result
      */
     AssembledWorkflow resolve(Map<String, Object> configs);
 }

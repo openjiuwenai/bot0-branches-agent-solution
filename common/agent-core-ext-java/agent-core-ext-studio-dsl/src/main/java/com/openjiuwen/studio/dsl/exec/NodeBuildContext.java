@@ -41,8 +41,10 @@ public final class NodeBuildContext {
     private final WorkflowVariableScope variableScope;
     private final String tenantId;
     private final StudioDslNodeProperties properties;
+
     /**
      * NodeBuildContext.
+     *
      * @param workflowId workflowId
      * @param nestingDepth nestingDepth
      * @param maxNestingDepth maxNestingDepth
@@ -74,8 +76,10 @@ public final class NodeBuildContext {
                 null,
                 new StudioDslNodeProperties());
     }
+
     /**
      * NodeBuildContext.
+     *
      * @param workflowId workflowId
      * @param nestingDepth nestingDepth
      * @param maxNestingDepth maxNestingDepth
@@ -119,8 +123,10 @@ public final class NodeBuildContext {
                 null,
                 new StudioDslNodeProperties());
     }
+
     /**
      * NodeBuildContext.
+     *
      * @param workflowId workflowId
      * @param nestingDepth nestingDepth
      * @param maxNestingDepth maxNestingDepth
@@ -170,17 +176,23 @@ public final class NodeBuildContext {
         this.tenantId = tenantId;
         this.properties = properties == null ? new StudioDslNodeProperties() : properties;
     }
+
     /**
      * defaults.
+     *
      * @param workflowId workflowId
+     * @return result
      */
     public static NodeBuildContext defaults(String workflowId) {
         return defaults(workflowId, new StudioDslNodeProperties());
     }
+
     /**
      * defaults.
+     *
      * @param workflowId workflowId
      * @param props props
+     * @return result
      */
     public static NodeBuildContext defaults(String workflowId, StudioDslNodeProperties props) {
         StudioDslNodeProperties p = props == null ? new StudioDslNodeProperties() : props;
@@ -207,11 +219,14 @@ public final class NodeBuildContext {
                 null,
                 p);
     }
+
     /**
      * defaults.
+     *
      * @param workflowId workflowId
      * @param tenantId tenantId
      * @param props props
+     * @return result
      */
     public static NodeBuildContext defaults(String workflowId, String tenantId, StudioDslNodeProperties props) {
         StudioDslNodeProperties p = props == null ? new StudioDslNodeProperties() : props;
@@ -241,6 +256,8 @@ public final class NodeBuildContext {
 
     /**
      * Bind registry after builtins registered (for loop body create).
+     *
+     * @return result
      */
     public NodeBuildContext withRegistry(NodeTypeRegistry registry) {
         return new NodeBuildContext(
@@ -260,92 +277,137 @@ public final class NodeBuildContext {
                 tenantId,
                 properties);
     }
+
     /**
      * workflowId.
+     *
+     * @return result
      */
     public String workflowId() {
         return workflowId;
     }
+
     /**
      * nestingDepth.
+     *
+     * @return result
      */
     public int nestingDepth() {
         return nestingDepth;
     }
+
     /**
      * maxNestingDepth.
+     *
+     * @return result
      */
     public int maxNestingDepth() {
         return maxNestingDepth;
     }
+
     /**
      * pythonExecutor.
+     *
+     * @return result
      */
     public PythonCodeExecutor pythonExecutor() {
         return pythonExecutor;
     }
+
     /**
      * codeLogicRegistry.
+     *
+     * @return result
      */
     public CodeLogicRegistry codeLogicRegistry() {
         return codeLogicRegistry;
     }
+
     /**
      * subWorkflowResolver.
+     *
+     * @return result
      */
     public SubWorkflowResolver subWorkflowResolver() {
         return subWorkflowResolver;
     }
+
     /**
      * coreExecutableFactory.
+     *
+     * @return result
      */
     public CoreExecutableFactory coreExecutableFactory() {
         return coreExecutableFactory;
     }
+
     /**
      * mcpToolInvoker.
+     *
+     * @return result
      */
     public McpToolInvoker mcpToolInvoker() {
         return mcpToolInvoker;
     }
+
     /**
      * agentInvoker.
+     *
+     * @return result
      */
     public AgentInvoker agentInvoker() {
         return agentInvoker;
     }
+
     /**
      * toolRegistry.
+     *
+     * @return result
      */
     public ToolRegistry toolRegistry() {
         return toolRegistry;
     }
+
     /**
      * agentRegistry.
+     *
+     * @return result
      */
     public AgentRegistry agentRegistry() {
         return agentRegistry;
     }
+
     /**
      * nodeTypeRegistry.
+     *
+     * @return result
      */
     public NodeTypeRegistry nodeTypeRegistry() {
         return nodeTypeRegistry;
     }
+
     /**
      * variableScope.
+     *
+     * @return result
      */
     public WorkflowVariableScope variableScope() {
         return variableScope;
     }
+
     /**
      * tenantId.
+     *
+     * @return result
      */
     public String tenantId() {
         return tenantId;
     }
+
     /**
      * properties.
+     *
+     * @return result
      */
     public StudioDslNodeProperties properties() {
         return properties;
@@ -353,6 +415,8 @@ public final class NodeBuildContext {
 
     /**
      * Nested child workflow: new depth + independent variable scope (L2 §3.7).
+     *
+     * @return result
      */
     public NodeBuildContext childDepth() {
         return new NodeBuildContext(

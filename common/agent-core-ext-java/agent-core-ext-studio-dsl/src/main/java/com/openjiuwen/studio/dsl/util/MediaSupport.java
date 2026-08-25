@@ -20,9 +20,12 @@ import java.util.Map;
  */
 public final class MediaSupport {
     private MediaSupport() {}
+
     /**
      * mediaOf.
+     *
      * @param inputs inputs
+     * @return result
      */
     public static List<MediaPart> mediaOf(Map<String, Object> inputs) {
         return PassthroughStudioNode.extractMedia(inputs);
@@ -30,6 +33,8 @@ public final class MediaSupport {
 
     /**
      * Inject media into userFields so downstream model/plugin can read.
+     *
+     * @return result
      */
     public static Map<String, Object> withConsumableMedia(Map<String, Object> userFields, List<MediaPart> media) {
         Map<String, Object> uf = new LinkedHashMap<>(userFields == null ? Map.of() : userFields);
@@ -57,6 +62,8 @@ public final class MediaSupport {
 
     /**
      * OpenAI-style multimodal content parts for LLMExecutable / Model clients that accept list content.
+     *
+     * @return result
      */
     public static List<Map<String, Object>> toLlmContentParts(String text, List<MediaPart> media) {
         List<Map<String, Object>> parts = new ArrayList<>();
@@ -98,6 +105,8 @@ public final class MediaSupport {
 
     /**
      * Flatten userFields into root inputs so core PromptTemplate can resolve {{query}} etc.
+     *
+     * @return result
      */
     public static Map<String, Object> flattenForPrompt(Map<String, Object> inputs, Map<String, Object> userFields) {
         Map<String, Object> in = new LinkedHashMap<>(inputs == null ? Map.of() : inputs);

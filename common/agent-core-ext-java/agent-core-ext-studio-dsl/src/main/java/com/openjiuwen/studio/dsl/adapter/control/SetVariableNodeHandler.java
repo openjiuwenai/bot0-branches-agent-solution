@@ -26,24 +26,33 @@ import java.util.Set;
  * @since 2026-08-17
  */
 public final class SetVariableNodeHandler implements NodeHandlerFactory {
+
     /**
      * canonicalType.
+     *
+     * @return result
      */
     @Override
     public String canonicalType() {
         return "jiuwen.setVariable";
     }
+
     /**
      * aliases.
+     *
+     * @return result
      */
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
+
     /**
      * create.
+     *
      * @param node node
      * @param ctx ctx
+     * @return result
      */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
@@ -57,11 +66,14 @@ public final class SetVariableNodeHandler implements NodeHandlerFactory {
             super(node);
             this.scope = scope;
         }
+
         /**
          * doInvoke.
+         *
          * @param inputs inputs
          * @param session session
          * @param context context
+         * @return result
          */
         @Override
         @SuppressWarnings("unchecked")

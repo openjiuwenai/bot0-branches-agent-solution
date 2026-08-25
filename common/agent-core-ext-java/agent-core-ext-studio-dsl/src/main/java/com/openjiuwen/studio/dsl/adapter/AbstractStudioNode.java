@@ -21,22 +21,30 @@ import java.util.Map;
  * @since 2026-08-17
  */
 public abstract class AbstractStudioNode extends WorkflowComponent {
+
     /**
      * node.
+     *
+     * @return result
      */
     protected final AssembledNode node;
+
     /**
      * AbstractStudioNode.
+     *
      * @param node node
      */
     protected AbstractStudioNode(AssembledNode node) {
         this.node = node;
     }
+
     /**
      * invoke.
+     *
      * @param inputs inputs
      * @param session session
      * @param context context
+     * @return result
      */
     @Override
     public Object invoke(Object inputs, NodeSessionApi session, ModelContext context) {
@@ -51,18 +59,24 @@ public abstract class AbstractStudioNode extends WorkflowComponent {
                     node.id(), node.canonicalType(), NodeCauseCode.NODE_INVOKE_FAILED, e.getMessage(), e);
         }
     }
+
     /**
      * doInvoke.
+     *
      * @param inputs inputs
      * @param session session
      * @param context context
+     * @return result
      * @throws Exception when the call fails
      */
     protected abstract NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context)
             throws Exception;
+
     /**
      * asMap.
+     *
      * @param inputs inputs
+     * @return result
      */
     @SuppressWarnings("unchecked")
     protected static Map<String, Object> asMap(Object inputs) {
@@ -76,9 +90,12 @@ public abstract class AbstractStudioNode extends WorkflowComponent {
         }
         return new LinkedHashMap<>(Map.of("value", inputs));
     }
+
     /**
      * userFieldsOf.
+     *
      * @param inputs inputs
+     * @return result
      */
     protected static Map<String, Object> userFieldsOf(Map<String, Object> inputs) {
         Object uf = inputs.get("userFields");

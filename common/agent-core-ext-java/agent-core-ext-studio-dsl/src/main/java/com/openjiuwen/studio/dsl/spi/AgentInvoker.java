@@ -12,10 +12,13 @@ import java.util.Map;
  * @since 2026-08-17
  */
 public interface AgentInvoker {
+
     /**
      * invoke.
+     *
      * @param agentId agentId
      * @param inputs inputs
+     * @return result
      * @throws Exception when the call fails
      */
     Map<String, Object> invoke(String agentId, Map<String, Object> inputs) throws Exception;

@@ -23,24 +23,33 @@ import java.util.Set;
  * @since 2026-08-17
  */
 public final class InputNodeHandler implements NodeHandlerFactory {
+
     /**
      * canonicalType.
+     *
+     * @return result
      */
     @Override
     public String canonicalType() {
         return "jiuwen.input";
     }
+
     /**
      * aliases.
+     *
+     * @return result
      */
     @Override
     public Set<String> aliases() {
         return Set.of("jiuwen.flowInput");
     }
+
     /**
      * create.
+     *
      * @param node node
      * @param ctx ctx
+     * @return result
      */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
@@ -51,11 +60,14 @@ public final class InputNodeHandler implements NodeHandlerFactory {
         InputExecutable(AssembledNode node) {
             super(node);
         }
+
         /**
          * doInvoke.
+         *
          * @param inputs inputs
          * @param session session
          * @param context context
+         * @return result
          */
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {

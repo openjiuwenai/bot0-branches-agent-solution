@@ -19,8 +19,10 @@ import java.util.Objects;
 public final class NodePayload {
     private final Map<String, Object> fields;
     private final List<MediaPart> media;
+
     /**
      * NodePayload.
+     *
      * @param fields fields
      * @param media media
      */
@@ -28,30 +30,42 @@ public final class NodePayload {
         this.fields = Collections.unmodifiableMap(new LinkedHashMap<>(Objects.requireNonNullElse(fields, Map.of())));
         this.media = Collections.unmodifiableList(new ArrayList<>(Objects.requireNonNullElse(media, List.of())));
     }
+
     /**
      * ofFields.
+     *
      * @param fields fields
+     * @return result
      */
     public static NodePayload ofFields(Map<String, Object> fields) {
         return new NodePayload(fields, List.of());
     }
+
     /**
      * userFields.
+     *
      * @param userFields userFields
+     * @return result
      */
     public static NodePayload userFields(Map<String, Object> userFields) {
         Map<String, Object> wrap = new LinkedHashMap<>();
         wrap.put("userFields", userFields == null ? Map.of() : userFields);
         return ofFields(wrap);
     }
+
     /**
      * fields.
+     *
+     * @return result
      */
     public Map<String, Object> fields() {
         return fields;
     }
+
     /**
      * media.
+     *
+     * @return result
      */
     public List<MediaPart> media() {
         return media;
@@ -59,6 +73,8 @@ public final class NodePayload {
 
     /**
      * Merge media list; unsupported modalities kept (D9 default passthrough).
+     *
+     * @return result
      */
     public NodePayload withMediaPassthrough(List<MediaPart> extra) {
         if (extra == null || extra.isEmpty()) {
@@ -68,8 +84,11 @@ public final class NodePayload {
         merged.addAll(extra);
         return new NodePayload(fields, merged);
     }
+
     /**
      * toInvokeMap.
+     *
+     * @return result
      */
     public Map<String, Object> toInvokeMap() {
         Map<String, Object> out = new LinkedHashMap<>(fields);

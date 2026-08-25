@@ -14,9 +14,12 @@ import java.util.function.Function;
  * @since 2026-08-17
  */
 public interface AgentRegistry {
+
     /**
      * find.
+     *
      * @param agentId agentId
+     * @return result
      */
     Optional<Function<Map<String, Object>, Map<String, Object>>> find(String agentId);
 }

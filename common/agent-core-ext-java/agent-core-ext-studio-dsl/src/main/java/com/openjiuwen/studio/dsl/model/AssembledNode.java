@@ -21,8 +21,10 @@ public final class AssembledNode {
     private final Map<String, Object> configs;
     private final Map<String, Object> inputsSchema;
     private final Map<String, Object> outputsSchema;
+
     /**
      * AssembledNode.
+     *
      * @param id id
      * @param irType irType
      * @param canonicalType canonicalType
@@ -46,54 +48,78 @@ public final class AssembledNode {
         this.outputsSchema =
                 Collections.unmodifiableMap(new LinkedHashMap<>(outputsSchema == null ? Map.of() : outputsSchema));
     }
+
     /**
      * of.
+     *
      * @param id id
      * @param irType irType
      * @param configs configs
+     * @return result
      */
     public static AssembledNode of(String id, String irType, Map<String, Object> configs) {
         return new AssembledNode(id, irType, irType, configs, Map.of(), Map.of());
     }
+
     /**
      * id.
+     *
+     * @return result
      */
     public String id() {
         return id;
     }
+
     /**
      * irType.
+     *
+     * @return result
      */
     public String irType() {
         return irType;
     }
+
     /**
      * canonicalType.
+     *
+     * @return result
      */
     public String canonicalType() {
         return canonicalType;
     }
+
     /**
      * configs.
+     *
+     * @return result
      */
     public Map<String, Object> configs() {
         return configs;
     }
+
     /**
      * inputsSchema.
+     *
+     * @return result
      */
     public Map<String, Object> inputsSchema() {
         return inputsSchema;
     }
+
     /**
      * outputsSchema.
+     *
+     * @return result
      */
     public Map<String, Object> outputsSchema() {
         return outputsSchema;
     }
+
     /**
      * withCanonical.
+     *
      * @param canonical canonical
+     * @return result
      */
     public AssembledNode withCanonical(String canonical) {
         return new AssembledNode(id, irType, canonical, configs, inputsSchema, outputsSchema);

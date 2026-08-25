@@ -12,11 +12,14 @@ import java.util.Map;
  * @since 2026-08-17
  */
 public interface McpToolInvoker {
+
     /**
      * invoke.
+     *
      * @param server server
      * @param tool tool
      * @param arguments arguments
+     * @return result
      * @throws Exception when the call fails
      */
     Map<String, Object> invoke(String server, String tool, Map<String, Object> arguments) throws Exception;

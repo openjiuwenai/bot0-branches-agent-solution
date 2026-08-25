@@ -20,18 +20,23 @@ import java.util.Map;
  * @since 2026-08-17
  */
 public final class PassthroughStudioNode extends AbstractStudioNode {
+
     /**
      * PassthroughStudioNode.
+     *
      * @param node node
      */
     public PassthroughStudioNode(AssembledNode node) {
         super(node);
     }
+
     /**
      * doInvoke.
+     *
      * @param inputs inputs
      * @param session session
      * @param context context
+     * @return result
      */
     @Override
     protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
@@ -39,9 +44,12 @@ public final class PassthroughStudioNode extends AbstractStudioNode {
         List<MediaPart> media = extractMedia(inputs);
         return NodePayload.userFields(uf).withMediaPassthrough(media);
     }
+
     /**
      * extractMedia.
+     *
      * @param inputs inputs
+     * @return result
      */
     @SuppressWarnings("unchecked")
     public static List<MediaPart> extractMedia(Map<String, Object> inputs) {

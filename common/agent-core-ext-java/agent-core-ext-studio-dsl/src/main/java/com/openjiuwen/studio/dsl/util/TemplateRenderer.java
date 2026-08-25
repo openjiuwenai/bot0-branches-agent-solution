@@ -17,10 +17,13 @@ public final class TemplateRenderer {
     private static final Pattern P = Pattern.compile("\\$\\{([^}]+)}");
 
     private TemplateRenderer() {}
+
     /**
      * render.
+     *
      * @param template template
      * @param fields fields
+     * @return result
      */
     public static String render(String template, Map<String, Object> fields) {
         if (template == null) {

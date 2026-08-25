@@ -26,8 +26,10 @@ import java.util.Set;
 public final class NodeTypeRegistry {
     private final Map<String, NodeHandlerFactory> byCanonical = new LinkedHashMap<>();
     private final Map<String, String> aliasToCanonical = new LinkedHashMap<>();
+
     /**
      * register.
+     *
      * @param factory factory
      */
     public synchronized void register(NodeHandlerFactory factory) {
@@ -49,6 +51,7 @@ public final class NodeTypeRegistry {
             aliasToCanonical.put(alias, canonical);
         }
     }
+
     /**
      * loadServiceLoader.
      */
@@ -57,9 +60,12 @@ public final class NodeTypeRegistry {
             register(factory);
         }
     }
+
     /**
      * canonicalize.
+     *
      * @param irType irType
+     * @return result
      */
     public String canonicalize(String irType) {
         if (irType == null) {
@@ -74,10 +80,13 @@ public final class NodeTypeRegistry {
         }
         return canonical;
     }
+
     /**
      * create.
+     *
      * @param node node
      * @param ctx ctx
+     * @return result
      */
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         String canonical = canonicalize(node.irType());
@@ -85,14 +94,20 @@ public final class NodeTypeRegistry {
         AssembledNode normalized = node.withCanonical(canonical);
         return factory.create(normalized, ctx);
     }
+
     /**
      * canonicalTypes.
+     *
+     * @return result
      */
     public Set<String> canonicalTypes() {
         return Set.copyOf(byCanonical.keySet());
     }
+
     /**
      * factories.
+     *
+     * @return result
      */
     public Collection<NodeHandlerFactory> factories() {
         return byCanonical.values();
@@ -101,6 +116,8 @@ public final class NodeTypeRegistry {
     /**
      * Builtins first, then ServiceLoader custom factories (L2 §4.1 / §4.7).
      * Custom factories must not occupy built-in canonical or alias names.
+     *
+     * @return result
      */
     public static NodeTypeRegistry createWithBuiltins() {
         NodeTypeRegistry registry = new NodeTypeRegistry();

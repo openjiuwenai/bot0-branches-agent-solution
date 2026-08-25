@@ -37,9 +37,12 @@ import java.util.Optional;
  * @since 2026-08-17
  */
 public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFactory {
+
     /**
      * createLlm.
+     *
      * @param node node
+     * @return result
      */
     @Override
     public Optional<ComponentExecutable> createLlm(AssembledNode node) {
@@ -71,9 +74,12 @@ public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFa
         }
         return Optional.of(new LLMExecutable(cfg));
     }
+
     /**
      * createIntentDetection.
+     *
      * @param node node
+     * @return result
      */
     @Override
     public Optional<ComponentExecutable> createIntentDetection(AssembledNode node) {
@@ -93,9 +99,12 @@ public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFa
         }
         return Optional.of(new IntentDetectionExecutable(cfg));
     }
+
     /**
      * createExtractor.
+     *
      * @param node node
+     * @return result
      */
     @Override
     public Optional<ComponentExecutable> createExtractor(AssembledNode node) {
@@ -112,9 +121,12 @@ public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFa
         cfg.setUserPromptTemplate(new UserMessage(userPrompt));
         return Optional.of(new LLMExecutable(cfg));
     }
+
     /**
      * createKnowledgeRetrieval.
+     *
      * @param node node
+     * @return result
      */
     @Override
     public Optional<ComponentExecutable> createKnowledgeRetrieval(AssembledNode node) {
@@ -133,9 +145,12 @@ public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFa
         applyVectorStore(cfg, c);
         return Optional.of(new KnowledgeRetrievalExecutable(cfg));
     }
+
     /**
      * createQuestioner.
+     *
      * @param node node
+     * @return result
      */
     @Override
     public Optional<ComponentExecutable> createQuestioner(AssembledNode node) {
@@ -301,8 +316,6 @@ public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFa
             Map<String, Object> def = new LinkedHashMap<>();
             def.put("type", "text");
             cfg.setResponseFormat(def);
-        } else {
-            // already set
         }
         Object oc = c.getOrDefault("outputConfig", c.getOrDefault("outputs", c.get("outputs_config")));
         if (oc instanceof Map<?, ?> m && !m.isEmpty()) {
@@ -311,8 +324,6 @@ public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFa
             Map<String, Object> def = new LinkedHashMap<>();
             def.put("text", Map.of("type", "string"));
             cfg.setOutputConfig(def);
-        } else {
-            // already set
         }
     }
 

@@ -26,24 +26,33 @@ import java.util.Set;
  * @since 2026-08-17
  */
 public final class ExtractorNodeHandler implements NodeHandlerFactory {
+
     /**
      * canonicalType.
+     *
+     * @return result
      */
     @Override
     public String canonicalType() {
         return "jiuwen.extractor";
     }
+
     /**
      * aliases.
+     *
+     * @return result
      */
     @Override
     public Set<String> aliases() {
         return Set.of("jiuwen.infoExtraction");
     }
+
     /**
      * create.
+     *
      * @param node node
      * @param ctx ctx
+     * @return result
      */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
@@ -57,11 +66,14 @@ public final class ExtractorNodeHandler implements NodeHandlerFactory {
             super(node);
             this.ctx = ctx;
         }
+
         /**
          * doInvoke.
+         *
          * @param inputs inputs
          * @param session session
          * @param context context
+         * @return result
          * @throws Exception when the call fails
          */
         @Override
@@ -93,8 +105,6 @@ public final class ExtractorNodeHandler implements NodeHandlerFactory {
             } else if (fields instanceof Map<?, ?> map) {
                 map.forEach((k, v) ->
                         extracted.put(String.valueOf(k), PathResolver.get(uf, String.valueOf(v)).orElse(null)));
-            } else {
-                // no extractFields / fields — keep userFields as-is
             }
             Map<String, Object> out = new LinkedHashMap<>(uf);
             out.putAll(extracted);

@@ -19,8 +19,10 @@ public final class MediaPart {
     private final String uri;
     private final String bytesRef;
     private final Map<String, Object> meta;
+
     /**
      * MediaPart.
+     *
      * @param modality modality
      * @param mimeType mimeType
      * @param uri uri
@@ -37,32 +39,47 @@ public final class MediaPart {
         this.bytesRef = bytesRef;
         this.meta = meta == null ? Map.of() : Collections.unmodifiableMap(meta);
     }
+
     /**
      * modality.
+     *
+     * @return result
      */
     public String modality() {
         return modality;
     }
+
     /**
      * mimeType.
+     *
+     * @return result
      */
     public String mimeType() {
         return mimeType;
     }
+
     /**
      * uri.
+     *
+     * @return result
      */
     public String uri() {
         return uri;
     }
+
     /**
      * bytesRef.
+     *
+     * @return result
      */
     public String bytesRef() {
         return bytesRef;
     }
+
     /**
      * meta.
+     *
+     * @return result
      */
     public Map<String, Object> meta() {
         return meta;

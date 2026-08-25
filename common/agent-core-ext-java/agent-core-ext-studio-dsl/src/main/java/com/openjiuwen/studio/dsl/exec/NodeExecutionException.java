@@ -15,8 +15,10 @@ public class NodeExecutionException extends RuntimeException {
     private final String nodeId;
     private final String nodeType;
     private final NodeCauseCode causeCode;
+
     /**
      * NodeExecutionException.
+     *
      * @param nodeId nodeId
      * @param nodeType nodeType
      * @param causeCode causeCode
@@ -25,8 +27,10 @@ public class NodeExecutionException extends RuntimeException {
     public NodeExecutionException(String nodeId, String nodeType, NodeCauseCode causeCode, String reason) {
         this(nodeId, nodeType, causeCode, reason, null);
     }
+
     /**
      * NodeExecutionException.
+     *
      * @param nodeId nodeId
      * @param nodeType nodeType
      * @param causeCode causeCode
@@ -44,20 +48,29 @@ public class NodeExecutionException extends RuntimeException {
     private static String format(String nodeId, String nodeType, NodeCauseCode code, String reason) {
         return "nodeId=" + nodeId + ", nodeType=" + nodeType + ", causeCode=" + code + ", reason=" + reason;
     }
+
     /**
      * nodeId.
+     *
+     * @return result
      */
     public String nodeId() {
         return nodeId;
     }
+
     /**
      * nodeType.
+     *
+     * @return result
      */
     public String nodeType() {
         return nodeType;
     }
+
     /**
      * causeCode.
+     *
+     * @return result
      */
     public NodeCauseCode causeCode() {
         return causeCode;

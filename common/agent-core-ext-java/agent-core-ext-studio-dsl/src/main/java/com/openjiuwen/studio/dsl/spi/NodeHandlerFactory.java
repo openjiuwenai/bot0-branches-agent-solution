@@ -17,19 +17,28 @@ import java.util.Set;
  * @since 2026-08-17
  */
 public interface NodeHandlerFactory {
+
     /**
      * canonicalType.
+     *
+     * @return result
      */
     String canonicalType();
+
     /**
      * aliases.
+     *
+     * @return result
      */
     default Set<String> aliases() {
         return Set.of();
     }
+
     /**
      * supports.
+     *
      * @param irType irType
+     * @return result
      */
     default boolean supports(String irType) {
         if (irType == null) {
@@ -37,10 +46,13 @@ public interface NodeHandlerFactory {
         }
         return canonicalType().equals(irType) || aliases().contains(irType);
     }
+
     /**
      * create.
+     *
      * @param node node
      * @param ctx ctx
+     * @return result
      * @throws NodeExecutionException when the call fails
      */
     ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) throws NodeExecutionException;

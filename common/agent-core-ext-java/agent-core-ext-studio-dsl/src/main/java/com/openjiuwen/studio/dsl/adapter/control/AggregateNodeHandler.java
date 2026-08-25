@@ -25,24 +25,33 @@ import java.util.Set;
  * @since 2026-08-17
  */
 public final class AggregateNodeHandler implements NodeHandlerFactory {
+
     /**
      * canonicalType.
+     *
+     * @return result
      */
     @Override
     public String canonicalType() {
         return "jiuwen.aggregate";
     }
+
     /**
      * aliases.
+     *
+     * @return result
      */
     @Override
     public Set<String> aliases() {
         return Set.of("jiuwen.aggregation", "jiuwen.flowAggregate");
     }
+
     /**
      * create.
+     *
      * @param node node
      * @param ctx ctx
+     * @return result
      */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
@@ -53,11 +62,14 @@ public final class AggregateNodeHandler implements NodeHandlerFactory {
         AggregateExecutable(AssembledNode node) {
             super(node);
         }
+
         /**
          * doInvoke.
+         *
          * @param inputs inputs
          * @param session session
          * @param context context
+         * @return result
          */
         @Override
         @SuppressWarnings("unchecked")

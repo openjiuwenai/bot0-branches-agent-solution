@@ -26,31 +26,40 @@ import java.util.Set;
  * @since 2026-08-17
  */
 public final class IntentDetectionNodeHandler implements NodeHandlerFactory {
+
     /**
      * canonicalType.
+     *
+     * @return result
      */
     @Override
     public String canonicalType() {
         return "jiuwen.intentDetection";
     }
+
     /**
      * aliases.
+     *
+     * @return result
      */
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
+
     /**
      * create.
+     *
      * @param node node
      * @param ctx ctx
+     * @return result
      */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         if (ctx.coreExecutableFactory() != null) {
             return ctx.coreExecutableFactory()
                     .createIntentDetection(node)
-                    .map(core -> (ComponentExecutable) new DelegatingStudioNode(node, core))
+                    .<ComponentExecutable>map(core -> new DelegatingStudioNode(node, core))
                     .orElseGet(() -> new IntentExecutable(node));
         }
         return new IntentExecutable(node);
@@ -60,11 +69,14 @@ public final class IntentDetectionNodeHandler implements NodeHandlerFactory {
         IntentExecutable(AssembledNode node) {
             super(node);
         }
+
         /**
          * doInvoke.
+         *
          * @param inputs inputs
          * @param session session
          * @param context context
+         * @return result
          */
         @Override
         @SuppressWarnings("unchecked")

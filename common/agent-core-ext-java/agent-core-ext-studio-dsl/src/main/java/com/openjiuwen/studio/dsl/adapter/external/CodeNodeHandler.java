@@ -32,24 +32,33 @@ import java.util.Set;
  * @since 2026-08-17
  */
 public final class CodeNodeHandler implements NodeHandlerFactory {
+
     /**
      * canonicalType.
+     *
+     * @return result
      */
     @Override
     public String canonicalType() {
         return "jiuwen.code";
     }
+
     /**
      * aliases.
+     *
+     * @return result
      */
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
+
     /**
      * create.
+     *
      * @param node node
      * @param ctx ctx
+     * @return result
      */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
@@ -63,11 +72,14 @@ public final class CodeNodeHandler implements NodeHandlerFactory {
             super(node);
             this.ctx = ctx;
         }
+
         /**
          * doInvoke.
+         *
          * @param inputs inputs
          * @param session session
          * @param context context
+         * @return result
          * @throws Exception when the call fails
          */
         @Override

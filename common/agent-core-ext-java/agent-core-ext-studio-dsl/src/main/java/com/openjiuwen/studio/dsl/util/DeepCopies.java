@@ -16,9 +16,12 @@ import java.util.Map;
  */
 public final class DeepCopies {
     private DeepCopies() {}
+
     /**
      * map.
+     *
      * @param in in
+     * @return result
      */
     @SuppressWarnings("unchecked")
     public static Map<String, Object> map(Map<String, Object> in) {
@@ -31,9 +34,12 @@ public final class DeepCopies {
         }
         return out;
     }
+
     /**
      * value.
+     *
      * @param v v
+     * @return result
      */
     @SuppressWarnings("unchecked")
     public static Object value(Object v) {

@@ -18,17 +18,22 @@ import java.util.function.Function;
  */
 public final class InMemoryAgentRegistry implements AgentRegistry {
     private final Map<String, Function<Map<String, Object>, Map<String, Object>>> byId = new ConcurrentHashMap<>();
+
     /**
      * register.
+     *
      * @param agentId agentId
      * @param fn fn
      */
     public void register(String agentId, Function<Map<String, Object>, Map<String, Object>> fn) {
         byId.put(agentId, fn);
     }
+
     /**
      * find.
+     *
      * @param agentId agentId
+     * @return result
      */
     @Override
     public Optional<Function<Map<String, Object>, Map<String, Object>>> find(String agentId) {

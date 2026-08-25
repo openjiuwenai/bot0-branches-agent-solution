@@ -26,24 +26,33 @@ import java.util.Set;
  * @since 2026-08-17
  */
 public final class McpNodeHandler implements NodeHandlerFactory {
+
     /**
      * canonicalType.
+     *
+     * @return result
      */
     @Override
     public String canonicalType() {
         return "jiuwen.mcp";
     }
+
     /**
      * aliases.
+     *
+     * @return result
      */
     @Override
     public Set<String> aliases() {
         return Set.of("jiuwen.flowMcp");
     }
+
     /**
      * create.
+     *
      * @param node node
      * @param ctx ctx
+     * @return result
      */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
@@ -57,11 +66,14 @@ public final class McpNodeHandler implements NodeHandlerFactory {
             super(node);
             this.invoker = invoker;
         }
+
         /**
          * doInvoke.
+         *
          * @param inputs inputs
          * @param session session
          * @param context context
+         * @return result
          * @throws Exception when the call fails
          */
         @Override

@@ -17,7 +17,6 @@ import com.openjiuwen.studio.dsl.model.NodePayload;
 import com.openjiuwen.studio.dsl.spi.NodeHandlerFactory;
 import com.openjiuwen.studio.dsl.util.MediaSupport;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -29,31 +28,40 @@ import java.util.Set;
  * @since 2026-08-17
  */
 public final class LlmNodeHandler implements NodeHandlerFactory {
+
     /**
      * canonicalType.
+     *
+     * @return result
      */
     @Override
     public String canonicalType() {
         return "jiuwen.LLMComponent";
     }
+
     /**
      * aliases.
+     *
+     * @return result
      */
     @Override
     public Set<String> aliases() {
         return Set.of("jiuwen.llm", "jiuwen.llm_chain", "jiuwen.llmChain");
     }
+
     /**
      * create.
+     *
      * @param node node
      * @param ctx ctx
+     * @return result
      */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         if (ctx.coreExecutableFactory() != null) {
             return ctx.coreExecutableFactory()
                     .createLlm(node)
-                    .map(core -> (ComponentExecutable) new MediaAwareDelegate(node, core))
+                    .<ComponentExecutable>map(core -> new MediaAwareDelegate(node, core))
                     .orElseGet(() -> new LlmFallbackExecutable(node));
         }
         return new LlmFallbackExecutable(node);
@@ -69,11 +77,14 @@ public final class LlmNodeHandler implements NodeHandlerFactory {
             super(node);
             this.delegate = delegate;
         }
+
         /**
          * doInvoke.
+         *
          * @param inputs inputs
          * @param session session
          * @param context context
+         * @return result
          * @throws Exception when the call fails
          */
         @Override
@@ -98,11 +109,14 @@ public final class LlmNodeHandler implements NodeHandlerFactory {
         LlmFallbackExecutable(AssembledNode node) {
             super(node);
         }
+
         /**
          * doInvoke.
+         *
          * @param inputs inputs
          * @param session session
          * @param context context
+         * @return result
          */
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {

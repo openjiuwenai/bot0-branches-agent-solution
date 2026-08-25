@@ -28,24 +28,33 @@ import java.util.Set;
  * @since 2026-08-17
  */
 public final class MessageNodeHandler implements NodeHandlerFactory {
+
     /**
      * canonicalType.
+     *
+     * @return result
      */
     @Override
     public String canonicalType() {
         return "jiuwen.message";
     }
+
     /**
      * aliases.
+     *
+     * @return result
      */
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
+
     /**
      * create.
+     *
      * @param node node
      * @param ctx ctx
+     * @return result
      */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
@@ -56,11 +65,14 @@ public final class MessageNodeHandler implements NodeHandlerFactory {
         MessageExecutable(AssembledNode node) {
             super(node);
         }
+
         /**
          * doInvoke.
+         *
          * @param inputs inputs
          * @param session session
          * @param context context
+         * @return result
          */
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
@@ -114,11 +126,17 @@ public final class MessageNodeHandler implements NodeHandlerFactory {
         }
 
         private static String firstString(Object a, Object b, Object c, Object d) {
-            Object[] vals = {a, b, c, d};
-            for (Object v : vals) {
-                if (v != null && !String.valueOf(v).isBlank()) {
-                    return String.valueOf(v);
-                }
+            if (a != null && !String.valueOf(a).isBlank()) {
+                return String.valueOf(a);
+            }
+            if (b != null && !String.valueOf(b).isBlank()) {
+                return String.valueOf(b);
+            }
+            if (c != null && !String.valueOf(c).isBlank()) {
+                return String.valueOf(c);
+            }
+            if (d != null && !String.valueOf(d).isBlank()) {
+                return String.valueOf(d);
             }
             return "";
         }

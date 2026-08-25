@@ -18,8 +18,10 @@ import java.util.Map;
  */
 public final class DslNodeShellValidator {
     private DslNodeShellValidator() {}
+
     /**
      * validateShell.
+     *
      * @param node node
      */
     public static void validateShell(AssembledNode node) {

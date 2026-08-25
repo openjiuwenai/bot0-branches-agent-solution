@@ -18,10 +18,13 @@ import java.util.function.Supplier;
  */
 public final class SessionStateIsolator {
     private SessionStateIsolator() {}
+
     /**
      * runIsolated.
+     *
      * @param session session
      * @param body body
+     * @return result
      */
     public static <T> T runIsolated(NodeSessionApi session, Supplier<T> body) {
         if (session == null) {

@@ -142,7 +142,7 @@ class PythonCodeExecutorTest {
 
     private static void assertNoLeftoverScripts(Path root) {
         try (Stream<Path> walk = Files.walk(root)) {
-            List<Path> leftover = walk.filter(p -> p.getFileName().toString().equals("script.py")).toList();
+            List<Path> leftover = walk.filter(p -> "script.py".equals(p.getFileName().toString())).toList();
             assertThat(leftover).as("isolation workdir must be cleaned (no script.py left)").isEmpty();
         } catch (IOException e) {
             throw new AssertionError(e);

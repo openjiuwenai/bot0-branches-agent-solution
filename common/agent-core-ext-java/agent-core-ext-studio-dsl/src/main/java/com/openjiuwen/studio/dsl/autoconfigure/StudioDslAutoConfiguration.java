@@ -29,8 +29,11 @@ import org.springframework.context.annotation.Bean;
 @EnableConfigurationProperties
 @ConditionalOnProperty(prefix = "studio-dsl", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class StudioDslAutoConfiguration {
+
     /**
      * studioDslProperties.
+     *
+     * @return result
      */
     @Bean
     @ConfigurationProperties(prefix = "studio-dsl")
@@ -38,45 +41,60 @@ public class StudioDslAutoConfiguration {
     public StudioDslProperties studioDslProperties() {
         return new StudioDslProperties();
     }
+
     /**
      * studioDslNodeProperties.
+     *
      * @param properties properties
+     * @return result
      */
     @Bean
     @ConditionalOnMissingBean
     public StudioDslNodeProperties studioDslNodeProperties(StudioDslProperties properties) {
         return properties.toNodeProperties();
     }
+
     /**
      * studioDslModule.
+     *
      * @param nodeProperties nodeProperties
+     * @return result
      */
     @Bean
     @ConditionalOnMissingBean
     public StudioDslModule studioDslModule(StudioDslNodeProperties nodeProperties) {
         return StudioDslModule.create(nodeProperties);
     }
+
     /**
      * nodeTypeRegistry.
+     *
      * @param module module
+     * @return result
      */
     @Bean
     @ConditionalOnMissingBean
     public NodeTypeRegistry nodeTypeRegistry(StudioDslModule module) {
         return module.registry();
     }
+
     /**
      * workflowAssemblyBridge.
+     *
      * @param module module
+     * @return result
      */
     @Bean
     @ConditionalOnMissingBean
     public WorkflowAssemblyBridge workflowAssemblyBridge(StudioDslModule module) {
         return module.assemblyBridge();
     }
+
     /**
      * pythonCodeExecutor.
+     *
      * @param module module
+     * @return result
      */
     @Bean
     @ConditionalOnMissingBean

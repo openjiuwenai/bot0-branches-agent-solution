@@ -12,14 +12,20 @@ import java.util.Map;
  * @since 2026-08-17
  */
 public interface CodeLogic {
+
     /**
      * name.
+     *
+     * @return result
      */
     String name();
+
     /**
      * execute.
+     *
      * @param inputs inputs
      * @param ctx ctx
+     * @return result
      * @throws Exception when the call fails
      */
     Map<String, Object> execute(Map<String, Object> inputs, CodeLogicContext ctx) throws Exception;

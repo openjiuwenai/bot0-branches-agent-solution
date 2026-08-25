@@ -67,15 +67,21 @@ public final class StudioDslModule {
         this.subWorkflowResolver = subWorkflowResolver;
         this.assemblyBridge = new WorkflowAssemblyBridge(registry);
     }
+
     /**
      * create.
+     *
+     * @return result
      */
     public static StudioDslModule create() {
         return create(new StudioDslNodeProperties());
     }
+
     /**
      * create.
+     *
      * @param properties properties
+     * @return result
      */
     public static StudioDslModule create(StudioDslNodeProperties properties) {
         StudioDslNodeProperties props = properties == null ? new StudioDslNodeProperties() : properties;
@@ -99,9 +105,12 @@ public final class StudioDslModule {
                             "no SubWorkflowResolver configured");
                 });
     }
+
     /**
      * withSubWorkflowResolver.
+     *
      * @param resolver resolver
+     * @return result
      */
     public StudioDslModule withSubWorkflowResolver(SubWorkflowResolver resolver) {
         return new StudioDslModule(
@@ -116,9 +125,12 @@ public final class StudioDslModule {
                 agentRegistry,
                 resolver);
     }
+
     /**
      * withToolRegistry.
+     *
      * @param tools tools
+     * @return result
      */
     public StudioDslModule withToolRegistry(ToolRegistry tools) {
         return new StudioDslModule(
@@ -133,9 +145,12 @@ public final class StudioDslModule {
                 agentRegistry,
                 subWorkflowResolver);
     }
+
     /**
      * withAgentRegistry.
+     *
      * @param agents agents
+     * @return result
      */
     public StudioDslModule withAgentRegistry(AgentRegistry agents) {
         return new StudioDslModule(
@@ -150,9 +165,12 @@ public final class StudioDslModule {
                 agents,
                 subWorkflowResolver);
     }
+
     /**
      * withMcpToolInvoker.
+     *
      * @param mcp mcp
+     * @return result
      */
     public StudioDslModule withMcpToolInvoker(McpToolInvoker mcp) {
         return new StudioDslModule(
@@ -167,32 +185,47 @@ public final class StudioDslModule {
                 agentRegistry,
                 subWorkflowResolver);
     }
+
     /**
      * properties.
+     *
+     * @return result
      */
     public StudioDslNodeProperties properties() {
         return properties;
     }
+
     /**
      * registry.
+     *
+     * @return result
      */
     public NodeTypeRegistry registry() {
         return registry;
     }
+
     /**
      * pythonExecutor.
+     *
+     * @return result
      */
     public PythonCodeExecutor pythonExecutor() {
         return pythonExecutor;
     }
+
     /**
      * codeLogicRegistry.
+     *
+     * @return result
      */
     public CodeLogicRegistry codeLogicRegistry() {
         return codeLogicRegistry;
     }
+
     /**
      * assemblyBridge.
+     *
+     * @return result
      */
     public WorkflowAssemblyBridge assemblyBridge() {
         return assemblyBridge;
@@ -200,14 +233,19 @@ public final class StudioDslModule {
 
     /**
      * Root build context for one workflow execution (fresh variable scope).
+     *
+     * @return result
      */
     public NodeBuildContext newRootContext(String workflowId) {
         return newRootContext(workflowId, null);
     }
+
     /**
      * newRootContext.
+     *
      * @param workflowId workflowId
      * @param tenantId tenantId
+     * @return result
      */
     public NodeBuildContext newRootContext(String workflowId, String tenantId) {
         return new NodeBuildContext(

@@ -22,8 +22,10 @@ import java.util.Map;
  */
 public final class DelegatingStudioNode extends AbstractStudioNode {
     private final ComponentExecutable delegate;
+
     /**
      * DelegatingStudioNode.
+     *
      * @param node node
      * @param delegate delegate
      */
@@ -31,11 +33,14 @@ public final class DelegatingStudioNode extends AbstractStudioNode {
         super(node);
         this.delegate = delegate;
     }
+
     /**
      * doInvoke.
+     *
      * @param inputs inputs
      * @param session session
      * @param context context
+     * @return result
      * @throws Exception when the call fails
      */
     @Override
@@ -53,28 +58,37 @@ public final class DelegatingStudioNode extends AbstractStudioNode {
         }
         return payload.withMediaPassthrough(media);
     }
+
     /**
      * stream.
+     *
      * @param inputs inputs
      * @param session session
      * @param context context
+     * @return result
      */
     @Override
     public Iterator<Object> stream(Object inputs, NodeSessionApi session, ModelContext context) {
         return delegate.stream(inputs, session, context);
     }
+
     /**
      * transform.
+     *
      * @param inputs inputs
      * @param session session
      * @param context context
+     * @return result
      */
     @Override
     public Iterator<Object> transform(Object inputs, NodeSessionApi session, ModelContext context) {
         return delegate.transform(inputs, session, context);
     }
+
     /**
      * delegate.
+     *
+     * @return result
      */
     public ComponentExecutable delegate() {
         return delegate;

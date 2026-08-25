@@ -18,17 +18,22 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class InMemoryToolRegistry implements ToolRegistry {
     private final Map<String, Tool> byId = new ConcurrentHashMap<>();
+
     /**
      * register.
+     *
      * @param apiId apiId
      * @param tool tool
      */
     public void register(String apiId, Tool tool) {
         byId.put(apiId, tool);
     }
+
     /**
      * find.
+     *
      * @param apiId apiId
+     * @return result
      */
     @Override
     public Optional<Tool> find(String apiId) {

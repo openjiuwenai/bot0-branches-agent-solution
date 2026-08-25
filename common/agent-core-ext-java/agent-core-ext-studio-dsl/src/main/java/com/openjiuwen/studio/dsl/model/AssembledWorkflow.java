@@ -17,8 +17,10 @@ import java.util.Objects;
 public final class AssembledWorkflow {
     private final String workflowId;
     private final List<AssembledNode> nodes;
+
     /**
      * AssembledWorkflow.
+     *
      * @param workflowId workflowId
      * @param nodes nodes
      */
@@ -26,14 +28,20 @@ public final class AssembledWorkflow {
         this.workflowId = Objects.requireNonNull(workflowId, "workflowId");
         this.nodes = Collections.unmodifiableList(new ArrayList<>(Objects.requireNonNull(nodes, "nodes")));
     }
+
     /**
      * workflowId.
+     *
+     * @return result
      */
     public String workflowId() {
         return workflowId;
     }
+
     /**
      * nodes.
+     *
+     * @return result
      */
     public List<AssembledNode> nodes() {
         return nodes;

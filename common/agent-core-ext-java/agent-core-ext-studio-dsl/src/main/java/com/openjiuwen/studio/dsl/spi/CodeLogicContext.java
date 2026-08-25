@@ -14,8 +14,10 @@ import java.util.Map;
 public final class CodeLogicContext {
     private final String nodeId;
     private final Map<String, Object> configs;
+
     /**
      * CodeLogicContext.
+     *
      * @param nodeId nodeId
      * @param configs configs
      */
@@ -23,14 +25,20 @@ public final class CodeLogicContext {
         this.nodeId = nodeId;
         this.configs = configs;
     }
+
     /**
      * nodeId.
+     *
+     * @return result
      */
     public String nodeId() {
         return nodeId;
     }
+
     /**
      * configs.
+     *
+     * @return result
      */
     public Map<String, Object> configs() {
         return configs;

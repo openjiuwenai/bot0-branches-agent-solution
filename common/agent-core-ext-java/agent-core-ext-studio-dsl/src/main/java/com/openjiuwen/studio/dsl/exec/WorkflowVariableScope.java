@@ -17,8 +17,10 @@ import java.util.Map;
 public final class WorkflowVariableScope {
     private final Map<String, Object> vars = new LinkedHashMap<>();
     private boolean closed;
+
     /**
      * put.
+     *
      * @param key key
      * @param value value
      */
@@ -26,8 +28,10 @@ public final class WorkflowVariableScope {
         ensureOpen();
         vars.put(key, value);
     }
+
     /**
      * putAll.
+     *
      * @param more more
      */
     public synchronized void putAll(Map<String, Object> more) {
@@ -36,16 +40,22 @@ public final class WorkflowVariableScope {
             vars.putAll(more);
         }
     }
+
     /**
      * get.
+     *
      * @param key key
+     * @return result
      */
     public synchronized Object get(String key) {
         ensureOpen();
         return vars.get(key);
     }
+
     /**
      * snapshot.
+     *
+     * @return result
      */
     public synchronized Map<String, Object> snapshot() {
         ensureOpen();
@@ -59,8 +69,11 @@ public final class WorkflowVariableScope {
         vars.clear();
         closed = true;
     }
+
     /**
      * isClosed.
+     *
+     * @return result
      */
     public synchronized boolean isClosed() {
         return closed;

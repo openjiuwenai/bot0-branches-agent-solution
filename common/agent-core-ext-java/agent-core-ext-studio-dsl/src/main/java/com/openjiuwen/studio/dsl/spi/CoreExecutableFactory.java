@@ -16,37 +16,52 @@ import java.util.Optional;
  * @since 2026-08-17
  */
 public interface CoreExecutableFactory {
+
     /**
      * createLlm.
+     *
      * @param node node
+     * @return result
      */
     default Optional<ComponentExecutable> createLlm(AssembledNode node) {
         return Optional.empty();
     }
+
     /**
      * createIntentDetection.
+     *
      * @param node node
+     * @return result
      */
     default Optional<ComponentExecutable> createIntentDetection(AssembledNode node) {
         return Optional.empty();
     }
+
     /**
      * createQuestioner.
+     *
      * @param node node
+     * @return result
      */
     default Optional<ComponentExecutable> createQuestioner(AssembledNode node) {
         return Optional.empty();
     }
+
     /**
      * createKnowledgeRetrieval.
+     *
      * @param node node
+     * @return result
      */
     default Optional<ComponentExecutable> createKnowledgeRetrieval(AssembledNode node) {
         return Optional.empty();
     }
+
     /**
      * createExtractor.
+     *
      * @param node node
+     * @return result
      */
     default Optional<ComponentExecutable> createExtractor(AssembledNode node) {
         return Optional.empty();

@@ -25,8 +25,10 @@ import java.util.function.Function;
 public final class DefaultMcpToolInvoker implements McpToolInvoker {
     private final Map<String, Function<Map<String, Object>, Map<String, Object>>> local =
             new ConcurrentHashMap<>();
+
     /**
      * register.
+     *
      * @param server server
      * @param tool tool
      * @param fn fn
@@ -34,11 +36,14 @@ public final class DefaultMcpToolInvoker implements McpToolInvoker {
     public void register(String server, String tool, Function<Map<String, Object>, Map<String, Object>> fn) {
         local.put(key(server, tool), fn);
     }
+
     /**
      * invoke.
+     *
      * @param server server
      * @param tool tool
      * @param arguments arguments
+     * @return result
      * @throws Exception when the call fails
      */
     @Override
@@ -72,9 +77,8 @@ public final class DefaultMcpToolInvoker implements McpToolInvoker {
             os.write(payload);
         }
         int status = conn.getResponseCode();
-        InputStream in = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
         String respBody;
-        try (InputStream stream = in) {
+        try (InputStream stream = status >= 400 ? conn.getErrorStream() : conn.getInputStream()) {
             respBody = stream == null ? "" : new String(stream.readAllBytes(), StandardCharsets.UTF_8);
         } finally {
             conn.disconnect();

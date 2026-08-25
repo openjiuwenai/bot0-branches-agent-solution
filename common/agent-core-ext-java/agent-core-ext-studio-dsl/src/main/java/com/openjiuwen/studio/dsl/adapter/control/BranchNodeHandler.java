@@ -31,24 +31,33 @@ import java.util.function.BooleanSupplier;
  * @since 2026-08-17
  */
 public final class BranchNodeHandler implements NodeHandlerFactory {
+
     /**
      * canonicalType.
+     *
+     * @return result
      */
     @Override
     public String canonicalType() {
         return "jiuwen.branch";
     }
+
     /**
      * aliases.
+     *
+     * @return result
      */
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
+
     /**
      * create.
+     *
      * @param node node
      * @param ctx ctx
+     * @return result
      */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
@@ -65,6 +74,8 @@ public final class BranchNodeHandler implements NodeHandlerFactory {
 
     /**
      * Map Studio condition shapes onto types Branch accepts.
+     *
+     * @return result
      */
     static Object toCoreCondition(BranchDef d, BranchExecutable executable) {
         if (d.isDefault) {
@@ -90,11 +101,14 @@ public final class BranchNodeHandler implements NodeHandlerFactory {
         Map<String, Object> lastUserFields() {
             return lastUserFields;
         }
+
         /**
          * doInvoke.
+         *
          * @param inputs inputs
          * @param session session
          * @param context context
+         * @return result
          */
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
@@ -109,8 +123,11 @@ public final class BranchNodeHandler implements NodeHandlerFactory {
             wrap.put("routeTargets", List.of(selected));
             return NodePayload.ofFields(wrap);
         }
+
         /**
          * branchComponent.
+         *
+         * @return result
          */
         public BranchComponent branchComponent() {
             return component;
@@ -131,34 +148,40 @@ public final class BranchNodeHandler implements NodeHandlerFactory {
         return fallback;
     }
 
-    @SuppressWarnings("unchecked")
     static List<BranchDef> parse(Map<String, Object> configs) {
         List<BranchDef> out = new ArrayList<>();
         Object branches = configs.get("branches");
         if (branches instanceof List<?> list) {
             for (Object item : list) {
-                if (!(item instanceof Map<?, ?> m)) {
-                    continue;
-                }
-                String id = String.valueOf(first(m, "branchId", "id", "default"));
-                Object cond = firstObj(m, "condition", "conditions");
-                boolean isDefault = Boolean.TRUE.equals(m.get("isDefault"))
-                        || "default".equalsIgnoreCase(id)
-                        || cond == null;
-                List<String> targets = new ArrayList<>();
-                Object t = m.get("targets");
-                if (t instanceof List<?> tl) {
-                    for (Object x : tl) {
-                        targets.add(String.valueOf(x));
-                    }
-                }
-                out.add(new BranchDef(id, cond, isDefault, targets));
+                addParsed(out, item);
             }
         }
         if (out.isEmpty()) {
             out.add(new BranchDef("default", null, true, List.of("default")));
         }
         return out;
+    }
+
+    private static void addParsed(List<BranchDef> out, Object item) {
+        if (!(item instanceof Map<?, ?> m)) {
+            return;
+        }
+        String id = String.valueOf(first(m, "branchId", "id", "default"));
+        Object cond = firstObj(m, "condition", "conditions");
+        boolean isDefault = Boolean.TRUE.equals(m.get("isDefault"))
+                || "default".equalsIgnoreCase(id)
+                || cond == null;
+        out.add(new BranchDef(id, cond, isDefault, targetIds(m.get("targets"))));
+    }
+
+    private static List<String> targetIds(Object t) {
+        List<String> targets = new ArrayList<>();
+        if (t instanceof List<?> tl) {
+            for (Object x : tl) {
+                targets.add(String.valueOf(x));
+            }
+        }
+        return targets;
     }
 
     private static Object firstObj(Map<?, ?> m, String a, String b) {

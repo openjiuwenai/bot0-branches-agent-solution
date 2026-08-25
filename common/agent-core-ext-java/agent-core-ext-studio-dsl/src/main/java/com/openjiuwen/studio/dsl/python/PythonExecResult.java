@@ -16,8 +16,10 @@ public final class PythonExecResult {
     private final String stdout;
     private final String stderr;
     private final int exitCode;
+
     /**
      * PythonExecResult.
+     *
      * @param outputs outputs
      * @param stdout stdout
      * @param stderr stderr
@@ -29,26 +31,38 @@ public final class PythonExecResult {
         this.stderr = stderr;
         this.exitCode = exitCode;
     }
+
     /**
      * outputs.
+     *
+     * @return result
      */
     public Map<String, Object> outputs() {
         return outputs;
     }
+
     /**
      * stdout.
+     *
+     * @return result
      */
     public String stdout() {
         return stdout;
     }
+
     /**
      * stderr.
+     *
+     * @return result
      */
     public String stderr() {
         return stderr;
     }
+
     /**
      * exitCode.
+     *
+     * @return result
      */
     public int exitCode() {
         return exitCode;

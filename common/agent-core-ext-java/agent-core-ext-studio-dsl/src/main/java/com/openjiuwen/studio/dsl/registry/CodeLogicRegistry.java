@@ -18,13 +18,16 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class CodeLogicRegistry {
     private final Map<String, CodeLogic> byName = new ConcurrentHashMap<>();
+
     /**
      * register.
+     *
      * @param logic logic
      */
     public void register(CodeLogic logic) {
         byName.put(logic.name(), logic);
     }
+
     /**
      * loadServiceLoader.
      */
@@ -33,9 +36,12 @@ public final class CodeLogicRegistry {
             register(logic);
         }
     }
+
     /**
      * find.
+     *
      * @param name name
+     * @return result
      */
     public Optional<CodeLogic> find(String name) {
         return Optional.ofNullable(byName.get(name));

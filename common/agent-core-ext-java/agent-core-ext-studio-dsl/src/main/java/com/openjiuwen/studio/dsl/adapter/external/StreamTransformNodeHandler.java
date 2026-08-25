@@ -26,24 +26,33 @@ import java.util.Set;
  * @since 2026-08-17
  */
 public final class StreamTransformNodeHandler implements NodeHandlerFactory {
+
     /**
      * canonicalType.
+     *
+     * @return result
      */
     @Override
     public String canonicalType() {
         return "jiuwen.streamTransform";
     }
+
     /**
      * aliases.
+     *
+     * @return result
      */
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
+
     /**
      * create.
+     *
      * @param node node
      * @param ctx ctx
+     * @return result
      */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
@@ -54,21 +63,27 @@ public final class StreamTransformNodeHandler implements NodeHandlerFactory {
         StreamTransformExecutable(AssembledNode node) {
             super(node);
         }
+
         /**
          * doInvoke.
+         *
          * @param inputs inputs
          * @param session session
          * @param context context
+         * @return result
          */
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
             return NodePayload.userFields(transformFields(userFieldsOf(inputs), node.configs()));
         }
+
         /**
          * transform.
+         *
          * @param inputs inputs
          * @param session session
          * @param context context
+         * @return result
          */
         @Override
         public Iterator<Object> transform(Object inputs, NodeSessionApi session, ModelContext context) {

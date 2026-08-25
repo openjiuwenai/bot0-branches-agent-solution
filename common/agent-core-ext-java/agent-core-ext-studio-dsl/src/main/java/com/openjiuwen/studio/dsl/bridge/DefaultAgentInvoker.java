@@ -16,17 +16,22 @@ import java.util.Map;
  */
 public final class DefaultAgentInvoker implements AgentInvoker {
     private final AgentRegistry registry;
+
     /**
      * DefaultAgentInvoker.
+     *
      * @param registry registry
      */
     public DefaultAgentInvoker(AgentRegistry registry) {
         this.registry = registry;
     }
+
     /**
      * invoke.
+     *
      * @param agentId agentId
      * @param inputs inputs
+     * @return result
      * @throws Exception when the call fails
      */
     @Override

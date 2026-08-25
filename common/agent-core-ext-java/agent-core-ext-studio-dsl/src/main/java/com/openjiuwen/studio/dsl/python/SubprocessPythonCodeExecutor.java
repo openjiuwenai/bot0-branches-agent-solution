@@ -16,7 +16,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
 /**
@@ -26,6 +31,7 @@ import java.util.stream.Stream;
  * @since 2026-08-17
  */
 public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
+
     /**
      * execute.
      *
@@ -41,10 +47,10 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
             return runProcess(request, workDir);
         } catch (NodeExecutionException e) {
             throw e;
-        } catch (IOException | InterruptedException | IllegalArgumentException e) {
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
+        } catch (InterruptedException e) {
+            throw new NodeExecutionException(
+                    request.nodeId(), "jiuwen.code", NodeCauseCode.PYTHON_IO, e.getMessage(), e);
+        } catch (IOException | IllegalArgumentException e) {
             throw new NodeExecutionException(
                     request.nodeId(), "jiuwen.code", NodeCauseCode.PYTHON_IO, e.getMessage(), e);
         } finally {
@@ -63,21 +69,27 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
         Process process = pb.start();
         ByteArrayOutputStream stdoutBuf = new ByteArrayOutputStream();
         ByteArrayOutputStream stderrBuf = new ByteArrayOutputStream();
-        Thread tOut = drain(process.getInputStream(), stdoutBuf);
-        Thread tErr = drain(process.getErrorStream(), stderrBuf);
-        boolean finished = process.waitFor(Math.max(1L, request.timeoutMs()), TimeUnit.MILLISECONDS);
-        if (!finished) {
-            process.destroyForcibly();
-            joinQuiet(tOut);
-            joinQuiet(tErr);
-            throw new NodeExecutionException(
-                    request.nodeId(),
-                    "jiuwen.code",
-                    NodeCauseCode.PYTHON_TIMEOUT,
-                    "python exceeded timeoutMs=" + request.timeoutMs());
+        ThreadPoolExecutor pool = new ThreadPoolExecutor(
+                2, 2, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        try {
+            Future<?> tOut = pool.submit(() -> drainStream(process.getInputStream(), stdoutBuf));
+            Future<?> tErr = pool.submit(() -> drainStream(process.getErrorStream(), stderrBuf));
+            boolean finished = process.waitFor(Math.max(1L, request.timeoutMs()), TimeUnit.MILLISECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                awaitDrain(tOut);
+                awaitDrain(tErr);
+                throw new NodeExecutionException(
+                        request.nodeId(),
+                        "jiuwen.code",
+                        NodeCauseCode.PYTHON_TIMEOUT,
+                        "python exceeded timeoutMs=" + request.timeoutMs());
+            }
+            awaitDrain(tOut);
+            awaitDrain(tErr);
+        } finally {
+            pool.shutdownNow();
         }
-        joinQuiet(tOut);
-        joinQuiet(tErr);
         String stdout = stdoutBuf.toString(StandardCharsets.UTF_8);
         String stderr = stderrBuf.toString(StandardCharsets.UTF_8);
         int code = process.exitValue();
@@ -91,24 +103,23 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
         return new PythonExecResult(parseJsonObject(stdout), stdout, stderr, code);
     }
 
-    private static Thread drain(InputStream in, ByteArrayOutputStream buf) {
-        Thread t = new Thread(() -> {
-            try {
-                in.transferTo(buf);
-            } catch (IOException ignored) {
-                // process ended
-            }
-        });
-        t.setDaemon(true);
-        t.start();
-        return t;
+    private static void drainStream(InputStream in, ByteArrayOutputStream buf) {
+        try {
+            in.transferTo(buf);
+        } catch (IOException ignored) {
+            // process ended
+        }
     }
 
-    private static void joinQuiet(Thread t) {
+    private static void awaitDrain(Future<?> future) {
         try {
-            t.join(2_000L);
+            future.get(2L, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            future.cancel(true);
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            future.cancel(true);
+        } catch (ExecutionException ignored) {
+            // drain IO already swallowed
         }
     }
 
@@ -129,7 +140,13 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
         }
     }
 
-    /** workdir-root / {tenant|default} / {workflowExecutionId} / {nodeId} / {uuid} — L2 §3.8 */
+    /**
+     * Isolation workdir: workdir-root / tenant / workflowExecutionId / nodeId / uuid (L2 §3.8).
+     *
+     * @param request request
+     * @return created directory
+     * @throws IOException when the directory cannot be created
+     */
     public static Path createIsolationWorkDir(PythonExecRequest request) throws IOException {
         Path root;
         if (request.workdirRoot() != null && !request.workdirRoot().isBlank()) {
@@ -319,8 +336,12 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
                 String key = parseString();
                 skipWs();
                 expect(':');
-                Object val = unwrapNull(parseValue());
-                map.put(key, val);
+                Object parsed = parseValue();
+                if (parsed instanceof JsonNull) {
+                    map.put(key, null);
+                } else {
+                    map.put(key, parsed);
+                }
                 skipWs();
                 if (peek('}')) {
                     i++;
@@ -339,7 +360,12 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
                 return list;
             }
             while (true) {
-                list.add(unwrapNull(parseValue()));
+                Object parsed = parseValue();
+                if (parsed instanceof JsonNull) {
+                    list.add(null);
+                } else {
+                    list.add(parsed);
+                }
                 skipWs();
                 if (peek(']')) {
                     i++;
@@ -405,10 +431,6 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
                 throw new IOException("expected " + c);
             }
             i++;
-        }
-
-        private static Object unwrapNull(Object v) {
-            return v instanceof JsonNull ? null : v;
         }
 
         private boolean peek(char c) {

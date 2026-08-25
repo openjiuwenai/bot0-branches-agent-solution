@@ -33,8 +33,10 @@ import java.util.logging.Logger;
  */
 public final class FakeHostMain {
     private static final Logger LOG = Logger.getLogger(FakeHostMain.class.getName());
+
     /**
      * main.
+     *
      * @param args args
      */
     public static void main(String[] args) {
@@ -46,17 +48,23 @@ public final class FakeHostMain {
         if (failed > 0) {
             throw new IllegalStateException("FAIL: " + failed + " scenario(s)");
         }
-        LOG.info("OK: all fake-host scenarios passed");
+        if (LOG.isLoggable(Level.INFO)) {
+            LOG.info("OK: all fake-host scenarios passed");
+        }
     }
 
     private static int run(String name, Scenario s) {
         try {
             s.run();
-            LOG.info("[PASS] " + name);
+            if (LOG.isLoggable(Level.INFO)) {
+                LOG.info("[PASS] " + name);
+            }
             return 0;
         } catch (AssertionError | IllegalStateException | IllegalArgumentException | NullPointerException
                 | ClassCastException e) {
-            LOG.log(Level.SEVERE, "[FAIL] " + name + " — " + e.getMessage(), e);
+            if (LOG.isLoggable(Level.SEVERE)) {
+                LOG.log(Level.SEVERE, "[FAIL] " + name + " — " + e.getMessage(), e);
+            }
             return 1;
         }
     }
@@ -85,7 +93,9 @@ public final class FakeHostMain {
         require("hello-host".equals(uf.get("greeting")), "greeting missing: " + uf);
         require(Integer.valueOf(1).equals(uf.get("seed")) || Long.valueOf(1L).equals(uf.get("seed")), "seed lost");
         require(ctx.variableScope().isClosed(), "variable scope must close after executeLinear");
-        LOG.info("    userFields=" + uf);
+        if (LOG.isLoggable(Level.INFO)) {
+            LOG.info("    userFields=" + uf);
+        }
     }
 
     /**
@@ -140,7 +150,9 @@ public final class FakeHostMain {
                 bridge.executeLinear(vipPath, pathCtx, Map.of("tier", "gold"), null, null);
         Map<String, Object> uf = asUserFields(pathOut);
         require(uf != null && "vip".equals(uf.get("lane")), "vip lane not set: " + uf);
-        LOG.info("    branchId=" + branchId + ", lane=" + uf.get("lane"));
+        if (LOG.isLoggable(Level.INFO)) {
+            LOG.info("    branchId=" + branchId + ", lane=" + uf.get("lane"));
+        }
     }
 
     /**
@@ -149,17 +161,23 @@ public final class FakeHostMain {
     private static void scenarioCode() {
         StudioDslModule module = StudioDslModule.create();
         module.codeLogicRegistry().register(new CodeLogic() {
+
             /**
              * name.
+             *
+             * @return result
              */
             @Override
             public String name() {
                 return "double";
             }
+
             /**
              * execute.
+             *
              * @param inputs inputs
              * @param ctx ctx
+             * @return result
              */
             @Override
             public Map<String, Object> execute(Map<String, Object> inputs, CodeLogicContext ctx) {
@@ -182,7 +200,9 @@ public final class FakeHostMain {
                 module.assemblyBridge().executeLinear(wf, ctx, Map.of("n", 21), null, null);
         Map<String, Object> uf = asUserFields(out);
         require(Long.valueOf(42L).equals(toLong(uf.get("n"))), "code out n!=42: " + uf);
-        LOG.info("    n=" + uf.get("n"));
+        if (LOG.isLoggable(Level.INFO)) {
+            LOG.info("    n=" + uf.get("n"));
+        }
     }
 
     /**
@@ -201,7 +221,9 @@ public final class FakeHostMain {
             require(
                     e.causeCode() == NodeCauseCode.UNKNOWN_NODE_TYPE,
                     "unexpected causeCode=" + e.causeCode());
-            LOG.info("    causeCode=" + e.causeCode());
+            if (LOG.isLoggable(Level.INFO)) {
+                LOG.info("    causeCode=" + e.causeCode());
+            }
         }
     }
 
@@ -228,8 +250,15 @@ public final class FakeHostMain {
         }
     }
 
+    /**
+     * One fake-host scenario.
+     */
     @FunctionalInterface
     private interface Scenario {
+
+        /**
+         * Run the scenario and throw on assertion failure.
+         */
         void run();
     }
 }

@@ -24,8 +24,10 @@ import java.util.Objects;
  */
 public final class WorkflowAssemblyBridge {
     private final NodeTypeRegistry registry;
+
     /**
      * WorkflowAssemblyBridge.
+     *
      * @param registry registry
      */
     public WorkflowAssemblyBridge(NodeTypeRegistry registry) {
@@ -34,6 +36,8 @@ public final class WorkflowAssemblyBridge {
 
     /**
      * Map assembled nodes to executables (edges / scheduling remain host responsibility).
+     *
+     * @return result
      */
     public Map<String, ComponentExecutable> mapExecutables(AssembledWorkflow workflow, NodeBuildContext ctx) {
         Map<String, ComponentExecutable> map = new LinkedHashMap<>();
@@ -46,6 +50,8 @@ public final class WorkflowAssemblyBridge {
     /**
      * Sequential host smoke path: invoke nodes in declaration order, then close variable scope (L2 §3.7).
      * Nested child scopes are independent; only the root context passed here is closed.
+     *
+     * @return result
      */
     @SuppressWarnings("unchecked")
     public Map<String, Object> executeLinear(

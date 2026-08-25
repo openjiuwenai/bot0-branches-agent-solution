@@ -32,31 +32,42 @@ import java.util.Set;
  */
 public final class LoopNodeHandler implements NodeHandlerFactory {
     private final NodeTypeRegistry registry;
+
     /**
      * LoopNodeHandler.
+     *
      * @param registry registry
      */
     public LoopNodeHandler(NodeTypeRegistry registry) {
         this.registry = registry;
     }
+
     /**
      * canonicalType.
+     *
+     * @return result
      */
     @Override
     public String canonicalType() {
         return "jiuwen.loop";
     }
+
     /**
      * aliases.
+     *
+     * @return result
      */
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
+
     /**
      * create.
+     *
      * @param node node
      * @param ctx ctx
+     * @return result
      */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
@@ -72,11 +83,14 @@ public final class LoopNodeHandler implements NodeHandlerFactory {
             this.registry = registry;
             this.ctx = ctx;
         }
+
         /**
          * doInvoke.
+         *
          * @param inputs inputs
          * @param session session
          * @param context context
+         * @return result
          * @throws Exception when the call fails
          */
         @Override
@@ -94,73 +108,64 @@ public final class LoopNodeHandler implements NodeHandlerFactory {
             List<AssembledNode> body = parseBody(configs.get("loopBody"));
             List<Object> iterations = new ArrayList<>();
 
+            LoopWork work = new LoopWork();
+            work.uf = uf;
+            work.max = max;
+            work.breakCond = breakCond;
+            work.body = body;
+            work.session = session;
+            work.context = context;
+            work.iterations = iterations;
             if (!forEachKey.isBlank()) {
-                runForEach(uf, forEachKey, max, breakCond, body, session, context, iterations);
+                runForEach(work, forEachKey);
             } else {
-                runCounted(uf, max, breakCond, body, session, context, iterations);
+                runCounted(work);
             }
             uf.put("loopOutputs", iterations);
             uf.put("loopCount", iterations.size());
             return NodePayload.userFields(uf);
         }
 
-        private void runForEach(
-                Map<String, Object> uf,
-                String forEachKey,
-                int max,
-                Object breakCond,
-                List<AssembledNode> body,
-                NodeSessionApi session,
-                ModelContext context,
-                List<Object> iterations)
-                throws Exception {
-            Object arr = PathResolver.get(uf, forEachKey).orElse(null);
+        private void runForEach(LoopWork work, String forEachKey) throws Exception {
+            Object arr = PathResolver.get(work.uf, forEachKey).orElse(null);
             if (!(arr instanceof List<?> list)) {
                 return;
             }
             int i = 0;
             for (Object item : list) {
-                if (i >= max) {
+                if (i >= work.max) {
                     break;
                 }
-                Map<String, Object> frame = new LinkedHashMap<>(uf);
+                Map<String, Object> frame = new LinkedHashMap<>(work.uf);
                 frame.put("item", item);
                 frame.put("index", i);
-                if (breakCond != null && ConditionEvaluator.matches(breakCond, frame)) {
+                if (work.breakCond != null && ConditionEvaluator.matches(work.breakCond, frame)) {
                     break;
                 }
-                Map<String, Object> bodyOut = runBody(frame, session, context, body);
+                Map<String, Object> bodyOut = runBody(frame, work.session, work.context, work.body);
                 Map<String, Object> rec = new LinkedHashMap<>();
                 rec.put("index", i);
                 rec.put("item", item);
                 rec.put("bodyOutput", bodyOut);
-                iterations.add(rec);
-                uf.putAll(bodyOut);
+                work.iterations.add(rec);
+                work.uf.putAll(bodyOut);
                 i++;
             }
         }
 
-        private void runCounted(
-                Map<String, Object> uf,
-                int max,
-                Object breakCond,
-                List<AssembledNode> body,
-                NodeSessionApi session,
-                ModelContext context,
-                List<Object> iterations)
-                throws Exception {
-            for (int i = 0; i < max; i++) {
-                Map<String, Object> frame = new LinkedHashMap<>(uf);
+        private void runCounted(LoopWork work) throws Exception {
+            for (int i = 0; i < work.max; i++) {
+                Map<String, Object> frame = new LinkedHashMap<>(work.uf);
                 frame.put("index", i);
-                if (breakCond != null && ConditionEvaluator.matches(breakCond, frame)) {
+                if (work.breakCond != null && ConditionEvaluator.matches(work.breakCond, frame)) {
                     break;
                 }
-                Map<String, Object> bodyOut = runBody(frame, session, context, body);
+                Map<String, Object> bodyOut = runBody(frame, work.session, work.context, work.body);
                 Map<String, Object> rec = new LinkedHashMap<>();
                 rec.put("index", i);
                 rec.put("bodyOutput", bodyOut);
-                iterations.add(rec);
-                uf.putAll(bodyOut);
+                work.iterations.add(rec);
+                work.uf.putAll(bodyOut);
             }
         }
 
@@ -183,6 +188,16 @@ public final class LoopNodeHandler implements NodeHandlerFactory {
                 }
             }
             return lastUf;
+        }
+
+        private static final class LoopWork {
+            private Map<String, Object> uf;
+            private int max;
+            private Object breakCond;
+            private List<AssembledNode> body;
+            private NodeSessionApi session;
+            private ModelContext context;
+            private List<Object> iterations;
         }
 
         @SuppressWarnings("unchecked")

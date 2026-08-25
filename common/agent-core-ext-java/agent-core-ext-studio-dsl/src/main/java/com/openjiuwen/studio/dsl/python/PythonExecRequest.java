@@ -23,8 +23,10 @@ public final class PythonExecRequest {
     private final String workdirRoot;
     private final boolean inheritEnv;
     private final List<String> envWhitelist;
+
     /**
      * PythonExecRequest.
+     *
      * @param nodeId nodeId
      * @param script script
      * @param inputs inputs
@@ -39,8 +41,10 @@ public final class PythonExecRequest {
             String interpreter) {
         this(nodeId, script, inputs, timeoutMs, interpreter, null, null, null, false, List.of("PATH", "LANG"));
     }
+
     /**
      * PythonExecRequest.
+     *
      * @param nodeId nodeId
      * @param script script
      * @param inputs inputs
@@ -74,62 +78,92 @@ public final class PythonExecRequest {
         this.inheritEnv = inheritEnv;
         this.envWhitelist = envWhitelist == null ? List.of() : List.copyOf(envWhitelist);
     }
+
     /**
      * nodeId.
+     *
+     * @return result
      */
     public String nodeId() {
         return nodeId;
     }
+
     /**
      * script.
+     *
+     * @return result
      */
     public String script() {
         return script;
     }
+
     /**
      * inputs.
+     *
+     * @return result
      */
     public Map<String, Object> inputs() {
         return inputs;
     }
+
     /**
      * timeoutMs.
+     *
+     * @return result
      */
     public long timeoutMs() {
         return timeoutMs;
     }
+
     /**
      * interpreter.
+     *
+     * @return result
      */
     public String interpreter() {
         return interpreter;
     }
+
     /**
      * tenantId.
+     *
+     * @return result
      */
     public String tenantId() {
         return tenantId;
     }
+
     /**
      * workflowExecutionId.
+     *
+     * @return result
      */
     public String workflowExecutionId() {
         return workflowExecutionId;
     }
+
     /**
      * workdirRoot.
+     *
+     * @return result
      */
     public String workdirRoot() {
         return workdirRoot;
     }
+
     /**
      * inheritEnv.
+     *
+     * @return result
      */
     public boolean inheritEnv() {
         return inheritEnv;
     }
+
     /**
      * envWhitelist.
+     *
+     * @return result
      */
     public List<String> envWhitelist() {
         return envWhitelist;
