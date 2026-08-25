@@ -50,8 +50,19 @@ public class HttpAgentRuntimeClient implements AgentRuntimeClient {
                 .POST(HttpRequest.BodyPublishers.ofString(jsonRpcBody, StandardCharsets.UTF_8)).build();
         try {
             HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            // Pass the body through (A2A errors arrive as 200 + JSON-RPC error; we don't fake success).
+            int code = resp.statusCode();
+            if (code >= 400) {
+                // Runtime returned non-2xx (e.g., 503 Service Unavailable) — this is a service-level
+                // failure, NOT a method error (which arrives as 200 + JSON-RPC error per the runtime
+                // contract). Surface as FORWARD_FAILED so the client sees 502, not 200 + raw error body.
+                // 200 + JSON-RPC error (e.g., -32001/-32004) is passed through below as-is.
+                throw new GovernanceException(HttpStatus.BAD_GATEWAY, "FORWARD_FAILED",
+                        "Runtime returned HTTP " + code + ": " + resp.body(), null);
+            }
+            // 200 — transparent passthrough (success body OR JSON-RPC error envelope, e.g., -32001/-32004).
             return resp.body();
+        } catch (GovernanceException ex) {
+            throw ex;
         } catch (IOException | InterruptedException ex) {
             // G.CON.10 forbids Thread.interrupt(); map transport failure to FORWARD_FAILED.
             throw new GovernanceException(HttpStatus.BAD_GATEWAY, "FORWARD_FAILED",
