@@ -8,7 +8,6 @@ import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentClient;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCall;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCallOutcome;
-import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
 import jakarta.annotation.PreDestroy;
 
@@ -17,7 +16,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -69,15 +67,10 @@ public final class DeepResearchOutboundPushRemoteAgentCaller implements RemoteAg
     }
 
     @Override
-    public CompletableFuture<RemoteCallOutcome> callOutcome(RemoteCall call, QueryStreamObserver streamObserver,
-            Consumer<String> remoteTaskIdObserver) {
+    public CompletableFuture<RemoteCallOutcome> callOutcome(RemoteCall call,
+            RemoteAgentCaller.EventObserver eventObserver) {
         RemoteCall outboundCall = SEARCH_AGENT.equals(call.agentName()) ? configureSearchCallback(call) : call;
-        return delegate.callOutcome(outboundCall, streamObserver, remoteTaskIdObserver);
-    }
-
-    @Override
-    public boolean supported(String agentName) {
-        return delegate.supported(agentName);
+        return delegate.callOutcome(outboundCall, eventObserver);
     }
 
     private RemoteCall configureSearchCallback(RemoteCall call) {
