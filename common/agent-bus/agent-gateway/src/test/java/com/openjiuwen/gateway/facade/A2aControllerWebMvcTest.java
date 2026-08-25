@@ -97,6 +97,9 @@ class A2aControllerWebMvcTest {
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendStreamingMessage\","
                     + "\"params\":{\"message\":{\"messageId\":\"ms\",\"parts\":[{\"text\":\"hi\"}]},"
                     + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
+    private static final String SUBSCRIBE_BODY =
+            "{\"jsonrpc\":\"2.0\",\"id\":\"3\",\"method\":\"SubscribeToTask\","
+                    + "\"params\":{\"id\":\"task-sub\"}}";
 
     @Autowired
     private MockMvc mvc;
@@ -488,5 +491,20 @@ class A2aControllerWebMvcTest {
                         .contentType(MediaType.APPLICATION_JSON).content(CONTINUE_INPUT_BODY))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.error.code").value(-32004));
+    }
+
+    @Test
+    void subscribeToTaskReturnsSseWithEventStreamContentType() throws Exception {
+        // issue 137: SubscribeToTask DIRECT path must set Content-Type: text/event-stream
+        // (other streaming paths do; handleSubscribeToTask previously omitted it).
+        sticky.put("task-sub", "h1", "svc-rt");
+        rdc.setResolved(new ResolvedRoute("http://rt:8000"));
+        runtime.setFrames(List.of("{\"result\":{\"id\":\"task-sub\"}}", "{\"result\":{\"status\":\"working\"}}"));
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(SUBSCRIBE_BODY))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM))
+                .andExpect(result -> assertThat(result.getResponse().getContentAsString())
+                        .contains("event: jsonrpc", "data: {\"result\":{\"id\":\"task-sub\"}}"));
     }
 }

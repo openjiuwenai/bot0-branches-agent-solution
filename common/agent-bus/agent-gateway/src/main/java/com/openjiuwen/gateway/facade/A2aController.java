@@ -206,6 +206,8 @@ public class A2aController {
         // Direct: sticky lookup → runtime SubscribeToTask SSE
         try {
             Stream<String> frames = router.routeSubscribe(context);
+            response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE);
+            response.setCharacterEncoding("UTF-8");
             sseBridge.writeSse(response.getOutputStream(), frames);
         } catch (GovernanceException ex) {
             // Runtime rejected the subscription with a JSON-RPC error (HTTP 200 + a non-SSE body,
