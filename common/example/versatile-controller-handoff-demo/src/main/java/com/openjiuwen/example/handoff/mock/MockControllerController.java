@@ -245,7 +245,8 @@ public class MockControllerController {
     private static String notInScopeEchoEvent(int invocation) {
         return "{\"event\":\"message\",\"data\":{\"text\":\"不在范围\",\"index\":0,"
                 + "\"node_id\":\"node_1787129452975\",\"node_type\":\"Q\",\"node_name\":\"不在范围\","
-                + "\"createdTime\":" + (createdTime(invocation) - 1) + ",\"workflow_id\":\"81476c36-28e6-4ec1-84c5-247be51a9327\","
+                + "\"createdTime\":" + (createdTime(invocation) - 1) + ","
+                + "\"workflow_id\":\"81476c36-28e6-4ec1-84c5-247be51a9327\","
                 + "\"workflow_name\":\"erjimorengongzuoliu_fenbushiyanzheng\"}}";
     }
 
@@ -321,7 +322,8 @@ public class MockControllerController {
     private static String answerEvent(String text) {
         return "{\"event\":\"node_finished\",\"data\":{\"agent_id\":\"81476c36-28e6-4ec1-84c5-247be51a9327\","
                 + "\"node_id\":\"node_answer\",\"node_status\":\"node_finished\",\"parent_workflow_id\":\"\","
-                + "\"status\":{\"code\":0,\"desc\":\"succeeded\"},\"node_name\":\"ABCDEResponseNode\",\"node_type\":\"QA\","
+                + "\"status\":{\"code\":0,\"desc\":\"succeeded\"},"
+                + "\"node_name\":\"ABCDEResponseNode\",\"node_type\":\"QA\","
                 + "\"inputs\":{},\"outputs\":{\"response\":\"" + text + "\"},\"text\":\"" + text + "\","
                 + "\"start_time\":1787129556865,\"end_time\":1787129556867,"
                 + "\"execution_id\":\"exec-answer\"},\"createdTime\":1787129556876}";
