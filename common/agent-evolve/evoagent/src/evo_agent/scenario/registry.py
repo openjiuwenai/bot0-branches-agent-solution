@@ -218,6 +218,10 @@ class ScenarioRegistry:
         链中，未知 key 不会穿透到不接受 ``**kwargs`` 的父类。
         """
         accepted: set[str] = set()
+        accepted_kinds = {
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.KEYWORD_ONLY,
+        }
         for klass in cls.__mro__:
             if klass is object:
                 continue
@@ -227,12 +231,7 @@ class ScenarioRegistry:
                 continue
             params = sig.parameters.values()
             has_var_keyword = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params)
-            accepted.update(
-                p.name
-                for p in params
-                if p.kind
-                in {inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY}
-            )
+            accepted.update(p.name for p in params if p.kind in accepted_kinds)
             if not has_var_keyword:
                 # 找到不含 **kwargs 的父类 — 以此为过滤边界
                 break

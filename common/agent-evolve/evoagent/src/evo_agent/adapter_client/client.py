@@ -411,6 +411,88 @@ class AdapterClient:
         data = await self._request_with_retry("POST", "/api/v1/skills", json=body)
         return data.get("restored", [])  # type: ignore[no-any-return]
 
+    # ── SkillHub 操作 ──
+
+    async def list_hub_skills(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+        keyword: str | None = None,
+    ) -> dict[str, Any]:
+        """POST /api/v1/skills  action=list_hub_skills"""
+        body: dict[str, Any] = {
+            "agent_name": self._agent_name,
+            "action": "list_hub_skills",
+            "page": page,
+            "page_size": page_size,
+        }
+        if keyword:
+            body["keyword"] = keyword
+        return await self._request_with_retry("POST", "/api/v1/skills", json=body)
+
+    async def get_hub_version(self, asset_id: str, version: str) -> dict[str, Any]:
+        """POST /api/v1/skills  action=get_hub_version"""
+        body = {
+            "agent_name": self._agent_name,
+            "action": "get_hub_version",
+            "asset_id": asset_id,
+            "version": version,
+        }
+        return await self._request_with_retry("POST", "/api/v1/skills", json=body)
+
+    async def pull_skill(
+        self,
+        asset_id: str,
+        version: str,
+        *,
+        overwrite: bool = True,
+    ) -> dict[str, Any]:
+        """POST /api/v1/skills  action=pull_skill"""
+        body = {
+            "agent_name": self._agent_name,
+            "action": "pull_skill",
+            "asset_id": asset_id,
+            "version": version,
+            "overwrite": overwrite,
+        }
+        return await self._request_with_retry("POST", "/api/v1/skills", json=body)
+
+    def publish_skill(
+        self,
+        *,
+        skill_name: str,
+        plugin_version: str | None = None,
+        asset_id: str | None = None,
+        version_desc: str | None = None,
+        force: bool = False,
+    ) -> dict[str, Any]:
+        """POST /api/v1/skills  action=publish_skill（同步，优化完成后调用）。"""
+        body: dict[str, Any] = {
+            "agent_name": self._agent_name,
+            "action": "publish_skill",
+            "skill_name": skill_name,
+            "force": force,
+        }
+        if plugin_version:
+            body["plugin_version"] = plugin_version
+        if asset_id:
+            body["asset_id"] = asset_id
+        if version_desc:
+            body["version_desc"] = version_desc
+        response = self._sync_http.post("/api/v1/skills", json=body)
+        return self._handle_response(response)
+
+    async def delete_hub_version(self, asset_id: str, version: str) -> dict[str, Any]:
+        """POST /api/v1/skills  action=delete_hub_version"""
+        body = {
+            "agent_name": self._agent_name,
+            "action": "delete_hub_version",
+            "asset_id": asset_id,
+            "version": version,
+        }
+        return await self._request_with_retry("POST", "/api/v1/skills", json=body)
+
     # ── 内部方法 ──
 
     @staticmethod

@@ -611,6 +611,14 @@ async def run_optimization(
         )
         _bind_evaluator_invocation(dataset.evaluator, evaluator_invocation)
 
+        # 5.5 构建 GEPA 视觉标注模型（被优化的目标模型，支持多模态输入）
+        vision_model = _create_vision_llm(config)
+        vision_model_name = (
+            config.vision_model.strip() or config.target_model
+            if vision_model is not None
+            else ""
+        )
+
         # 6. 构建依赖（run_artifact_dir 在进入 AdapterClient 前按模式计算：
         # managed-doc 用 canonical id 作目录名，Skill 用 run_id）。
         dependencies: dict[str, Any] = {
@@ -631,6 +639,9 @@ async def run_optimization(
             # Wave 10 新增：注入 phase_callback（SSE 阶段事件推送）
             "phase_callback": phase_callback or (lambda *a, **kw: None),
             "cancellation_token": token,
+            # GEPA 新增：注入视觉标注模型（被优化的目标模型）
+            "vision_model": vision_model,
+            "vision_model_name": vision_model_name,
         }
 
         # 7. 通过 ScenarioRegistry 构建场景 optimizer
@@ -989,6 +1000,28 @@ def _create_llm(config: EvolveConfig) -> Model:
     """根据 EvolveConfig 创建优化器 LLM Model 实例。"""
     client_config = _build_model_client_config(config)
     model_config = ModelRequestConfig(model_name=config.optimizer_model)
+    return Model(client_config, model_config)
+
+
+def _create_vision_llm(config: EvolveConfig) -> Model | None:
+    """构建 GEPA 视觉标注模型实例。
+
+    空配置（vision_model 为空且未设独立凭证）时返回 None，
+    GEPA 场景可在 scenario 层提供 fallback。
+    """
+    model_name = (config.vision_model or "").strip() or config.target_model
+    api_key = (config.vision_api_key or "").strip() or config.llm_api_key
+    base_url = (config.vision_base_url or "").strip() or config.llm_base_url
+    if not api_key or not base_url:
+        return None
+    client_config = ModelClientConfig(
+        client_provider="OpenAI",
+        api_key=api_key,
+        api_base=base_url,
+        verify_ssl=False,
+        timeout=config.llm_timeout,
+    )
+    model_config = ModelRequestConfig(model_name=model_name)
     return Model(client_config, model_config)
 
 

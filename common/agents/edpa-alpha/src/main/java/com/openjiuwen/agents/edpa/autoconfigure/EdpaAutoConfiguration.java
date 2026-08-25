@@ -4,19 +4,10 @@
 
 package com.openjiuwen.agents.edpa.autoconfigure;
 
+import com.openjiuwen.agents.edpa.EdpaRails;
 import com.openjiuwen.agents.edpa.explore.ExploreBudget;
-import com.openjiuwen.agents.edpa.explore.ExploreToolRegistrar;
 import com.openjiuwen.agents.edpa.explore.Explorer;
 import com.openjiuwen.agents.edpa.explore.LlmExplorer;
-import com.openjiuwen.agents.edpa.rail.ExploreRail;
-import com.openjiuwen.agents.edpa.rail.SteeringProvisionRail;
-import com.openjiuwen.agents.edpa.rail.UserInputCaptureRail;
-import com.openjiuwen.agents.edpa.verification.GroundTruthVerifier;
-import com.openjiuwen.agents.edpa.verification.ProactiveConvergenceRail;
-import com.openjiuwen.agents.reactrails.replan.ReplanRail;
-import com.openjiuwen.agents.reactrails.replan.ReplanTool;
-import com.openjiuwen.agents.reactrails.selfheal.RootCauseRail;
-import com.openjiuwen.agents.reactrails.verification.CriteriaReplanBridgeRail;
 import com.openjiuwen.agents.reactrails.verification.CriteriaVerifier;
 import com.openjiuwen.agents.reactrails.verification.RuleBasedCriteriaVerifier;
 import com.openjiuwen.core.foundation.llm.Model;
@@ -26,41 +17,45 @@ import com.openjiuwen.core.foundation.llm.schema.UserMessage;
 import com.openjiuwen.core.singleagent.agents.ReActAgent;
 
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.event.ContextRefreshedEvent;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.logging.Logger;
 
 /**
- * Spring Boot auto-configuration for EDPA-alpha.
+ * Spring Boot auto-configuration for EDPA-alpha — infrastructure beans only.
  *
- * <p><b>Species B-replace-injected</b>: when {@code edpa.enabled=true}, this
- * auto-config REPLACES agent-core-ext-react-rails by registering the full EDPA rail stack onto
- * every {@link ReActAgent}:
- * <ul>
- *   <li>{@link ExploreRail} (new) — Explore phase: explore + pushSteering</li>
- *   <li>{@link ReplanRail} (reused) — Decision: __replan__ dispatch</li>
- *   <li>{@link CriteriaReplanBridgeRail} (reused) — Action verify gate</li>
- *   <li>{@link RootCauseRail} (reused) — Action device-failure degrade</li>
- * </ul>
+ * <p><b>C2 refactor (strategy B)</b>: the BeanPostProcessor rail-assembly logic has been
+ * REMOVED. The auto-config now provides only the three infrastructure beans
+ * ({@link EdpaProperties}, {@link CriteriaVerifier}, {@link Explorer}) — mirroring the
+ * official {@code agent-service-app} pattern of "assemble infrastructure, not agents".
  *
- * <p><b>LlmExplorer LLM access</b>: the Explorer SPI takes a
- * {@code Function<String,String>}. This auto-config builds that function from a
- * context-provided {@link Model} bean (lazy-resolved via
- * {@link ObjectProvider} so the Model need not exist at BeanPostProcessor time —
- * it is only touched when {@code explore()} actually runs, by which point
- * {@code agent.setLlm(model)} has long since executed). If no {@link Model} bean
- * exists, a no-op explorer function (returns "") is wired — honest degradation,
- * ExploreRail then skips pushSteering.
+ * <p><b>Assembly is explicit</b>: hosts following the official demo pattern
+ * ({@code @Bean AgentHandler} with agent not exposed as a Spring bean) call
+ * {@link EdpaRails#registerOnto} directly:
+ * <pre>{@code
+ * @Bean
+ * AgentHandler myAgentHandler(LlmConfigResolver r, EdpaProperties props,
+ *         CriteriaVerifier verifier, Explorer explorer) {
+ *     ReActAgent agent = ExampleReActAgentFactory.build("my-agent", ..., llm);
+ *     EdpaRails.registerOnto(agent, props, verifier, explorer);
+ *     return new JiuwenCoreAgentHandler(agent);
+ * }
+ * }</pre>
+ *
+ * <p>A zero-hit WARN is emitted when {@code edpa.enabled=true} but no
+ * {@link ReActAgent} bean was detected in the Spring context (hosts following the
+ * official pattern should use {@link EdpaRails#registerOnto} instead).
  *
  * @since 2026-07
  */
@@ -69,6 +64,8 @@ import java.util.function.Function;
         "com.openjiuwen.core.singleagent.rail.AgentRail"})
 @ConditionalOnProperty(name = "edpa.enabled", havingValue = "true")
 public class EdpaAutoConfiguration {
+    private static final Logger LOG = Logger.getLogger(EdpaAutoConfiguration.class.getName());
+
     /**
      * Properties bean for EDPA configuration.
      *
@@ -81,20 +78,24 @@ public class EdpaAutoConfiguration {
     }
 
     /**
-     * Default rule-based criteria verifier (mirrors agent-core-ext-react-rails default).
+     * Default criteria verifier — keyword-based ({@link RuleBasedCriteriaVerifier}).
      *
-     * @return a {@link RuleBasedCriteriaVerifier} instance
+     * <p>C5 refactor: the default bean is now {@link RuleBasedCriteriaVerifier}
+     * (the actual behavior when no {@code DeterministicChecker} is injected).
+     * Hosts wanting deterministic verification should override with
+     * {@code new GroundTruthVerifier(List.of(myChecker))}.
+     *
+     * @return a {@link RuleBasedCriteriaVerifier} instance (keyword fallback, zero LLM)
      */
     @Bean
     @ConditionalOnMissingBean(CriteriaVerifier.class)
     public CriteriaVerifier edpaCriteriaVerifier() {
-        return new GroundTruthVerifier();
+        return new RuleBasedCriteriaVerifier();
     }
 
     /**
      * Default {@link Explorer} bean — an {@link LlmExplorer} backed by the
-     * context's {@link Model} (lazily resolved so it survives the
-     * BeanPostProcessor-before-setLlm timing window).
+     * context's {@link Model} (lazily resolved).
      *
      * @param properties EDPA properties (provides budget)
      * @param modelProvider lazy provider of the agent's Model bean
@@ -109,65 +110,77 @@ public class EdpaAutoConfiguration {
     }
 
     /**
-     * BeanPostProcessor that registers the EDPA rail stack onto every
-     * {@link ReActAgent}. Mirrors agent-core-ext-react-rails' registrar shape but registers
-     * ExploreRail in addition to the 3 reused rails.
+     * Zero-hit detector: WARNs when {@code edpa.enabled=true} but EDPA rails are
+     * absent from the Spring context.
      *
-     * <p><b>Timing note</b>: the Explorer bean is captured by reference here;
-     * its internal {@code ObjectProvider<Model>} is only resolved at
-     * {@code explore()} time (during the agent loop, well after
-     * {@code setLlm}), so the SDK's setLlm-after-init ordering is a non-issue.
+     * <p>Covers both failure modes:
+     * <ul>
+     *   <li><b>0 ReActAgent beans</b> — official demo pattern (agent inside
+     *       {@code @Bean AgentHandler}); host should call
+     *       {@link EdpaRails#registerOnto} explicitly.</li>
+     *   <li><b>ReActAgent beans present but no EDPA rails</b> — hosts upgrading from
+     *       the old BeanPostProcessor auto-assembly. The old BPP registered rails
+     *       automatically on every ReActAgent bean; C2 removed this. The host must
+     *       now call {@link EdpaRails#registerOnto} in their own
+     *       {@code @Bean AgentHandler} method (breaking change).</li>
+     * </ul>
      *
-     * @param properties EDPA configuration
-     * @param criteriaVerifier injected verifier
-     * @param explorer the Explore-phase SPI
-     * @return the rail-registering post-processor
+     * <p><b>Honest boundary</b>: the detector cannot verify that a host following
+     * the demo pattern called {@code registerOnto} — static calls leave no
+     * Spring-observable footprint. The zero-bean WARN is the best available signal.
+     *
+     * @return the context-refreshed listener
      */
     @Bean
-    public BeanPostProcessor edpaRegistrar(EdpaProperties properties, CriteriaVerifier criteriaVerifier,
-            Explorer explorer) {
-        return new BeanPostProcessor() {
-            @Override
-            public Object postProcessAfterInitialization(Object bean, String beanName) {
-                if (!(bean instanceof ReActAgent agent)) {
-                    return bean;
+    public ApplicationListener<ContextRefreshedEvent> edpaZeroHitDetector() {
+        return event -> {
+            var beans = event.getApplicationContext().getBeansOfType(ReActAgent.class);
+            if (beans.isEmpty()) {
+                LOG.warning("EDPA enabled but no ReActAgent bean detected in the Spring context. "
+                        + "If you follow the official demo pattern (agent instantiated inside "
+                        + "@Bean AgentHandler), call EdpaRails.registerOnto(agent, props, "
+                        + "verifier, explorer) explicitly.");
+            } else {
+                // ReActAgent beans exist — check if any has EDPA rails registered.
+                // Old BPP auto-registered on every bean; C2 removed this. If none have
+                // EDPA rails, the host likely upgraded without adding registerOnto calls.
+                long withEdpaRails = beans.values().stream()
+                        .filter(agent -> hasEdpaRail(agent))
+                        .count();
+                if (withEdpaRails == 0) {
+                    LOG.warning("EDPA enabled but " + beans.size() + " ReActAgent bean(s) have "
+                            + "no EDPA rails registered. The BeanPostProcessor auto-assembly "
+                            + "was removed (breaking change). Call EdpaRails.registerOnto(agent, "
+                            + "props, verifier, explorer) in your @Bean AgentHandler method.");
                 }
-                // Provision a steering queue FIRST (priority 1) — issue-#13: invoke(taskString,
-                // null) never binds one, so without this every pushSteering silently drops.
-                agent.registerRail(new SteeringProvisionRail());
-                ExploreBudget budget = properties.toExploreBudget();
-                String exploreMode = properties.getExploreMode();
-                boolean useToolMode = !"rail".equalsIgnoreCase(exploreMode);
-
-                if (useToolMode) {
-                    AtomicReference<String> userInputRef = new AtomicReference<>();
-                    agent.registerRail(new UserInputCaptureRail(userInputRef));
-                    ExploreToolRegistrar.registerOnto(agent, explorer, budget,
-                            () -> userInputRef.get());
-                } else {
-                    agent.registerRail(new ExploreRail(explorer, budget));
-                }
-                ReplanRail sharedReplanRail = new ReplanRail(properties.getMaxReplan());
-                if (!properties.getCriteria().isEmpty()) {
-                    agent.registerRail(new CriteriaReplanBridgeRail(
-                            criteriaVerifier, properties.getCriteria(), sharedReplanRail));
-                    if (properties.isProactiveConvergenceEnabled()) {
-                        agent.registerRail(buildProactiveConvergenceRail(
-                                criteriaVerifier, properties));
-                    }
-                }
-                if (properties.getMaxReplan() >= 0) {
-                    // Register the SAME instance that was passed to CriteriaReplanBridgeRail above —
-                    // LLM-driven __replan__ calls and verify-failure retries must share one budget
-                    // (4-lens MAJOR #1 fix: was `new ReplanRail(...)` = disjoint counters → 2× budget).
-                    agent.registerRail(sharedReplanRail);
-                    ReplanTool.registerOnto(agent);
-                }
-                // Action phase — device-failure degrade (reused).
-                agent.registerRail(new RootCauseRail());
-                return bean;
             }
         };
+    }
+
+    /**
+     * Probes whether a ReActAgent has any EDPA-characteristic rail registered.
+     *
+     * <p>Uses the ability manager's tool list to detect the {@code __replan__} tool
+     * (registered by {@code ReplanTool.registerOnto} during EDPA assembly) — an
+     * observable proxy for "EDPA rails were registered on this agent".
+     *
+     * <p>The probe runs through a {@link FutureTask} bridge so the ability manager's
+     * broad checked-exception contract surfaces as {@code ExecutionException} —
+     * a probe failure means "not assembled" (false), never propagates.
+     *
+     * @param agent the agent to probe
+     * @return true if EDPA assembly is detected
+     */
+    private static boolean hasEdpaRail(ReActAgent agent) {
+        FutureTask<Boolean> probe = new FutureTask<>(() -> agent.getAbilityManager().listToolInfo().stream()
+                .anyMatch(t -> "__replan__".equals(t.getName())));
+        probe.run();
+        try {
+            return probe.get();
+        } catch (InterruptedException | ExecutionException e) {
+            // probe failed — treat as "not assembled"
+            return false;
+        }
     }
 
     // ==================================================================
@@ -240,21 +253,5 @@ public class EdpaAutoConfiguration {
             throw error;
         }
         return new IllegalStateException("exploring model invoke failed: " + cause.getMessage(), cause);
-    }
-
-    /**
-     * Builds the {@link ProactiveConvergenceRail} (action-phase convergence
-     * monitor) from the configured success criteria and stall window. Extracted
-     * so the registrar stays readable; behavior is unchanged.
-     *
-     * @param verifier criteria verifier shared with the bridge rail
-     * @param properties EDPA configuration (criteria + stall window)
-     * @return a configured convergence rail
-     */
-    private static ProactiveConvergenceRail buildProactiveConvergenceRail(
-            CriteriaVerifier verifier, EdpaProperties properties) {
-        return new ProactiveConvergenceRail(verifier, properties.getCriteria(),
-                properties.getProactiveConvergenceStallWindow(),
-                ProactiveConvergenceRail.DEFAULT_COVERAGE_CRITICAL);
     }
 }

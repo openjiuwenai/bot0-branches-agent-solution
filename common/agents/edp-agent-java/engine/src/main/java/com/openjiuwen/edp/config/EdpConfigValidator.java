@@ -65,8 +65,11 @@ public class EdpConfigValidator {
         String apiKey = backend.getApiKey();
         String envApiKey = System.getenv("DEEPSEEK_API_KEY");
         boolean hasValidApiKey = (apiKey != null && !apiKey.isBlank()) || (envApiKey != null && !envApiKey.isBlank());
-        if (!hasValidApiKey) {
-            throw new IllegalStateException("Backend apiKey missing. Set DEEPSEEK_API_KEY environment variable.");
+        boolean hasCustomHeaders = backend.getHeaders() != null && !backend.getHeaders().isEmpty();
+        if (!hasValidApiKey && !hasCustomHeaders) {
+            throw new IllegalStateException(
+                "Backend apiKey missing and no custom headers configured. "
+                + "Set DEEPSEEK_API_KEY environment variable or configure deep-agent.backend.headers.");
         }
 
         if (model == null) {

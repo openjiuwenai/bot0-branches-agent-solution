@@ -4,12 +4,14 @@
 
 package com.openjiuwen.client.api;
 
+import com.openjiuwen.client.api.calltree.CallTreeSnapshot;
+
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow;
 
 /**
  * 一次进行中调用的句柄（FEAT-006 §2.4）。由 {@link AgentClient#invoke} 立即返回，
- * 不阻塞在网络上。业务通过它订阅事件流、等待终态，或用 {@link #invocationRef()} 发起后续操作。
+ * 不阻塞在网络上。业务通过它订阅事件流、等待调用结算，或用 {@link #invocationRef()} 发起后续操作。
  *
  * <p>受理回执通过 {@link #accepted()} 结算为 {@link Handle}（携带诊断用 {@code diagnosticTaskRef}），
  * 也可经 {@link #events()} 订阅 {@link InvocationEvent.Accepted} 事件获取同一信息。
@@ -48,14 +50,52 @@ public interface InvocationCall extends AutoCloseable {
     Flow.Publisher<InvocationEvent> events();
 
     /**
-     * 在调用到达终态时完成，携带最终快照。
+     * 订阅调用树最新值。旧 Transport 或不支持过程树的调用返回一个立即完成的 Publisher；
+     * SDK 内置 Transport 会在订阅后立即发布当前快照。
      *
-     * @return 终态快照 future
+     * @return 调用树快照流
+     */
+    default Flow.Publisher<CallTreeSnapshot> callTree() {
+        return superCallTreePublisher();
+    }
+
+    /**
+     * SDK 内部与兼容实现共用的空 Publisher。
+     *
+     * @return 空调用树发布者
+     */
+    static Flow.Publisher<CallTreeSnapshot> superCallTreePublisher() {
+        return subscriber -> subscriber.onSubscribe(new Flow.Subscription() {
+            private boolean done;
+
+            @Override
+            public void request(long n) {
+                if (!done) {
+                    done = true;
+                    subscriber.onComplete();
+                }
+            }
+
+            @Override
+            public void cancel() {
+                done = true;
+            }
+        });
+    }
+
+    /**
+     * 在调用到达终态时正常完成，携带最终快照。自动观察超时或调用方
+     * 关闭观察时异常完成；这两种情况都不表示服务端 Task 已失败或取消。
+     * 需要业务用户输入时，当前句柄可在 {@code INPUT_REQUIRED} 等待点结算，后续由
+     * {@link AgentClient#continueInput(ContinueInputRequest)} 返回的新句柄继续观察。
+     *
+     * @return 终态或根等待输入交接点的结算快照 future
      */
     CompletionStage<InvocationSnapshot> completion();
 
     /**
-     * 关闭本调用句柄，释放本地订阅资源（不影响服务端 Task 状态）。
+     * 关闭本调用句柄，释放本地订阅和 invocationRef 到 Task 的映射（不影响服务端 Task 状态）。
+     * 关闭后，当前 Client 不能再通过该 invocationRef 查询或续接调用。
      */
     @Override
     void close();

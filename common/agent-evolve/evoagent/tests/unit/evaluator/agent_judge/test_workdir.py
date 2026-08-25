@@ -1,0 +1,138 @@
+"""WorkdirManager 单元测试 — 临时目录生命周期 + 物化。"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from evo_agent.evaluator.agent_judge.schemas import dimension_judgment_json_schema
+from evo_agent.evaluator.agent_judge.workdir import SCHEMA_FILENAME, WorkdirManager
+from evo_agent.evaluator.domain.models import StandardTrajectory
+
+_TRAJECTORY = StandardTrajectory.model_validate(
+    {"messages": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "yo"}]}
+)
+
+
+class TestWorkdirManager:
+    @staticmethod
+    def test_creates_and_cleans_up(tmp_path: Path) -> None:
+        with WorkdirManager(base_dir=str(tmp_path)) as wd:
+            p = wd.path
+            assert p.exists()
+            assert p.parent == tmp_path
+            assert p.name.startswith("evo-agent-judge-")
+        assert not p.exists()
+
+    @staticmethod
+    def test_used_outside_context_raises() -> None:
+        wd = WorkdirManager()
+        with pytest.raises(RuntimeError, match="outside its context manager"):
+            _ = wd.path
+
+    @staticmethod
+    def test_keep_on_error_preserves_dir(tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="boom"):
+            with WorkdirManager(base_dir=str(tmp_path), keep_on_error=True) as wd:
+                raise ValueError("boom")
+        assert wd.path.exists()
+        # manual cleanup so tmp_path stays tidy
+        import shutil
+
+        shutil.rmtree(wd.path, ignore_errors=True)
+
+    @staticmethod
+    def test_clean_exit_still_cleans_with_keep_on_error(tmp_path: Path) -> None:
+        # keep_on_error only retains on exception; clean exit always cleans.
+        with WorkdirManager(base_dir=str(tmp_path), keep_on_error=True) as wd:
+            p = wd.path
+            pass
+        assert not p.exists()
+
+    @staticmethod
+    def test_materialize_trajectory(tmp_path: Path) -> None:
+        with WorkdirManager(base_dir=str(tmp_path)) as wd:
+            wd.materialize_trajectory(_TRAJECTORY, compacted_text="## summary")
+            jsonl = (wd.path / "trajectory.jsonl").read_text(encoding="utf-8")
+            lines = [ln for ln in jsonl.splitlines() if ln]
+            assert len(lines) == 2
+            assert json.loads(lines[0])["role"] == "user"
+            assert json.loads(lines[1])["content"] == "yo"
+            md = (wd.path / "trajectory.md").read_text(encoding="utf-8")
+            assert md == "## summary"
+
+    @staticmethod
+    def test_materialize_trajectory_dict_input(tmp_path: Path) -> None:
+        traj_dict = {"messages": [{"role": "assistant", "content": "x"}], "summary": "s"}
+        with WorkdirManager(base_dir=str(tmp_path)) as wd:
+            wd.materialize_trajectory(traj_dict, compacted_text="c")
+            assert (wd.path / "trajectory.jsonl").exists()
+
+    @staticmethod
+    def test_materialize_helper_skills(tmp_path: Path) -> None:
+        # judge_rubric_guide ships with the package (registered default helper).
+        with WorkdirManager(base_dir=str(tmp_path)) as wd:
+            wd.materialize_helper_skills(("judge_rubric_guide",))
+            content = (wd.path / "judge_rubric_guide.md").read_text(encoding="utf-8")
+            assert content.strip()
+
+    @staticmethod
+    def test_materialize_helper_skills_missing_raises(tmp_path: Path) -> None:
+        with WorkdirManager(base_dir=str(tmp_path)) as wd:
+            with pytest.raises(FileNotFoundError, match="evaluator skill not found"):
+                wd.materialize_helper_skills(("definitely_not_a_helper",))
+
+    @staticmethod
+    def test_materialize_helper_skills_empty_noop(tmp_path: Path) -> None:
+        with WorkdirManager(base_dir=str(tmp_path)) as wd:
+            wd.materialize_helper_skills(())  # no files written, no error
+            assert wd.path.exists()
+
+    @staticmethod
+    def test_write_schema(tmp_path: Path) -> None:
+        schema = dimension_judgment_json_schema()
+        with WorkdirManager(base_dir=str(tmp_path)) as wd:
+            path = wd.write_schema(schema)
+            assert path.name == SCHEMA_FILENAME
+            assert path.parent == wd.path
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            assert loaded == schema
+
+    @staticmethod
+    def test_materialize_helper_skills_mounts_scripts(tmp_path: Path) -> None:
+        # trajectory_reader has parse_trajectory.py alongside SKILL.md
+        with WorkdirManager(base_dir=str(tmp_path)) as wd:
+            wd.materialize_helper_skills(("trajectory_reader",))
+            assert (wd.path / "trajectory_reader.md").exists()
+            assert (wd.path / "parse_trajectory.py").exists()
+            content = (wd.path / "parse_trajectory.py").read_text(encoding="utf-8")
+            assert "parse_trajectory" in content
+
+    @staticmethod
+    def test_materialize_dimension_specific_skill(tmp_path: Path) -> None:
+        # faithfulness_checklist lives under evaluator_skills/answer_faithfulness/
+        with WorkdirManager(base_dir=str(tmp_path)) as wd:
+            wd.materialize_helper_skills(("faithfulness_checklist",))
+            content = (wd.path / "faithfulness_checklist.md").read_text(encoding="utf-8")
+            assert content.strip()
+
+
+class TestDiscoverCommonSkills:
+    @staticmethod
+    def test_returns_common_skill_names() -> None:
+        from evo_agent.evaluator.agent_judge.workdir import discover_common_skills
+
+        names = discover_common_skills()
+        assert "judge_rubric_guide" in names
+        assert "trajectory_reader" in names
+        assert "trajectory_cleaner" in names
+        assert "trajectory_decompressor" in names
+
+    @staticmethod
+    def test_sorted_order() -> None:
+        from evo_agent.evaluator.agent_judge.workdir import discover_common_skills
+
+        names = discover_common_skills()
+        assert names == sorted(names)

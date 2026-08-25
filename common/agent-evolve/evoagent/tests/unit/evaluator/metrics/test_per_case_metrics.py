@@ -79,23 +79,27 @@ class TestKeywordHitMetric:
 
     def test_hit_any_keyword(self) -> None:
         m = KeywordHitMetric()
-        assert m.compute({"answer": "该诉求属实"}, ["属实", "供电公司责任"]) == 1.0
-        assert m.compute({"answer": "不属于供电公司责任"}, ["属实", "供电公司责任"]) == 1.0
+        assert m.compute({"answer": "该诉求属实"}, ["属实", "供电公司责任"]) == pytest.approx(1.0)
+        assert m.compute(
+            {"answer": "不属于供电公司责任"}, ["属实", "供电公司责任"]
+        ) == pytest.approx(1.0)
 
     def test_miss(self) -> None:
-        assert KeywordHitMetric().compute({"answer": "无相关词"}, ["属实", "供电公司责任"]) == 0.0
+        assert KeywordHitMetric().compute(
+            {"answer": "无相关词"}, ["属实", "供电公司责任"]
+        ) == pytest.approx(0.0)
 
     def test_empty_keywords_is_zero(self) -> None:
-        assert KeywordHitMetric().compute({"answer": "anything"}, []) == 0.0
+        assert KeywordHitMetric().compute({"answer": "anything"}, []) == pytest.approx(0.0)
 
     def test_case_insensitive(self) -> None:
         m = KeywordHitMetric(case_insensitive=True)
-        assert m.compute({"answer": "Hello World"}, ["hello"]) == 1.0
-        assert m.compute({"answer": "Hello World"}, ["goodbye"]) == 0.0
+        assert m.compute({"answer": "Hello World"}, ["hello"]) == pytest.approx(1.0)
+        assert m.compute({"answer": "Hello World"}, ["goodbye"]) == pytest.approx(0.0)
 
     def test_scalar_label(self) -> None:
         # A scalar label is treated as a single-keyword list.
-        assert KeywordHitMetric().compute({"answer": "PASS here"}, "PASS") == 1.0
+        assert KeywordHitMetric().compute({"answer": "PASS here"}, "PASS") == pytest.approx(1.0)
 
 
 class TestRegexMatchMetric:
@@ -103,23 +107,25 @@ class TestRegexMatchMetric:
         assert RegexMatchMetric().name == "regex"
 
     def test_search_hit(self) -> None:
-        assert RegexMatchMetric().compute({"answer": "order #12345 done"}, r"#\d+") == 1.0
+        assert RegexMatchMetric().compute(
+            {"answer": "order #12345 done"}, r"#\d+"
+        ) == pytest.approx(1.0)
 
     def test_search_miss(self) -> None:
-        assert RegexMatchMetric().compute({"answer": "no id here"}, r"#\d+") == 0.0
+        assert RegexMatchMetric().compute({"answer": "no id here"}, r"#\d+") == pytest.approx(0.0)
 
     def test_fullmatch(self) -> None:
         m = RegexMatchMetric(fullmatch=True)
-        assert m.compute("12345", r"\d+") == 1.0
-        assert m.compute("order 12345", r"\d+") == 0.0
+        assert m.compute("12345", r"\d+") == pytest.approx(1.0)
+        assert m.compute("order 12345", r"\d+") == pytest.approx(0.0)
 
     def test_explicit_pattern_overrides_label(self) -> None:
         m = RegexMatchMetric(pattern=r"\d+", fullmatch=True)
         # label is ignored when an explicit pattern is given
-        assert m.compute("12345", "not-a-regex") == 1.0
+        assert m.compute("12345", "not-a-regex") == pytest.approx(1.0)
 
     def test_empty_label_is_miss(self) -> None:
-        assert RegexMatchMetric().compute({"answer": "abc"}, "") == 0.0
+        assert RegexMatchMetric().compute({"answer": "abc"}, "") == pytest.approx(0.0)
 
     def test_invalid_regex_raises(self) -> None:
         with pytest.raises(Exception):  # re.error
@@ -132,24 +138,26 @@ class TestNumericToleranceMetric:
 
     def test_within_abs_tol(self) -> None:
         m = NumericToleranceMetric(abs_tol=0.5)
-        assert m.compute({"answer": "42.3"}, "42.0") == 1.0
+        assert m.compute({"answer": "42.3"}, "42.0") == pytest.approx(1.0)
 
     def test_outside_abs_tol_no_rel(self) -> None:
         m = NumericToleranceMetric(abs_tol=0.1)
-        assert m.compute({"answer": "42.3"}, "42.0") == 0.0
+        assert m.compute({"answer": "42.3"}, "42.0") == pytest.approx(0.0)
 
     def test_rel_tol(self) -> None:
         m = NumericToleranceMetric(abs_tol=0.0, rel_tol=0.01)
         # diff 1.0, base ~100 → rel 0.01 → within
-        assert m.compute({"answer": "101.0"}, "100.0") == 1.0
+        assert m.compute({"answer": "101.0"}, "100.0") == pytest.approx(1.0)
         # diff 5.0, base ~100 → rel 0.05 → outside
-        assert m.compute({"answer": "105.0"}, "100.0") == 0.0
+        assert m.compute({"answer": "105.0"}, "100.0") == pytest.approx(0.0)
 
     def test_no_number_in_prediction(self) -> None:
-        assert NumericToleranceMetric().compute({"answer": "no digits"}, "42.0") == 0.0
+        assert NumericToleranceMetric().compute(
+            {"answer": "no digits"}, "42.0"
+        ) == pytest.approx(0.0)
 
     def test_no_number_in_label(self) -> None:
-        assert NumericToleranceMetric().compute({"answer": "42"}, "n/a") == 0.0
+        assert NumericToleranceMetric().compute({"answer": "42"}, "n/a") == pytest.approx(0.0)
 
 
 class TestLLMJudgeMetric:
@@ -160,12 +168,12 @@ class TestLLMJudgeMetric:
 
     def test_reads_judged_label(self) -> None:
         m = LLMJudgeMetric()
-        assert m.compute("pred", "否", judged_label="否") == 1.0
-        assert m.compute("pred", "否", judged_label="是") == 0.0
+        assert m.compute("pred", "否", judged_label="否") == pytest.approx(1.0)
+        assert m.compute("pred", "否", judged_label="是") == pytest.approx(0.0)
 
     def test_missing_judged_label_defaults_zero(self) -> None:
         # 无 judged_label kwarg → 视为判错（0.0）
-        assert LLMJudgeMetric().compute("pred", "否") == 0.0
+        assert LLMJudgeMetric().compute("pred", "否") == pytest.approx(0.0)
 
 
 class TestPerCaseViaEvaluator:
@@ -180,8 +188,10 @@ class TestPerCaseViaEvaluator:
         return MetricEvaluator(metrics=metric).evaluate(case, predict).score
 
     def test_contains_via_evaluator(self) -> None:
-        assert self._eval(ContainsMetric(), "PASS", {"answer": "the result is PASS"}) == 1.0
+        assert self._eval(
+            ContainsMetric(), "PASS", {"answer": "the result is PASS"}
+        ) == pytest.approx(1.0)
 
     def test_keyword_recall_via_evaluator(self) -> None:
         score = self._eval(KeywordRecallMetric(), ["北京", "广州"], {"answer": "北京 南京"})
-        assert score == 0.5
+        assert score == pytest.approx(0.5)

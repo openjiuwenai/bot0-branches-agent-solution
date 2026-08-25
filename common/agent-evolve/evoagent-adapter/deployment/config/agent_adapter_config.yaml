@@ -49,12 +49,17 @@ match_tags:                              # Tags to extract from log lines
 #
 # Per-agent 字段环境变量按 agent name 前缀命名（name 大写 + _ 前缀）：
 #   edp_agent  → EDP_AGENT_*
-#   other_agent → OTHER_AGENT_*
+#   opencode → OPENCODE_*
 # 增删 agent 只需：在 .env 增对应 EDP_/OTHER_/… 变量块、在此列表增删条目、
 # 并在宿主侧建好子目录。agent_url 等字段也可走 CRUD API
 # （PUT /api/v1/config/agents/{name}）热更新写回本文件（写回为具体值，不影响其它条目的占位）。
 agents:
   - name: "edp_agent"
+    # 多 Agent 轨迹 profile 引用：对应 trace_profiles.yaml 中的 profile 名。
+    # Java 版 EDPAgent 上报的 gen_ai.completion 无 "outputs" 键（回复文本在 content 下），
+    # 必须用 edp_agent_java profile（sub_key=content, format=json）才能取到大模型输出；
+    # 缺省/留空会回退 legacy 硬编码（取 outputs 键 → output 为 null，助手回复被丢弃）。
+    trace_profile: ${EDP_AGENT_TRACE_PROFILE:edp_agent_java}
     log_dir: ${EDP_AGENT_LOG_DIR:/data/logs/edp_agent}      # 绝对路径 → 宿主 HOST_LOG_ROOT/edp_agent
     skills_dir: ${EDP_AGENT_SKILLS_DIR:/data/skills/edp_agent}  # 绝对路径 → 宿主 HOST_SKILLS_ROOT/edp_agent
     # ── Skill backend（可选；默认 local 走宿主 bind-mount；切 jiuwenbox 走沙箱文件 API）──
@@ -116,13 +121,17 @@ agents:
     #   type: "controller"
     #   workspace_id: "191"
 
-  - name: "other_agent"
-    log_dir: ${OTHER_AGENT_LOG_DIR:/data/logs/other_agent}
-    skills_dir: ${OTHER_AGENT_SKILLS_DIR:/data/skills/other_agent}
-    agent_url: ${OTHER_AGENT_URL:}
-    project_id: ${OTHER_AGENT_PROJECT_ID:proj_002}
-    agent_id: ${OTHER_AGENT_ID:other_agent}
-    timeout: ${OTHER_AGENT_TIMEOUT:300}
+  - name: "opencode"
+    log_dir: ${OPENCODE_LOG_DIR:/data/logs/opencode}
+    skills_dir: ${OPENCODE_SKILLS_DIR:/data/skills/opencode}
+    agent_url: ${OPENCODE_URL:}     # 轨迹采集 Agent，默认无调用中转；需要时填 http://host.docker.internal:<port>
+    project_id: ${OPENCODE_PROJECT_ID:}
+    agent_id: ${OPENCODE_ID:opencode}
+    timeout: ${OPENCODE_TIMEOUT:300}
+    # 多 Agent 轨迹 profile 引用：对应 trace_profiles.yaml 中的 profile 名（opencode）。
+    # DbTraceSource 经 AgentEntryConfig.trace_profile → ProfileRegistry.get_by_agent_name
+    # 解析出该 agent 的轨迹处理规则（span 过滤 + 字段提取）。
+    trace_profile: ${OPENCODE_TRACE_PROFILE:opencode}
 
 # ── Managed-doc defaults（可选，仅当任一 agent 配了 managed_docs 且 apply=restart 时生效）──
 # profile 决定 burst（canary 训练，快速失败）vs single（人工单次）两套默认基线；

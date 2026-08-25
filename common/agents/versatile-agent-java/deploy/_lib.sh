@@ -118,6 +118,12 @@ require_runtime_jar() {
             *) filtered+=("${jar}") ;;
         esac
     done
+    # classifier=exec 后 thin jar 和 exec jar 并存，优先使用 exec jar（fat jar，可独立运行）
+    for jar in "${filtered[@]}"; do
+        case "${jar}" in
+            *-exec.jar) printf '%s' "${jar}"; return ;;
+        esac
+    done
     [ "${#filtered[@]}" -eq 1 ] || die "期望 target/ 下恰好有一个 adapter 运行 jar，实际找到 ${#filtered[@]} 个；请先完成 Maven package 并清理旧产物。"
     printf '%s' "${filtered[0]}"
 }

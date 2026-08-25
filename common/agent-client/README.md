@@ -218,10 +218,10 @@ public class QuickStart {
 | 模式 | wire 方法 | 业务消费方式 | 状态 |
 |------|-----------|--------------|------|
 | `STREAMING` | `SendStreamingMessage`（HTTP + SSE） | 订阅 `events()` 增量消费 | **已交付** |
-| `BLOCKING` | 严格 unary `SendMessage` + `params.configuration.returnImmediately=false`，不自动调用 `GetTask`；非终态时以 `ProgressUncertain` 结算 | 忽略事件流，直接等 `completion()`；需要持续观察时改用 ASYNC 或显式 `getInvocation` | **client 已交付** |
-| `ASYNC` | `SendMessage` + `params.configuration.returnImmediately=true`，要求受理即返回 | 拿到 `accepted()` 即返回，之后用 `getInvocation` 观察 | **client 已交付；gateway 需执行该字段** |
+| `BLOCKING` | unary `SendMessage` + `params.configuration.returnImmediately=false`；若返回已受理但非终态，SDK 有界轮询 `GetTask` | 直接等待 `completion()`；不构造调用树 | **client 已交付** |
+| `ASYNC` | `SendMessage` + `params.configuration.returnImmediately=true`，要求受理即返回；SDK 不启动后台轮询 | 拿到 `accepted()` 即返回，之后由业务按需调用 `getInvocation`；不构造调用树 | **client 已交付；gateway 需执行该字段** |
 
-> BLOCKING **不是**"在本地把流式结果聚合"，也不是隐藏的 `GetTask` 轮询；它只消费一次创建 `SendMessage` 响应。`SendMessage` 只表示 unary，真正区分 ASYNC/BLOCKING 返回时机的是 `returnImmediately`。client-tool / 用户输入续跑仍可按协议另发关联原 Task 的 `SendMessage`。
+> BLOCKING **不是**"在本地把流式结果聚合"：它先消费一次 `SendMessage` 响应，仅在服务端已受理但返回非终态时有界查询同一 Task。ASYNC accepted 后不会产生后台 `GetTask`，其后续进度完全由业务调用 `getInvocation` 驱动。client-tool / 用户输入续跑仍可按协议另发关联原 Task 的 `SendMessage`。
 
 ### 事件流（sealed `InvocationEvent`）
 
@@ -256,12 +256,21 @@ SUBMITTED → WORKING → INPUT_REQUIRED → COMPLETED
 
 ### 1. 构造 `AgentClient`
 
-唯一必填项是 `transport`（决定 wire 协议与网关地址）。连接真实网关时还需 `credentialProvider`。
+使用内置 A2A Transport 时，唯一必填项是 `endpointUrl`。连接真实网关时还需
+`credentialProvider`；也可以通过 `transport(...)` 完整替换内置 Transport。
 
 ```java
 AgentClient client = AgentClients.builder()
-        .transport(new A2aHttpTransportProvider("https://agent-bus.example.com"))
+        .endpointType(EndpointType.GATEWAY)
+        .endpointUrl("https://agent-bus.example.com")
         .credentialProvider(CredentialProvider.staticToken("my-token"))
+        .retryPolicy(RetryPolicy.builder()
+                .initialDelay(Duration.ofMillis(200))
+                .maxDelay(Duration.ofMillis(800))
+                .multiplier(2.0)
+                .jitterFactor(0.2)
+                .maxConsecutiveFailures(3)
+                .build())
         // 以下均有默认值，按需覆盖：
         // .toolRegistry(...)        // 默认空实现
         // .stateStore(...)          // 默认内存实现
@@ -592,7 +601,13 @@ boolean retryable = ClassifiedError.retryableOf(throwable);
 | 处于 `INPUT_REQUIRED` | 服务端按约定关流，保持通道开放等待续跑，不做任何处置 |
 | 其余非终态 | 先用 `GetTask` 主动查询确认真实状态；能确定就据此投影（多数断连由此完全恢复） |
 | 查询也无法确定 | 投递 `ProgressUncertain` 事件并正常结算，**不伪造终态也不悬挂** |
-| 尚未取得 taskRef（创建未确认） | 以同幂等键、同正文重发创建（最多 3 次），由网关幂等回放取回原 Task，不产生重复 Task |
+| 尚未取得 taskRef（创建未确认） | 以同幂等键、同正文按 `RetryPolicy` 有界重发创建，由网关幂等回放取回原 Task，不产生重复 Task |
+
+`RetryPolicy.defaults()` 保持 FEAT-006 默认语义：连续失败上限为 3，按
+200ms、400ms、800ms 指数退避。`initialDelay`、`maxDelay`、`multiplier`、
+`jitterFactor` 和 `maxConsecutiveFailures` 均可配置；该策略同时用于周期性
+`GetTask`、SSE 重订阅和 Gateway 创建结果未确认恢复。确定性错误不会重试，
+任一次合法 Task 状态或有效订阅帧会重置连续失败计数。
 
 `ProgressUncertain` 不是失败。`completion()` 返回的快照会附带 `Recovery` 线索，告诉业务下一步：
 

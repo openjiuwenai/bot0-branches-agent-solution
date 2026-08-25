@@ -32,6 +32,7 @@ import com.openjiuwen.edp.rail.McpInterruptRail;
 import com.openjiuwen.edp.rail.SandboxInterruptRail;
 import com.openjiuwen.edp.rail.ScriptsRail;
 import com.openjiuwen.edp.rail.VersatileDelegateRail;
+import com.openjiuwen.edp.rail.SubagentDelegateRail;
 import com.openjiuwen.edp.tools.EdpaBusinessTools;
 import com.openjiuwen.core.foundation.tool.Tool;
 import com.openjiuwen.core.singleagent.rail.AgentRail;
@@ -336,6 +337,11 @@ public class EdpaAgentEnhancer {
         // 由框架 A2AEnabledServeOrchestrator 接管远端调用与续传。
         // 阶段2：垂直聚合原 VersatileInterruptRail 的 4 块业务逻辑（guard/归一化/熔断/脱敏/history_info）。
         rails.add(new VersatileDelegateRail(ctx.getEdpConfig(),
+                ctx.getSpringBootConfig() != null ? ctx.getSpringBootConfig().getVersatile() : null,
+                sharedChannel, ctx.getSkillsDir(), ctx.getScripts(), ctx.getAgentName(),
+                ctx.getSysOp(), skillDeployPath, ctx.getDecoratedSandboxClient()));
+        // 通用子智能体委派：拦截 call_subagent 工具，agent_name 从 Skill 配置动态读取。
+        rails.add(new SubagentDelegateRail(ctx.getEdpConfig(),
                 ctx.getSpringBootConfig() != null ? ctx.getSpringBootConfig().getVersatile() : null,
                 sharedChannel, ctx.getSkillsDir(), ctx.getScripts(), ctx.getAgentName(),
                 ctx.getSysOp(), skillDeployPath, ctx.getDecoratedSandboxClient()));

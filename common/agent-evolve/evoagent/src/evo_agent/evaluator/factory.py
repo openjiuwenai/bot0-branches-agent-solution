@@ -64,6 +64,14 @@ def create_evaluator(config: dict[str, Any]) -> BaseEvaluator:
                 "user_feedback": {"enabled": True},
             },
         })
+
+        # Agent-as-judge (HTTP-only; drives claude/codex CLIs as subprocesses)
+        create_evaluator({
+            "type": "agent",
+            "preset": "default",
+            "model_config": model_config,
+            "model_client_config": model_client_config,
+        })
     """
     evaluator_type = config.get("type")
 
@@ -73,10 +81,12 @@ def create_evaluator(config: dict[str, Any]) -> BaseEvaluator:
         return _create_llm_evaluator(config)
     elif evaluator_type == "filtered":
         return _create_filtering_evaluator(config)
+    elif evaluator_type == "agent":
+        return _create_agent_evaluator(config)
     else:
         raise ValueError(
             f"Unknown evaluator type: {evaluator_type!r}. "
-            f"Supported types: 'metric', 'llm', 'filtered'."
+            f"Supported types: 'metric', 'llm', 'filtered', 'agent'."
         )
 
 
@@ -209,3 +219,130 @@ def _create_filtering_evaluator(config: dict[str, Any]) -> FilteringEvaluator:
     if not filters:
         raise ValueError("Filtered evaluator requires at least one enabled filter.")
     return FilteringEvaluator(delegate=create_evaluator(delegate_config), filters=filters)
+
+
+def _create_agent_evaluator(config: dict[str, Any]) -> Any:
+    """Build an AgentEvaluator (agent-as-judge) from explicit configuration.
+
+    Drives real coding-agent CLIs (claude / codex) as bounded subprocesses across
+    a preset's dimensions, then fuses the verdicts via a final attribution-agent
+    subprocess. Scope is HTTP-only — it is **not** wired into the optimization
+    pipeline.
+
+    Inputs are read from the raw ``config`` dict (the HTTP route assembles it);
+    per-dimension overrides are folded into a resolved preset via
+    :func:`dataclasses.replace` so :class:`AgentEvaluator` reads every knob from
+    its preset object alone.
+
+    Imports are local to avoid pulling the agent_judge package into the import
+    path of the other evaluator types.
+    """
+    import dataclasses
+    from pathlib import Path
+
+    from evo_agent.evaluator.agent_judge.presets import get_preset
+    from evo_agent.evaluator.agent_judge.runtime import make_runtime
+    from evo_agent.evaluator.evaluators.agent import AgentEvaluator
+    from evo_agent.evaluator.golden_data.skill_provider import make_skill_provider
+
+    preset_name = config.get("preset")
+    if not isinstance(preset_name, str) or not preset_name:
+        raise ValueError("Agent evaluator requires a 'preset' name.")
+    preset = get_preset(preset_name)
+
+    runtime = config.get("runtime") or preset.runtime
+    if runtime not in ("claude", "codex", "jiuwenswarm"):
+        raise ValueError(
+            f"Agent evaluator 'runtime' must be 'claude', 'codex', "
+            f"or 'jiuwenswarm', got {runtime!r}."
+        )
+
+    tool_allowlist_raw = config.get("tool_allowlist")
+    if tool_allowlist_raw is None:
+        tool_allowlist = preset.tool_allowlist
+    elif isinstance(tool_allowlist_raw, list):
+        tool_allowlist = tuple(str(t) for t in tool_allowlist_raw)
+    else:
+        raise TypeError("'tool_allowlist' must be a list[str].")
+
+    max_concurrent = config.get("max_concurrent") or preset.max_concurrent
+    run_timeout = config.get("run_timeout") or preset.run_timeout
+
+    extra_env = dict(preset.extra_env)
+    extra_env_raw = config.get("extra_env")
+    if isinstance(extra_env_raw, dict):
+        extra_env.update({str(k): str(v) for k, v in extra_env_raw.items()})
+
+    resolved_preset = dataclasses.replace(
+        preset,
+        runtime=runtime,
+        tool_allowlist=tool_allowlist,
+        max_concurrent=max_concurrent,
+        run_timeout=run_timeout,
+        extra_env=extra_env,
+    )
+
+    # Skill doc source for the attribution agent's prompt.
+    skill_source = config.get("skill_source", "none")
+    skill_provider = None
+    if skill_source == "local":
+        skill_root = config.get("skill_root")
+        if not isinstance(skill_root, str) or not skill_root:
+            raise ValueError("skill_source='local' requires 'skill_root'.")
+        skill_provider = make_skill_provider("local", skill_root=Path(skill_root))
+    elif skill_source == "adapter":
+        adapter_client = config.get("adapter_client")
+        if adapter_client is None:
+            raise ValueError("skill_source='adapter' requires 'adapter_client'.")
+        skill_provider = make_skill_provider("adapter", adapter_client=adapter_client)
+    elif skill_source != "none":
+        raise ValueError(
+            f"Unknown skill_source: {skill_source!r} (use 'local', 'adapter', or 'none')."
+        )
+
+    # Optional agent profile for jiuwenswarm runtime (which ACP agent to use).
+    agent_profile_raw = config.get("agent_profile")
+    agent_profile: str | None = None
+    if agent_profile_raw is not None:
+        if not isinstance(agent_profile_raw, str):
+            raise TypeError("'agent_profile' must be a str.")
+        agent_profile = agent_profile_raw
+
+    runtime_adapter = make_runtime(
+        runtime, extra_env=extra_env, agent_profile=agent_profile
+    )
+
+    workdir_base = config.get("workdir_base")
+    keep_on_error = bool(config.get("keep_on_error", False))
+
+    trajectory_budget_raw = config.get("trajectory_budget")
+    trajectory_budget: int | None = None
+    if trajectory_budget_raw is not None:
+        if not isinstance(trajectory_budget_raw, int) or isinstance(trajectory_budget_raw, bool):
+            raise TypeError(
+                f"'trajectory_budget' must be an int, got {type(trajectory_budget_raw).__name__}."
+            )
+        if trajectory_budget_raw <= 0:
+            raise ValueError(f"'trajectory_budget' must be > 0, got {trajectory_budget_raw}.")
+        trajectory_budget = trajectory_budget_raw
+
+    # Per-dimension thresholds (required): dict[str, float] mapping dimension
+    # name → threshold (0-1). is_pass = all dimensions >= their threshold.
+    dimension_thresholds_raw = config.get("dimension_thresholds")
+    if dimension_thresholds_raw is None:
+        raise ValueError("Agent evaluator requires 'dimension_thresholds'.")
+    if not isinstance(dimension_thresholds_raw, dict) or not dimension_thresholds_raw:
+        raise ValueError(
+            "'dimension_thresholds' must be a non-empty dict[str, float]."
+        )
+    dimension_thresholds = {str(k): float(v) for k, v in dimension_thresholds_raw.items()}
+
+    return AgentEvaluator(
+        preset=resolved_preset,
+        runtime=runtime_adapter,
+        dimension_thresholds=dimension_thresholds,
+        skill_provider=skill_provider,
+        workdir_base=workdir_base if isinstance(workdir_base, str) else None,
+        keep_on_error=keep_on_error,
+        trajectory_budget=trajectory_budget,
+    )

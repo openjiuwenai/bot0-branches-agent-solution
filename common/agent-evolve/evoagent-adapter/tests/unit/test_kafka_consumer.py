@@ -7,11 +7,12 @@ test_postgres_repository.py 覆盖; 此处验证消费者把两者正确串起�
 
 from __future__ import annotations
 
+import asyncio
 import json
 
 import pytest
 
-from agent_adapter.kafka_consumer.consumer import process_envelope
+from agent_adapter.kafka_consumer.consumer import TraceConsumer, process_envelope
 from agent_adapter.kafka_consumer.otlp_parser import parse_otlp_envelope
 
 
@@ -75,3 +76,38 @@ async def test_process_envelope_bad_json_raises():
     with pytest.raises(Exception):
         await process_envelope(repo, b"not json")
     assert repo.bulks == []  # 失败前未入库
+
+
+async def test_consume_loop_without_start_raises_runtime_error():
+    """start() 未调用前 _consumer 为 None，启动前置校验须抛 RuntimeError 而非 AssertionError。"""
+    consumer = TraceConsumer(FakeRepo(), "localhost:9092")
+    with pytest.raises(RuntimeError, match="未 start"):
+        await consumer._consume_loop()
+
+
+async def test_handle_without_start_raises_runtime_error():
+    """_handle 在 start() 前调用须抛 RuntimeError（msg 在校验通过后才被访问）。"""
+    consumer = TraceConsumer(FakeRepo(), "localhost:9092")
+    with pytest.raises(RuntimeError, match="未 start"):
+        await consumer._handle(None)
+
+
+class _CancelConsumer:
+    """aiokafka-like: async 迭代首条即抛 CancelledError，验证消费循环不吞取消。"""
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        raise asyncio.CancelledError()
+
+    async def stop(self) -> None:  # pragma: no cover
+        pass
+
+
+async def test_consume_loop_propagates_cancellation():
+    """CancelledError 属 BaseException，须穿透 except Exception 传播而非被吞入重试。"""
+    consumer = TraceConsumer(FakeRepo(), "localhost:9092")
+    consumer._consumer = _CancelConsumer()  # type: ignore[assignment]
+    with pytest.raises(asyncio.CancelledError):
+        await consumer._consume_loop()

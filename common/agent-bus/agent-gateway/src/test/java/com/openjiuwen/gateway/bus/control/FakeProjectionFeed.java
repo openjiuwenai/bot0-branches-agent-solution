@@ -40,7 +40,9 @@ public class FakeProjectionFeed implements ProjectionFeed {
      */
     public void inject(AgentBusEventType type, String taskId, String streamRef,
                        String payloadRef, String body) {
-        queue.add(new ProjectionEvent(type, taskId, streamRef, payloadRef, body));
+        boolean a2aResponse = body != null && body.stripLeading().startsWith("{")
+                && body.contains("\"jsonrpc\"");
+        queue.add(new ProjectionEvent(type, taskId, streamRef, payloadRef, body, a2aResponse, null));
     }
 
     @Override

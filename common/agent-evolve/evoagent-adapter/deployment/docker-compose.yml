@@ -16,6 +16,7 @@ services:
     # （需 Docker 20.10+，host-gateway 关键字在该版本引入。）
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "skillhub.local:host-gateway"
     # 全量 .env 注入容器：per-agent 变量（EDP_AGENT_*/OTHER_AGENT_*）等由此流入，
     # agent_adapter_config.yaml 的 ${VAR:default} 占位在 load_config 期解析。
     # environment 块中同名变量优先级更高；HOST_* 等宿主路径容器内不读，注入无害。
@@ -46,6 +47,12 @@ services:
       ADAPTER_KAFKA_GROUP: ${ADAPTER_KAFKA_GROUP:-agent-adapter}
       # GET /traces/{conv} 等根 span 的服务端短等待秒数（standard 模式）
       ADAPTER_TRACE_WAIT_TIMEOUT: ${ADAPTER_TRACE_WAIT_TIMEOUT:-10.0}
+      # ── SkillHub 对接 ──
+      ADAPTER_SKILLHUB_ENABLED: ${ADAPTER_SKILLHUB_ENABLED:-false}
+      ADAPTER_SKILLHUB_BASE_URL: ${ADAPTER_SKILLHUB_BASE_URL:-}
+      ADAPTER_SKILLHUB_AUTH_MODE: ${ADAPTER_SKILLHUB_AUTH_MODE:-system_token}
+      ADAPTER_SKILLHUB_TOKEN: ${ADAPTER_SKILLHUB_TOKEN:-}
+      ADAPTER_SKILLHUB_VERSION_STRATEGY: ${ADAPTER_SKILLHUB_VERSION_STRATEGY:-manual}
     # standard 模式（ADAPTER_TRACE_SOURCE=standard）需接入 collector 所在的 docker 网络以解析
     # kafka/postgres 容器别名。启用方式见文件末尾注释块（log 模式无需任何改动）。
     volumes:

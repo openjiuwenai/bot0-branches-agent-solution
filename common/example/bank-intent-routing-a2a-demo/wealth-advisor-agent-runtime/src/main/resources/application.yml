@@ -1,0 +1,32 @@
+server:
+  port: ${WEALTH_ADVISOR_AGENT_PORT:18203}
+
+spring:
+  application:
+    name: wealth-advisor-agent
+  config:
+    import: optional:file:./application-intent_local.yml
+
+openjiuwen:
+  service:
+    agent-id: wealth-advisor-agent
+    handler: agentcore
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      agent-name: WealthAdvisorAgent
+      agent-description: 根据期限、金额和产品风险等级推荐银行理财产品
+      provider-organization: OpenJiuwen
+      streaming: true
+      default-input-modes: ["text", "text/plain"]
+      default-output-modes: ["text", "text/plain", "application/json"]
+      skills:
+        - id: recommend_wealth
+          name: Recommend wealth products
+          description: 理财产品推荐：根据投资金额、持有期限和产品风险等级推荐理财产品，例如推荐一款稳健的三个月理财
+          tags: ["bank", "wealth", "recommendation"]
+          examples: ["推荐一款稳健理财", "十万元半年可以买什么理财"]
+          input-modes: ["text", "text/plain"]
+          output-modes: ["text", "text/plain", "application/json"]

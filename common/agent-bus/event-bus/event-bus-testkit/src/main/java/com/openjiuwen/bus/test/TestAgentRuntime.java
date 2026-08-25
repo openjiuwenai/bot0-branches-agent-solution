@@ -390,14 +390,15 @@ public final class TestAgentRuntime {
      */
     private void produceResponse(ForwardingEnvelope env, long nowMillisEpoch) {
         ForwardingReceipt receipt = outbox.enqueue(env, env.sourceServiceId(), env.targetServiceId(), nowMillisEpoch);
-        List<ForwardingOutboxRecord> claimed = outbox.claimDue(env.tenantId(), nowMillisEpoch, 1,
-                consumerServiceId, nowMillisEpoch + 60_000L);
-        for (ForwardingOutboxRecord r : claimed) {
-            broker.produce(r, nowMillisEpoch);
-            outbox.markAcked(r.messageId(), r.tenantId(), consumerServiceId);
-        }
-        // receipt unused beyond enqueue; the outbox dedups on (tenantId, messageId)
         Objects.requireNonNull(receipt, "enqueue receipt");
+        // Targeted claim (defect A): claim exactly the record just enqueued, by receipt.messageId() —
+        // never a foreign record on a shared outbox. Mirrors the relay's republishHop2 fix; the outbox
+        // dedups on (tenantId, messageId) so an idempotent re-enqueue still locates the row.
+        outbox.claim(receipt.messageId(), env.tenantId(), nowMillisEpoch, consumerServiceId, nowMillisEpoch + 60_000L)
+                .ifPresent(r -> {
+                    broker.produce(r, nowMillisEpoch);
+                    outbox.markAcked(r.messageId(), r.tenantId(), consumerServiceId);
+                });
     }
 
     /**

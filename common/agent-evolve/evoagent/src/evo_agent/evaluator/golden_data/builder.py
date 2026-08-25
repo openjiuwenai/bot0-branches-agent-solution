@@ -41,7 +41,6 @@ from openjiuwen.core.foundation.llm import (
 from evo_agent.config import EvolveConfig
 from evo_agent.evaluator.domain.models import StandardTrajectory
 from evo_agent.evaluator.domain.scoring import EvaluationError
-from evo_agent.llm.invocation import _get_invocation_loop
 from evo_agent.evaluator.golden_data.gu_store import (
     OUT_OF_SCOPE_SKILL,
     route_skill,
@@ -58,6 +57,7 @@ from evo_agent.evaluator.golden_data.prompts.phase1_gu import (
 )
 from evo_agent.evaluator.golden_data.skill_provider import SkillProvider
 from evo_agent.evaluator.golden_data.trajectory_format import _format_turn_rich, _truncate
+from evo_agent.llm.invocation import _get_invocation_loop
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +205,7 @@ class GlobalUnderstandingBuilder:
         current = ""
         for batch_num in range(1, total_batches + 1):
             start = (batch_num - 1) * batch_size
-            batch = traces[start : min(batch_num * batch_size, total)]
+            batch = traces[start: min(batch_num * batch_size, total)]
             batch_text = _format_batch(batch, batch_num, total_batches)
             if batch_num == 1:
                 current = self._global_induct(batch_text, len(batch), skills)

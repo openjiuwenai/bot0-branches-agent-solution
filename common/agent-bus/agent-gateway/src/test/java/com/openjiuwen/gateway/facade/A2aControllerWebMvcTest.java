@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.openjiuwen.gateway.direct.FakeAgentRuntimeClient;
 import com.openjiuwen.gateway.governance.GovernanceErrorHandler;
+import com.openjiuwen.gateway.governance.GovernanceException;
 import com.openjiuwen.gateway.governance.auth.AuthRule;
 import com.openjiuwen.gateway.governance.auth.CredentialDirectory;
 import com.openjiuwen.gateway.governance.auth.Principal;
@@ -23,7 +24,6 @@ import com.openjiuwen.gateway.obs.AuditSink;
 import com.openjiuwen.gateway.obs.GovernanceAuditor;
 import com.openjiuwen.gateway.path.PathSelector;
 import com.openjiuwen.gateway.routing.AgentCardRoute;
-import com.openjiuwen.gateway.routing.DefaultAgentResolver;
 import com.openjiuwen.gateway.routing.FakeRdcRouteClient;
 import com.openjiuwen.gateway.routing.ResolvedRoute;
 import com.openjiuwen.gateway.routing.Router;
@@ -37,8 +37,8 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
@@ -53,16 +53,19 @@ import java.util.Optional;
 @WebMvcTest(controllers = A2aController.class)
 @Import({AuthRule.class, TenantResolver.class, ParamValidator.class, IdempotencyRule.class,
         GovernanceAuditor.class, GovernanceErrorHandler.class, Router.class, StickyIndex.class,
-        DefaultAgentResolver.class, SseBridge.class, PathSelector.class})
-@TestPropertySource(properties = "gateway.default-agent-id=default-agent-1")
+        SseBridge.class, PathSelector.class})
 class A2aControllerWebMvcTest {
     private static final String VALID_CREATE =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
-                    + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]}}}";
+                    + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]},"
+                    + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
     private static final String CREATE_WITH_AGENT =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
                     + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]},"
                     + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
+    private static final String NO_AGENT_CREATE =
+            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
+                    + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]}}}";
     private static final String EMPTY_AGENT_ID =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
                     + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]},"
@@ -71,13 +74,16 @@ class A2aControllerWebMvcTest {
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"message/send\",\"params\":{}}";
     private static final String BODY_A =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
-                    + "\"params\":{\"message\":{\"messageId\":\"m-dup\",\"parts\":[{\"text\":\"hi\"}]}}}";
+                    + "\"params\":{\"message\":{\"messageId\":\"m-dup\",\"parts\":[{\"text\":\"hi\"}]},"
+                    + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
     private static final String BODY_B =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
-                    + "\"params\":{\"message\":{\"messageId\":\"m-dup\",\"parts\":[{\"text\":\"bye\"}]}}}";
+                    + "\"params\":{\"message\":{\"messageId\":\"m-dup\",\"parts\":[{\"text\":\"bye\"}]},"
+                    + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
     private static final String NO_MESSAGE_ID =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
-                    + "\"params\":{\"message\":{\"parts\":[{\"text\":\"hi\"}]}}}";
+                    + "\"params\":{\"message\":{\"parts\":[{\"text\":\"hi\"}]},"
+                    + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
     private static final String RESUME_BODY =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
                     + "\"params\":{\"message\":{\"messageId\":\"m-res\",\"taskId\":\"task-1\",\"parts\":[]}}}";
@@ -89,7 +95,8 @@ class A2aControllerWebMvcTest {
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"result\":{\"id\":\"task-9\"}}";
     private static final String STREAM_CREATE =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendStreamingMessage\","
-                    + "\"params\":{\"message\":{\"messageId\":\"ms\",\"parts\":[{\"text\":\"hi\"}]}}}";
+                    + "\"params\":{\"message\":{\"messageId\":\"ms\",\"parts\":[{\"text\":\"hi\"}]},"
+                    + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
 
     @Autowired
     private MockMvc mvc;
@@ -312,17 +319,20 @@ class A2aControllerWebMvcTest {
                 .andExpect(result -> assertThat(result.getResponse().getContentAsString())
                         .doesNotContain("routeHandle", "http://rt:8000"));
         // authoritative tenant injected into the forwarded body
-        assertThat(runtime.lastBody()).contains("\"tenantId\":\"tenant-1\"");
+        assertThat(runtime.lastBody()).contains("\"tenant\":\"tenant-1\"");
         // sticky bound; no routeHandle leaked to the client response
         assertThat(sticky.find("task-9")).contains("h1");
     }
 
     @Test
-    void createWithoutAgentUsesDefaultAgent() throws Exception {
+    void createWithoutAgentReturns400ValidationAgentId() throws Exception {
+        // C2: create-type MUST carry an explicit agentId (no default-Agent fallback) — G3 rejects
+        // with VALIDATION_AGENT_ID before routing; the runtime is never called.
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
-                        .contentType(MediaType.APPLICATION_JSON).content(VALID_CREATE))
-                .andExpect(status().isOk());
-        assertThat(rdc.lastAgentId()).isEqualTo("default-agent-1");
+                        .contentType(MediaType.APPLICATION_JSON).content(NO_AGENT_CREATE))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_AGENT_ID"));
+        assertThat(runtime.lastEndpoint()).isNull();
     }
 
     @Test
@@ -390,11 +400,53 @@ class A2aControllerWebMvcTest {
                 .andExpect(jsonPath("$.code").value("ROUTE_NO_CANDIDATES"));
     }
 
+    // --- DF-003: DIRECT transport failure before taskId -> UNKNOWN ---
+
+    @Test
+    void directCreateRuntimeTransportFailureReturnsDirectTransportUnknown() throws Exception {
+        // invokeSync throws FORWARD_FAILED (transport); A2aController aborts G4 then converts
+        // to DIRECT_TRANSPORT_UNKNOWN (retryable=false: do NOT retry original create).
+        runtime.setSyncException(new GovernanceException(HttpStatus.BAD_GATEWAY, "FORWARD_FAILED",
+                "Cannot reach runtime"));
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(VALID_CREATE))
+                .andExpect(status().isOk())                                            // B-class -> HTTP 200
+                .andExpect(jsonPath("$.error.code").value(-32053))
+                .andExpect(jsonPath("$.error.data.code").value("DIRECT_TRANSPORT_UNKNOWN"))
+                .andExpect(jsonPath("$.error.data.retryable").value(false));
+        // G4 abort preserved (A 方案): in-flight key released so a same-key retry can re-NEW.
+        assertThat(idempotencyRule.isCompleted("tenant-1", "m1")).isEmpty();
+    }
+
+    @Test
+    void streamCreateRuntimeTransportFailureReturnsDirectTransportUnknown() throws Exception {
+        runtime.setOpenStreamException(new GovernanceException(HttpStatus.BAD_GATEWAY, "FORWARD_FAILED",
+                "Cannot open runtime stream"));
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(STREAM_CREATE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.error.code").value(-32053))
+                .andExpect(jsonPath("$.error.data.code").value("DIRECT_TRANSPORT_UNKNOWN"))
+                .andExpect(jsonPath("$.error.data.retryable").value(false));
+    }
+
+    @Test
+    void streamingCreateRuntimeJsonrpcErrorIsPassedThroughNotConverted() throws Exception {
+        // RUNTIME_JSONRPC_ERROR (verbatim runtime rejection) must NOT convert to UNKNOWN —
+        // only FORWARD_FAILED (transport) converts.
+        runtime.setOpenStreamException(new GovernanceException(HttpStatus.OK, "RUNTIME_JSONRPC_ERROR",
+                "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32004,\"message\":\"terminal\"}}"));
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(STREAM_CREATE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("RUNTIME_JSONRPC_ERROR"));
+    }
+
     // --- S3 resume (sticky) ---
 
     @Test
     void resumeReachesStickyOwnerWithoutSearch() throws Exception {
-        sticky.put("task-1", "h1");
+        sticky.put("task-1", "h1", "svc-rt");
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
                         .contentType(MediaType.APPLICATION_JSON).content(RESUME_BODY))
                 .andExpect(status().isOk())
@@ -405,19 +457,20 @@ class A2aControllerWebMvcTest {
     }
 
     @Test
-    void stickyMissReturnsResumeOwnerUnknown() throws Exception {
-        // sticky cleared in @BeforeEach -> task-1 has no owner
+    void stickyMissReturnsContinuationFailed() throws Exception {
+        // sticky cleared in @BeforeEach -> task-1 has no owner -> CONTINUATION_FAILED (200 + JSON-RPC error)
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
                         .contentType(MediaType.APPLICATION_JSON).content(RESUME_BODY))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("RESUME_OWNER_UNKNOWN"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.error.code").value(-32051))
+                .andExpect(jsonPath("$.error.data.code").value("CONTINUATION_FAILED"));
     }
 
     // --- S4 continueInput (same wire as S3; reuses the sticky path) ---
 
     @Test
     void continueInputReachesOriginalOwner() throws Exception {
-        sticky.put("task-ci", "h1");
+        sticky.put("task-ci", "h1", "svc-rt");
         runtime.setResponse(
                 "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"result\":{\"id\":\"task-ci\",\"status\":\"working\"}}");
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
@@ -429,7 +482,7 @@ class A2aControllerWebMvcTest {
 
     @Test
     void continueInputTerminalStateIsPassedThroughNotNewCreate() throws Exception {
-        sticky.put("task-ci", "h1");
+        sticky.put("task-ci", "h1", "svc-rt");
         runtime.setResponse("{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"error\":{\"code\":-32004,\"message\":\"terminal\"}}");
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
                         .contentType(MediaType.APPLICATION_JSON).content(CONTINUE_INPUT_BODY))

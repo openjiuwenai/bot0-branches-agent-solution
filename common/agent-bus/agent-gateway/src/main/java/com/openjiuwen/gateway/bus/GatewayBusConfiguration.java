@@ -98,28 +98,30 @@ public class GatewayBusConfiguration {
      * @param control I-04 outbound forwarder
      * @param projectionFeed inbound projection poll port
      * @param g4 idempotency rule (G4)
+     * @param agentRuntimeClient runtime client for SSE bridge after STREAM_READY
+     * @param stickyIndex taskId -> routeHandle index; written on the first taskId-bearing projection
+     *                    so a BUS-created task resumes to its owning runtime
      * @param sourceServiceId gateway service identity for envelope audit
      * @param acceptWindowMillis accept-phase timeout
      * @param responseWindowMillis response-phase timeout after accept
-     * @param agentRuntimeClient runtime client for SSE bridge after STREAM_READY
-     * @param defaultAgentResolver default logical agent resolver (used when ctx carries no agentId)
-     * @param stickyIndex taskId→routeHandle sticky index (written on first taskId-bearing projection, read on resume)
      * @param streamFirstFrameDeadlineMillis deadline to read the first SSE frame
+     * @param singleResponseWindowMillis single-response window timeout for QUERY/SUBSCRIBE
      * @return the bus forwarder
      */
     @Bean
     public BusForwarder busForwarder(RdcRouteClient rdc, BusControlForwarder control,
                                      ProjectionFeed projectionFeed, IdempotencyRule g4,
             com.openjiuwen.gateway.direct.AgentRuntimeClient agentRuntimeClient,
-            com.openjiuwen.gateway.routing.DefaultAgentResolver defaultAgentResolver,
             com.openjiuwen.gateway.routing.StickyIndex stickyIndex,
             @Value("${agent-bus.gateway-service-id:gateway}") String sourceServiceId,
             @Value("${gateway.bus.accept-window-ms:30000}") long acceptWindowMillis,
             @Value("${gateway.bus.response-window-ms:60000}") long responseWindowMillis,
-            @Value("${gateway.bus.stream-first-frame-deadline-ms:10000}") long streamFirstFrameDeadlineMillis) {
+            @Value("${gateway.bus.stream-first-frame-deadline-ms:10000}") long streamFirstFrameDeadlineMillis,
+            @Value("${gateway.bus.single-response-window-ms:30000}") long singleResponseWindowMillis) {
         BusForwarder forwarder = new BusForwarder(rdc, control, projectionFeed, g4, sourceServiceId,
-                acceptWindowMillis, responseWindowMillis, agentRuntimeClient, defaultAgentResolver, stickyIndex);
+                acceptWindowMillis, responseWindowMillis, agentRuntimeClient, stickyIndex);
         forwarder.setStreamFirstFrameDeadlineMillis(streamFirstFrameDeadlineMillis);
+        forwarder.setSingleResponseWindowMillis(singleResponseWindowMillis);
         return forwarder;
     }
 }

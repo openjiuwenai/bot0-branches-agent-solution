@@ -23,7 +23,6 @@ import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -82,8 +81,10 @@ import java.util.Set;
  * </ul>
  *
  * <p><b>Re-publish path</b> mirrors {@code GatewayRuntimeService.dispatchRequest} /
- * {@code TestAgentRuntime.produceResponse}: outbox.enqueue → claimDue(1) →
- * {@link BrokerForwardingProducerPort#produce} → markAcked. A produce
+ * {@code TestAgentRuntime.produceResponse}: outbox.enqueue → claim(receipt.messageId()) →
+ * {@link BrokerForwardingProducerPort#produce} → markAcked. The targeted claim (by the enqueue
+ * receipt's messageId) claims exactly the row just enqueued, so on a shared outbox the relay
+ * never re-publishes another role's naked record through its own producer (defect A). A produce
  * {@link BrokerProduceOutcome.Outcome#UNAVAILABLE UNAVAILABLE} / {@code ROUTE_NOT_FOUND}
  * → consumer.reject (redeliver; the agent-bus retry policy owns when).
  *
@@ -290,31 +291,22 @@ public final class EventBusRelayWorker {
                                          String tenantId, long nowMillisEpoch, String role) {
         ForwardingReceipt receipt = outbox.enqueue(env, sourceServiceId, env.targetServiceId(), nowMillisEpoch);
         Objects.requireNonNull(receipt, "enqueue receipt");
-        List<ForwardingOutboxRecord> claimed = claimPort.claimDue(tenantId, nowMillisEpoch, 1,
-                consumerServiceId, nowMillisEpoch + leaseDurationMillis);
-        BrokerProduceOutcome outcome = null;
-        for (ForwardingOutboxRecord record : claimed) {
-            outcome = relay.produce(record, nowMillisEpoch);
-            if (outcome.outcome() == BrokerProduceOutcome.Outcome.ACCEPTED) {
-                outbox.markAcked(record.messageId(), tenantId, consumerServiceId);
-            }
-        }
-        if (outcome != null && outcome.outcome() == BrokerProduceOutcome.Outcome.ACCEPTED) {
-            inbox.markConsumed(env.messageId(), tenantId, consumerServiceId);
-            consumer.commit(msg);
-            log.info("[{}] SEND hop2 messageId={} eventType={} corrId={} tenant={} source={} target={} route={}",
-                    role, env.messageId(), env.eventType(), env.correlationId(), env.tenantId(),
-                    env.sourceServiceId(), env.targetServiceId(), env.routeHandle().value());
-            return MessageOutcome.RELAYED;
-        }
-        // Nothing claimable now (outcome == null): a prior crashed attempt may have already produced +
-        // acked hop2 (outbox now ACKED) but died before markConsumed/commit. If so, complete idempotently
-        // — markConsumed (the inbox row is RECEIVED, since receive returned RECEIVED to enter republish)
-        // + commit — instead of reject→redeliver, which would loop forever against an ACKED (terminal,
-        // never re-claimable) outbox row. A DISPATCHING row (active self-lease from a prior in-flight
-        // produce) or PENDING / RETRY_SCHEDULED falls through to reject: the lease/claim machinery
-        // re-drives produce after lease expiry.
-        if (outcome == null) {
+        // Defect A fix: claim EXACTLY the record just enqueued — by receipt.messageId() — instead of
+        // an untargeted claimDue(1). On a shared outbox the untargeted claim could surface another
+        // role's naked record (a gateway hop1 left between its enqueue and the dispatcher's next tick,
+        // or another relay's hop2) and re-publish it through THIS relay's own producer (wrong topic
+        // suffix), stranding this relay's own hop2 — the "滞后一位的移位链". The targeted claim never
+        // touches another role's record; the receipt (previously fetched then discarded) now locates
+        // the row. A prior crashed attempt's expired DISPATCHING lease is reclaimed (HA: any instance).
+        Optional<ForwardingOutboxRecord> claimed = claimPort.claim(receipt.messageId(), tenantId,
+                nowMillisEpoch, consumerServiceId, nowMillisEpoch + leaseDurationMillis);
+        if (claimed.isEmpty()) {
+            // Nothing claimable now: a prior crashed attempt may have already produced + acked hop2
+            // (outbox now ACKED) but died before markConsumed/commit. If so, complete idempotently —
+            // markConsumed + commit — instead of reject→redeliver, which would loop against a terminal
+            // ACKED (never re-claimable) row. A DISPATCHING row under a live self-lease (a prior
+            // in-flight produce not yet expired) or PENDING/RETRY falls through to reject: the
+            // lease/claim machinery re-drives produce on the next redelivery / after lease expiry.
             ForwardingStatus.Outbox hop2 = outbox.statusOf(env.messageId(), tenantId);
             if (hop2 == ForwardingStatus.Outbox.ACKED) {
                 inbox.markConsumed(env.messageId(), tenantId, consumerServiceId);
@@ -323,15 +315,33 @@ public final class EventBusRelayWorker {
                         role, msg.messageId());
                 return MessageOutcome.RELAYED;
             }
+            ForwardingFailureCode code = ForwardingFailureCode.RECEIVER_UNAVAILABLE;
+            log.warn("[{}] REJECT redeliver (nothing claimable, status={}) messageId={}",
+                    role, hop2, msg.messageId());
+            consumer.reject(msg, code);
+            return MessageOutcome.REDELIVERED;
         }
-        // produce UNAVAILABLE / ROUTE_NOT_FOUND (or nothing claimable + not ACKED): reject → redeliver;
-        // the agent-bus retry policy owns when, and rejecting leaves the hop1 message visible for
-        // operator intervention.
-        ForwardingFailureCode code = (outcome != null && outcome.failureCode() != null)
+        ForwardingOutboxRecord record = claimed.get();
+        BrokerProduceOutcome outcome = relay.produce(record, nowMillisEpoch);
+        if (outcome.outcome() == BrokerProduceOutcome.Outcome.ACCEPTED) {
+            outbox.markAcked(record.messageId(), tenantId, consumerServiceId);
+            inbox.markConsumed(env.messageId(), tenantId, consumerServiceId);
+            consumer.commit(msg);
+            // log the record actually produced/acked (record.messageId()), not the envelope's id —
+            // post-fix they are equal (the targeted claim returned the row keyed by env.messageId()),
+            // but the log now faithfully reports what crossed the produce boundary (defect §3.7).
+            log.info("[{}] SEND hop2 messageId={} eventType={} corrId={} tenant={} source={} target={} route={}",
+                    role, record.messageId(), env.eventType(), env.correlationId(), env.tenantId(),
+                    env.sourceServiceId(), env.targetServiceId(), env.routeHandle().value());
+            return MessageOutcome.RELAYED;
+        }
+        // produce UNAVAILABLE / ROUTE_NOT_FOUND → reject → redeliver; the agent-bus retry policy owns when,
+        // and rejecting leaves the hop1 message visible for operator intervention.
+        ForwardingFailureCode code = (outcome.failureCode() != null)
                 ? outcome.failureCode()
                 : ForwardingFailureCode.RECEIVER_UNAVAILABLE;
         log.warn("[{}] REJECT redeliver (produce outcome={} failureCode={}) messageId={}",
-                role, outcome == null ? "none-claimed" : outcome.outcome(), code, msg.messageId());
+                role, outcome.outcome(), code, msg.messageId());
         consumer.reject(msg, code);
         return MessageOutcome.REDELIVERED;
     }

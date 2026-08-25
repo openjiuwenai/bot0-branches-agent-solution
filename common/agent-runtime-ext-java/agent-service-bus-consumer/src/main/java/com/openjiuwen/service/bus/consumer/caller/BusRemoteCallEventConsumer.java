@@ -36,16 +36,42 @@ final class BusRemoteCallEventConsumer {
 
     private final RemoteCallOutcomeMapper outcomeMapper = new RemoteCallOutcomeMapper();
 
+    /**
+     * Per-call record of whether any artifact has already reached the Runtime observer.
+     *
+     * <p>One {@code BusRemoteCallEventConsumer} is shared by every concurrent call of a caller, so
+     * this state cannot live on the consumer itself; it belongs to the pending call.
+     *
+     * <p>Implementations must be thread-safe: artifacts are delivered both from the SDK's HTTP/SSE
+     * callback thread ({@code acceptUpdate}) and from the Bus consumer thread ({@code acceptTask}
+     * via {@code A2A_CALL_TERMINAL}), and the fast-terminal case is exactly when those two threads
+     * interleave.
+     */
+    interface ArtifactDelivery {
+        /**
+         * Reports whether an artifact has already been handed to the observer for this call.
+         *
+         * @return true once at least one artifact was delivered
+         */
+        boolean hasDelivered();
+
+        /**
+         * Records that an artifact reached the observer.
+         */
+        void markDelivered();
+    }
+
     void accept(ClientEvent event, CompletableFuture<RemoteCallOutcome> result,
-            RemoteAgentCaller.EventObserver eventObserver, boolean isStreaming) {
+            RemoteAgentCaller.EventObserver eventObserver, ArtifactDelivery delivery) {
         Objects.requireNonNull(event, "event is required");
         Objects.requireNonNull(result, "result is required");
         Objects.requireNonNull(eventObserver, "eventObserver is required");
+        Objects.requireNonNull(delivery, "delivery is required");
         try {
             if (event instanceof TaskUpdateEvent update) {
-                acceptUpdate(update, result, eventObserver);
+                acceptUpdate(update, result, eventObserver, delivery);
             } else if (event instanceof TaskEvent taskEvent) {
-                acceptTask(taskEvent.getTask(), result, eventObserver, isStreaming);
+                acceptTask(taskEvent.getTask(), result, eventObserver, delivery);
             } else if (event instanceof MessageEvent messageEvent) {
                 acceptMessage(messageEvent.getMessage(), result);
             } else {
@@ -57,13 +83,14 @@ final class BusRemoteCallEventConsumer {
     }
 
     private void acceptUpdate(TaskUpdateEvent update, CompletableFuture<RemoteCallOutcome> result,
-            RemoteAgentCaller.EventObserver eventObserver) {
+            RemoteAgentCaller.EventObserver eventObserver, ArtifactDelivery delivery) {
         if (result.isDone()) {
             return;
         }
         Object updateEvent = update.getUpdateEvent();
         if (updateEvent instanceof TaskArtifactUpdateEvent artifactUpdate) {
             eventObserver.onArtifact(artifactUpdate);
+            delivery.markDelivered();
         } else if (updateEvent instanceof TaskStatusUpdateEvent statusUpdate) {
             eventObserver.onStatus(statusUpdate);
             outcomeMapper.mapTask(statusUpdate.taskId(), statusUpdate.status().state(), statusText(statusUpdate),
@@ -74,14 +101,20 @@ final class BusRemoteCallEventConsumer {
     }
 
     private void acceptTask(Task task, CompletableFuture<RemoteCallOutcome> result,
-            RemoteAgentCaller.EventObserver eventObserver, boolean isStreaming) {
+            RemoteAgentCaller.EventObserver eventObserver, ArtifactDelivery delivery) {
         if (result.isDone() || task == null || task.status() == null) {
             return;
         }
-        if (task.artifacts() != null && (!isStreaming || !task.status().state().isFinal())) {
+        // Replay the snapshot's artifacts only when nothing has reached the observer yet. Keying on
+        // delivery rather than on terminal state is what makes the fast-terminal case work: there the
+        // SubscribeToTask subscription never succeeded, so this snapshot is the only carrier of the
+        // stream's artifacts. Once the subscription did deliver frames, the snapshot would only
+        // repeat them.
+        if (task.artifacts() != null && !delivery.hasDelivered()) {
             for (Artifact artifact : task.artifacts()) {
                 eventObserver.onArtifact(new TaskArtifactUpdateEvent(task.id(), artifact, task.contextId(),
                         false, true, Map.of()));
+                delivery.markDelivered();
             }
         }
         eventObserver.onStatus(new TaskStatusUpdateEvent(task.id(), task.status(), task.contextId(), Map.of()));

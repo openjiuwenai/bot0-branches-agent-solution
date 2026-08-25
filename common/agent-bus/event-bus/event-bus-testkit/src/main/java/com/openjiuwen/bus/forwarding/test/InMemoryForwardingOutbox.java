@@ -5,6 +5,7 @@
 package com.openjiuwen.bus.forwarding.test;
 
 import com.openjiuwen.bus.forwarding.runtime.ForwardingStateMachine;
+import com.openjiuwen.bus.forwarding.spi.ClaimDueRequest;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingLease;
@@ -21,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * In-memory test double for {@link ForwardingOutboxPort} and
@@ -158,19 +160,92 @@ public final class InMemoryForwardingOutbox
             if (claimKindOf(row, nowMillisEpoch) == ClaimKind.NONE) {
                 continue; // terminal, not-yet-due, or mid-dispatch under a live lease
             }
-            // claim: transition fresh / retry → DISPATCHING (reclaim stays DISPATCHING), stamp lease
-            ForwardingStatus.Outbox next = (row.status == ForwardingStatus.Outbox.DISPATCHING)
-                    ? ForwardingStatus.Outbox.DISPATCHING
-                    : stateMachine.transitOutbox(row.status, ForwardingStateMachine.OutboxEvent.BEGIN_DISPATCH);
-            row.status = next;
-            row.lease = new ForwardingLease(leaseOwner, leaseUntilMillisEpoch);
-            row.updatedAt = nowMillisEpoch;
-            claimed.add(snapshot(row));
+            claimed.add(doClaim(row, nowMillisEpoch, leaseOwner, leaseUntilMillisEpoch));
             if (claimed.size() >= limit) {
                 break;
             }
         }
         return claimed;
+    }
+
+    @Override
+    public synchronized Optional<ForwardingOutboxRecord> claim(ForwardingMessageId id, String tenantId,
+                                                               long nowMillisEpoch, String leaseOwner,
+                                                               long leaseUntilMillisEpoch) {
+        requireNonBlank(tenantId, "tenantId");
+        requireNonBlank(leaseOwner, "leaseOwner");
+        Objects.requireNonNull(id, "id is required");
+        if (leaseUntilMillisEpoch <= nowMillisEpoch) {
+            throw new IllegalArgumentException("leaseUntilMillisEpoch must be > nowMillisEpoch");
+        }
+        Entry row = findEntryOrNull(id, tenantId);
+        if (row == null || claimKindOf(row, nowMillisEpoch) == ClaimKind.NONE) {
+            // unknown, terminal, not-yet-due, or mid-dispatch under another owner's live lease
+            return Optional.empty();
+        }
+        // claim exactly the named row (targeted): defect A — the enqueue-then-produce path never
+        // touches another role's naked record. Reclaim of an expired DISPATCHING lease (stuck holder)
+        // re-drives a prior crashed attempt — HA: any instance may reclaim an expired lease.
+        return Optional.of(doClaim(row, nowMillisEpoch, leaseOwner, leaseUntilMillisEpoch));
+    }
+
+    @Override
+    public synchronized List<ForwardingOutboxRecord> claimDue(ClaimDueRequest request) {
+        String tenantId = request.tenantId();
+        long nowMillisEpoch = request.nowMillisEpoch();
+        int limit = request.limit();
+        String leaseOwner = request.leaseOwner();
+        long leaseUntilMillisEpoch = request.leaseUntilMillisEpoch();
+        String sourceServiceId = request.sourceServiceId();
+        requireNonBlank(tenantId, "tenantId");
+        requireNonBlank(leaseOwner, "leaseOwner");
+        requireNonBlank(sourceServiceId, "sourceServiceId");
+        if (limit <= 0) {
+            throw new IllegalArgumentException("limit must be > 0");
+        }
+        if (leaseUntilMillisEpoch <= nowMillisEpoch) {
+            throw new IllegalArgumentException("leaseUntilMillisEpoch must be > nowMillisEpoch");
+        }
+        List<ForwardingOutboxRecord> claimed = new ArrayList<>();
+        for (Map.Entry<Key, Entry> e : store.entrySet()) {
+            Entry row = e.getValue();
+            if (!e.getKey().tenantId.equals(tenantId)) {
+                continue; // tenant scope (Rule R-C.c)
+            }
+            if (!sourceServiceId.equals(row.sourceServiceId)) {
+                continue; // source-scoped (defect A): only the caller's own records are claimable
+            }
+            if (claimKindOf(row, nowMillisEpoch) == ClaimKind.NONE) {
+                continue; // terminal, not-yet-due, or mid-dispatch under a live lease
+            }
+            claimed.add(doClaim(row, nowMillisEpoch, leaseOwner, leaseUntilMillisEpoch));
+            if (claimed.size() >= limit) {
+                break;
+            }
+        }
+        return claimed;
+    }
+
+    /**
+     * Shared claim body: transition fresh / retry → DISPATCHING (reclaim stays DISPATCHING),
+     * stamp the exclusive lease, update updatedAt, and return the immutable snapshot.
+     * Used by both {@code claimDue} variants and the targeted {@code claim(id)}.
+     *
+     * @param row                  the in-memory row to claim (already confirmed due)
+     * @param nowMillisEpoch       the claim instant
+     * @param leaseOwner           identity of the claiming dispatcher instance
+     * @param leaseUntilMillisEpoch instant until which the claim is exclusive
+     * @return the claimed record snapshot (already DISPATCHING, leased to the caller)
+     */
+    private ForwardingOutboxRecord doClaim(Entry row, long nowMillisEpoch, String leaseOwner,
+                                          long leaseUntilMillisEpoch) {
+        ForwardingStatus.Outbox next = (row.status == ForwardingStatus.Outbox.DISPATCHING)
+                ? ForwardingStatus.Outbox.DISPATCHING
+                : stateMachine.transitOutbox(row.status, ForwardingStateMachine.OutboxEvent.BEGIN_DISPATCH);
+        row.status = next;
+        row.lease = new ForwardingLease(leaseOwner, leaseUntilMillisEpoch);
+        row.updatedAt = nowMillisEpoch;
+        return snapshot(row);
     }
 
     /** Why (or why not) a row is claimable at the given instant. */

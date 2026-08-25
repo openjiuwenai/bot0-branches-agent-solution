@@ -5,7 +5,6 @@
 package com.openjiuwen.gateway.bus;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
@@ -20,7 +19,6 @@ import com.openjiuwen.gateway.governance.GovernanceContext;
 import com.openjiuwen.gateway.governance.GovernanceException;
 import com.openjiuwen.gateway.governance.idempotency.IdempotencyRule;
 import com.openjiuwen.gateway.routing.AgentCardRoute;
-import com.openjiuwen.gateway.routing.DefaultAgentResolver;
 import com.openjiuwen.gateway.routing.FakeRdcRouteClient;
 import com.openjiuwen.gateway.routing.ResolvedRoute;
 import com.openjiuwen.gateway.routing.Router;
@@ -64,7 +62,7 @@ class BusStreamingAndResumeTest {
     private BusForwarder forwarder() {
         return new BusForwarder(rdc,
                 new BusControlForwarder(new EnvelopeBuilder(), new InMemoryPayloadStore(), outbox),
-                feed, g4, "svc-gw", 30_000L, 60_000L, runtime, new DefaultAgentResolver(""), sticky);
+                feed, g4, "svc-gw", 30_000L, 60_000L, runtime, sticky);
     }
 
     @Test
@@ -143,7 +141,7 @@ class BusStreamingAndResumeTest {
         // small response window so the RED (timeout→synthetic COMPLETED) is fast, not 60s
         BusForwarder f = new BusForwarder(rdc,
                 new BusControlForwarder(new EnvelopeBuilder(), new InMemoryPayloadStore(), outbox),
-                feed, g4, "svc-gw", 30_000L, 300L, runtime, new DefaultAgentResolver(""), sticky);
+                feed, g4, "svc-gw", 30_000L, 300L, runtime, sticky);
         f.setStreamFirstFrameDeadlineMillis(2_000L);
         MockHttpServletResponse mockResponse = new MockHttpServletResponse();
         Optional<String> result = f.forwardStreaming(createCtx("agent-1", "m-ir"), mockResponse, sseBridge);
@@ -174,7 +172,7 @@ class BusStreamingAndResumeTest {
                 + "\"runtimeDrainMarker\":\"should-not-appear\"}}"));
         BusForwarder f = new BusForwarder(rdc,
                 new BusControlForwarder(new EnvelopeBuilder(), new InMemoryPayloadStore(), outbox),
-                feed, g4, "svc-gw", 30_000L, 300L, runtime, new DefaultAgentResolver(""), sticky);
+                feed, g4, "svc-gw", 30_000L, 300L, runtime, sticky);
         f.setStreamFirstFrameDeadlineMillis(2_000L);
         MockHttpServletResponse mockResponse = new MockHttpServletResponse();
         Optional<String> result = f.forwardStreaming(createCtx("agent-1", "m-ir-skip"), mockResponse, sseBridge);
@@ -249,32 +247,6 @@ class BusStreamingAndResumeTest {
     }
 
     @Test
-    void b6_defaultAgentMissingIsConfigError() {
-        // No agentId AND no default configured → clean DEFAULT_AGENT_UNCONFIGURED governance
-        // error, not an NPE (the BUS path must mirror the DIRECT Router's fallback).
-        rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
-        feed.inject(AgentBusEventType.INVOCATION_RESPONSE, null, null);
-        var thrown = catchThrowable(() -> forwarder().forwardSync(createCtx(null, "m-da")));
-        assertThat(thrown).isInstanceOf(GovernanceException.class);
-        if (thrown instanceof GovernanceException ge) {
-            assertThat(ge.code()).isEqualTo("DEFAULT_AGENT_UNCONFIGURED");
-        }
-    }
-
-    @Test
-    void b6_streamingNullAgentIsConfigError() {
-        // Same fallback for the streaming path: null agentId + no default → config error,
-        // not an NPE inside HttpRdcRouteClient.enc.
-        rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
-        var thrown = catchThrowable(() -> forwarder().forwardStreaming(createCtx(null, "m-da-s"),
-                new MockHttpServletResponse(), sseBridge));
-        assertThat(thrown).isInstanceOf(GovernanceException.class);
-        if (thrown instanceof GovernanceException ge) {
-            assertThat(ge.code()).isEqualTo("DEFAULT_AGENT_UNCONFIGURED");
-        }
-    }
-
-    @Test
     void b6_stickyMissNotS5() {
         sticky.clear();
         assertThat(sticky.find("ghost")).isEmpty();
@@ -282,7 +254,7 @@ class BusStreamingAndResumeTest {
 
     @Test
     void b7_resumeEnvelopeCarriesTaskId() {
-        sticky.put("task-7", "h1");
+        sticky.put("task-7", "h1", "svc-rt");
         rdc.setCandidates(List.of());
         g4.check("T1", "m-r1", "fp");
         feed.inject(AgentBusEventType.INVOCATION_RESPONSE, null, null);
@@ -291,9 +263,9 @@ class BusStreamingAndResumeTest {
 
     @Test
     void b7_resumeNoSearchUsesStickyRoute() {
-        sticky.put("task-7", "h1");
+        sticky.put("task-7", "h1", "svc-rt");
         assertThat(sticky.find("task-7")).isPresent();
-        sticky.put("task-7", "h1");
+        sticky.put("task-7", "h1", "svc-rt");
         assertThat(sticky.find("task-7")).hasValue("h1");
     }
 
@@ -310,7 +282,7 @@ class BusStreamingAndResumeTest {
 
     @Test
     void b8_continueInputWireSameAsResume() {
-        sticky.put("task-ci", "h1");
+        sticky.put("task-ci", "h1", "svc-rt");
         assertThat(sticky.find("task-ci")).contains("h1");
     }
 
@@ -337,7 +309,7 @@ class BusStreamingAndResumeTest {
         assertThat(sticky.find("ti-resume")).contains("h1");
         // DIRECT resume reads the sticky binding (read-only, no re-search) and reaches the owner.
         runtime.setResponse("{\"result\":{\"id\":\"ti-resume\",\"status\":{\"state\":\"completed\"}}}");
-        Router router = new Router(rdc, runtime, sticky, new DefaultAgentResolver(""));
+        Router router = new Router(rdc, runtime, sticky);
         GovernanceContext resumeCtx = new GovernanceContext();
         resumeCtx.setTenantId("T1");
         resumeCtx.setTaskId("ti-resume");

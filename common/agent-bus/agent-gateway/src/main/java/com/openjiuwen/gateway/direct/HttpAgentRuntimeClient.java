@@ -18,6 +18,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -71,6 +72,17 @@ public class HttpAgentRuntimeClient implements AgentRuntimeClient {
             HttpResponse<Stream<String>> resp = http.send(req, HttpResponse.BodyHandlers.ofLines());
             log.info("openStream status={}", resp.statusCode());
             requireStreamOk(resp, "stream subscription");
+            // A runtime that rejects the subscription with a JSON-RPC error (HTTP 200 + a non-SSE
+            // body, e.g. SubscribeToTask on a terminal task → -32004) must be surfaced verbatim,
+            // not swallowed as an empty SSE stream (the data: filter below would drop the JSON body).
+            // Throw carrying the body; the DIRECT subscribe handler returns it to the client as-is,
+            // unifying DIRECT with the BUS path (which folds the runtime's failure to -32004).
+            String contentType = resp.headers().firstValue("Content-Type").orElse("");
+            if (!contentType.toLowerCase(Locale.ROOT).contains("text/event-stream")) {
+                String body = resp.body().collect(java.util.stream.Collectors.joining("\n"));
+                log.info("openStream non-SSE 200 body={}", body);
+                throw new GovernanceException(HttpStatus.OK, "RUNTIME_JSONRPC_ERROR", body);
+            }
             return resp.body()
                     .filter(line -> line.startsWith("data:"))
                     .map(line -> line.substring("data:".length()).strip())
@@ -126,5 +138,15 @@ public class HttpAgentRuntimeClient implements AgentRuntimeClient {
                     "Runtime rejected " + what + ": HTTP " + status
                             + (firstLine.isBlank() ? "" : " " + firstLine));
         }
+    }
+
+    @Override
+    public String getTask(String endpointUrl, String taskId, String tenantId, Integer historyLength) {
+        String body = "{\"jsonrpc\":\"2.0\",\"id\":\"" + UUID.randomUUID()
+                + "\",\"method\":\"GetTask\",\"params\":{\"id\":\"" + taskId
+                + "\",\"tenant\":\"" + tenantId + "\""
+                + (historyLength != null ? ",\"historyLength\":" + historyLength : "")
+                + "}}";
+        return invokeSync(endpointUrl, body);
     }
 }

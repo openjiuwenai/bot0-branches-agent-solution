@@ -50,7 +50,36 @@ class TestEvolveConfig:
         assert config.optimizer_model == "gpt-4o-mini"
         assert config.remote_timeout == pytest.approx(600.0)
 
-    def test_no_remote_endpoint_field(self) -> None:
+    # --- GEPA vision model 配置 ---
+
+    @staticmethod
+    def test_vision_model_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+        """vision_model 默认空，回退到 target_model。"""
+        for key in (
+            "EVO_VISION_MODEL",
+            "EVO_VISION_API_KEY",
+            "EVO_VISION_BASE_URL",
+        ):
+            monkeypatch.delenv(key, raising=False)
+        config = EvolveConfig(_env_file=None)
+        assert config.vision_model == ""
+        assert config.vision_api_key == ""
+        assert config.vision_base_url == ""
+
+    @staticmethod
+    def test_vision_model_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+        """EVO_VISION_* 环境变量被正确读取。"""
+        monkeypatch.setenv("EVO_VISION_MODEL", "gpt-4o-vision")
+        monkeypatch.setenv("EVO_VISION_API_KEY", "vision-key-123")
+        monkeypatch.setenv("EVO_VISION_BASE_URL", "https://vision.api.com/v1")
+
+        config = EvolveConfig()
+        assert config.vision_model == "gpt-4o-vision"
+        assert config.vision_api_key == "vision-key-123"
+        assert config.vision_base_url == "https://vision.api.com/v1"
+
+    @staticmethod
+    def test_no_remote_endpoint_field() -> None:
         """remote_endpoint 字段已从 EvolveConfig 移除。"""
         config = EvolveConfig(_env_file=None)
         assert not hasattr(config, "remote_endpoint")
@@ -274,7 +303,8 @@ class TestEvolveConfig:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """EVO_MANAGED_DOC_PROTECTED_SECTIONS JSON 注入：dict[str, list[ProtectedSectionConfig]]，
-        key 为精确 doc_kind。"""
+        key 为精确 doc_kind。
+        """
         monkeypatch.setenv(
             "EVO_MANAGED_DOC_PROTECTED_SECTIONS",
             '{"agent_rule": [{"start_marker": "<a>", "end_marker": "</a>"}]}',

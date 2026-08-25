@@ -10,8 +10,8 @@ span dict 形状见 kafka_consumer.otlp_parser.parse_span:
 
 汇总规则 (设计文档 §3 traces 表):
     - 根 span = kind=SERVER 且 parent_span_id 为空; root_span_id 取自根 span。
-    - request_summary 取自根 span 的 openjiuwen.http.request_body;
-      response_summary 取自 chain span 的 openjiuwen.agent.outputs (EDPAgent 真实响应)。
+    - request_summary 取自根 span 的配置字段（默认 openjiuwen.http.request_body）;
+      response_summary 取自配置的 response span 前缀 + 字段（默认 chain.* / openjiuwen.agent.outputs）。
     - start_time = min(各 span start_time); end_time = max(各 span end_time)。
     - span_count = len(spans); status = 最差状态 (ERROR > OK > UNSET)。
     - session_id/service_name: 根 span 优先, 否则取首个非空。
@@ -20,6 +20,8 @@ span dict 形状见 kafka_consumer.otlp_parser.parse_span:
 from __future__ import annotations
 
 from typing import Any
+
+from agent_adapter.trace_profile.models import TraceProfile
 
 # status 严重度: ERROR > OK > UNSET (设计文档 §3 traces.status "取最差状态")
 _STATUS_RANK: dict[str, int] = {"UNSET": 0, "OK": 1, "ERROR": 2}
@@ -46,28 +48,36 @@ def _attrs(span: dict[str, Any]) -> dict[str, Any]:
     return span.get("attributes") or {}
 
 
-def _chain_agent_outputs(spans: list[dict[str, Any]]) -> Any:
-    """chain span 的 openjiuwen.agent.outputs (EDPAgent 真实响应)。无 chain span 返回 None。
+def _chain_agent_outputs(spans: list[dict[str, Any]], profile: TraceProfile | None = None) -> Any:
+    """response_summary 提取（profile 配置化或 legacy 硬编码）。
 
-    chain span = name 以 "chain." 开头 (如 chain.EDP Agent)。一个 trace 通常一个 chain 根。
+    profile 提供时：按 response_summary_span_prefix + response_summary_attr 匹配。
+    profile 为 None 时：走 legacy 硬编码（chain. 前缀 + openjiuwen.agent.outputs）。
     """
+    prefix = profile.response_summary_span_prefix if profile else "chain."
+    attr_key = profile.response_summary_attr if profile else "openjiuwen.agent.outputs"
     for s in spans:
-        if (s.get("name") or "").startswith("chain."):
-            return _attrs(s).get("openjiuwen.agent.outputs")
+        if prefix and (s.get("name") or "").startswith(prefix):
+            return _attrs(s).get(attr_key)
     return None
 
 
-def compute_trace_summary(trace_id: str, spans: list[dict[str, Any]]) -> dict[str, Any]:
+def compute_trace_summary(
+    trace_id: str,
+    spans: list[dict[str, Any]],
+    profile: TraceProfile | None = None,
+) -> dict[str, Any]:
     """从一条 trace 的全部 spans 计算 traces 汇总行 (dict, 对齐 traces 表列)。
 
     与 span 插入顺序无关: 总是从完整 span 集合重算。空 spans 抛 ValueError。
+    profile 提供时：request_summary / response_summary 按配置字段提取；
+    profile 为 None 时：走 legacy 硬编码（EDPAgent 兼容）。
     """
     if not spans:
         raise ValueError(f"compute_trace_summary: trace {trace_id!r} 无 spans")
 
     root = next((s for s in spans if is_root_span(s)), None)
     a_root = _attrs(root) if root else {}
-    # 根 span 优先提供会话级字段, 否则回退首个非空 (根可能尚未到达)
     first = spans[0]
 
     def _first_attr(key: str) -> Any:
@@ -82,6 +92,8 @@ def compute_trace_summary(trace_id: str, spans: list[dict[str, Any]]) -> dict[st
     start_times = [s["start_time"] for s in spans if s.get("start_time")]
     end_times = [s["end_time"] for s in spans if s.get("end_time")]
 
+    request_attr = profile.request_summary_attr if profile else "openjiuwen.http.request_body"
+
     return {
         "trace_id": trace_id,
         "session_id": (root or first).get("session_id") or _first_attr("session.id"),
@@ -91,8 +103,8 @@ def compute_trace_summary(trace_id: str, spans: list[dict[str, Any]]) -> dict[st
         "end_time": max(end_times) if end_times else None,
         "span_count": len(spans),
         "status": worst_status([s.get("status_code", "UNSET") for s in spans]),
-        "request_summary": a_root.get("openjiuwen.http.request_body"),
-        "response_summary": _chain_agent_outputs(spans),
+        "request_summary": a_root.get(request_attr),
+        "response_summary": _chain_agent_outputs(spans, profile),
     }
 
 

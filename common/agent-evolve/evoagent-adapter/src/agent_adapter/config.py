@@ -140,6 +140,67 @@ class ManagedDocDefaults(BaseModel):
         return _SINGLE_DEFAULTS.copy() if self.profile == "single" else _BURST_DEFAULTS.copy()
 
 
+class RecognizerConfig(BaseModel):
+    """单个 skill 识别器 (per-agent, 按需勾选; 评审稿 §3.3)。
+
+    adapter 据识别器判定 "哪些 span 表示某 skill 被激活/执行" (L1/L2 归属信号):
+      - skill_span:          认 ``skill.<skill>`` span (业务 agent 自声明, L1 ground truth);
+                              span_name_prefix 默认 "skill."。
+      - read_file_skill:      认 ``read_file`` 读 SKILL.md (OpenCode 主信号); path_field 指向
+                              input 里 skill 文件路径字段, 命中 skills_dir 即开 active 上下文 (L2)。
+      - todo_write_boundary: 认 ``lite_todo_write`` 规划出某 skill (EDPAgent 兜底); tool_name
+                              指向规划工具名。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["skill_span", "read_file_skill", "todo_write_boundary"]
+    span_name_prefix: str | None = None
+    tool_name: str | None = None
+    path_field: str | None = None
+
+
+_DEFAULT_OWNERSHIP_VERBS = [
+    "调用", "使用", "通过", "借助", "用来", "invoke", "call", "use",
+]
+_DEFAULT_NEGATION_CUES = [
+    "禁止", "不要", "勿", "不应", "不得", "避免", "请勿", "不可",
+    "do not", "don't", "must not", "never", "avoid", "without",
+]
+
+
+class ProseMatchingConfig(BaseModel):
+    """prose 匹配 own/forbid 分类配置 (L2 多 skill 消歧 / L3 全局匹配; 评审稿 §3.1.1)。
+
+    默认词典可被 per-agent 覆写。forbid 优先 own: 同 skill 既出现 "用 X" 又 "禁用 X"
+    (通常条件性使用) 时保守按禁用, X 不归该 skill。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    ownership_verbs: list[str] = Field(default_factory=lambda: list(_DEFAULT_OWNERSHIP_VERBS))
+    negation_cues: list[str] = Field(default_factory=lambda: list(_DEFAULT_NEGATION_CUES))
+
+
+class AttributionConfig(BaseModel):
+    """per-agent skill 归属配置 (评审稿 §3.3)。
+
+    adapter 据此把异构 agent 的 span 归一到统一 attribution 二层字段
+    {skill, source, confidence, candidates, misuse}。recognizers 按需勾选;
+    prose_matching 仅 L2 多 skill 消歧 / L3 全局匹配时用 (EDPAgent 走 skill_span 不需)。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    recognizers: list[RecognizerConfig] = Field(default_factory=list)
+    prose_matching: ProseMatchingConfig = Field(default_factory=ProseMatchingConfig)
+    fallback_skill: str = "Agent.md"
+    # 传输层/入口 span 名 (归 ingress, 非业务行为): EDPAgent 每轮 HTTP 入口是 http.request。
+    ingress_span_names: list[str] = Field(default_factory=lambda: ["http.request"])
+
+
 class AgentEntryConfig(BaseModel):
     """Configuration for a single managed Agent.
 
@@ -188,6 +249,11 @@ class AgentEntryConfig(BaseModel):
     remote_skills_dir: str = "/tmp/skills"
     # managed_docs: 该 agent 的可优化文档配置（spec managed-doc-agent-rule §8.1）。
     managed_docs: list[ManagedDocConfig] = Field(default_factory=list)
+    # trace_profile: 引用 trace_profiles.yaml 中的 profile 名（多 Agent 轨迹配置化）。
+    # 为 None 时走 legacy 硬编码逻辑（EDPAgent 兼容）。
+    trace_profile: str | None = None
+    # attribution: 该 agent 的 skill 归属配置 (None=走 AdapterConfig 默认; 评审稿 §3.3)。
+    attribution: AttributionConfig | None = None
 
 
 def _get_adapter_root() -> Path:
@@ -289,6 +355,23 @@ class AdapterConfig(BaseSettings):
     kafka_group: str = "agent-adapter"
     # ── GET /traces/{conv} 服务端短等待 (设计文档 §7: 5s 上报 + 余量) ──
     trace_wait_timeout: float = 10.0
+    # ── 多 Agent 轨迹 profile 路径 ──
+    trace_profiles_path: str = "deployment/config/trace_profiles.yaml"
+
+    # ── AttributionRunner 后台轮询 (trace 完整后异步算归属写回 spans.attribution) ──
+    attribution_runner_enabled: bool = True
+    attribution_poll_interval: float = 5.0
+
+    # ── SkillHub integration (optional publish/pull to marketplace) ──
+    skillhub_enabled: bool = False
+    skillhub_base_url: str = ""
+    skillhub_auth_mode: Literal["bearer", "system_token"] = "system_token"
+    skillhub_token: str = ""
+    skillhub_token_env: str = "SKILLHUB_TOKEN"
+    skillhub_connect_timeout: float = 30.0
+    skillhub_publish_timeout: float = 120.0
+    skillhub_version_strategy: Literal["patch", "manual"] = "manual"
+    skillhub_default_plugin_type: str = "skill"
 
     # ── Internal (not from YAML/env) ──
     _yaml_path: str | None = None

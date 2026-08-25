@@ -6,11 +6,10 @@ package com.openjiuwen.agents.edpa.e2e;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.openjiuwen.agents.edpa.verification.ProactiveConvergenceRail;
+import com.openjiuwen.agents.edpa.EdpaRails;
+import com.openjiuwen.agents.edpa.autoconfigure.EdpaProperties;
+import com.openjiuwen.agents.edpa.explore.ExplorationResult;
 import com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel;
-import com.openjiuwen.agents.reactrails.replan.ReplanRail;
-import com.openjiuwen.agents.reactrails.replan.ReplanTool;
-import com.openjiuwen.agents.reactrails.verification.CriteriaReplanBridgeRail;
 import com.openjiuwen.agents.reactrails.verification.RuleBasedCriteriaVerifier;
 import com.openjiuwen.core.foundation.llm.model_clients.DefaultModelClientFactories;
 import com.openjiuwen.core.foundation.llm.schema.ModelClientConfig;
@@ -37,6 +36,10 @@ import java.util.Map;
  * {@code com.openjiuwen.agents.edpa.verification.ProactiveConvergenceRailTest}（持有 ctx，可读状态）。
  * 本 e2e 只证 rail 注册到 ReActAgent + invoke 端到端跑通（数据通道 wiring），
  * 不证 rail 内部状态。
+ *
+ * <p>装配经 {@link EdpaRails#registerOnto}（单一装配真源）：rail 实例外部零引用（状态隔离后
+ * 内部状态不可读，仅 registerRail 消费），stallWindow=2 经 EdpaProperties 映射；生产宿主同一
+ * wiring 图（SteeringProvisionRail 首位 + bridge/__replan__ 共享单一 ReplanRail 实例）。
  *
  * <p>Env-gated opt-in: {@code OPENJIUWEN_API_KEY} / {@code OPENJIUWEN_BASE_URL} /
  * {@code EDPA_CONVERGENCE_E2E_ENABLED=true}.
@@ -99,6 +102,7 @@ class ProactiveConvergenceRealLlmE2eTest {
                 .clientProvider("OpenAI").apiKey(key).apiBase(base).verifySsl(false).timeout(120000).build();
         var reqCfg = ModelRequestConfig.builder().modelName(modelName).temperature(0.3).topP(0.9).maxTokens(800)
                 .build();
+        applyThinkingMode(reqCfg);
         ToolCallingEnforcingModel model = new ToolCallingEnforcingModel(cliCfg, reqCfg);
 
         ReActAgent agent = new ReActAgent(AgentCard.builder().name("edpa-conv-" + role).build());
@@ -110,13 +114,17 @@ class ProactiveConvergenceRealLlmE2eTest {
 
         registerStub(agent, converge);
 
-        ProactiveConvergenceRail rail = new ProactiveConvergenceRail(new RuleBasedCriteriaVerifier(), CRITERIA, 2,
-                ProactiveConvergenceRail.DEFAULT_COVERAGE_CRITICAL);
-        agent.registerRail(rail);
-        ReplanRail sharedCounter = new ReplanRail(3);
-        agent.registerRail(new CriteriaReplanBridgeRail(new RuleBasedCriteriaVerifier(), CRITERIA, sharedCounter));
-        agent.registerRail(new ReplanRail(3));
-        ReplanTool.registerOnto(agent);
+        // 装配经 EdpaRails.registerOnto（单一装配真源）。rail 实例外部零引用（原手动装配只
+        // registerRail 消费，无内部状态断言——状态隔离后本就不可读），可等价替换；原手动的
+        // 双 ReplanRail 实例（bridge 一份 + 独立一份 = 预算×2 契约违规）就此消除。
+        // explorer 传惰性 lambda：本 TASK 不含 explore 步骤，ExploreTool 不会被调，仅满足 SPI 签名。
+        EdpaProperties props = new EdpaProperties();
+        props.setCriteria(CRITERIA);
+        props.setMaxReplan(3);
+        props.setProactiveConvergenceEnabled(true);
+        props.setProactiveConvergenceStallWindow(2);
+        EdpaRails.registerOnto(agent, props, new RuleBasedCriteriaVerifier(),
+                (userInput, budget) -> new ExplorationResult(""));
 
         Object result = agent.invoke(TASK, null);
         // 状态隔离后 rail 内部状态（triggerCount/coverage）invoke 后不可读（ctx 不可达）；
@@ -178,5 +186,17 @@ class ProactiveConvergenceRealLlmE2eTest {
         }
         return "苹果公司 1976 年创立于加州库比蒂诺，总部 Apple Park 园区，"
                 + "全球员工约 16.4 万人。";
+    }
+
+    /**
+     * Applies the {@code LLM_THINKING} env switch onto the request config (default
+     * {@code thinking-off} — identical to the pre-switch behavior). Mirrors the
+     * {@code EdpaCognitiveLoopRealLlmE2eTest} / unified-matrix thinking idiom.
+     *
+     * @param reqCfg the request config to decorate in place
+     */
+    static void applyThinkingMode(ModelRequestConfig reqCfg) {
+        String mode = System.getenv().getOrDefault("LLM_THINKING", "thinking-off");
+        ModelDialect.thinkingParams(mode).forEach(reqCfg::setExtraField);
     }
 }

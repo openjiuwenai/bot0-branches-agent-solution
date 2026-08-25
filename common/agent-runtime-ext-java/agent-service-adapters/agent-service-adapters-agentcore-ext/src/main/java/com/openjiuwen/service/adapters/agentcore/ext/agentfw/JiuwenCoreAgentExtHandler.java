@@ -7,6 +7,8 @@ package com.openjiuwen.service.adapters.agentcore.ext.agentfw;
 import com.openjiuwen.service.adapters.agentcore.agentfw.JiuwenCoreAgentHandler;
 import com.openjiuwen.service.adapters.agentcore.ext.external.ClientToolRail;
 import com.openjiuwen.service.adapters.agentcore.ext.external.RemoteA2aToolInstaller;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.OtelRailBinding;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.OtelRuntimeSupport;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub.SkillHubManager;
 import com.openjiuwen.service.adapters.agentcore.external.ExternalSvcAdapterRegistrar;
 import com.openjiuwen.service.adapters.agentcore.middleware.MiddlewareAdapterRegistrar;
@@ -21,8 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import java.util.Objects;
 
 /**
- * AgentCore handler extension that installs remote A2A tools and SkillHub
- * skills before execution.
+ * AgentCore handler extension that installs remote A2A tools and SkillHub skills before execution.
  *
  * @since 2026-06-30
  */
@@ -30,6 +31,7 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     private static final Logger log = LoggerFactory.getLogger(JiuwenCoreAgentExtHandler.class);
 
     private RemoteA2aToolInstaller remoteToolInstaller = RemoteA2aToolInstaller.noop();
+    private IntentDeepAgentInstaller intentInstaller;
     private SkillHubManager skillHubManager;
 
     public JiuwenCoreAgentExtHandler(Object agent) {
@@ -54,11 +56,17 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
         this.remoteToolInstaller = Objects.requireNonNull(remoteToolInstaller, "remoteToolInstaller");
     }
 
+    @Autowired(required = false)
+    void setIntentDeepAgentInstaller(IntentDeepAgentInstaller intentInstaller) {
+        this.intentInstaller = Objects.requireNonNull(intentInstaller, "intentInstaller");
+    }
+
     /**
-     * Inject the SkillHubManager when the SkillHub chain is active (enabled=true
-     * and provider present). Null when inactive - handler runs without skills.
+     * Inject the SkillHubManager when the SkillHub chain is active (enabled=true and provider present). Null when
+     * inactive - handler runs without skills.
      *
-     * @param skillHubManager the SkillHub manager bean, or null when middleware is inactive
+     * @param skillHubManager
+     *            the SkillHub manager bean, or null when middleware is inactive
      */
     @Autowired(required = false)
     void setSkillHubManager(SkillHubManager skillHubManager) {
@@ -69,10 +77,10 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     public void start() {
         if (skillHubManager != null) {
             // Layered failure semantics:
-            //   - provider.start() config failures: thrown (fail fast)
-            //   - required auth/access/lookup failures: thrown (fail fast)
-            //   - download/integrity-check failures: degraded + retried in
-            //     background inside Manager.start() (never reach here)
+            // - provider.start() config failures: thrown (fail fast)
+            // - required auth/access/lookup failures: thrown (fail fast)
+            // - download/integrity-check failures: degraded + retried in
+            // background inside Manager.start() (never reach here)
             // Any exception from skillHubManager.start() propagates and blocks
             // super.start(), so the Agent card never becomes ready.
             skillHubManager.start();
@@ -95,21 +103,47 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     @Override
     public void streamQuery(ServeRequest request, QueryStreamObserver observer) {
         installBeforeRun();
+        OtelRailBinding otelBinding = bindOtel(request);
         try (var binding = ClientToolRail.bind(getAgent(), request)) {
             super.streamQuery(request, observer);
+        } finally {
+            closeOtelQuietly(otelBinding);
         }
     }
 
     @Override
     public QueryResponse query(ServeRequest request) {
         installBeforeRun();
+        OtelRailBinding otelBinding = bindOtel(request);
         try (var binding = ClientToolRail.bind(getAgent(), request)) {
             return super.query(request);
+        } finally {
+            closeOtelQuietly(otelBinding);
         }
     }
 
+    private void closeOtelQuietly(OtelRailBinding otelBinding) {
+        try {
+            otelBinding.close();
+        } catch (IllegalStateException | IllegalArgumentException | UnsupportedOperationException ex) {
+            log.warn("OTel binding close failed reason={}", ex.getMessage());
+        }
+    }
+
+    private OtelRailBinding bindOtel(ServeRequest request) {
+        // 同模块 middleware/otel：未启用时 OtelRuntimeSupport 内部返回 no-op 绑定
+        return OtelRuntimeSupport.bindRequest(getAgent(), request.getConversationId());
+    }
+
     private void installBeforeRun() {
-        remoteToolInstaller.install(getAgent());
+        if (intentInstaller == null) {
+            remoteToolInstaller.install(getAgent());
+        } else {
+            intentInstaller.install(getAgent());
+            if (intentInstaller.exposeAgentCardTools()) {
+                remoteToolInstaller.install(getAgent());
+            }
+        }
         if (skillHubManager != null) {
             skillHubManager.register(getAgent());
         }

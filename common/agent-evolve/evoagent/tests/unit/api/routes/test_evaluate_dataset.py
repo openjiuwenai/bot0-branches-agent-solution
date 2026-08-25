@@ -111,7 +111,7 @@ def test_mode1_single_exact_match_json() -> None:
     result = body["result"]
     assert result is not None
     agg = result["aggregate"]["是否属实"]
-    assert agg["exact_match"] == 0.5
+    assert agg["exact_match"] == pytest.approx(0.5)
     assert "_overall" in agg and "f1" in agg and "accuracy" in agg
     assert result["extraction_summary"] == {"raw": 2}
     assert result["per_case"][0]["case_id"] == "1"
@@ -134,8 +134,8 @@ def test_mode2_multi_exact_match() -> None:
     body = _wait_terminal(client, submit["job_id"])
     result = body["result"]
     assert set(result["aggregate"].keys()) == {"是否属实", "是否供电"}
-    assert result["aggregate"]["是否属实"]["exact_match"] == 0.5
-    assert result["aggregate"]["是否供电"]["exact_match"] == 1.0
+    assert result["aggregate"]["是否属实"]["exact_match"] == pytest.approx(0.5)
+    assert result["aggregate"]["是否供电"]["exact_match"] == pytest.approx(1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -152,10 +152,10 @@ def test_mode3_keyword_group() -> None:
     body = _wait_terminal(client, submit["job_id"])
     result = body["result"]
     agg = result["aggregate"]["责任判定"]
-    assert agg["keyword_hit"] == 0.5  # 命中率
+    assert agg["keyword_hit"] == pytest.approx(0.5)  # 命中率
     assert agg["precision"] == pytest.approx(1.0)
-    assert agg["recall"] == 0.5
-    assert agg["accuracy"] == 0.5
+    assert agg["recall"] == pytest.approx(0.5)
+    assert agg["accuracy"] == pytest.approx(0.5)
     assert agg["f1"] == pytest.approx(2 * 0.5 / 1.5)
 
 
@@ -205,7 +205,7 @@ def test_xlsx_upload_mode1() -> None:
     body = _wait_terminal(client, submit["job_id"])
     result = body["result"]
     agg = result["aggregate"]["是否属实"]
-    assert agg["exact_match"] == 0.5
+    assert agg["exact_match"] == pytest.approx(0.5)
 
 
 # ---------------------------------------------------------------------------
@@ -251,7 +251,7 @@ def test_mode5_json_column_extraction() -> None:
     # 是否属实: 3 条中 2 条对（id3 误判）→ accuracy 2/3
     assert result["aggregate"]["是否属实"]["exact_match"] == pytest.approx(2 / 3)
     # 是否供电公司责任: 3 条全对 → 1.0
-    assert result["aggregate"]["是否供电公司责任"]["exact_match"] == 1.0
+    assert result["aggregate"]["是否供电公司责任"]["exact_match"] == pytest.approx(1.0)
     assert result["extraction_summary"] == {"json": 6}  # 3 条 × 2 组
 
 
@@ -347,14 +347,14 @@ def test_mode6_llm_judge(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result is not None
     assert result["extraction_summary"] == {"raw": 4}
     agg = result["aggregate"]["是否属实"]
-    assert agg["llm_judge"] == 0.75
-    assert agg["accuracy"] == 0.75
+    assert agg["llm_judge"] == pytest.approx(0.75)
+    assert agg["accuracy"] == pytest.approx(0.75)
     assert agg["precision"] == pytest.approx((2 / 3 + 1.0) / 2)  # 非退化
     assert agg["recall"] == pytest.approx((1.0 + 0.5) / 2)
     assert agg["f1"] == pytest.approx((0.8 + 2 / 3) / 2)
     ov = result["overall"]
     assert ov["_overall"] == pytest.approx(0.75)
-    assert ov["accuracy"] == ov["_overall"]  # llm_judge-only 恒等
+    assert ov["accuracy"] == pytest.approx(ov["_overall"])  # llm_judge-only 恒等
 
 
 # ---------------------------------------------------------------------------

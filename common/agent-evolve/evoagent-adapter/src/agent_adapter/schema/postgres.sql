@@ -22,12 +22,15 @@ CREATE TABLE IF NOT EXISTS spans (
     events             jsonb,                         -- OTLP Event[]
     links              jsonb,                         -- OTLP Link[]
     session_id         text,                          -- 从 attributes."session.id" 提升 (轨迹 API 查询键)
+    attribution        jsonb,                          -- skill 归属 {skill,source,confidence,candidates,misuse}; trace 完整后异步算写回; NULL=未算完 (入库时不写)
     ingested_at        timestamptz DEFAULT now(),
     PRIMARY KEY (trace_id, span_id)
 );
 CREATE INDEX IF NOT EXISTS idx_spans_session    ON spans (session_id);
 CREATE INDEX IF NOT EXISTS idx_spans_trace_time ON spans (trace_id, start_time);
 CREATE INDEX IF NOT EXISTS idx_spans_attr       ON spans USING gin (attributes);
+-- 历史库迁移: 已存在的 spans 表补 attribution 列 (新库由 CREATE TABLE 带, 此 ALTER 幂等 no-op)
+ALTER TABLE spans ADD COLUMN IF NOT EXISTS attribution jsonb;
 
 -- traces: 应用层汇总 (非 OTel 标准), 消费者写 spans 时 upsert
 CREATE TABLE IF NOT EXISTS traces (

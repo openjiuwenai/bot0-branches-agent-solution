@@ -27,14 +27,18 @@ import com.openjiuwen.rdc.security.CallerAuthorizationPolicy;
 import com.openjiuwen.rdc.tenant.TenantContext;
 
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.LongSupplier;
 
 /**
  * MVP phase-1 implementation of {@link AgentDiscoveryService} — single
@@ -70,6 +74,11 @@ import java.util.UUID;
  * {@link TenantIsolationViolationException} (HTTP 400
  * {@code tenant_isolation_violation}).
  *
+ * <p>Level-1 degradation (DB briefly unavailable): successful FEAT-016 search /
+ * resolve results are kept in {@link RdcLocalRouteCache} (TTL default one probe
+ * period, 5s). On {@link RegistryUnavailableException}, a fresh cache hit is
+ * returned so callers still see RDC; cache miss keeps explicit failure.
+ *
  * @since 0.1.0
  */
 @Primary
@@ -78,22 +87,63 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
     private static final String DIM_AGENT_ID = "agentId";
     private static final String DIM_SERVICE_ID = "serviceId";
     private static final String DIM_CAPABILITY = "capability";
+    private static final Duration DEFAULT_LOCAL_CACHE_TTL = Duration.ofSeconds(5);
 
     private final AgentRegistryRepository repository;
     private final TenantContext tenantContext;
     private final RegistryObservabilityConfig observability;
     private final CallerAuthorizationPolicy callerAuthorizationPolicy;
+    private final RdcLocalRouteCache localRouteCache;
 
+    /**
+     * Test / manual construction with default local-cache TTL (5s).
+     *
+     * @param repository repository
+     * @param tenantContext tenantContext
+     * @param observability observability
+     * @param callerAuthorizationPolicy callerAuthorizationPolicy
+     */
     public PgMvpDiscoveryServiceImpl(AgentRegistryRepository repository,
                                      TenantContext tenantContext,
                                      RegistryObservabilityConfig observability,
                                      CallerAuthorizationPolicy callerAuthorizationPolicy) {
+        this(repository, tenantContext, observability, callerAuthorizationPolicy,
+                DEFAULT_LOCAL_CACHE_TTL, System::currentTimeMillis);
+    }
+
+    /**
+     * Spring construction — TTL from {@code agent-bus.registry.mvp.local-cache.ttl-ms}.
+     *
+     * @param repository repository
+     * @param tenantContext tenantContext
+     * @param observability observability
+     * @param callerAuthorizationPolicy callerAuthorizationPolicy
+     * @param cacheTtlMs local route cache TTL in milliseconds
+     */
+    @Autowired
+    public PgMvpDiscoveryServiceImpl(AgentRegistryRepository repository,
+                                     TenantContext tenantContext,
+                                     RegistryObservabilityConfig observability,
+                                     CallerAuthorizationPolicy callerAuthorizationPolicy,
+                                     @Value("${agent-bus.registry.mvp.local-cache.ttl-ms:5000}") long cacheTtlMs) {
+        this(repository, tenantContext, observability, callerAuthorizationPolicy,
+                Duration.ofMillis(cacheTtlMs), System::currentTimeMillis);
+    }
+
+    PgMvpDiscoveryServiceImpl(AgentRegistryRepository repository,
+                              TenantContext tenantContext,
+                              RegistryObservabilityConfig observability,
+                              CallerAuthorizationPolicy callerAuthorizationPolicy,
+                              Duration cacheTtl,
+                              LongSupplier clock) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.tenantContext = Objects.requireNonNull(tenantContext, "tenantContext");
         this.observability = Objects.requireNonNull(observability, "observability");
         this.callerAuthorizationPolicy = callerAuthorizationPolicy != null
                 ? callerAuthorizationPolicy
                 : new CallerAuthorizationPolicy.Permissive();
+        Duration ttl = cacheTtl != null ? cacheTtl : DEFAULT_LOCAL_CACHE_TTL;
+        this.localRouteCache = new RdcLocalRouteCache(ttl, clock != null ? clock : System::currentTimeMillis);
     }
 
     /**
@@ -157,18 +207,30 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
                 outcome = "not_found";
                 return List.of();
             }
+            List<AgentCardDto> dtos = rows.stream().map(row -> toDto(tenantId, row)).toList();
+            localRouteCache.putSearch(dimension, tenantId, value, contractVersion, dtos);
             outcome = "success";
-            return rows.stream().map(row -> toDto(tenantId, row)).toList();
-        } catch (TenantIsolationViolationException ex) {
-                outcome = "tenant_isolation_violation";
-                throw ex;
-                } finally {
-                long latencyMs = (System.nanoTime() - start) / 1_000_000;
-                observability.observeDiscover(
-                new RegistryOpAudit(traceId, tenantId, value, null, null, null, null, outcome, latencyMs),
-                resultCount);
-                MDC.remove("traceId");
+            return dtos;
+        } catch (RegistryUnavailableException ex) {
+            List<AgentCardDto> cached = localRouteCache.getSearch(
+                    dimension, tenantId, value, contractVersion);
+            if (!cached.isEmpty()) {
+                outcome = "degraded_cached";
+                resultCount = cached.size();
+                return cached;
             }
+            outcome = "registry_unavailable";
+            throw ex;
+        } catch (TenantIsolationViolationException ex) {
+            outcome = "tenant_isolation_violation";
+            throw ex;
+        } finally {
+            long latencyMs = (System.nanoTime() - start) / 1_000_000;
+            observability.observeDiscover(
+                    new RegistryOpAudit(traceId, tenantId, value, null, null, null, null, outcome, latencyMs),
+                    resultCount);
+            MDC.remove("traceId");
+        }
     }
 
     /**
@@ -272,49 +334,58 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
         long start = System.nanoTime();
         String outcome = "error";
         try {
-            if (deadline != null) {
-                RegistryRequestDeadline.enforce(deadline, effectiveTraceId);
-            }
-            if (callerRef != null && !callerRef.isBlank()) {
-                callerAuthorizationPolicy.authorize(tenantId, callerRef, effectiveTraceId);
-            }
-            RouteHandleCodec.HandleFields decoded = decodeRouteHandle(routeHandle, tenantId, effectiveTraceId);
-            verifyTenant(tenantId, effectiveTraceId);
-            RouteResolution resolution = lookupRouteResolution(tenantId, decoded, effectiveTraceId);
+            RouteResolution resolution = resolveRouteHandleBody(
+                    routeHandle, tenantId, callerRef, effectiveTraceId, deadline);
             outcome = "success";
             return resolution;
         } catch (TenantIsolationViolationException ex) {
-                if ("error".equals(outcome)) {
-                outcome = "tenant_isolation_violation";
-            }
+            outcome = remapOutcome(outcome, "tenant_isolation_violation");
             throw ex;
         } catch (MalformedRouteHandleException ex) {
-                if ("error".equals(outcome)) {
-                    outcome = "malformed_handle";
-                }
+            outcome = remapOutcome(outcome, "malformed_handle");
             throw ex;
         } catch (EntryNotFoundException ex) {
-                    if ("error".equals(outcome)) {
-                    outcome = "entry_not_found";
-                }
+            outcome = remapOutcome(outcome, "entry_not_found");
             throw ex;
         } catch (LeaseExpiredException ex) {
-                    if ("error".equals(outcome)) {
-                    outcome = "lease_expired";
-                }
+            outcome = remapOutcome(outcome, "lease_expired");
             throw ex;
         } catch (DeadlineExceededException ex) {
-                    outcome = "deadline_exceeded";
-                    throw ex;
-                    } catch (RegistryUnavailableException ex) {
-                    outcome = "registry_unavailable";
-                    throw ex;
-                    } finally {
-                    long latencyMs = (System.nanoTime() - start) / 1_000_000;
-                    observability.observeResolve(new RegistryOpAudit(
+            outcome = "deadline_exceeded";
+            throw ex;
+        } catch (RegistryUnavailableException ex) {
+            Optional<RouteResolution> cached = localRouteCache.getResolve(tenantId, routeHandle);
+            if (cached.isPresent()) {
+                outcome = "degraded_cached";
+                return cached.get();
+            }
+            outcome = "registry_unavailable";
+            throw ex;
+        } finally {
+            long latencyMs = (System.nanoTime() - start) / 1_000_000;
+            observability.observeResolve(new RegistryOpAudit(
                     effectiveTraceId, tenantId, null, null, null, null, routeHandle, outcome, latencyMs));
-                    MDC.remove("traceId");
-                }
+            MDC.remove("traceId");
+        }
+    }
+
+    private RouteResolution resolveRouteHandleBody(String routeHandle, String tenantId, String callerRef,
+                                                   String effectiveTraceId, Instant deadline) {
+        if (deadline != null) {
+            RegistryRequestDeadline.enforce(deadline, effectiveTraceId);
+        }
+        if (callerRef != null && !callerRef.isBlank()) {
+            callerAuthorizationPolicy.authorize(tenantId, callerRef, effectiveTraceId);
+        }
+        RouteHandleCodec.HandleFields decoded = decodeRouteHandle(routeHandle, tenantId, effectiveTraceId);
+        verifyTenant(tenantId, effectiveTraceId);
+        RouteResolution resolution = lookupRouteResolution(tenantId, decoded, effectiveTraceId);
+        localRouteCache.putResolve(tenantId, routeHandle, resolution);
+        return resolution;
+    }
+
+    private static String remapOutcome(String current, String mapped) {
+        return "error".equals(current) ? mapped : current;
     }
 
     private RouteHandleCodec.HandleFields decodeRouteHandle(

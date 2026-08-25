@@ -68,7 +68,7 @@ class AgentBusInMemoryIntegrationTest {
         assertThat(gatewayMessages).allSatisfy(message -> {
             assertThat(message.targetServiceId()).isEqualTo(Feat017BusIntegrationSupport.GATEWAY);
             assertThat(message.payloadRef()).isNull();
-            assertThat(message.inlinePayload()).contains("taskId=");
+            assertThat(message.inlinePayload()).contains("\"taskId\":");
         });
     }
 
@@ -131,14 +131,15 @@ class AgentBusInMemoryIntegrationTest {
         assertThat(responses).singleElement().satisfies(response -> {
             assertThat(response.headers().eventType()).isEqualTo(AgentBusEventType.INVOCATION_RESPONSE);
             assertThat(response.headers().payloadRef()).isNull();
-            assertThat(response.headers().inlinePayload()).contains("taskId=" + taskId)
+            assertThat(response.headers().inlinePayload()).contains("\"taskId\":\"" + taskId + "\"")
                     .doesNotContain(clientInvocationId);
         });
         List<BrokerInboundMessage> gatewayMessages = publishResponsesToGateway(responses);
         assertThat(gatewayMessages).singleElement().satisfies(message -> {
             assertThat(message.eventType()).isEqualTo(AgentBusEventType.INVOCATION_RESPONSE);
             assertThat(message.payloadRef()).isNull();
-            assertThat(message.inlinePayload()).contains("taskId=" + taskId).doesNotContain(clientInvocationId);
+            assertThat(message.inlinePayload()).contains("\"taskId\":\"" + taskId + "\"")
+                    .doesNotContain(clientInvocationId);
         });
     }
 

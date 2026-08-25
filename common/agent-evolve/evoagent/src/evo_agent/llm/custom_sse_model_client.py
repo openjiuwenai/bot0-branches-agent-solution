@@ -290,7 +290,7 @@ class CustomSSEModelClient(BaseModelClient):  # type: ignore[misc]
                     if not stripped.startswith("data:"):
                         continue
                     chunk_index += 1
-                    payload = stripped[len("data:") :].strip()
+                    payload = stripped[len("data:"):].strip()
                     if payload == self._profile.done_sentinel:
                         done_received = True
                         break

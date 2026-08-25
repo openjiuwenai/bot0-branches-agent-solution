@@ -37,6 +37,7 @@
 
     <modules>
         <module>agent-core-ext-react-rails</module>
+        <module>agent-core-ext-intent-suite</module>
         <module>agent-core-ext-studio-dsl</module>
     </modules>
 

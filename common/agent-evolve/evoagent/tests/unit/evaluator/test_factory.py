@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from openjiuwen.core.foundation.llm import ModelClientConfig, ModelRequestConfig
 
+from evo_agent.evaluator.evaluators.agent import AgentEvaluator
 from evo_agent.evaluator.evaluators.filtering import FilteringEvaluator
 from evo_agent.evaluator.evaluators.llm import LLMEvaluator
 from evo_agent.evaluator.evaluators.metric import MetricEvaluator
@@ -310,3 +312,121 @@ class TestUnknownType:
     def test_missing_type_raises(self) -> None:
         with pytest.raises(ValueError, match="Unknown evaluator type"):
             create_evaluator({})  # type: ignore[dict-item]
+
+
+class TestAgentFactory:
+    """create_evaluator({'type': 'agent'}) → AgentEvaluator + 配置校验。"""
+
+    @staticmethod
+    def _cfg(**overrides: object) -> dict[str, object]:
+        cfg: dict[str, object] = {
+            "type": "agent",
+            "preset": "default",
+            "dimension_thresholds": {"task_completion": 0.5, "safety": 0.5},
+        }
+        cfg.update(overrides)
+        return cfg
+
+    @staticmethod
+    def test_creates_agent_evaluator() -> None:
+        evaluator = create_evaluator(TestAgentFactory._cfg())
+        assert isinstance(evaluator, AgentEvaluator)
+
+    @staticmethod
+    def test_unknown_type_message_lists_agent() -> None:
+        with pytest.raises(ValueError, match="agent"):
+            create_evaluator({"type": "magic"})
+
+    def test_missing_preset_raises(self) -> None:
+        with pytest.raises(ValueError, match="preset"):
+            create_evaluator(self._cfg(preset=""))
+
+    def test_unknown_preset_raises(self) -> None:
+        with pytest.raises(ValueError, match="Unknown judge preset"):
+            create_evaluator(self._cfg(preset="definitely_not_a_preset"))
+
+    def test_unknown_runtime_raises(self) -> None:
+        with pytest.raises(ValueError, match="runtime"):
+            create_evaluator(self._cfg(runtime="openclaw"))  # type: ignore[dict-item]
+
+    def test_overrides_folded_into_preset(self) -> None:
+        evaluator = create_evaluator(
+            self._cfg(
+                tool_allowlist=["Read"],
+                max_concurrent=3,
+                run_timeout=42.0,
+            )
+        )
+        assert isinstance(evaluator, AgentEvaluator)
+        assert getattr(evaluator, "_preset").tool_allowlist == ("Read",)
+        assert getattr(evaluator, "_preset").max_concurrent == 3
+        assert getattr(evaluator, "_preset").run_timeout == 42.0
+
+    def test_runtime_override(self) -> None:
+        evaluator = create_evaluator(self._cfg(runtime="codex"))
+        assert isinstance(evaluator, AgentEvaluator)
+        assert getattr(evaluator, "_preset").runtime == "codex"
+
+    def test_skill_source_local_without_root_raises(self) -> None:
+        with pytest.raises(ValueError, match="skill_root"):
+            create_evaluator(self._cfg(skill_source="local"))
+
+    def test_skill_source_local_with_root(self, tmp_path: Path) -> None:
+        evaluator = create_evaluator(self._cfg(skill_source="local", skill_root=str(tmp_path)))
+        assert isinstance(evaluator, AgentEvaluator)
+
+    def test_unknown_skill_source_raises(self) -> None:
+        with pytest.raises(ValueError, match="skill_source"):
+            create_evaluator(self._cfg(skill_source="ghost"))  # type: ignore[dict-item]
+
+    def test_tool_allowlist_wrong_type_raises(self) -> None:
+        with pytest.raises(TypeError, match="tool_allowlist"):
+            create_evaluator(self._cfg(tool_allowlist="Read"))  # type: ignore[dict-item]
+
+    def test_trajectory_budget_forwarded(self) -> None:
+        evaluator = create_evaluator(self._cfg(trajectory_budget=12000))
+        assert isinstance(evaluator, AgentEvaluator)
+        assert getattr(evaluator, "_trajectory_budget") == 12000
+
+    def test_trajectory_budget_default_uses_module_constant(self) -> None:
+        from evo_agent.evaluator.evaluators.agent import _DEFAULT_TRAJECTORY_BUDGET
+
+        evaluator = create_evaluator(self._cfg())
+        assert getattr(evaluator, "_trajectory_budget") == _DEFAULT_TRAJECTORY_BUDGET
+
+    def test_trajectory_budget_wrong_type_raises(self) -> None:
+        with pytest.raises(TypeError, match="trajectory_budget"):
+            create_evaluator(self._cfg(trajectory_budget="big"))  # type: ignore[dict-item]
+
+    def test_trajectory_budget_bool_rejected(self) -> None:
+        # bool is a subclass of int; explicitly reject it to avoid True/False slips.
+        with pytest.raises(TypeError, match="trajectory_budget"):
+            create_evaluator(self._cfg(trajectory_budget=True))  # type: ignore[dict-item]
+
+    def test_trajectory_budget_zero_raises(self) -> None:
+        with pytest.raises(ValueError, match="trajectory_budget"):
+            create_evaluator(self._cfg(trajectory_budget=0))
+
+    def test_trajectory_budget_negative_raises(self) -> None:
+        with pytest.raises(ValueError, match="trajectory_budget"):
+            create_evaluator(self._cfg(trajectory_budget=-100))
+
+    def test_jiuwenswarm_runtime(self) -> None:
+        evaluator = create_evaluator(self._cfg(runtime="jiuwenswarm"))
+        assert isinstance(evaluator, AgentEvaluator)
+        assert getattr(evaluator, "_preset").runtime == "jiuwenswarm"
+
+    def test_agent_profile_passthrough(self) -> None:
+        evaluator = create_evaluator(
+            self._cfg(runtime="jiuwenswarm", agent_profile="custom_agent")
+        )
+        assert isinstance(evaluator, AgentEvaluator)
+        # The runtime adapter should be a JiuwenSwarmRuntime with the custom profile
+        from evo_agent.evaluator.agent_judge.runtime import JiuwenSwarmRuntime
+
+        assert isinstance(getattr(evaluator, "_runtime"), JiuwenSwarmRuntime)
+        assert getattr(getattr(evaluator, "_runtime"), "_agent_profile") == "custom_agent"
+
+    def test_agent_profile_wrong_type_raises(self) -> None:
+        with pytest.raises(TypeError, match="agent_profile"):
+            create_evaluator(self._cfg(agent_profile=42))  # type: ignore[dict-item]

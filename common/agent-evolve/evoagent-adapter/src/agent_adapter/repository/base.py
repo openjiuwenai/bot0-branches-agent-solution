@@ -42,7 +42,12 @@ class TraceRepository(Protocol):
         ...
 
     async def get_spans_by_session(self, session_id: str) -> list[dict[str, Any]]:
-        """按 session_id 取全部 spans (跨 trace, 按 start_time 升序)。"""
+        """按 session_id 取全部 spans (跨 trace, 按 start_time 升序)。
+
+        含子 agent session: 子 agent span 的 session_id 形如 ``<主session>-sub-entity_<id>``
+        (同源后缀), 按 ``session_id=$1 OR session_id LIKE $1||'-sub-%'`` 同源匹配, 否则
+        /traces 和 runner 的 session context 都会漏子 agent 执行段。
+        """
         ...
 
     async def get_trace_tree(self, trace_id: str) -> dict[str, Any]:
@@ -55,4 +60,16 @@ class TraceRepository(Protocol):
 
     async def list_sessions(self, agent_name: str | None = None) -> list[dict[str, Any]]:
         """列出 traces 汇总 (可按 service_name=agent_name 过滤)。"""
+        ...
+
+    # ---- 归属 (AttributionRunner 调; 入库路径不写 attribution, 此处写回) ----
+
+    async def list_unattributed_completed_traces(self) -> list[dict[str, Any]]:
+        """sweep: 已完整但仍有 attribution NULL span 的 trace。返回 [{trace_id, ...}]。"""
+        ...
+
+    async def update_span_attribution(
+        self, trace_id: str, attributions: dict[str, dict[str, Any]]
+    ) -> int:
+        """批量写回一条 trace 内各 span 归属 (span_id -> attribution dict)。返回 UPDATE 条数。"""
         ...

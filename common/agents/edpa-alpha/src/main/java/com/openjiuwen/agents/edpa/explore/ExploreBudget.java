@@ -8,8 +8,10 @@ package com.openjiuwen.agents.edpa.explore;
  * Budget constraints for the Explore phase.
  *
  * @param maxRounds maximum exploration rounds (default 2)
- * @param maxSubAgents maximum subagents that can be spawned (default 3)
- * @param timeoutMillis per-round timeout in milliseconds (default 60000)
+ * @param maxSubAgents maximum subagents that can be spawned (default 3) —
+ *                   <b>honest boundary</b>: no production Explorer consumes this yet
+ * @param timeoutMillis per-round timeout in milliseconds (default 60000) —
+ *                   <b>honest boundary</b>: no production Explorer enforces this yet
  *
  * @since 2026-07
  */

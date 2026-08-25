@@ -1,0 +1,14 @@
+{
+  "jsonrpc": "2.0",
+  "id": "smoke-l2-1",
+  "method": "SendMessage",
+  "params": {
+    "message": {
+      "messageId": "smoke-l2-msg-1",
+      "parts": [{ "text": "l2-degrade-smoke" }]
+    },
+    "metadata": {
+      "agentId": "smoke-agent"
+    }
+  }
+}

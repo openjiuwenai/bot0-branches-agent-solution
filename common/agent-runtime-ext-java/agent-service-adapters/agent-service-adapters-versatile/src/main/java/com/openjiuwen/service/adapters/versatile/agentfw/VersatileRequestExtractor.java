@@ -47,8 +47,10 @@ final class VersatileRequestExtractor {
         if (hasText(semanticInput.intent())) {
             inputs.put("intent", semanticInput.intent());
         }
-        serializeIntents().ifPresent(json -> inputs.put("intents", json));
-        serializeMessages(request).ifPresent(json -> inputs.put("messages", json));
+        serializeIntents().ifPresent(json -> {
+            inputs.put("intents", json);
+            serializeMessages(request).ifPresent(messages -> inputs.put("messages", messages));
+        });
         if (!inputs.isEmpty()) {
             remoteBody.put("inputs", inputs);
         }
@@ -76,8 +78,10 @@ final class VersatileRequestExtractor {
         if (!hasText(urlTemplate)) {
             throw new IllegalArgumentException("openjiuwen.service.versatile.url-template must not be blank");
         }
+        Object agentId = request.getMetadata().get("agent_id");
         String url = urlTemplate.replace(
-                "{conversation_id}", request.getConversationId() != null ? request.getConversationId() : "");
+                "{conversation_id}", request.getConversationId() != null ? request.getConversationId() : "")
+                .replace("{agent_id}", agentId != null ? String.valueOf(agentId) : "");
         return new RemoteRequest(url, headers, params, remoteBody);
     }
 

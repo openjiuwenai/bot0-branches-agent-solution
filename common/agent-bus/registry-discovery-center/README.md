@@ -25,11 +25,13 @@
 
 ### 1. PostgreSQL
 
-默认 `localhost:5432/agent_rdc`，账密 `agent_rdc/agent_rdc`（账号需为库 owner，以便建 RLS）：
+库 `agent_rdc`，账密 `agent_rdc/agent_rdc`（账号需为库 owner，以便建 RLS）。
+
+> **端口选择**：RDC 应用默认连 `localhost:5432/agent_rdc`。但 event-bus 编排已占用宿主 `5432`（库 `agentbus`）；与 event-bus 同机并跑（Gateway BUS 场景）时，RDC 用宿主 `5433` 并在第 2 步覆盖 JDBC URL，避免两个 PostgreSQL 争抢 `5432`。RDC 单独运行时可用 `5432`（无需覆盖）。
 
 ```bash
 docker run -d --name registry-discovery-center-pg \
-  -p 5432:5432 \
+  -p 5433:5432 \
   -e POSTGRES_DB=agent_rdc \
   -e POSTGRES_USER=agent_rdc \
   -e POSTGRES_PASSWORD=agent_rdc \
@@ -38,12 +40,15 @@ docker run -d --name registry-discovery-center-pg \
 
 ### 2. 构建与运行
 
-本模块为独立 Maven 工程：
+本模块为独立 Maven 工程（上步用宿主 `5433` 时须覆盖 JDBC URL，否则连不上库）：
 
 ```bash
 cd agent-solution/common/agent-bus/registry-discovery-center
+SPRING_DATASOURCE_URL=jdbc:postgresql://127.0.0.1:5433/agent_rdc \
+SPRING_DATASOURCE_USERNAME=agent_rdc SPRING_DATASOURCE_PASSWORD=agent_rdc \
 mvn spring-boot:run
 # 或
+SPRING_DATASOURCE_URL=jdbc:postgresql://127.0.0.1:5433/agent_rdc \
 mvn package && java -jar target/agent-rdc-0.1.0.jar
 ```
 
@@ -55,7 +60,13 @@ mvn package && java -jar target/agent-rdc-0.1.0.jar
 mvn -DjunitParallel=false test
 ```
 
-（macOS 建议关 JUnit 类并行，减轻 `kern.sysv.shmmni` 压力；测试使用 Zonky embedded-postgres。）
+联机发现过滤 / 降级冒烟见配套 example：
+
+```bash
+cd ../../example/registry-discovery-center-demo/discovery-degrade
+DEGRADE_L1_YES=1 ./run-online.sh   # 过滤 + L1(切断 agent_rdc) + L2(Gateway)
+./run-online.sh --filter-only      # 只要过滤
+```
 
 ### 4. 生产覆盖
 

@@ -1,0 +1,154 @@
+name: knowledge_qc_http_llm
+display_name: RAG知识质检 - HTTP LLM
+description: 兼容知识质检 HTTP LLM 协议（token 请求头 + question/sessionId/userId 请求体）。
+version: "1.0"
+
+ui:
+  form:
+    - key: name
+      label: 配置名称
+      type: text
+      placeholder: 知识质检-HTTP
+      required: true
+      help: 给这个 HTTP LLM 配置起个名字。
+
+    - key: connection.base_url
+      label: LLM HTTP 接口 URL
+      type: text
+      placeholder: https://example.com/llm/conversation
+      required: true
+      help: 对应环境变量 HTTP_LLM_URL，填写完整 POST 地址。
+
+    - key: connection.api_key
+      label: Token
+      type: password
+      placeholder: your-token
+      required: true
+      sensitive: true
+      help: 对应环境变量 HTTP_LLM_TOKEN，将以 header token=... 发送。
+
+    - key: connection.timeout
+      label: 超时时间（秒）
+      type: int
+      default: 120
+      required: true
+      help: 对应环境变量 API_TIMEOUT。
+
+    - key: request.data.model
+      label: 模型标识
+      type: text
+      placeholder: gpt-4o-mini
+      required: false
+      help: 仅用于展示/日志，该 HTTP 协议可不填。
+
+    - key: runtime.kqc_session_id
+      label: Session ID
+      type: text
+      default: "0"
+      help: 对应环境变量 HTTP_LLM_SESSION_ID。
+
+    - key: runtime.kqc_user_id
+      label: User ID
+      type: text
+      default: "0"
+      help: 对应环境变量 HTTP_LLM_USER_ID。
+
+    - key: runtime.kqc_enable_history
+      label: 启用历史
+      type: checkbox
+      default: false
+      help: 对应环境变量 HTTP_LLM_ENABLE_HISTORY。
+
+defaults:
+  connection:
+    base_url: https://example.com/llm/conversation
+    api_key: ""
+    timeout: 120
+  request:
+    method: POST
+    url_suffix: ""
+    headers:
+      Content-Type: application/json
+      token: ${connection.api_key}
+    data:
+      model: ""
+      enableHistory: false
+      sessionId: "0"
+      userId: "0"
+  runtime:
+    knowledge_qc_http: true
+    kqc_session_id: "0"
+    kqc_user_id: "0"
+    kqc_enable_history: false
+    http_post_content_path: "result.finalAnswer"
+    http_post_usage_path: ""
+
+schema:
+  sections:
+    connection:
+      required: true
+      fields:
+        base_url:
+          type: string
+          required: true
+        api_key:
+          type: string
+          required: true
+          sensitive: true
+        timeout:
+          type: int
+          default: 120
+    request:
+      required: true
+      fields:
+        method:
+          type: string
+          default: POST
+        url_suffix:
+          type: string
+          default: ""
+        headers:
+          type: dict
+          fields:
+            Content-Type:
+              type: string
+              default: application/json
+            token:
+              type: string
+              required: true
+        data:
+          type: dict
+          fields:
+            model:
+              type: string
+              default: ""
+            enableHistory:
+              type: bool
+              default: false
+            sessionId:
+              type: string
+              default: "0"
+            userId:
+              type: string
+              default: "0"
+    runtime:
+      required: false
+      fields:
+        knowledge_qc_http:
+          type: bool
+          default: true
+        kqc_session_id:
+          type: string
+          default: "0"
+        kqc_user_id:
+          type: string
+          default: "0"
+        kqc_enable_history:
+          type: bool
+          default: false
+        http_post_content_path:
+          type: string
+          default: "result.finalAnswer"
+        http_post_usage_path:
+          type: string
+          default: ""

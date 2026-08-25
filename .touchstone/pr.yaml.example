@@ -1,0 +1,20 @@
+# .touchstone/pr.yaml.example
+# 本 PR 的提交契约模板 —— 复制为 pr.yaml 后填写，touchstone 确定性核对每条声明。
+# 核对逻辑：scope 越界→SCOPE-001；声称加测试但 diff 无测试文件→TEST-001；
+#          声称复用但新代码无引用→DUP-001。不填则跳过对应核对（不拦）。
+#
+# schema_version: touchstone pr.yaml 结构版本（当前 0.1，不随软件版本变）
+schema_version: "0.1"
+
+# 本 PR 改动的文件范围（glob）。diff 里出现 scope 外的文件 → SCOPE-001 越界告警
+scope:
+  - common/agent-core-ext-java/**
+
+# 本 PR 声称新增/修改的测试（类名或文件名）。diff 无测试文件 → TEST-001 申报不实
+tests_added: []
+  # - AgentCoreExtTest
+  # - AgentBusIntegrationTest
+
+# 本 PR 声称复用的既有能力（全限定名/方法名）。新代码无对应引用 → DUP-001 疑似重复造轮子
+reused_components: []
+  # - com.openjiuwen.agent.common.AgentHelper

@@ -8,6 +8,7 @@
 common
 |-- agent-core-ext-java
 |   |-- agent-core-ext-react-rails
+|   |-- agent-core-ext-intent-suite
 |   `-- agent-core-ext-studio-dsl
 |-- agent-runtime-ext-java
 |   `-- agent-service-adapters
@@ -21,13 +22,16 @@ common
 `-- example
     |-- agentcore-ext-deepagent-remote-a2a-demo
     |-- agentcore-ext-remote-a2a-tool-demo
+    |-- bank-intent-routing-a2a-demo
     `-- versatile-a2a-adapter-demo
 ```
 
 ## 扩展工程
 
 - `agent-runtime-ext-java`：运行时扩展模块的 Maven 父工程。
-- `agent-core-ext-java`：`agent-core-java` 的纯 SDK 扩展工程，当前包含 `agent-core-ext-react-rails`、`agent-core-ext-studio-dsl`。
+- `agent-core-ext-java`：`agent-core-java` 的纯 SDK 扩展工程，当前包含 `agent-core-ext-react-rails`、`agent-core-ext-intent-suite`、`agent-core-ext-studio-dsl`。
+  - `agent-core-ext-intent-suite`：提供 DeepAgent 意图套件、三类 SPI、原子目录更新、reranker 匹配和意图路由 Rail。
+  - `agent-core-ext-studio-dsl`：Studio DSL 节点类型扩展与节点执行（FEAT-031）。
 - `agents`：具体 Agent 实现工程，当前包含 PEV Agent。
 - `agent-evolve/evoagent`：Skill/managed-doc 自进化服务，Python 3.12 + uv 独立工程。
 - `agent-evolve/evoagent-adapter`：日志、Skill 与 managed-doc sidecar，Python 3.12 + uv 独立工程。
@@ -43,6 +47,7 @@ common
   - `agent-a-deepagent-runtime`：Agent A，通过注入的远端 A2A 工具委托 Agent B。
   - `agent-b-deepagent-runtime`：Agent B，通过 A2A 暴露 DeepAgent runtime。
 - `example/versatile-a2a-adapter-demo`：Versatile adapter 的独立查询和 A2A 请求示例。
+- `example/bank-intent-routing-a2a-demo`：五个 DeepAgent runtime 组成的银行多 Agent 示例，验证意图匹配、A2A 委托、本地工具、中断续接、意图跳转和计划执行。
 
 ## 编译打包流程
 
@@ -67,6 +72,9 @@ mvn -f common\example\agentcore-ext-remote-a2a-tool-demo\pom.xml `
   clean install
 
 mvn -f common\example\agentcore-ext-deepagent-remote-a2a-demo\pom.xml `
+  clean install
+
+mvn -f common\example\bank-intent-routing-a2a-demo\pom.xml `
   clean install
 ```
 
@@ -116,5 +124,8 @@ mvn -f common\example\agentcore-ext-remote-a2a-tool-demo\pom.xml `
   clean install
 
 mvn -f common\example\agentcore-ext-deepagent-remote-a2a-demo\pom.xml `
+  clean install
+
+mvn -f common\example\bank-intent-routing-a2a-demo\pom.xml `
   clean install
 ```

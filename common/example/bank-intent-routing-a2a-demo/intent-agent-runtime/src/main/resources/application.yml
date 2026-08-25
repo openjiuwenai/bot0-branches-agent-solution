@@ -1,0 +1,94 @@
+server:
+  port: ${INTENT_AGENT_PORT:18200}
+
+spring:
+  application:
+    name: intent-bank-router
+  config:
+    import: optional:file:./application-intent_local.yml
+
+openjiuwen:
+  service:
+    agent-id: intent-bank-router
+    handler: agentcore-ext
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    intent:
+      enabled: true
+      expose-agent-card-tools: false
+      match:
+        threshold: ${INTENT_MATCH_THRESHOLD:0.45}
+        # 相关性 reranker 判定的是"文档能否回答查询"。裸的用户口语是提问，能力描述并不回答它，
+        # 绝对分会塌（"深圳天气怎么样"实测 0.0423），尽管排序仍正确。补一句任务前缀把查询
+        # 重述为路由请求后，真阳性最低分从 0.0423 升到 0.6704，真阴性最高仍只有 0.0060。
+        # 2026-08-22 实测（8 正样本 / 6 负样本，Qwen3-Reranker-8B）：
+        #   无前缀        真阳性最低 0.0423（3/8 低于阈值）真阴性最高 0.0009
+        #   用户请求：     真阳性最低 0.6704（8/8 通过）    真阴性最高 0.0060  ← 采用
+        #   请判断该请求应由哪个能力处理：真阳性最低 0.9018，但真阴性升到 0.3201，fallback 余量不足
+        query-instruction: "用户请求："
+      prompt:
+        tool-description: >
+          根据最新用户语义匹配一个银行业务或本地能力，并在同一次调用中执行匹配结果。
+        routing-instructions: >
+          所有用户请求（包括银行范围外、计算、日期和天气请求）都必须进入意图路由，禁止直接回答或自行选择工具。
+          单一业务目标先调用 intent_match；包含多个业务目标的请求必须先调用 todo_create 创建计划，
+          不得在计划创建前调用 intent_match；随后按计划为每个单一业务目标分别调用 intent_match。
+          semantic 必须保留最新用户语义及完成当前步骤所需的上下文。
+          不得与其他业务工具并行调用 intent_match。intent_match 已经执行匹配目标，直接使用其工具结果。
+          当下游结果 status 为 INTENT_CHANGED 且带有 latestSemantic 时，用 latestSemantic 再次调用 intent_match，
+          不要结束本轮。完成全部计划步骤后再汇总结果。
+      custom-intents:
+        # 描述用于 reranker 排序，应说明能力边界，不要写入验收脚本的原始输入语句，
+        # 否则匹配得分会被抬高，掩盖意图之间的真实区分度。
+        calculator:
+          description: 数学计算：对数字执行加、减、乘、除等算术运算或金额试算
+          result-function-bean: calculatorIntentResult
+        current-date:
+          description: 日期查询：查询当前的日期和星期
+          result-function-bean: dateIntentResult
+        weather:
+          description: 天气查询：查询指定城市的天气状况
+          result-function-bean: weatherIntentResult
+      fallback:
+        id: bank-intent-fallback
+        result-function-bean: bankFallbackIntentResult
+    a2a:
+      agent-name: IntentBankRouter
+      agent-description: 银行业务统一意图识别、任务规划和下游 Agent 路由入口
+      provider-organization: OpenJiuwen
+      streaming: true
+      default-input-modes: ["text", "text/plain"]
+      default-output-modes: ["text", "text/plain", "application/json"]
+      skills:
+        - id: route_bank_intent
+          name: Route bank intent
+          description: 识别银行或本地工具意图并执行匹配目标
+          tags: ["intent", "bank", "routing"]
+          examples: ["查询余额", "给张三转100元", "推荐一款稳健理财"]
+          input-modes: ["text", "text/plain"]
+          output-modes: ["text", "text/plain", "application/json"]
+      remote-agents:
+        - name: balance-agent
+          url: ${BALANCE_AGENT_URL:http://127.0.0.1:18201}
+          timeout-seconds: 300
+          streaming: true
+        - name: transfer-agent
+          url: ${TRANSFER_AGENT_URL:http://127.0.0.1:18202}
+          timeout-seconds: 300
+          streaming: true
+        - name: wealth-advisor-agent
+          url: ${WEALTH_ADVISOR_AGENT_URL:http://127.0.0.1:18203}
+          timeout-seconds: 300
+          streaming: true
+        - name: wealth-purchase-agent
+          url: ${WEALTH_PURCHASE_AGENT_URL:http://127.0.0.1:18204}
+          timeout-seconds: 300
+          streaming: true
+
+logging:
+  level:
+    com.openjiuwen.agents.intent: INFO
+    com.openjiuwen.service.adapters.agentcore.ext: INFO
+    com.openjiuwen.service.app.controller.a2a: INFO

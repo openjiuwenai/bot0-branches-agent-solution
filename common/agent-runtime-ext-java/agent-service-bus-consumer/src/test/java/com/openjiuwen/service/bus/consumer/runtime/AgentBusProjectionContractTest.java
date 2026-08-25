@@ -5,6 +5,7 @@
 package com.openjiuwen.service.bus.consumer.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.service.bus.consumer.model.BusResponseProjection;
 
@@ -21,12 +22,13 @@ import java.util.Map;
  */
 class AgentBusProjectionContractTest {
     @Test
-    void acceptedProjectionMatchesGoldenDescriptor() {
+    void acceptedProjectionMatchesGoldenJson() {
         BusResponseProjection projection = projection("A2A_CALL_ACCEPTED", "task-1", "ACCEPTED",
                 Map.of("idempotencyResult", "NEW"));
 
         assertThat(AgentBusResponsePublisher.encodeProjection(projection)).isEqualTo(
-                "taskId=task-1;projectionKind=ACCEPTED;revision=0;idempotencyResult=NEW");
+                "{\"schemaVersion\":\"1.0\",\"projectionKind\":\"ACCEPTED\",\"revision\":0,"
+                        + "\"taskId\":\"task-1\",\"idempotencyResult\":\"NEW\"}");
     }
 
     @Test
@@ -37,22 +39,40 @@ class AgentBusProjectionContractTest {
         BusResponseProjection projection = projection("A2A_CALL_FAILED", null, "FAILED", data);
 
         assertThat(AgentBusResponsePublisher.encodeProjection(projection)).isEqualTo(
-                "projectionKind=FAILED;revision=0;reason=TASK_NOT_FOUND;"
-                        + "errorCode=TASK_NOT_FOUND;retryable=false");
+                "{\"schemaVersion\":\"1.0\",\"projectionKind\":\"FAILED\",\"revision\":0,"
+                        + "\"errorCode\":\"TASK_NOT_FOUND\",\"retryable\":false}");
     }
 
     @Test
-    void completeJsonRpcResponseMatchesGoldenDescriptor() {
+    void completeJsonRpcResponseMatchesGoldenJson() {
         String response = "{\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"result\":{\"task\":{"
                 + "\"id\":\"task-1\"}}}";
         BusResponseProjection projection = projection("A2A_CALL_RESPONSE", "task-1", "RESPONSE",
                 Map.of("a2aResponse", response));
 
         assertThat(AgentBusResponsePublisher.encodeProjection(projection)).isEqualTo(
-                "taskId=task-1;projectionKind=RESPONSE;revision=0;"
-                        + "a2aResponseType=JsonRpcResponse;"
-                        + "a2aResponse=eyJqc29ucnBjIjoiMi4wIiwiaWQiOiJyZXEtMSIsInJlc3VsdCI6"
-                        + "eyJ0YXNrIjp7ImlkIjoidGFzay0xIn19fQ");
+                "{\"schemaVersion\":\"1.0\",\"projectionKind\":\"RESPONSE\",\"revision\":0,"
+                        + "\"taskId\":\"task-1\",\"a2aResponse\":{"
+                        + "\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"result\":{"
+                        + "\"task\":{\"id\":\"task-1\"}}}}" );
+    }
+
+    @Test
+    void rejectsDuplicateFieldsAndMismatchedTaskIds() {
+        var codec = new com.openjiuwen.service.bus.consumer.projection.AgentBusProjectionJsonCodec();
+        String duplicate = "{\"schemaVersion\":\"1.0\",\"projectionKind\":\"ACCEPTED\","
+                + "\"revision\":0,\"taskId\":\"one\",\"taskId\":\"two\","
+                + "\"idempotencyResult\":\"NEW\"}";
+        String mismatch = "{\"schemaVersion\":\"1.0\",\"projectionKind\":\"RESPONSE\","
+                + "\"revision\":0,\"taskId\":\"task-1\",\"a2aResponse\":{\"jsonrpc\":\"2.0\","
+                + "\"id\":\"request-1\",\"result\":{\"task\":{\"id\":\"task-2\"}}}}";
+
+        assertThatThrownBy(() -> codec.decode(duplicate, "A2A_CALL_ACCEPTED"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("PROJECTION_PAYLOAD_INVALID");
+        assertThatThrownBy(() -> codec.decode(mismatch, "A2A_CALL_RESPONSE"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("PROJECTION_PAYLOAD_INVALID");
     }
 
     private static BusResponseProjection projection(String eventType, String taskId, String kind,

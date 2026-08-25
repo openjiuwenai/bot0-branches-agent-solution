@@ -41,8 +41,8 @@ import java.util.concurrent.TimeUnit;
  * <p>北向方法白名单只含上述三者；其余方法（{@code CancelTask} / {@code SubscribeToTask}）
  * 按治理语义返回 {@code 400 VALIDATION_METHOD}，与真实网关 v0730 的开放面一致。
  *
- * <p>治理对齐（Feat-Func-011 §4.9）：每个请求强制 Bearer 鉴权（缺失 {@code AUTH_MISSING} / 非法 {@code AUTH_INVALID}，
- * 均 401）；{@code agentId} 可选，显式给出时不得为空串（否则 400 {@code VALIDATION_AGENT_ID}）；
+ * <p>治理对齐（Feat-Func-011 §3 / DF-Q01）：每个请求强制 Bearer 鉴权（缺失 {@code AUTH_MISSING} / 非法 {@code AUTH_INVALID}，
+ * 均 401）；创建类 {@code agentId} 必填，缺省/空串 → 400 {@code VALIDATION_AGENT_ID}（无默认 Agent 回退）；
  * 创建请求按 {@code message.messageId} 幂等去重。
  *
  * <p>它按 Feat-Func-009 的语义驱动 client 工具多轮：读取 {@code params.metadata.clientTools}（即 ToolView），
@@ -222,9 +222,9 @@ public final class MockGatewayServer {
         JsonNode metadata = params.path("metadata");
 
         if (taskId == null || taskId.isEmpty()) {
-            // G3 校验（Feat-Func-011 §4.9）：agentId 可选，但若显式给出则不得为空串。
-            if (metadata.has("agentId") && metadata.path("agentId").asText("").isBlank()) {
-                writeGovernanceError(ex, 400, "VALIDATION_AGENT_ID", "agentId must not be empty when present");
+            // G3 校验（Feat-Func-011 §3 / DF-Q01）：创建类 agentId 必填，缺省/空串 → 400 VALIDATION_AGENT_ID（无默认 Agent 回退）。
+            if (metadata.path("agentId").asText("").isBlank()) {
+                writeGovernanceError(ex, 400, "VALIDATION_AGENT_ID", "agentId is required for create-type requests");
                 return;
             }
             // G4 幂等：同一 messageId 的重复创建复用既有 Task，不新建。

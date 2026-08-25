@@ -7,6 +7,7 @@ package com.openjiuwen.client.transport.a2a;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.openjiuwen.client.api.AgentClient;
 import com.openjiuwen.client.api.AgentClients;
@@ -16,7 +17,12 @@ import com.openjiuwen.client.api.InvocationEvent;
 import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.api.InvocationRequest;
 import com.openjiuwen.client.api.InvocationSnapshot;
+import com.openjiuwen.client.api.ObservationTimeoutException;
 import com.openjiuwen.client.api.TaskState;
+import com.openjiuwen.client.api.ErrorCodes;
+import com.openjiuwen.client.tool.spi.LocalToolDescriptor;
+import com.openjiuwen.client.tool.spi.ToolExecutionRecord;
+import com.openjiuwen.client.tool.spi.ToolExposurePolicy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -34,6 +40,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Flow;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -47,7 +54,7 @@ class A2aHttpTransportProviderTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Test
-    void blockingNonTerminalResponseDoesNotPollGetTask() throws Exception {
+    void runtimeBlockingNonTerminalResponseAutomaticallyPollsGetTask() throws Exception {
         AtomicInteger sendMessageCalls = new AtomicInteger();
         AtomicInteger getTaskCalls = new AtomicInteger();
         List<String> returnImmediatelyValues = new CopyOnWriteArrayList<>();
@@ -58,7 +65,7 @@ class A2aHttpTransportProviderTest {
 
         String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
         try (AgentClient client = AgentClients.builder()
-                .transport(new A2aHttpTransportProvider(baseUrl, MAPPER, Duration.ofSeconds(5)))
+                .transport(runtimeTransport(baseUrl, Duration.ofSeconds(5), Duration.ofMillis(20)))
                 .build()) {
             InvocationCall call = client.invoke(InvocationRequest.builder()
                     .conversationId("strict-blocking")
@@ -68,17 +75,42 @@ class A2aHttpTransportProviderTest {
 
             InvocationSnapshot snapshot = call.completion().toCompletableFuture().get(3, TimeUnit.SECONDS);
 
-            assertEquals(TaskState.WORKING, snapshot.state());
-            assertFalse(snapshot.terminal());
-            assertNotNull(snapshot.recovery());
+            assertEquals(TaskState.COMPLETED, snapshot.state());
             assertEquals(1, sendMessageCalls.get());
-            assertEquals(0, getTaskCalls.get(), "strict BLOCKING must not poll GetTask");
+            assertEquals(1, getTaskCalls.get(), "Runtime BLOCKING must observe non-terminal Task");
             assertEquals(List.of("false"), returnImmediatelyValues);
+        } finally {
+            server.stop(0);
+        }
+    }
 
-            InvocationSnapshot observed = client.getInvocation(call.invocationRef())
-                    .toCompletableFuture().get(3, TimeUnit.SECONDS);
-            assertEquals(TaskState.COMPLETED, observed.state());
-            assertEquals(1, getTaskCalls.get(), "explicit getInvocation must issue exactly one GetTask");
+    @Test
+    void gatewayBlockingNonTerminalResponseAutomaticallyPollsGetTask() throws Exception {
+        AtomicInteger sendMessageCalls = new AtomicInteger();
+        AtomicInteger getTaskCalls = new AtomicInteger();
+        List<String> returnImmediatelyValues = new CopyOnWriteArrayList<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/a2a", exchange ->
+                handle(exchange, sendMessageCalls, getTaskCalls, returnImmediatelyValues));
+        server.start();
+
+        String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
+        try (AgentClient client = AgentClients.builder()
+                .transport(new A2aHttpTransportProvider(baseUrl, MAPPER, Duration.ofSeconds(5),
+                        GatewayEndpointPolicy.INSTANCE, Duration.ofSeconds(5), Duration.ofMillis(20)))
+                .build()) {
+            InvocationSnapshot snapshot = client.invoke(InvocationRequest.builder()
+                            .conversationId("gateway-blocking")
+                            .mode(InvocationMode.BLOCKING)
+                            .input("return a working task")
+                            .build())
+                    .completion().toCompletableFuture().get(3, TimeUnit.SECONDS);
+
+            assertEquals(TaskState.COMPLETED, snapshot.state());
+            assertEquals(1, sendMessageCalls.get());
+            assertEquals(1, getTaskCalls.get(), "Gateway BLOCKING must observe a non-terminal Task");
+            assertEquals(List.of("false"), returnImmediatelyValues);
+            assertNull(snapshot.callTree());
         } finally {
             server.stop(0);
         }
@@ -126,7 +158,7 @@ class A2aHttpTransportProviderTest {
     }
 
     @Test
-    void asyncCreateRequestsImmediateReturn() throws Exception {
+    void runtimeAsyncWaitsForExplicitGetInvocation() throws Exception {
         AtomicInteger sendMessageCalls = new AtomicInteger();
         AtomicInteger getTaskCalls = new AtomicInteger();
         List<String> returnImmediatelyValues = new CopyOnWriteArrayList<>();
@@ -137,7 +169,7 @@ class A2aHttpTransportProviderTest {
 
         String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
         try (AgentClient client = AgentClients.builder()
-                .transport(new A2aHttpTransportProvider(baseUrl, MAPPER, Duration.ofSeconds(5)))
+                .transport(runtimeTransport(baseUrl, Duration.ofSeconds(5), Duration.ofMillis(20)))
                 .build()) {
             InvocationCall call = client.invoke(InvocationRequest.builder()
                     .conversationId("async-create")
@@ -146,13 +178,131 @@ class A2aHttpTransportProviderTest {
                     .build());
 
             call.accepted().toCompletableFuture().get(3, TimeUnit.SECONDS);
+            TimeUnit.MILLISECONDS.sleep(100);
 
             assertEquals(1, sendMessageCalls.get());
-            assertEquals(0, getTaskCalls.get());
             assertEquals(List.of("true"), returnImmediatelyValues);
+            assertEquals(0, getTaskCalls.get(), "Runtime ASYNC must not start background GetTask");
             assertFalse(call.completion().toCompletableFuture().isDone());
+
+            InvocationSnapshot queried = client.getInvocation(call.invocationRef())
+                    .toCompletableFuture().get(3, TimeUnit.SECONDS);
+            InvocationSnapshot completed = call.completion().toCompletableFuture().get(3, TimeUnit.SECONDS);
+
+            assertEquals(TaskState.COMPLETED, queried.state());
+            assertEquals(TaskState.COMPLETED, completed.state());
+            assertEquals(1, getTaskCalls.get());
+            assertNull(completed.callTree());
         } finally {
             server.stop(0);
+        }
+    }
+
+    @Test
+    void gatewayAsyncWaitsForExplicitGetInvocation() throws Exception {
+        AtomicInteger sendMessageCalls = new AtomicInteger();
+        AtomicInteger getTaskCalls = new AtomicInteger();
+        List<String> returnImmediatelyValues = new CopyOnWriteArrayList<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/a2a", exchange ->
+                handle(exchange, sendMessageCalls, getTaskCalls, returnImmediatelyValues));
+        server.start();
+
+        String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
+        try (AgentClient client = AgentClients.builder()
+                .transport(new A2aHttpTransportProvider(baseUrl, MAPPER, Duration.ofSeconds(5),
+                        GatewayEndpointPolicy.INSTANCE, Duration.ofSeconds(5), Duration.ofMillis(20)))
+                .build()) {
+            InvocationCall call = client.invoke(InvocationRequest.builder()
+                    .conversationId("gateway-async")
+                    .mode(InvocationMode.ASYNC)
+                    .input("return a working task")
+                    .build());
+
+            call.accepted().toCompletableFuture().get(3, TimeUnit.SECONDS);
+            TimeUnit.MILLISECONDS.sleep(100);
+
+            assertEquals(1, sendMessageCalls.get());
+            assertEquals(List.of("true"), returnImmediatelyValues);
+            assertEquals(0, getTaskCalls.get(), "Gateway ASYNC must not start background GetTask");
+            assertFalse(call.completion().toCompletableFuture().isDone());
+
+            InvocationSnapshot queried = client.getInvocation(call.invocationRef())
+                    .toCompletableFuture().get(3, TimeUnit.SECONDS);
+            assertEquals(TaskState.COMPLETED, queried.state());
+            assertEquals(TaskState.COMPLETED,
+                    call.completion().toCompletableFuture().get(3, TimeUnit.SECONDS).state());
+            assertEquals(1, getTaskCalls.get());
+            assertNull(queried.callTree());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void runtimeBlockingTimeoutCompletesExceptionallyAndCanBeQueried() throws Exception {
+        AtomicInteger sendMessageCalls = new AtomicInteger();
+        AtomicInteger getTaskCalls = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/a2a", exchange -> handleAlwaysWorking(exchange,
+                sendMessageCalls, getTaskCalls));
+        server.start();
+
+        String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
+        try (AgentClient client = AgentClients.builder()
+                .transport(runtimeTransport(baseUrl, Duration.ofMillis(120), Duration.ofMillis(20)))
+                .build()) {
+            InvocationCall call = client.invoke(InvocationRequest.builder()
+                    .conversationId("runtime-timeout")
+                    .mode(InvocationMode.BLOCKING)
+                    .input("keep working")
+                    .build());
+
+            call.accepted().toCompletableFuture().get(1, TimeUnit.SECONDS);
+            ExecutionException thrown = org.junit.jupiter.api.Assertions.assertThrows(ExecutionException.class,
+                    () -> call.completion().toCompletableFuture().get(2, TimeUnit.SECONDS));
+            if (thrown.getCause() instanceof ObservationTimeoutException timeout) {
+                assertEquals(call.invocationRef(), timeout.invocationRef());
+                assertEquals("task-working", timeout.diagnosticTaskRef());
+                assertEquals(TaskState.WORKING, timeout.lastKnownState());
+            }
+            assertEquals(1, sendMessageCalls.get());
+            assertFalse(getTaskCalls.get() == 0);
+
+            InvocationSnapshot later = client.getInvocation(call.invocationRef())
+                    .toCompletableFuture().get(1, TimeUnit.SECONDS);
+            assertEquals(TaskState.WORKING, later.state());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void terminalTimeoutAndCloseReleaseActiveTransportMappings() throws Exception {
+        AtomicInteger sendCalls = new AtomicInteger();
+        AtomicInteger getCalls = new AtomicInteger();
+        HttpServer workingServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        workingServer.createContext("/a2a", exchange -> handleAlwaysWorking(exchange, sendCalls, getCalls));
+        workingServer.start();
+        A2aHttpTransportProvider transport = runtimeTransport(
+                "http://127.0.0.1:" + workingServer.getAddress().getPort(),
+                Duration.ofMillis(100), Duration.ofMillis(20));
+        try (AgentClient client = AgentClients.builder().transport(transport).build()) {
+            InvocationCall timedOut = client.invoke(InvocationRequest.builder().conversationId("release-timeout")
+                    .mode(InvocationMode.BLOCKING).input("working").build());
+            org.junit.jupiter.api.Assertions.assertThrows(ExecutionException.class,
+                    () -> timedOut.completion().toCompletableFuture().get(2, TimeUnit.SECONDS));
+            assertEquals(0, transport.activeInvocationCount());
+            assertEquals(0, transport.activeTaskCount());
+
+            InvocationCall closed = client.invoke(InvocationRequest.builder().conversationId("release-close")
+                    .mode(InvocationMode.ASYNC).input("working").build());
+            closed.accepted().toCompletableFuture().get(1, TimeUnit.SECONDS);
+            closed.close();
+            assertEquals(0, transport.activeInvocationCount());
+            assertEquals(0, transport.activeTaskCount());
+        } finally {
+            workingServer.stop(0);
         }
     }
 
@@ -193,6 +343,99 @@ class A2aHttpTransportProviderTest {
             assertEquals(0, getTaskCalls.get());
             // 续轮继承 BLOCKING：returnImmediately=false（而非业务声明的 ASYNC=true）
             assertEquals(List.of("false", "false"), returnImmediatelyValues);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void runtimeAsyncContinueInputWaitsForExplicitGetInvocation() throws Exception {
+        AtomicInteger sendMessageCalls = new AtomicInteger();
+        AtomicInteger getTaskCalls = new AtomicInteger();
+        List<String> returnImmediatelyValues = new CopyOnWriteArrayList<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/a2a", exchange ->
+                handle(exchange, sendMessageCalls, getTaskCalls, returnImmediatelyValues));
+        server.start();
+
+        String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
+        try (AgentClient client = AgentClients.builder()
+                .transport(runtimeTransport(baseUrl, Duration.ofSeconds(5), Duration.ofMillis(20)))
+                .build()) {
+            InvocationCall initial = client.invoke(InvocationRequest.builder()
+                    .conversationId("async-input")
+                    .mode(InvocationMode.ASYNC)
+                    .input("need user input")
+                    .build());
+            initial.completion().toCompletableFuture().get(3, TimeUnit.SECONDS);
+
+            InvocationCall resumed = client.continueInput(ContinueInputRequest.builder()
+                    .conversationId("async-input")
+                    .relatedInvocationRef(initial.invocationRef())
+                    .input("user answer")
+                    .build());
+            resumed.accepted().toCompletableFuture().get(1, TimeUnit.SECONDS);
+            TimeUnit.MILLISECONDS.sleep(100);
+
+            assertEquals(2, sendMessageCalls.get());
+            assertEquals(0, getTaskCalls.get(), "ASYNC continuation must not start background GetTask");
+            assertFalse(resumed.completion().toCompletableFuture().isDone());
+
+            InvocationSnapshot queried = client.getInvocation(resumed.invocationRef())
+                    .toCompletableFuture().get(3, TimeUnit.SECONDS);
+            InvocationSnapshot completed = resumed.completion().toCompletableFuture()
+                    .get(3, TimeUnit.SECONDS);
+
+            assertEquals(TaskState.COMPLETED, queried.state());
+            assertEquals(TaskState.COMPLETED, completed.state());
+            assertEquals(2, sendMessageCalls.get());
+            assertEquals(1, getTaskCalls.get());
+            assertEquals(List.of("true", "true"), returnImmediatelyValues);
+            assertNull(completed.callTree());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void runtimeAsyncContinueInputHasNoBackgroundObservationTimeout() throws Exception {
+        AtomicInteger sendMessageCalls = new AtomicInteger();
+        AtomicInteger getTaskCalls = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/a2a", exchange -> handleInputThenAlwaysWorking(exchange,
+                sendMessageCalls, getTaskCalls));
+        server.start();
+
+        String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
+        try (AgentClient client = AgentClients.builder()
+                .transport(runtimeTransport(baseUrl, Duration.ofMillis(120), Duration.ofMillis(20)))
+                .build()) {
+            InvocationCall initial = client.invoke(InvocationRequest.builder()
+                    .conversationId("resume-timeout")
+                    .mode(InvocationMode.ASYNC)
+                    .input("need user input")
+                    .build());
+            initial.completion().toCompletableFuture().get(1, TimeUnit.SECONDS);
+
+            InvocationCall resumed = client.continueInput(ContinueInputRequest.builder()
+                    .conversationId("resume-timeout")
+                    .relatedInvocationRef(initial.invocationRef())
+                    .input("keep working")
+                    .build());
+            resumed.accepted().toCompletableFuture().get(1, TimeUnit.SECONDS);
+            TimeUnit.MILLISECONDS.sleep(250);
+
+            assertEquals(2, sendMessageCalls.get());
+            assertEquals(0, getTaskCalls.get());
+            assertFalse(resumed.completion().toCompletableFuture().isDone(),
+                    "ASYNC completion stays pending until an explicit query reaches a settlement point");
+
+            InvocationSnapshot working = client.getInvocation(resumed.invocationRef())
+                    .toCompletableFuture().get(1, TimeUnit.SECONDS);
+            assertEquals(TaskState.WORKING, working.state());
+            assertEquals(1, getTaskCalls.get());
+            assertFalse(resumed.completion().toCompletableFuture().isDone());
+            resumed.close();
         } finally {
             server.stop(0);
         }
@@ -266,6 +509,81 @@ class A2aHttpTransportProviderTest {
         } finally {
             server.stop(0);
         }
+    }
+
+    @Test
+    void incompleteClientToolInterruptIsDiagnosedAndNeverExecuted() throws Exception {
+        AtomicInteger executions = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/a2a", A2aHttpTransportProviderTest::handleIncompleteClientTool);
+        server.start();
+
+        String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
+        try (AgentClient client = AgentClients.builder().endpointType(com.openjiuwen.client.api.EndpointType.RUNTIME)
+                .endpointUrl(baseUrl).build()) {
+            client.tools().register(LocalToolDescriptor.builder("local.echo").displayName("echo")
+                    .description("echo").build(), (invocation, context) -> {
+                        executions.incrementAndGet();
+                        return ToolExecutionRecord.ok(invocation.toolCallId(), java.util.Map.of());
+                    });
+            client.exposeInConversation("incomplete-tool", ToolExposurePolicy.allow("local.echo"));
+            InvocationCall call = client.invoke(InvocationRequest.builder().conversationId("incomplete-tool")
+                    .mode(InvocationMode.BLOCKING).input("hello").build());
+            List<InvocationEvent> events = new CopyOnWriteArrayList<>();
+            CountDownLatch diagnosed = new CountDownLatch(1);
+            call.events().subscribe(collectingSubscriber(events, diagnosed));
+
+            InvocationSnapshot snapshot = call.completion().toCompletableFuture().get(3, TimeUnit.SECONDS);
+            diagnosed.await(1, TimeUnit.SECONDS);
+
+            assertEquals(0, executions.get());
+            assertEquals(TaskState.INPUT_REQUIRED, snapshot.state());
+            assertEquals(null, snapshot.pendingToolCall());
+            org.junit.jupiter.api.Assertions.assertTrue(events.stream().anyMatch(event ->
+                    event instanceof InvocationEvent.ProtocolDiagnostic diagnostic
+                            && ErrorCodes.INPUT_RESUME_TARGET_MISSING.equals(diagnostic.code())));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    private static Flow.Subscriber<InvocationEvent> collectingSubscriber(List<InvocationEvent> events,
+            CountDownLatch diagnosed) {
+        return new Flow.Subscriber<>() {
+            @Override
+            public void onSubscribe(Flow.Subscription subscription) {
+                subscription.request(Long.MAX_VALUE);
+            }
+
+            @Override
+            public void onNext(InvocationEvent item) {
+                events.add(item);
+                if (item instanceof InvocationEvent.ProtocolDiagnostic) {
+                    diagnosed.countDown();
+                }
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+            }
+
+            @Override
+            public void onComplete() {
+            }
+        };
+    }
+
+    private static void handleIncompleteClientTool(HttpExchange exchange) throws IOException {
+        exchange.getRequestBody().readAllBytes();
+        String body = "{\"jsonrpc\":\"2.0\",\"id\":\"tool\",\"result\":{\"task\":{"
+                + "\"id\":\"task-tool\",\"contextId\":\"incomplete-tool\","
+                + "\"status\":{\"state\":\"TASK_STATE_INPUT_REQUIRED\",\"message\":{"
+                + "\"metadata\":{\"_interrupt\":{\"context\":{\"_interrupt_kind\":\"client_tool\"}}}}}}}}}";
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(200, bytes.length);
+        exchange.getResponseBody().write(bytes);
+        exchange.close();
     }
 
     /**
@@ -348,6 +666,56 @@ class A2aHttpTransportProviderTest {
             body = "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32601,"
                     + "\"message\":\"method not found\"}}";
         }
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(200, bytes.length);
+        exchange.getResponseBody().write(bytes);
+        exchange.close();
+    }
+
+    private static A2aHttpTransportProvider runtimeTransport(String baseUrl, Duration observationTimeout,
+            Duration pollInterval) {
+        return new A2aHttpTransportProvider(baseUrl, MAPPER, Duration.ofSeconds(5),
+                RuntimeEndpointPolicy.INSTANCE, observationTimeout, pollInterval);
+    }
+
+    private static void handleAlwaysWorking(HttpExchange exchange, AtomicInteger sendMessageCalls,
+            AtomicInteger getTaskCalls) throws IOException {
+        JsonNode request = MAPPER.readTree(exchange.getRequestBody());
+        String method = request.path("method").asText();
+        if ("SendMessage".equals(method)) {
+            sendMessageCalls.incrementAndGet();
+        } else if ("GetTask".equals(method)) {
+            getTaskCalls.incrementAndGet();
+        } else {
+            // Unknown method; no-op — the mock only records the two known A2A methods.
+            return;
+        }
+        String body = "{\"jsonrpc\":\"2.0\",\"id\":\"working\",\"result\":{\"task\":{"
+                + "\"id\":\"task-working\",\"contextId\":\"runtime-timeout\","
+                + "\"status\":{\"state\":\"TASK_STATE_WORKING\"}}}}";
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(200, bytes.length);
+        exchange.getResponseBody().write(bytes);
+        exchange.close();
+    }
+
+    private static void handleInputThenAlwaysWorking(HttpExchange exchange, AtomicInteger sendMessageCalls,
+            AtomicInteger getTaskCalls) throws IOException {
+        JsonNode request = MAPPER.readTree(exchange.getRequestBody());
+        String method = request.path("method").asText();
+        String state;
+        if ("SendMessage".equals(method)) {
+            int call = sendMessageCalls.incrementAndGet();
+            state = call == 1 ? "TASK_STATE_INPUT_REQUIRED" : "TASK_STATE_WORKING";
+        } else {
+            getTaskCalls.incrementAndGet();
+            state = "TASK_STATE_WORKING";
+        }
+        String body = "{\"jsonrpc\":\"2.0\",\"id\":\"resume\",\"result\":{\"task\":{"
+                + "\"id\":\"task-resume-timeout\",\"contextId\":\"resume-timeout\","
+                + "\"status\":{\"state\":\"" + state + "\"}}}}";
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", "application/json");
         exchange.sendResponseHeaders(200, bytes.length);

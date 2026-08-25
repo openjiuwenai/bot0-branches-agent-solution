@@ -41,10 +41,23 @@ public class EdpaProperties {
     /** Maximum exploration rounds before switching to Plan phase. Default 2. */
     private int exploreRounds = 2;
 
-    /** Maximum subagents that can be spawned during Explore. Default 3. */
+    /**
+     * Maximum subagents that can be spawned during Explore. Default 3.
+     * <p><b>Honest boundary (4-lens 2026-08-15)</b>: flows into
+     * {@link com.openjiuwen.agents.edpa.explore.ExploreBudget#maxSubAgents} but no
+     * production {@code Explorer} consumes it yet (only {@code maxRounds} is read by
+     * ExploreRail; LlmExplorer ignores the budget entirely). Kept as the planned
+     * config surface — do not rely on it for behavior today.
+     */
     private int maxSubagents = 3;
 
-    /** Per-round explore timeout in milliseconds. Default 60000. */
+    /**
+     * Per-round explore timeout in milliseconds. Default 60000.
+     * <p><b>Honest boundary (4-lens 2026-08-15)</b>: flows into
+     * {@link com.openjiuwen.agents.edpa.explore.ExploreBudget#timeoutMillis} but no
+     * production {@code Explorer} enforces a timeout yet. Kept as the planned
+     * config surface — do not rely on it for behavior today.
+     */
     private int exploreTimeoutMillis = 60_000;
 
     /** Comma-separated success criteria for the verify gate. Empty = skip verify rail. */

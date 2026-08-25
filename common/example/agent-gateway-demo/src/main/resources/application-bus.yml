@@ -11,6 +11,8 @@
 # Prereq before boot: docker compose up -d (common/agent-bus/event-bus/event-bus-relay/src/test/java/
 # com/openjiuwen/bus/conf/) — Postgres (agentbus:5432) + RocketMQ (9876) + 8 topics; and the
 # relay (eventbus profile) + a target runtime (agent-bus-consumer-callee-demo) + RDC (:8092) running.
+# RDC uses its own Postgres on host :5433 (agent_rdc) to avoid clashing with event-bus's :5432;
+# this launcher's spring.datasource points at the event-bus outbox (agentbus), RDC connects to its own DB.
 
 server:
   port: ${GATEWAY_PORT:8080}
@@ -19,7 +21,6 @@ gateway:
   path-mode: bus
   rdc:
     base-url: ${GATEWAY_RDC_BASE_URL:}
-  default-agent-id: ${GATEWAY_DEFAULT_AGENT_ID:travel-hotel}
   test-credential:
     token: ${GATEWAY_TEST_TOKEN:}
     principalId: ${GATEWAY_TEST_PRINCIPAL:test-principal}

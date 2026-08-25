@@ -21,7 +21,7 @@ make test-unit  # 仅单元测试
 - Python 3.12+
 - uv (包管理)
 - hatchling (构建)
-- Ruff (lint + format, line-length=100)
+- Ruff (lint + format, line-length=120)
 - mypy strict (类型检查)
 - pytest + pytest-asyncio (测试)
 - FastAPI (服务端 API)

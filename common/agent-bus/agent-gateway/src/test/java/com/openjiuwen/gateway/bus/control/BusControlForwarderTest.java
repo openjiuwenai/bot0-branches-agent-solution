@@ -69,4 +69,37 @@ class BusControlForwarderTest {
         forwarder.forward(ctx("T1", "{}"), "handle-1", "svc-target", "svc-gw", 99999L);
         assertThat(outbox.enqueued()).hasSize(1);
     }
+
+    @Test
+    void forwardQueryWithoutMessageIdEnqueuesQueryEnvelope() {
+        // GetTask queries carry no client message id — forwardQuery must synthesize an idempotency
+        // key rather than NPE ("idempotencyKey is required") in the ForwardingEnvelope constructor.
+        GovernanceContext queryCtx = new GovernanceContext();
+        queryCtx.setTenantId("T1");
+        queryCtx.setTraceId("trace-1");
+        queryCtx.setRawBody("{\"jsonrpc\":\"2.0\",\"method\":\"GetTask\",\"params\":{\"id\":\"task-1\"}}");
+
+        forwarder.forwardQuery(queryCtx, "handle-1", "svc-target", "svc-gw", 99999L);
+
+        assertThat(outbox.enqueued()).hasSize(1);
+        assertThat(outbox.enqueued().get(0).eventType())
+                .isEqualTo(AgentBusEventType.CLIENT_INVOCATION_QUERY_REQUESTED);
+        assertThat(outbox.enqueued().get(0).idempotencyKey()).isNotBlank();
+    }
+
+    @Test
+    void forwardSubscribeWithoutMessageIdEnqueuesSubscribeEnvelope() {
+        // SubscribeToTask likewise carries no client message id.
+        GovernanceContext subscribeCtx = new GovernanceContext();
+        subscribeCtx.setTenantId("T1");
+        subscribeCtx.setTraceId("trace-1");
+        subscribeCtx.setRawBody("{\"jsonrpc\":\"2.0\",\"method\":\"SubscribeToTask\",\"params\":{\"id\":\"task-1\"}}");
+
+        forwarder.forwardSubscribe(subscribeCtx, "handle-1", "svc-target", "svc-gw", 99999L);
+
+        assertThat(outbox.enqueued()).hasSize(1);
+        assertThat(outbox.enqueued().get(0).eventType())
+                .isEqualTo(AgentBusEventType.CLIENT_STREAM_SUBSCRIBE_REQUESTED);
+        assertThat(outbox.enqueued().get(0).idempotencyKey()).isNotBlank();
+    }
 }

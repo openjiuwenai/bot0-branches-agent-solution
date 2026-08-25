@@ -26,17 +26,21 @@ class EvoCase:
         queries: 用户输入查询列表（从 inputs[].content 提取）。
         extra_data: 场景级附加数据（role_id 等）。
         expected_behavior: 期望行为描述。
+        images: 图片路径列表（GEPA 视觉模型优化用）。
     """
 
     case_id: str
     queries: tuple[str, ...]
     extra_data: dict[str, Any] = field(default_factory=dict)
     expected_behavior: str = ""
+    images: tuple[str, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
-        """将 queries 规范化为 tuple（兼容 list 输入）。"""
+        """将 queries 和 images 规范化为 tuple（兼容 list 输入）。"""
         if not isinstance(self.queries, tuple):
             object.__setattr__(self, "queries", tuple(self.queries))
+        if not isinstance(self.images, tuple):
+            object.__setattr__(self, "images", tuple(self.images))
 
 
 def parse_evo_cases(raw: list[dict[str, Any]]) -> list[EvoCase]:
@@ -69,12 +73,22 @@ def parse_evo_cases(raw: list[dict[str, Any]]) -> list[EvoCase]:
         if not queries:
             continue
 
+        # images: 从顶层 images 字段或 extra_data.images 提取
+        raw_images = item.get("images")
+        if raw_images is None:
+            raw_images = item.get("extra_data", {}).get("images", [])
+        images = tuple(
+            str(p) for p in (raw_images if isinstance(raw_images, list) else [raw_images])
+            if p
+        ) if raw_images else ()
+
         cases.append(
             EvoCase(
                 case_id=str(item.get("id", "")),
                 queries=queries,
                 extra_data=item.get("extra_data", {}),
                 expected_behavior=item.get("expected_behavior", ""),
+                images=images,
             )
         )
     return cases
@@ -89,15 +103,19 @@ def evo_case_to_case(evo: EvoCase) -> Case:
     - ``queries`` (list) → ``inputs["queries"]``
     - ``extra_data`` → ``inputs["extra_data"]``（保留供 optimizer 使用）
     - ``expected_behavior`` → ``label["expected_result"]``
+    - ``images`` → ``inputs["images"]``（GEPA 视觉模型优化用）
     """
     first_query = evo.queries[0] if evo.queries else ""
+    inputs: dict[str, Any] = {
+        "query": first_query,
+        "queries": list(evo.queries),
+        "extra_data": evo.extra_data,
+    }
+    if evo.images:
+        inputs["images"] = list(evo.images)
     return Case(
         case_id=evo.case_id,
-        inputs={
-            "query": first_query,
-            "queries": list(evo.queries),
-            "extra_data": evo.extra_data,
-        },
+        inputs=inputs,
         label={"expected_result": evo.expected_behavior},
     )
 
