@@ -316,7 +316,15 @@ public class BusForwarder {
      */
     public ResponseEntity<String> forwardSync(GovernanceContext ctx) {
         String effectiveAgentId = ctx.agentId();  // C2: validator guarantees non-null for create-type
-        List<AgentCardRoute> candidates = rdc.searchInstancesByAgentId(ctx.tenantId(), effectiveAgentId);
+        List<AgentCardRoute> candidates;
+        try {
+            candidates = rdc.searchInstancesByAgentId(ctx.tenantId(), effectiveAgentId);
+        } catch (RouteResolutionException ex) {
+            // L2-014: RDC search-stage failure (network down / 5xx+cache-empty / 4xx-non-404)
+            // is distinct from "no candidates" (empty business list). Retryable: transient RDC unavailability.
+            throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "RDC_UNAVAILABLE",
+                    "RDC search unavailable for agent " + effectiveAgentId, ex);
+        }
         if (candidates.isEmpty()) {
             throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "ROUTE_NO_CANDIDATES",
                     "No routable instance for agent " + effectiveAgentId);
@@ -422,7 +430,15 @@ public class BusForwarder {
     public Optional<String> forwardStreaming(GovernanceContext ctx, HttpServletResponse response, SseBridge sseBridge)
             throws IOException {
         String effectiveAgentId = ctx.agentId();  // C2: validator guarantees non-null for create-type
-        List<AgentCardRoute> candidates = rdc.searchInstancesByAgentId(ctx.tenantId(), effectiveAgentId);
+        List<AgentCardRoute> candidates;
+        try {
+            candidates = rdc.searchInstancesByAgentId(ctx.tenantId(), effectiveAgentId);
+        } catch (RouteResolutionException ex) {
+            // L2-014: RDC search-stage failure (network down / 5xx+cache-empty / 4xx-non-404)
+            // is distinct from "no candidates" (empty business list). Retryable: transient RDC unavailability.
+            throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "RDC_UNAVAILABLE",
+                    "RDC search unavailable for agent " + effectiveAgentId, ex);
+        }
         if (candidates.isEmpty()) {
             throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "ROUTE_NO_CANDIDATES",
                     "No routable instance for agent " + effectiveAgentId);

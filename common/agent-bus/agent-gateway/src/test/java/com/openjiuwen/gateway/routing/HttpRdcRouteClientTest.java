@@ -131,8 +131,25 @@ class HttpRdcRouteClientTest {
     }
 
     @Test
-    void searchReturnsEmptyWhenRdc503AndNoCache() {
+    void searchThrowsRouteResolutionExceptionWhenRdc503AndNoCache() {
+        // L2-014 ①: 5xx + no cache → RouteResolutionException (not List.of()), so Router maps to RDC_UNAVAILABLE.
         mockRdc.enqueue(new MockResponse().setResponseCode(503));
+        Throwable thrown = catchThrowable(() -> client.searchInstancesByAgentId("t", "a"));
+        assertThat(thrown).isInstanceOf(RouteResolutionException.class);
+    }
+
+    @Test
+    void searchThrowsRouteResolutionExceptionWhenRdc400() {
+        // L2-014 ①: 400 (RDC rejected) → RouteResolutionException (not List.of()), distinct from business-empty.
+        mockRdc.enqueue(new MockResponse().setResponseCode(400));
+        Throwable thrown = catchThrowable(() -> client.searchInstancesByAgentId("t", "a"));
+        assertThat(thrown).isInstanceOf(RouteResolutionException.class);
+    }
+
+    @Test
+    void searchReturnsEmptyFor404AsGenuineNoCandidates() {
+        // 404 = agent not registered → genuine "no candidates" (business-empty, NOT a dependency fault).
+        mockRdc.enqueue(new MockResponse().setResponseCode(404));
         assertThat(client.searchInstancesByAgentId("t", "a")).isEmpty();
     }
 
@@ -162,7 +179,10 @@ class HttpRdcRouteClientTest {
 
         Thread.sleep(60L);
         mockRdc.enqueue(new MockResponse().setResponseCode(503));
-        assertThat(shortTtlClient.searchInstancesByAgentId("tenant-1", "agent-9")).isEmpty();
+        // After TTL expiry, cache is empty → 503 throws RouteResolutionException (L2-014 ①).
+        Throwable thrown = catchThrowable(() ->
+                shortTtlClient.searchInstancesByAgentId("tenant-1", "agent-9"));
+        assertThat(thrown).isInstanceOf(RouteResolutionException.class);
     }
 
     @Test

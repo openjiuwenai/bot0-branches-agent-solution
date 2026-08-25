@@ -96,6 +96,19 @@ class BusForwarderTest {
     }
 
     @Test
+    void searchFailureReturnsRdcUnavailable() {
+        // L2-014: RDC search-stage failure (network/5xx+cache-empty/4xx-non-404) → RDC_UNAVAILABLE,
+        // distinct from ROUTE_NO_CANDIDATES (business-empty). BUS path (BusForwarder), not just DIRECT (Router).
+        rdc.setSearchFails(true);
+        var thrown = catchThrowable(() -> forwarder.forwardSync(ctx("agent-1", "m-rdc")));
+        assertThat(thrown).isInstanceOf(GovernanceException.class);
+        if (thrown instanceof GovernanceException ge) {
+            assertThat(ge.code()).isEqualTo("RDC_UNAVAILABLE");
+        }
+        assertThat(outbox.enqueued()).isEmpty();
+    }
+
+    @Test
     void produceFailEnqueueFailed() {
         rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
         outbox.setFailNext(true);

@@ -78,15 +78,32 @@ public class HttpRdcRouteClient implements RdcRouteClient {
                 .GET().build();
         try {
             HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            if (resp.statusCode() == 503 || resp.statusCode() == 502 || resp.statusCode() == 504) {
-                return cache.getSearch(tenantId, agentId);
+            int code = resp.statusCode();
+            if (code == 502 || code == 503 || code == 504) {
+                // L2-014 ①: RDC 5xx is a transient dependency fault, not "no candidates".
+                // If the cache has a prior result, use it (degraded but routable);
+                // if not, throw so the Router maps it to RDC_UNAVAILABLE (retryable), distinct from
+                // the business-empty ROUTE_NO_CANDIDATES.
+                List<AgentCardRoute> cached = cache.getSearch(tenantId, agentId);
+                if (!cached.isEmpty()) {
+                    return cached;
+                }
+                throw new RouteResolutionException("RDC search unavailable (HTTP " + code + ") for " + agentId);
             }
-            if (resp.statusCode() >= 400) {
+            if (code == 404) {
+                // 404 = agent has no registered instances → genuine "no candidates" (business-empty).
                 return List.of();
+            }
+            if (code >= 400) {
+                // 400/401/403 etc. = RDC rejected the request (config/auth/client error),
+                // not "no candidates" — throw so Router maps to RDC_UNAVAILABLE.
+                throw new RouteResolutionException("RDC search rejected (HTTP " + code + ") for " + agentId);
             }
             List<AgentCardRoute> parsed = parseSearchBody(resp.body());
             cache.putSearch(tenantId, agentId, parsed);
             return parsed;
+        } catch (RouteResolutionException ex) {
+            throw ex;
         } catch (IOException | InterruptedException ex) {
             List<AgentCardRoute> cached = cache.getSearch(tenantId, agentId);
             if (!cached.isEmpty()) {
