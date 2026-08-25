@@ -20,7 +20,6 @@ import java.util.Map;
  * @since 2026-08-17
  */
 public final class PassthroughStudioNode extends AbstractStudioNode {
-
     /**
      * PassthroughStudioNode.
      *

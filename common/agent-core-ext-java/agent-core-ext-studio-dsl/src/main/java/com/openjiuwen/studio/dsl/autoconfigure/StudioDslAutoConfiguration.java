@@ -29,7 +29,6 @@ import org.springframework.context.annotation.Bean;
 @EnableConfigurationProperties
 @ConditionalOnProperty(prefix = "studio-dsl", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class StudioDslAutoConfiguration {
-
     /**
      * studioDslProperties.
      *

@@ -21,7 +21,6 @@ import java.util.Map;
  * @since 2026-08-17
  */
 public abstract class AbstractStudioNode extends WorkflowComponent {
-
     /**
      * node.
      *

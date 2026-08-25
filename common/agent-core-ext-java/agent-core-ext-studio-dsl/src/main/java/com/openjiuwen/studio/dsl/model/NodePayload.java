@@ -74,6 +74,7 @@ public final class NodePayload {
     /**
      * Merge media list; unsupported modalities kept (D9 default passthrough).
      *
+     * @param extra extra
      * @return result
      */
     public NodePayload withMediaPassthrough(List<MediaPart> extra) {

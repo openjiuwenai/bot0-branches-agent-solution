@@ -15,7 +15,6 @@ import java.util.Map;
  */
 @FunctionalInterface
 public interface SubWorkflowResolver {
-
     /**
      * resolve.
      *

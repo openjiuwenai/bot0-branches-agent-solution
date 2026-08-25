@@ -37,7 +37,6 @@ import java.util.Optional;
  * @since 2026-08-17
  */
 public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFactory {
-
     /**
      * createLlm.
      *
@@ -306,24 +305,31 @@ public final class ConfigDrivenCoreExecutableFactory implements CoreExecutableFa
     /**
      * Core {@code OutputFormatter} requires responseFormat.type + a single-field outputConfig for text.
      * Without defaults, a live model call succeeds then NPEs on format (empty type).
+     *
+     * @param cfg cfg
+     * @param c c
      */
     @SuppressWarnings("unchecked")
     private static void applyResponseAndOutputs(LLMCompConfig cfg, Map<String, Object> c) {
         Object rf = c.getOrDefault("responseFormat", c.get("response_format"));
         if (rf instanceof Map<?, ?> m && !m.isEmpty()) {
             cfg.setResponseFormat(cast(m));
-        } else if (cfg.getResponseFormat() == null || cfg.getResponseFormat().isEmpty()) {
-            Map<String, Object> def = new LinkedHashMap<>();
-            def.put("type", "text");
-            cfg.setResponseFormat(def);
+        } else {
+            if (cfg.getResponseFormat() == null || cfg.getResponseFormat().isEmpty()) {
+                Map<String, Object> def = new LinkedHashMap<>();
+                def.put("type", "text");
+                cfg.setResponseFormat(def);
+            }
         }
         Object oc = c.getOrDefault("outputConfig", c.getOrDefault("outputs", c.get("outputs_config")));
         if (oc instanceof Map<?, ?> m && !m.isEmpty()) {
             cfg.setOutputConfig(cast(m));
-        } else if (cfg.getOutputConfig() == null || cfg.getOutputConfig().isEmpty()) {
-            Map<String, Object> def = new LinkedHashMap<>();
-            def.put("text", Map.of("type", "string"));
-            cfg.setOutputConfig(def);
+        } else {
+            if (cfg.getOutputConfig() == null || cfg.getOutputConfig().isEmpty()) {
+                Map<String, Object> def = new LinkedHashMap<>();
+                def.put("text", Map.of("type", "string"));
+                cfg.setOutputConfig(def);
+            }
         }
     }
 

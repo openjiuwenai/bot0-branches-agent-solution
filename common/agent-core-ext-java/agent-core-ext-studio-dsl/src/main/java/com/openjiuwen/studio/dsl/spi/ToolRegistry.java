@@ -14,7 +14,6 @@ import java.util.Optional;
  * @since 2026-08-17
  */
 public interface ToolRegistry {
-
     /**
      * find.
      *

@@ -234,6 +234,7 @@ public final class StudioDslModule {
     /**
      * Root build context for one workflow execution (fresh variable scope).
      *
+     * @param workflowId workflowId
      * @return result
      */
     public NodeBuildContext newRootContext(String workflowId) {

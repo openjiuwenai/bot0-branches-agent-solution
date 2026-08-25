@@ -17,7 +17,6 @@ import java.util.Set;
  * @since 2026-08-17
  */
 public interface NodeHandlerFactory {
-
     /**
      * canonicalType.
      *

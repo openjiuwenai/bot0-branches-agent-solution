@@ -34,6 +34,8 @@ public final class MediaSupport {
     /**
      * Inject media into userFields so downstream model/plugin can read.
      *
+     * @param userFields userFields
+     * @param media media
      * @return result
      */
     public static Map<String, Object> withConsumableMedia(Map<String, Object> userFields, List<MediaPart> media) {
@@ -63,6 +65,8 @@ public final class MediaSupport {
     /**
      * OpenAI-style multimodal content parts for LLMExecutable / Model clients that accept list content.
      *
+     * @param text text
+     * @param media media
      * @return result
      */
     public static List<Map<String, Object>> toLlmContentParts(String text, List<MediaPart> media) {
@@ -106,6 +110,8 @@ public final class MediaSupport {
     /**
      * Flatten userFields into root inputs so core PromptTemplate can resolve {{query}} etc.
      *
+     * @param inputs inputs
+     * @param userFields userFields
      * @return result
      */
     public static Map<String, Object> flattenForPrompt(Map<String, Object> inputs, Map<String, Object> userFields) {

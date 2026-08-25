@@ -14,7 +14,6 @@ import com.openjiuwen.studio.dsl.python.PythonExecResult;
  * @since 2026-08-17
  */
 public interface PythonCodeExecutor {
-
     /**
      * execute.
      *

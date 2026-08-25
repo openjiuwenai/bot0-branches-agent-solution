@@ -37,6 +37,8 @@ public final class WorkflowAssemblyBridge {
     /**
      * Map assembled nodes to executables (edges / scheduling remain host responsibility).
      *
+     * @param workflow workflow
+     * @param ctx ctx
      * @return result
      */
     public Map<String, ComponentExecutable> mapExecutables(AssembledWorkflow workflow, NodeBuildContext ctx) {
@@ -51,6 +53,11 @@ public final class WorkflowAssemblyBridge {
      * Sequential host smoke path: invoke nodes in declaration order, then close variable scope (L2 §3.7).
      * Nested child scopes are independent; only the root context passed here is closed.
      *
+     * @param workflow workflow
+     * @param ctx ctx
+     * @param inputs inputs
+     * @param session session
+     * @param modelContext modelContext
      * @return result
      */
     @SuppressWarnings("unchecked")

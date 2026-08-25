@@ -257,6 +257,7 @@ public final class NodeBuildContext {
     /**
      * Bind registry after builtins registered (for loop body create).
      *
+     * @param registry registry
      * @return result
      */
     public NodeBuildContext withRegistry(NodeTypeRegistry registry) {

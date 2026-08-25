@@ -31,7 +31,6 @@ import java.util.function.BooleanSupplier;
  * @since 2026-08-17
  */
 public final class BranchNodeHandler implements NodeHandlerFactory {
-
     /**
      * canonicalType.
      *
@@ -75,6 +74,8 @@ public final class BranchNodeHandler implements NodeHandlerFactory {
     /**
      * Map Studio condition shapes onto types Branch accepts.
      *
+     * @param d d
+     * @param executable executable
      * @return result
      */
     static Object toCoreCondition(BranchDef d, BranchExecutable executable) {

@@ -32,7 +32,6 @@ import java.util.Set;
  * @since 2026-08-17
  */
 public final class CodeNodeHandler implements NodeHandlerFactory {
-
     /**
      * canonicalType.
      *

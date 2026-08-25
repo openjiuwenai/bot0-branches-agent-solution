@@ -10,7 +10,6 @@ package com.openjiuwen.studio.dsl.model;
  * @since 2026-08-17
  */
 public enum NodeCauseCode {
-
     /** Unknown canonical node type. */
     UNKNOWN_NODE_TYPE,
 

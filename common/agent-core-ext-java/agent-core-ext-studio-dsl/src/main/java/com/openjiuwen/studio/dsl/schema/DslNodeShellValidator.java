@@ -43,6 +43,8 @@ public final class DslNodeShellValidator {
 
     /**
      * Validate a raw DSL/IR map before AssembledNode construction.
+     *
+     * @param raw raw
      */
     public static void validateRaw(Map<String, Object> raw) {
         if (raw == null) {

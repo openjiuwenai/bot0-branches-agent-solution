@@ -26,7 +26,6 @@ import java.util.Set;
  * @since 2026-08-17
  */
 public final class ExtractorNodeHandler implements NodeHandlerFactory {
-
     /**
      * canonicalType.
      *
@@ -102,9 +101,11 @@ public final class ExtractorNodeHandler implements NodeHandlerFactory {
                         continue;
                     }
                 }
-            } else if (fields instanceof Map<?, ?> map) {
-                map.forEach((k, v) ->
-                        extracted.put(String.valueOf(k), PathResolver.get(uf, String.valueOf(v)).orElse(null)));
+            } else {
+                if (fields instanceof Map<?, ?> map) {
+                    map.forEach((k, v) ->
+                            extracted.put(String.valueOf(k), PathResolver.get(uf, String.valueOf(v)).orElse(null)));
+                }
             }
             Map<String, Object> out = new LinkedHashMap<>(uf);
             out.putAll(extracted);

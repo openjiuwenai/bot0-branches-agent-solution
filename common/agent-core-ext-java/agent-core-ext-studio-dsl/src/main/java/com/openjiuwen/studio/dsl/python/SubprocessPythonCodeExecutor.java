@@ -31,7 +31,6 @@ import java.util.stream.Stream;
  * @since 2026-08-17
  */
 public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
-
     /**
      * execute.
      *
