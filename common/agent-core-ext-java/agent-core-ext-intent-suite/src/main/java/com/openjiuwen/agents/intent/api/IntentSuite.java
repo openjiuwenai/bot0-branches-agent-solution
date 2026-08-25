@@ -44,6 +44,8 @@ public final class IntentSuite {
 
     private static final Logger log = LoggerFactory.getLogger(IntentSuite.class);
 
+    private static final String INTENT_TOOL_NAME = "intent_match";
+
     private final IntentSuiteConfig config;
     private final IntentInitializer initializer;
     private final IntentMatcher matcher;
@@ -230,7 +232,7 @@ public final class IntentSuite {
         }
         if (action instanceof InvokeToolAction invokeAction) {
             return invokeAction.toolName() != null && !invokeAction.toolName().isBlank()
-                    && invokeAction.arguments() != null;
+                    && !INTENT_TOOL_NAME.equals(invokeAction.toolName()) && invokeAction.arguments() != null;
         }
         return false;
     }

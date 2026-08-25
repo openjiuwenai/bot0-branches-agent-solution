@@ -17,6 +17,7 @@ import com.openjiuwen.agents.intent.model.IntentDecision;
 import com.openjiuwen.agents.intent.model.IntentDecisionStatus;
 import com.openjiuwen.agents.intent.model.IntentDefinition;
 import com.openjiuwen.agents.intent.model.IntentSuiteConfig;
+import com.openjiuwen.agents.intent.model.InvokeToolAction;
 import com.openjiuwen.agents.intent.model.NoIntentResultArguments;
 import com.openjiuwen.agents.intent.model.ReturnAction;
 import com.openjiuwen.agents.intent.spi.IntentMatcher;
@@ -39,6 +40,24 @@ import java.util.concurrent.atomic.AtomicReference;
 class IntentSuiteTest {
     private static final IntentResultFunction RETURN_SELECTED = context -> new ReturnAction(
             context.selectedIntent().orElseThrow().id());
+
+    @Test
+    void rejectsMatchThresholdOutsideUnitRangeAtConstruction() {
+        assertThatThrownBy(() -> IntentSuiteConfig.builder().matchThreshold(-0.01D).build())
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("within [0, 1]");
+        assertThatThrownBy(() -> IntentSuiteConfig.builder().matchThreshold(1.01D).build())
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("within [0, 1]");
+        assertThatThrownBy(() -> IntentSuiteConfig.builder().matchThreshold(Double.NaN).build())
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> IntentSuiteConfig.builder().matchThreshold(Double.POSITIVE_INFINITY).build())
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void acceptsMatchThresholdUnitRangeBoundaries() {
+        assertThat(IntentSuiteConfig.builder().matchThreshold(0.0D).build().matchThreshold()).isZero();
+        assertThat(IntentSuiteConfig.builder().matchThreshold(1.0D).build().matchThreshold()).isEqualTo(1.0D);
+    }
 
     @Test
     void strictBuilderRequiresBothSpiAndCreatesEmptyVersionZeroCatalog() {
@@ -107,6 +126,16 @@ class IntentSuiteTest {
         actionSuite.replaceCatalog(catalog(invalid, registration("fallback")));
         selected.set(actionSuite.snapshot().initializedIntents().matchableIntents().get(0));
         assertThat(actionSuite.resolve(Map.of("semantic", "bad"), Map.of()).status())
+                .isEqualTo(IntentDecisionStatus.FAILED);
+
+        AtomicReference<IntentDefinition> recursiveSelected = new AtomicReference<>();
+        IntentSuite recursiveSuite = suite(context -> Optional.of(recursiveSelected.get()));
+        recursiveSuite.replaceCatalog(new IntentCatalogInput(List.of(), List.of(new CustomIntentRegistration(
+                "recursive", "recursive",
+                context -> new InvokeToolAction("intent_match", Map.of("semantic", context.routingSemantic())))),
+                null));
+        recursiveSelected.set(recursiveSuite.snapshot().initializedIntents().matchableIntents().get(0));
+        assertThat(recursiveSuite.resolve(Map.of("semantic", "again"), Map.of()).status())
                 .isEqualTo(IntentDecisionStatus.FAILED);
     }
 
