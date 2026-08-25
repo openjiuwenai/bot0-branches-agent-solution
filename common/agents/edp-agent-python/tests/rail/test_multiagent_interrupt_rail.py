@@ -15,7 +15,7 @@ def _make_sub_agents_config():
     """创建测试用的 sub_agents 配置"""
     return SubAgentsConfig(
         sub_agents=[
-            SubAgentEntry(entity_type="ABC", url="http://abc-agent:8080", name="SubEDPAgent"),
+            SubAgentEntry(entity_type="ABC", url="https://abc-agent:8080", name="SubEDPAgent"),
         ]
     )
 
@@ -103,7 +103,7 @@ class TestMultiagentInterruptRail:
         assert len(pending_dispatch) == 1
 
         # 验证 sub_agent_url 已映射
-        assert pending_dispatch[0]["sub_agent_url"] == "http://abc-agent:8080"
+        assert pending_dispatch[0]["sub_agent_url"] == "https://abc-agent:8080"
         assert pending_dispatch[0]["entity_id"] == "entity_001"
 
         # 验证防重入标记

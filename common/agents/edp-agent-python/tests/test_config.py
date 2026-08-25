@@ -20,12 +20,12 @@ class TestSubAgentsConfig:
     def test_with_entries():
         config = SubAgentsConfig(
             sub_agents=[
-                SubAgentEntry(entity_type="ABC", url="http://abc-agent:8080", name="SubEDPAgent"),
+                SubAgentEntry(entity_type="ABC", url="https://abc-agent:8080", name="SubEDPAgent"),
             ]
         )
         assert len(config.sub_agents) == 1
         assert config.sub_agents[0].entity_type == "ABC"
-        assert config.sub_agents[0].url == "http://abc-agent:8080"
+        assert config.sub_agents[0].url == "https://abc-agent:8080"
         assert config.sub_agents[0].name == "SubEDPAgent"
 
 
@@ -49,10 +49,10 @@ class TestLoadSubAgentsConfig:
         yaml_content = """
 sub_agents:
   - entity_type: ABC
-    url: http://abc-agent:8080
+    url: https://abc-agent:8080
     name: SubEDPAgent
   - entity_type: FUND
-    url: http://fund-agent:8080
+    url: https://fund-agent:8080
     name: FundAgent
 """
         yaml_file = tmp_path / "sub_agents.yaml"
@@ -62,10 +62,10 @@ sub_agents:
 
         assert len(config.sub_agents) == 2
         assert config.sub_agents[0].entity_type == "ABC"
-        assert config.sub_agents[0].url == "http://abc-agent:8080"
+        assert config.sub_agents[0].url == "https://abc-agent:8080"
         assert config.sub_agents[0].name == "SubEDPAgent"
         assert config.sub_agents[1].entity_type == "FUND"
-        assert config.sub_agents[1].url == "http://fund-agent:8080"
+        assert config.sub_agents[1].url == "https://fund-agent:8080"
 
     @staticmethod
     def test_load_nonexistent_file(tmp_path):

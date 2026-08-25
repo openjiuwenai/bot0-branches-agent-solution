@@ -4,7 +4,6 @@
 
 package com.openjiuwen.rdc.card;
 
-import java.lang.reflect.Method;
 import java.net.Socket;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
@@ -12,6 +11,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLSocket;
@@ -54,21 +54,8 @@ final class AgentCardHostnamePin {
     }
 
     private static HostnameVerifier resolveHostnameVerifier() {
-        for (String typeName : new String[] {
-                "java.net.HttpsURLConnection",
-                "javax.net.ssl.HttpsURLConnection"
-        }) {
-            try {
-                Method getter = Class.forName(typeName).getMethod("getDefaultHostnameVerifier");
-                Object value = getter.invoke(null);
-                if (value instanceof HostnameVerifier verifier) {
-                    return verifier;
-                }
-            } catch (ReflectiveOperationException ignored) {
-                // try alternate JDK package
-            }
-        }
-        return (hostname, session) -> false;
+        HostnameVerifier verifier = HttpsURLConnection.getDefaultHostnameVerifier();
+        return verifier != null ? verifier : (hostname, session) -> false;
     }
 
     /**

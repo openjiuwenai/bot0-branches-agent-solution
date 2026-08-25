@@ -170,7 +170,7 @@ class TestOtelSpanHelper:
             entity_id="fund_agent",
             entity_name="基金理财 Agent",
             query="推荐稳健型基金",
-            sub_agent_url="http://xxx/a2a",
+            sub_agent_url="https://xxx/a2a",
             sub_task_path="['conv-100','fund_agent']",
             context_id="conv-100-sub-fund_agent",
             session_id="conv-100",
@@ -181,7 +181,7 @@ class TestOtelSpanHelper:
         assert attrs["openjiuwen.subagent.entity_id"] == "fund_agent"
         assert attrs["openjiuwen.subagent.entity_name"] == "基金理财 Agent"
         assert attrs["openjiuwen.subagent.query"] == "推荐稳健型基金"
-        assert attrs["openjiuwen.subagent.sub_agent_url"] == "http://xxx/a2a"
+        assert attrs["openjiuwen.subagent.sub_agent_url"] == "https://xxx/a2a"
         assert attrs["openjiuwen.subagent.sub_task_path"] == "['conv-100','fund_agent']"
         assert attrs["openjiuwen.subagent.context_id"] == "conv-100-sub-fund_agent"
         assert attrs["session.id"] == "conv-100"

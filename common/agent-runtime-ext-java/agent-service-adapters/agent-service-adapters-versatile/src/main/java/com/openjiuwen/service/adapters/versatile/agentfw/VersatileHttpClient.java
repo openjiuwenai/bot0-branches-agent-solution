@@ -191,7 +191,7 @@ final class VersatileHttpClient {
                     return new X509Certificate[0];
                 }
             };
-            SSLContext context = SSLContext.getInstance("TLS");
+            SSLContext context = SSLContext.getInstance("TLSv1.3");
             context.init(null, new TrustManager[]{trustAll}, new SecureRandom());
             return context.getSocketFactory();
         } catch (GeneralSecurityException exception) {

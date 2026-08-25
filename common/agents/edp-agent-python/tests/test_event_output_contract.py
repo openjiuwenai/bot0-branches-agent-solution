@@ -18,7 +18,7 @@ async def test_agent_stream_public_contract_yields_dict_events(monkeypatch):
                     entity_id="entity-1",
                     entity_name="Entity One",
                     query="inspect entity",
-                    url="http://agent.example/a2a/",
+                    url="https://agent.example/a2a/",
                 )
             ]
         )
@@ -46,7 +46,7 @@ async def test_agent_stream_public_contract_yields_dict_events(monkeypatch):
                         "entity_id": "entity-1",
                         "entity_name": "Entity One",
                         "query": "inspect entity",
-                        "url": "http://agent.example/a2a/",
+                        "url": "https://agent.example/a2a/",
                     }
                 ]
             },

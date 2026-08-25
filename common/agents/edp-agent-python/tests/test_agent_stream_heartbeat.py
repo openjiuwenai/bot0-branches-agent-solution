@@ -161,7 +161,7 @@ class TestDelegateInitialHeartbeat:
                 "entity_id": "e1",
                 "entity_name": "Entity1",
                 "query": "inspect",
-                "url": "http://agent.example/a2a/",
+                "url": "https://agent.example/a2a/",
             }
         ]
 

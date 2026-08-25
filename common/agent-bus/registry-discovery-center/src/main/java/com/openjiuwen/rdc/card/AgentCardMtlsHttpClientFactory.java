@@ -97,7 +97,7 @@ final class AgentCardMtlsHttpClientFactory {
             }
             TrustManager[] trustManagers = AgentCardHostnamePin.wrap(tmf.getTrustManagers());
 
-            SSLContext sslContext = SSLContext.getInstance("TLS");
+            SSLContext sslContext = SSLContext.getInstance("TLSv1.3");
             sslContext.init(keyManagers, trustManagers, null);
             return sslContext;
         } catch (IOException | KeyStoreException | NoSuchAlgorithmException | UnrecoverableKeyException

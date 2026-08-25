@@ -443,6 +443,20 @@ def _is_placeholder_only(required_skills: set[str]) -> bool:
     return all(name == _PLACEHOLDER_SKILL_NAME for name in required_skills)
 
 
+def _count_local_skills(skills_root: Path) -> int:
+    """统计本地 skills 目录下的真实 skill 数量（含 SKILL.md 的子目录，排除 scenarios）。
+
+    仅用于整目录注册后的日志提示，不参与注册逻辑。
+    """
+    count = 0
+    for entry in skills_root.iterdir():
+        if not entry.is_dir() or entry.name == "scenarios":
+            continue
+        if (entry / "SKILL.md").exists():
+            count += 1
+    return count
+
+
 # ════════════════════════════════════════════════════════════════════
 # 公开接口
 # ════════════════════════════════════════════════════════════════════
@@ -882,11 +896,7 @@ async def initialize_dpa() -> None:
         if not required:
             # 路径 1 fallback：场景未加载或场景未声明 required_skills → 整目录注册
             await agent.register_skill(remote_skills_root)
-            skill_count = sum(
-                1 for d in local_skills_root.iterdir()
-                if d.is_dir() and d.name != "scenarios"
-                and (d / "SKILL.md").exists()
-            )
+            skill_count = _count_local_skills(local_skills_root)
             logger.warning(
                 f"[DPA] sandbox 未找到场景配置或场景未声明所需 Skill，"
                 f"回退到整目录注册：{remote_skills_root}（共 {skill_count} 个 skill）"
@@ -900,11 +910,7 @@ async def initialize_dpa() -> None:
             #   1) 防御场景生成工具误产出 _placeholder_ skill 名
             #   2) 让 _placeholder_ 字符串在日志中保持"运维警觉"信号（v2.1.1 D3 设计）
             await agent.register_skill(remote_skills_root)
-            skill_count = sum(
-                1 for d in local_skills_root.iterdir()
-                if d.is_dir() and d.name != "scenarios"
-                and (d / "SKILL.md").exists()
-            )
+            skill_count = _count_local_skills(local_skills_root)
             logger.warning(
                 "[DPA] sandbox 当前 required_skills 仅含占位（_placeholder_），"
                 "说明场景配置未加载或加载失败；按 v2.1.1 D3 设计走整目录注册；"
