@@ -21,7 +21,7 @@ openjiuwen:
         enabled: false
     versatile:
       timeout: 600s
-      result-node-name: AnswerNode
+      result-node-name: ABCDEResponseNode
       interrupt:
         signal-match: need_user_input
         prompt-get: /data/question

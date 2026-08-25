@@ -4,11 +4,15 @@
 
 package com.openjiuwen.service.adapters.versatile.controller.handoff;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * Upstream not-in-scope signal (二级退回一级, spec 2.2/4.4): a controller handoff message
@@ -26,6 +30,10 @@ public final class HandoffSignals {
     public static final String TYPE_NOT_IN_SCOPE = "versatile_handoff_not_in_scope";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    /** Fallback marker pattern for results prefixed with non-JSON text. */
+    private static final Pattern ENVELOPE_TYPE_MARKER = Pattern.compile(
+            "\"type\"\\s*:\\s*\"" + TYPE_NOT_IN_SCOPE + "\"");
 
     private HandoffSignals() {
     }
@@ -49,13 +57,21 @@ public final class HandoffSignals {
         payload.put("message", "request not in this business domain");
         try {
             return MAPPER.writeValueAsString(payload);
-        } catch (JsonProcessingException ex) {
+        } catch (IOException ex) {
             return "{\"type\":\"" + TYPE_NOT_IN_SCOPE + "\"}";
         }
     }
 
     /**
      * Detects the marker envelope in a downstream answer.
+     *
+     * <p>The result may carry more than the envelope: in streaming mode frames emitted
+     * before the not-in-scope signal (e.g. partial business answers that bypass
+     * result-node-name extraction) ride the same answer channel, and the caller's task
+     * result is the concatenation of all business artifacts. The envelope must still
+     * win, so this scans every top-level JSON value in the result instead of requiring
+     * the whole string to be exactly one envelope object; results prefixed with
+     * non-JSON text fall back to a delimited marker match.
      *
      * @param result the downstream {@code RemoteCallOutcome.result} (may be {@code null})
      * @return {@code true} when the result carries the not-in-scope marker
@@ -64,12 +80,21 @@ public final class HandoffSignals {
         if (result == null || result.isBlank()) {
             return false;
         }
-        try {
-            var node = MAPPER.readTree(result);
-            return node != null && node.isObject()
-                    && TYPE_NOT_IN_SCOPE.equals(node.path("type").asText(null));
-        } catch (JsonProcessingException ex) {
-            return false;
+        try (JsonParser parser = MAPPER.getFactory().createParser(result)) {
+            JsonToken token;
+            while ((token = parser.nextToken()) != null) {
+                if (token != JsonToken.START_OBJECT) {
+                    parser.skipChildren();
+                    continue;
+                }
+                JsonNode node = parser.readValueAsTree();
+                if (node.isObject() && TYPE_NOT_IN_SCOPE.equals(node.path("type").asText(null))) {
+                    return true;
+                }
+            }
+        } catch (IOException ex) {
+            return ENVELOPE_TYPE_MARKER.matcher(result).find();
         }
+        return false;
     }
 }

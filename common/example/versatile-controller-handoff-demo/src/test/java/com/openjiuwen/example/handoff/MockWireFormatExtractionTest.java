@@ -29,11 +29,11 @@ class MockWireFormatExtractionTest {
     @Test
     void answerAndEndLinesProduceLegacyAnswer() {
         VersatileProperties properties = new VersatileProperties();
-        properties.setResultNodeName("AnswerNode");
+        properties.setResultNodeName("ABCDEResponseNode");
         VersatileResponseExtractor extractor =
                 new VersatileResponseExtractor(properties, new IntentAgentResolver(properties));
         extractor.consumeLine("data: {\"event\":\"node_finished\",\"data\":{"
-                + "\"node_name\":\"AnswerNode\",\"node_type\":\"QA\","
+                + "\"node_name\":\"ABCDEResponseNode\",\"node_type\":\"QA\","
                 + "\"outputs\":{\"response\":\"一级本地业务答案\"},\"text\":\"一级本地业务答案\"}}");
         extractor.consumeLine("data: {\"event\":\"workflow_finished\",\"data\":{"
                 + "\"node_id\":\"node_end\",\"node_type\":\"End\",\"node_status\":\"node_finished\"}}");
@@ -104,7 +104,7 @@ class MockWireFormatExtractionTest {
 
         // 业务答案（node_finished）不满足 event-type=message，不误判为转调
         HandoffClassification answer = classifer.classify(
-                "data: {\"event\":\"node_finished\",\"data\":{\"node_name\":\"AnswerNode\",\"node_type\":\"QA\","
+                "data: {\"event\":\"node_finished\",\"data\":{\"node_name\":\"ABCDEResponseNode\",\"node_type\":\"QA\","
                         + "\"outputs\":{\"response\":\"一级本地业务答案\"},\"text\":\"一级本地业务答案\"}}");
         assertThat(answer.outcome()).isEqualTo(HandoffClassification.Outcome.NOT_HANDOFF);
     }

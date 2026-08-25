@@ -54,6 +54,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   <tr><td>(default)</td><td>本地业务答案（无转调）</td><td>本域业务答案</td></tr>
  *   <tr><td>转调</td><td>意图返回 "3"</td><td>本域业务答案</td></tr>
  *   <tr><td>退回</td><td>首次: 意图返回 "3"；再次(同会话): 本地业务答案</td><td>不在范围</td></tr>
+ *   <tr><td>先答后退回</td><td>同"退回"</td><td>先 前置输出中间帧（透传泄漏），后 不在范围</td></tr>
  *   <tr><td>循环</td><td>始终 意图返回 "3"</td><td>始终 不在范围</td></tr>
  *   <tr><td>补充信息</td><td>意图返回 "3"</td><td>need_user_input 中断</td></tr>
  *   <tr><td>超时</td><td>意图返回 "3"</td><td>延迟 10s 后本域答案</td></tr>
@@ -147,8 +148,19 @@ public class MockControllerController {
     }
 
     private void l2Response(OutputStream out, String query, int invocation) throws IOException {
+        if (query.contains("先答后退回")) {
+            // 生产形态：控制器先流出部分业务答案（非结果节点的中间帧——不匹配
+            // result-node-name、不命中转调识别，正常透传泄漏），随后才判定不在范围。
+            // 泄漏帧与 not-in-scope 信封背靠背拼接进 L1 的 re-invoke 结果，
+            // 验证信封在 L1 容错识别下仍胜出（而非依赖信封独占结果串）
+            sseLines(out, partialAnswerEvent(invocation), notInScopeEvent(invocation));
+            return;
+        }
         if (query.contains("退回") || query.contains("循环")) {
-            sseLines(out, notInScopeEvent(invocation));
+            // 生产报文逐字复刻（2026-08-24 生产抓样）：带 index 的文本回显帧 → 完整信号帧
+            // → node_end 帧 → workflow_end/end；命中后非信号帧全部被抑制
+            sseLines(out, notInScopeEchoEvent(invocation), notInScopeEvent(invocation),
+                    nodeEndEvent(invocation), prodWorkflowEndEvent(invocation), "{\"event\":\"end\"}");
             return;
         }
         if (query.contains("补充信息")) {
@@ -224,23 +236,84 @@ public class MockControllerController {
     }
 
     /**
-     * L2 不在范围退回信号 — 生产报文样例原样（createdTime 随执行变化）。
+     * L2 不在范围退回 — 文本回显帧，生产报文逐字复刻（2026-08-24 抓样）：带 index、
+     * 无 summary，text 为「不在范围」；signal 类型旁路识别即命中。
+     *
+     * @param invocation 会话内第几次调用（驱动 createdTime 变化）
+     * @return message SSE 回显事件行
+     */
+    private static String notInScopeEchoEvent(int invocation) {
+        return "{\"event\":\"message\",\"data\":{\"text\":\"不在范围\",\"index\":0,"
+                + "\"node_id\":\"node_1787129452975\",\"node_type\":\"Q\",\"node_name\":\"不在范围\","
+                + "\"createdTime\":" + (createdTime(invocation) - 1) + ",\"workflow_id\":\"81476c36-28e6-4ec1-84c5-247be51a9327\","
+                + "\"workflow_name\":\"erjimorengongzuoliu_fenbushiyanzheng\"}}";
+    }
+
+    /**
+     * L2 不在范围退回信号 — 生产报文逐字复刻（2026-08-24 抓样，createdTime 随执行变化）。
      *
      * @param invocation 会话内第几次调用（驱动 createdTime 变化）
      * @return message SSE 事件行
      */
     private static String notInScopeEvent(int invocation) {
-        return "{\"event\":\"message\",\"data\":{\"text\":\"\",\"summary\":\"不在范围\","
-                + "\"node_id\":\"node_1787129452975\",\"node_type\":\"QA\",\"node_name\":\"不在范围\","
-                + "\"is_finished\":true,\"workflow_id\":\"81476c36-28e6-4ec1-84c5-247be51a9317\","
-                + "\"workflow_name\":\"eqijimorengongzuoliu_fenbushiyanzheng\"},"
-                + "\"createdTime\":" + createdTime(invocation) + "}";
+        return "{\"event\":\"message\",\"data\":{\"text\":\"\",\"summary\":\"不在范围\",\"index\":0,"
+                + "\"node_id\":\"node_1787129452975\",\"node_type\":\"Q\",\"node_name\":\"不在范围\","
+                + "\"is_finished\":true,\"createdTime\":" + createdTime(invocation) + ","
+                + "\"workflow_id\":\"81476c36-28e6-4ec1-84c5-247be51a9327\","
+                + "\"workflow_name\":\"erjimorengongzuoliu_fenbushiyanzheng\"}}";
+    }
+
+    /**
+     * 结束节点消息帧 — 生产报文复刻（信号帧后到达，命中后整帧抑制）。
+     *
+     * @param invocation 会话内第几次调用（驱动 createdTime 变化）
+     * @return message SSE 事件行
+     */
+    private static String nodeEndEvent(int invocation) {
+        return "{\"event\":\"message\",\"data\":{\"text\":\"\",\"summary\":\"\","
+                + "\"node_id\":\"node_end\",\"node_type\":\"End\",\"node_name\":\"结束\","
+                + "\"is_finished\":true,\"createdTime\":" + (createdTime(invocation) + 7) + ","
+                + "\"workflow_id\":\"81476c36-28e6-4ec1-84c5-247be51a9327\","
+                + "\"workflow_name\":\"erjimorengongzuoliu_fenbushiyanzheng\"}}";
+    }
+
+    /**
+     * 生产退回流的终态事件（workflow_end，answer 为空串；与本地答案路径的
+     * workflow_finished 不同名，命中转调后到达即被抑制）。
+     *
+     * @param invocation 会话内第几次调用（驱动 createdTime 变化）
+     * @return workflow_end SSE 事件行
+     */
+    private static String prodWorkflowEndEvent(int invocation) {
+        return "{\"event\":\"workflow_end\",\"data\":{\"answer\":\"\",\"node_id\":\"node_end\","
+                + "\"node_type\":\"End\",\"node_name\":\"结束\",\"is_finished\":true,"
+                + "\"createdTime\":" + (createdTime(invocation) + 14) + ",\"should_interrupt\":false,"
+                + "\"workflow_id\":\"81476c36-28e6-4ec1-84c5-247be51a9327\","
+                + "\"workflow_name\":\"erjimorengongzuoliu_fenbushiyanzheng\"}}";
+    }
+
+    /**
+     * 先答后退回的前置中间帧 — 生产报文复刻形态（message/Q/带 index 的文本帧）：
+     * {@code node_name} 既非结果节点（不匹配 result-node-name {@code ABCDEResponseNode}，
+     * 不被基线抽取拦截），也不命中转调识别字段值，因此流式正常透传泄漏，
+     * 与随后到达的 not-in-scope 信封背靠背拼接为 L1 的远端结果串。
+     *
+     * @param invocation 会话内第几次调用（驱动 createdTime 变化）
+     * @return message SSE 事件行
+     */
+    private static String partialAnswerEvent(int invocation) {
+        return "{\"event\":\"message\",\"data\":{\"text\":\"前置业务输出：部分答案\",\"index\":0,"
+                + "\"node_id\":\"node_1787129452976\",\"node_type\":\"Q\",\"node_name\":\"前置输出\","
+                + "\"createdTime\":" + (createdTime(invocation) - 1) + ","
+                + "\"workflow_id\":\"81476c36-28e6-4ec1-84c5-247be51a9327\","
+                + "\"workflow_name\":\"erjimorengongzuoliu_fenbushiyanzheng\"}}";
     }
 
     /**
      * 本地/本域业务答案。{@code data.text} 与 {@code outputs.response} 同值：前者供
      * FEAT-002 基线 result-node-name 提取（{@code extractLegacyText} 读 {@code data.text}），
-     * 后者保持真实报文形态。
+     * 后者保持真实报文形态。{@code node_name} 与生产 result-node-name 配置
+     * （{@code ABCDEResponseNode}）一致，答案帧必须命中才能被抽取。
      *
      * @param text 业务答案文本
      * @return node_finished SSE 事件行
@@ -248,7 +321,7 @@ public class MockControllerController {
     private static String answerEvent(String text) {
         return "{\"event\":\"node_finished\",\"data\":{\"agent_id\":\"81476c36-28e6-4ec1-84c5-247be51a9327\","
                 + "\"node_id\":\"node_answer\",\"node_status\":\"node_finished\",\"parent_workflow_id\":\"\","
-                + "\"status\":{\"code\":0,\"desc\":\"succeeded\"},\"node_name\":\"AnswerNode\",\"node_type\":\"QA\","
+                + "\"status\":{\"code\":0,\"desc\":\"succeeded\"},\"node_name\":\"ABCDEResponseNode\",\"node_type\":\"QA\","
                 + "\"inputs\":{},\"outputs\":{\"response\":\"" + text + "\"},\"text\":\"" + text + "\","
                 + "\"start_time\":1787129556865,\"end_time\":1787129556867,"
                 + "\"execution_id\":\"exec-answer\"},\"createdTime\":1787129556876}";
