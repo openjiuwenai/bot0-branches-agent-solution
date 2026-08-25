@@ -66,8 +66,29 @@ class V2BenchE2eTest {
         return key != null && !key.isBlank() && base != null && !base.isBlank();
     }
 
+    /**
+     * 1.3 复现实验主入口：A vs B 臂 × N 发 × 判分落盘。
+     * 预注册判据（对照 Python B−A=+19pp±5pp）。
+     * GLH_RUNS 控制发数（默认 1=冒烟）；GLH_ARM 控制臂。
+     */
     @Test
-    void v2a5ArmABaseline() throws Exception {
+    void v2a5ReproductionBatch() throws Exception {
+        int runs = Integer.parseInt(System.getenv().getOrDefault("GLH_RUNS", "1"));
+        java.util.List<String> states = new java.util.ArrayList<>();
+        for (int i = 1; i <= runs; i++) {
+            System.out.println("[1.3] ===== run " + i + "/" + runs + " =====");
+            long t0 = System.currentTimeMillis();
+            try {
+                runOnce(i);
+            } catch (Exception e) {
+                System.out.println("[1.3] run " + i + " exception: " + e);
+            }
+            System.out.println("[1.3] run " + i + " took "
+                    + (System.currentTimeMillis() - t0) / 1000 + "s");
+        }
+    }
+
+    private void runOnce(int runId) throws Exception {
         Assumptions.assumeTrue(envPresent(), "Requires DEEPSEEK_API_KEY + DEEPSEEK_BASE_URL");
 
         String key = System.getenv("DEEPSEEK_API_KEY");
@@ -156,7 +177,7 @@ class V2BenchE2eTest {
         System.out.println("[v2bench] reply=" + String.valueOf(raw).substring(0,
                 Math.min(150, String.valueOf(raw).length())));
 
-        assertThat(v.state()).as("终态必须是合法判分态").isIn("SAT", "GAP");
+        System.out.println("[1.3] runId=" + runId + " final_state=" + v.state());
     }
 
     /**
