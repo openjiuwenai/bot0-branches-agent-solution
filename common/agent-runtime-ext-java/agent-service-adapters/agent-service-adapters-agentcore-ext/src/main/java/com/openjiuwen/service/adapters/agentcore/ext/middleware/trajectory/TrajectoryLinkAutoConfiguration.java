@@ -5,16 +5,20 @@
 package com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory;
 
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity.TraceContextCarrier;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity.TraceIdentityFilter;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.runtree.RunTreeRegistrar;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.store.AsyncTrajectoryWriter;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.store.RedisTrajectoryStore;
 import com.openjiuwen.service.spec.spi.RuntimeRedisClient;
 
+import org.a2aproject.sdk.server.tasks.TaskStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 
 /**
@@ -80,5 +84,41 @@ public class TrajectoryLinkAutoConfiguration {
         AsyncTrajectoryWriter writer = new AsyncTrajectoryWriter(props.getQueueCapacity(), props.getFlushIntervalMs());
         writer.start();
         return writer;
+    }
+
+    /**
+     * Registers the trace identity filter ahead of the batch-1 http span filter
+     * (batch-1 uses order 0; a smaller value runs first).
+     *
+     * @param carrier           trace context carrier
+     * @param taskStoreProvider SDK task store provider (nullable)
+     * @param storeProvider     trajectory store provider (nullable)
+     * @return filter registration
+     */
+    @Bean
+    FilterRegistrationBean<TraceIdentityFilter> traceIdentityFilter(
+            TraceContextCarrier carrier, ObjectProvider<TaskStore> taskStoreProvider,
+            ObjectProvider<RedisTrajectoryStore> storeProvider) {
+        FilterRegistrationBean<TraceIdentityFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(new TraceIdentityFilter(carrier, taskStoreProvider.getIfAvailable(),
+                storeProvider.getIfAvailable()));
+        registration.addUrlPatterns("/a2a", "/a2a/*", "/v1/*");
+        registration.setOrder(-10);
+        return registration;
+    }
+
+    /**
+     * Registers the run-tree TaskStore decorator post processor.
+     *
+     * @param carrierProvider carrier provider
+     * @param storeProvider   store provider
+     * @param writerProvider  writer provider
+     * @return the registrar
+     */
+    @Bean
+    RunTreeRegistrar runTreeRegistrar(ObjectProvider<TraceContextCarrier> carrierProvider,
+                                      ObjectProvider<RedisTrajectoryStore> storeProvider,
+                                      ObjectProvider<AsyncTrajectoryWriter> writerProvider) {
+        return new RunTreeRegistrar(carrierProvider, storeProvider, writerProvider);
     }
 }
