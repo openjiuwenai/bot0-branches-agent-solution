@@ -2158,7 +2158,7 @@ public class EdpaEventRail extends DeepAgentRail {
                     abbreviate(String.valueOf(payload.getOrDefault("content", "")), 120));
             LOGGER.info("[EDPAgent] stream payload [{}]: {}", type.wireName(), contentPreview);
             ctx.getSession().writeStream(new OutputSchema("custom", 0, event));
-        } catch (RuntimeException e) {
+        } catch (BaseError | IllegalStateException e) {
             // 关键事件丢失应为 ERROR 级别 + 记录完整堆栈
             LOGGER.error("[EDPA-DIAG] emit '{}' failed: {}", type.wireName(), e.getMessage(), e);
         }
