@@ -261,7 +261,8 @@ public class AuditEventCollector {
             boolean stale = entry.getValue().createdAtMs < cutoff;
             if (stale) {
                 currentTask.values().removeIf(entry.getValue().taskId::equals);
-                outOfRoundCounters.keySet().removeIf(key -> key.endsWith("|" + entry.getValue().seq));
+                outOfRoundCounters.remove(entry.getValue().tenantId + "|"
+                        + entry.getValue().conversationId + "|" + entry.getValue().seq);
             }
             return stale;
         });

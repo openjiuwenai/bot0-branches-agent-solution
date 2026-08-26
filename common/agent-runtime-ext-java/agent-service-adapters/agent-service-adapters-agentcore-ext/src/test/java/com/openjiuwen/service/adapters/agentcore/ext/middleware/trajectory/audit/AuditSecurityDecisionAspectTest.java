@@ -35,7 +35,7 @@ class AuditSecurityDecisionAspectTest {
         // 防 FQN 漂移回归：切点表达式必须匹配打了真实注解的方法（FQN 写错时本测试即红）
         org.springframework.aop.aspectj.AspectJExpressionPointcut pointcut =
                 new org.springframework.aop.aspectj.AspectJExpressionPointcut();
-        pointcut.setExpression("@annotation(com.openjiuwen.service.spec.security.AuthorizedResource)");
+        pointcut.setExpression(AuditSecurityDecisionAspect.POINTCUT_EXPRESSION);
         java.lang.reflect.Method method = DummyResource.class.getDeclaredMethod("serve");
         assertThat(pointcut.matches(method, DummyResource.class)).isTrue();
     }

@@ -30,6 +30,10 @@ import java.util.Optional;
 @Aspect
 @Order(0)
 public class AuditSecurityDecisionAspect {
+    /** 切点表达式（测试共用同一份，防两份字面量漂移）。 */
+    static final String POINTCUT_EXPRESSION =
+            "@annotation(com.openjiuwen.service.spec.security.AuthorizedResource)";
+
     private static final String TENANT_HEADER = "x-tenant-id";
     private static final String TRACEPARENT_HEADER = "traceparent";
     private static final String UNKNOWN = "unknown";
@@ -41,7 +45,7 @@ public class AuditSecurityDecisionAspect {
      * @return the controller method result
      * @throws Throwable propagated from the target method
      */
-    @Around("@annotation(com.openjiuwen.service.spec.security.AuthorizedResource)")
+    @Around(POINTCUT_EXPRESSION)
     public Object observe(ProceedingJoinPoint joinPoint) throws Throwable {
         try {
             Object result = joinPoint.proceed();

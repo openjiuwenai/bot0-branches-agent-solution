@@ -127,8 +127,9 @@ public class SessionFilteredAgentRail extends AgentRail {
                     || !(ctx.getInputs() instanceof InvokeInputs inputs)) {
                 return;
             }
+            Object result = inputs.getResult();
             AuditEventBridge.recordExchange(session.getSessionId(), pendingQuery,
-                    String.valueOf(inputs.getResult()));
+                    result != null ? String.valueOf(result) : "");
         } catch (IllegalStateException | NullPointerException | ClassCastException e) {
             LOGGER.warn("audit exchange event failed: {}", e.getClass().getSimpleName());
         }
