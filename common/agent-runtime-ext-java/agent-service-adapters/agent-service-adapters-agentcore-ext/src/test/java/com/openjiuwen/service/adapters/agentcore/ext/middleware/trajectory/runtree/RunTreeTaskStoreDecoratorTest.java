@@ -111,6 +111,19 @@ class RunTreeTaskStoreDecoratorTest {
     }
 
     @Test
+    void recoveredInterruptedStateTriggersNextRoundOnResume() {
+        // G2 直接钉：恢复节点的 finalState=INPUT_REQUIRED 映回 lastState，重启后续跑直接开新轮
+        when(store.exists(RedisTrajectoryStore.runKey("task-1#1"))).thenReturn(true);
+        when(store.scanRoundKeys("task-1")).thenReturn(
+                List.of(RedisTrajectoryStore.runKey("task-1#1"), RedisTrajectoryStore.runKey("task-1#2")));
+        when(store.getRecord(RedisTrajectoryStore.runKey("task-1#2"))).thenReturn(java.util.Optional.of(
+                "{\"traceId\":\"t-1\",\"finalState\":\"TASK_STATE_INPUT_REQUIRED\"}"));
+        decorator.save(task("task-1", TaskState.TASK_STATE_WORKING, null), false);
+        flush();
+        verify(store).putRecord(eq(RedisTrajectoryStore.runKey("task-1#3")), contains("\"startedAt\""));
+    }
+
+    @Test
     void plainCallsPassThrough() {
         decorator.get("task-1");
         decorator.delete("task-1");

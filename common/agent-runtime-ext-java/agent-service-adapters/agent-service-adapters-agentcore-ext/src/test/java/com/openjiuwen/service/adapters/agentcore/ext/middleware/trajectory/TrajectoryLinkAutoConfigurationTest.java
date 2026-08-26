@@ -12,7 +12,10 @@ import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.store
 import com.openjiuwen.service.spec.spi.RuntimeRedisClient;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.AutoConfigureBefore;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.context.annotation.Bean;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import java.util.List;
@@ -64,11 +67,21 @@ class TrajectoryLinkAutoConfigurationTest {
                 });
     }
 
+    @Test
+    void autoConfigureAfterPointsAtRealProviderClass() {
+        // FQN 反射钉：runtime-java 侧重命名/搬包 provider 时立刻红（防 G1 静默回归）
+        String fqn = "com.openjiuwen.service.adapters.common.middleware.redis.RedisMiddlewareAutoConfiguration";
+        org.springframework.boot.autoconfigure.AutoConfigureAfter ordering = TrajectoryLinkAutoConfiguration.class
+                .getAnnotation(org.springframework.boot.autoconfigure.AutoConfigureAfter.class);
+        assertThat(ordering.name()).contains(fqn);
+        assertThat(org.springframework.util.ClassUtils.isPresent(fqn, getClass().getClassLoader())).isTrue();
+    }
+
     /** 以 auto-configuration 形态提供 RuntimeRedisClient 的 stub（模拟生产 provider 时序）。 */
-    @org.springframework.boot.autoconfigure.AutoConfiguration
-    @org.springframework.boot.autoconfigure.AutoConfigureBefore(TrajectoryLinkAutoConfiguration.class)
+    @AutoConfiguration
+    @AutoConfigureBefore(TrajectoryLinkAutoConfiguration.class)
     static class StubRedisProviderAutoConfiguration {
-        @org.springframework.context.annotation.Bean
+        @Bean
         RuntimeRedisClient stubRedisClient() {
             return new StubRedisClient();
         }
