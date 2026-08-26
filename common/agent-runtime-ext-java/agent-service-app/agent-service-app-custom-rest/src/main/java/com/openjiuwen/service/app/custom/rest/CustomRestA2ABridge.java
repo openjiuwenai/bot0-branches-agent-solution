@@ -238,10 +238,33 @@ final class CustomRestA2ABridge {
     }
 
     private static CustomRestFailure mapA2AError(A2AError error) {
+        if (isAdmissionRejection(error)) {
+            return new CustomRestFailure(503, "concurrent_limit_reached", "Concurrent task limit reached");
+        }
         int code = error.getCode() == null ? 0 : error.getCode();
         A2AErrorCodes known = A2AErrorCodes.fromCode(code);
         int status = known == null ? 500 : known.httpCode();
         return new CustomRestFailure(status, "a2a_" + code, "The A2A runtime rejected the request");
+    }
+
+    /**
+     * Recognizes the authoritative admission rejection thrown by
+     * {@code A2AAgentExecutor} when a request slips past the read-only
+     * pre-check ({@code Service Unavailable: concurrent task limit reached},
+     * INTERNAL code). The message literal mirrors the package-private
+     * {@code A2AAgentExecutor.ADMISSION_REJECTED_MESSAGE} constant of the
+     * runtime app module. Without this mapping the rejection would surface as
+     * the INTERNAL default HTTP 500 instead of the retryable 503 used by the
+     * pre-check.
+     *
+     * @param error the A2A error raised by the runtime
+     * @return {@code true} when the error represents an admission rejection
+     */
+    private static boolean isAdmissionRejection(A2AError error) {
+        Integer code = error.getCode();
+        return code != null
+                && code == A2AErrorCodes.INTERNAL.code()
+                && "Service Unavailable: concurrent task limit reached".equals(error.getMessage());
     }
 
     static Map<String, Object> fallbackError(CustomRestFailure failure) {
