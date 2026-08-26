@@ -69,39 +69,58 @@ class AgentInstanceManagerTest {
     }
 
     @Test
-    void acquire_raceWindowDuringCreate_loserAgentDestroyed() throws Exception {
+    void acquire_concurrentDuringCreate_secondFailsFastWithoutCreate() throws Exception {
+        // Issue #157: while the winner is mid-create, a concurrent acquire for
+        // the same conversation must fail fast — no waiting for the creation
+        // and no wasted create()+destroy() round-trip.
         AgentFactory factory = mock(AgentFactory.class);
         Object slowAgent = new Object();
-        Object fastAgent = new Object();
         CountDownLatch enteredCreate = new CountDownLatch(1);
         CountDownLatch releaseSlowCreate = new CountDownLatch(1);
         when(factory.create()).thenAnswer(invocation -> {
             enteredCreate.countDown();
             releaseSlowCreate.await();
             return slowAgent;
-        }).thenReturn(fastAgent);
+        });
 
         AgentInstanceManager manager = new AgentInstanceManager(factory);
         ExecutorService executor = new ThreadPoolExecutor(
                 1, 1, 0L, TimeUnit.MILLISECONDS,
                 new LinkedBlockingQueue<>());
         try {
-            Future<Object> slow = executor.submit(() -> manager.acquire("conv-1"));
+            Future<Object> winner = executor.submit(() -> manager.acquire("conv-1"));
             assertThat(enteredCreate.await(5, TimeUnit.SECONDS)).isTrue();
 
-            Object winner = manager.acquire("conv-1");
-            releaseSlowCreate.countDown();
+            assertThatThrownBy(() -> manager.acquire("conv-1"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("conv-1");
+            // Only the winner's create ran; the rejected acquire created nothing
+            verify(factory, times(1)).create();
 
-            assertThatThrownBy(slow::get)
-                    .isInstanceOf(ExecutionException.class)
-                    .hasCauseInstanceOf(IllegalStateException.class);
-            assertThat(winner).isSameAs(fastAgent);
-            verify(factory).destroy(slowAgent);
-            verify(factory, never()).destroy(fastAgent);
+            releaseSlowCreate.countDown();
+            assertThat(winner.get(5, TimeUnit.SECONDS)).isSameAs(slowAgent);
+            verify(factory, never()).destroy(any());
         } finally {
             releaseSlowCreate.countDown();
             executor.shutdownNow();
         }
+    }
+
+    @Test
+    void acquire_createReturnsNull_cleansReservation_conversationReacquirable() {
+        // A misbehaving factory returning null must not leave the reservation
+        // placeholder behind — the conversation would be permanently busy.
+        AgentFactory factory = mock(AgentFactory.class);
+        Object recreated = new Object();
+        when(factory.create()).thenReturn(null).thenReturn(recreated);
+        AgentInstanceManager manager = new AgentInstanceManager(factory);
+
+        assertThatThrownBy(() -> manager.acquire("conv-1"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("null");
+        verify(factory, never()).destroy(any());
+
+        assertThat(manager.acquire("conv-1")).isSameAs(recreated);
     }
 
     @Test
