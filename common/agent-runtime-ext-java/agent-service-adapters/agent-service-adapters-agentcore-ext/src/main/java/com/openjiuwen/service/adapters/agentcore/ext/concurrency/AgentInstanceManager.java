@@ -62,12 +62,19 @@ public class AgentInstanceManager {
     /**
      * Release an Agent instance and its resources.
      *
+     * <p>Idempotent (issue #156): the entry is removed with
+     * {@code remove(key, agent)} — a value-equality check — so only the caller
+     * presenting the currently tracked agent destroys it. A second release of
+     * the same agent, or a release racing with a newer acquire that replaced
+     * the entry, finds the entry gone (or pointing at another instance) and
+     * does nothing, preventing a double {@code destroy()} of the same instance
+     * or destruction of a successor's agent.
+     *
      * @param conversationId conversation identifier
      * @param agent the Agent object to release
      */
     public void release(String conversationId, Object agent) {
-        activeAgents.remove(conversationId);
-        if (agent != null) {
+        if (activeAgents.remove(conversationId, agent) && agent != null) {
             factory.destroy(agent);
         }
     }

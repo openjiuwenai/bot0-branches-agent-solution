@@ -186,6 +186,66 @@ class AgentInstanceManagerTest {
     }
 
     @Test
+    void release_twiceSameAgent_destroysExactlyOnce() {
+        // Issue #156: double-release must be a no-op the second time —
+        // destroy() runs exactly once per acquired instance.
+        AgentFactory factory = mock(AgentFactory.class);
+        Object agent = new Object();
+        when(factory.create()).thenReturn(agent);
+        AgentInstanceManager manager = new AgentInstanceManager(factory);
+        Object acquired = manager.acquire("conv-1");
+
+        manager.release("conv-1", acquired);
+        manager.release("conv-1", acquired);
+
+        verify(factory, times(1)).destroy(agent);
+    }
+
+    @Test
+    void release_afterReacquire_doesNotDestroySuccessorAgent() {
+        // Issue #156 racing shape: agent A released, agent B re-acquired for
+        // the same conversation; a stale delayed release of A must not evict
+        // or destroy B.
+        AgentFactory factory = mock(AgentFactory.class);
+        Object agentA = new Object();
+        Object agentB = new Object();
+        when(factory.create()).thenReturn(agentA, agentB);
+        AgentInstanceManager manager = new AgentInstanceManager(factory);
+        Object acquiredA = manager.acquire("conv-1");
+        manager.release("conv-1", acquiredA);
+        Object acquiredB = manager.acquire("conv-1");
+
+        manager.release("conv-1", acquiredA);
+
+        verify(factory, times(1)).destroy(agentA);
+        verify(factory, never()).destroy(agentB);
+        // B is still tracked: a third acquire for the conversation is busy
+        assertThatThrownBy(() -> manager.acquire("conv-1"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("conv-1");
+    }
+
+    @Test
+    void release_unknownAgentForTrackedConversation_destroySkipped_entryIntact() {
+        // A foreign/stale agent reference must neither destroy that agent nor
+        // evict the tracked owner: entry removal and destroy are decided by
+        // the same atomic remove(key, agent).
+        AgentFactory factory = mock(AgentFactory.class);
+        Object tracked = new Object();
+        Object foreign = new Object();
+        when(factory.create()).thenReturn(tracked);
+        AgentInstanceManager manager = new AgentInstanceManager(factory);
+        manager.acquire("conv-1");
+
+        manager.release("conv-1", foreign);
+
+        verify(factory, never()).destroy(any());
+        assertThatThrownBy(() -> manager.acquire("conv-1"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("conv-1");
+    }
+
+    @Test
     void acquire_differentConversations_bothSucceed() {
         SpyAgentFactory factory = new SpyAgentFactory();
         AgentInstanceManager manager = new AgentInstanceManager(factory);
