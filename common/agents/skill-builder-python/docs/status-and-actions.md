@@ -44,6 +44,70 @@ warning 不是生命周期状态。当 warning 不影响已验证可用性时，
 
 宿主不能把所有 warning 都升级为 `needs_review`，也不能把阻断 finding 降为普通警告。
 
+## 最终验证结论
+
+最终结论必须直接使用 `view.workspace_status` 和 `view.validation_status`，不能根据 finding 数量、检查项数量或本地文案重新计算。
+
+| `workspace_status` | `validation_status` | 默认标题 | 默认说明 |
+|---|---|---|---|
+| `ready` | `pass` | Skill 生成完成 | 当前 artifact 已通过验收 |
+| `ready` | `warn` | Skill 生成完成，有提示 | 已验证可用，存在不阻断使用的提示 |
+| `needs_review` | `warn` / `not_run` | Skill 已生成，需要人工审核 | 展示未确认范围和审核项 |
+| `failed` | `fail` / `not_run` | Skill 生成或验收未通过 | 展示阻断问题或结构化 failure |
+| `draft_ready` | `not_run` | Skill 草稿待验收 | 已有候选，但没有当前 Acceptance Receipt |
+| `waiting_for_user` | `not_run` | 等待用户确认 | 展示 Core 提供的 HITL 表单 |
+
+页面摘要使用 `view.summary`。如果 `execution.failure` 存在，用户侧显示 `failure.user_message`；`failure.developer_message` 和 `details` 只进入受限诊断面板。
+
+## Checks 与 Findings
+
+`view.acceptance` 是完整 Acceptance 结果，其中两类列表用途不同：
+
+- `checks`：全部检查过程，包含大量 `pass`、`info` 和 `skip`；用于完整报告和开发者诊断。
+- `findings`：需要关注的问题或提示；用于用户页面的验证结论。
+
+宿主默认页面不应平铺全部 `checks`。首页只显示最终结论和需要处理的 findings；完整检查项、执行命令和诊断详情放入折叠的“完整验证详情”或下载报告。
+
+### Finding 字段
+
+| 字段 | 含义 | 展示规则 |
+|---|---|---|
+| `id` | 稳定问题标识 | 用于关联 blocker、日志和诊断，不作为主要标题 |
+| `rootCauseId` | 根因标识 | 相同根因合并展示；缺失时使用 `id` |
+| `severity` | `fail` 或 `warn` | `fail` 优先于所有提示；`warn` 不自动等于人工审核 |
+| `category` | 问题分类 | 可用于包结构、执行、能力、外部验证等分组 |
+| `audience` | `user` 或 `developer` | `user` 正常展示；`developer` 只进受限诊断面板 |
+| `failureOwner` | `package`、`controller`、`environment` 等责任边界 | 用于路由修复或运维处理，不用于改变严重级别 |
+| `repairable` | 是否属于机械可修复问题 | 只有 `true` 且诊断确认范围安全时才能提供 Repair |
+| `title` | 用户可读标题 | 作为问题组标题；缺失时使用分类名称 |
+| `message` | 用户可读说明 | 作为默认问题描述 |
+| `path` | 关联文件 | 作为位置补充，必须使用安全相对路径展示 |
+| `reviewRequired` | 是否需要人工确认 | `true` 时进入人工审核区 |
+| `reviewSatisfiedBy` | 已满足审核要求的确定性证据 | 存在时只作为证据提示，不再显示为待审核项 |
+| `details` | 结构化技术详情 | 默认折叠；不得直接向普通用户输出敏感路径、命令或响应体 |
+
+`blockingFailureIds` 是阻断 finding 的 ID 集合，`warnings` 是 `severity=warn` 的 findings 子集。宿主应使用这些结构化字段，不解析 `message` 判断是否阻断或需要审核。
+
+### 默认分组与排序
+
+同一个 finding 只能进入一个最高优先级分组：
+
+1. **阻断问题**：`id` 位于 `blockingFailureIds`，或 `severity=fail`；
+2. **人工审核项**：`reviewRequired=true`，且没有 `reviewSatisfiedBy`；
+3. **普通提示**：`severity=warn`，且不属于前两组。
+
+每组先按 `rootCauseId` 去重，再合并关联路径和简要 details。同一根因存在多个 finding 时保留最高严重级别，不能通过去重丢失 blocker。
+
+默认只展示 `audience=user` 的内容。`audience=developer` 的阻断 finding 仍会影响最终状态，但普通用户只查看 `view.summary` 提供的安全概述；完整内容进入开发者诊断面板。
+
+### 页面层级
+
+1. 顶部结论：最终状态、`view.summary`、生成文件数和主要宿主操作；
+2. 需要处理：阻断问题、人工审核项、普通提示，按上述优先级展示；
+3. 完整验证详情：全部 checks、执行命令、退出码、details、developer finding 和原始 Acceptance JSON。
+
+`ready + warn` 只展示普通提示，不应渲染成人工审核或失败。`needs_review` 重点展示人工审核项。`failed` 重点展示 blocker；如果失败来自运行时而不是 Acceptance，则展示结构化 `execution.failure`。
+
 ## 状态与宿主策略
 
 Core 固定 `ready`、`needs_review` 和 `failed` 的验收含义，宿主不能把一个状态改写成另一个状态。下载、导出、人工审批和外部发布属于宿主策略，可以因产品、租户和组织治理要求而不同。
