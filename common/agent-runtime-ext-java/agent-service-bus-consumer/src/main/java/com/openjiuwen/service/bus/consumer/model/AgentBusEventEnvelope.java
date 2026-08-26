@@ -16,9 +16,9 @@ import java.util.Map;
  *
  * @since 2026-07-22
  */
-public record AgentBusEventEnvelope(String schemaVersion, String eventType, String messageId, String tenantId,
-        String sourceServiceId, String targetServiceId, String routeHandle, String correlationId, String traceId,
-        String idempotencyKey, Instant deadline, String payloadContentType, byte[] inlinePayload, String payloadRef,
+public record AgentBusEventEnvelope(String eventType, String messageId, String tenantId, String sourceServiceId,
+        String targetServiceId, String routeHandle, String correlationId, String traceId, String idempotencyKey,
+        Instant deadline, String payloadContentType, byte[] inlinePayload, String payloadRef,
         Map<String, String> metadata) {
 
     /**

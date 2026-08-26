@@ -68,15 +68,14 @@ class BusEnvelopeValidatorTest {
     }
 
     private AgentBusEventEnvelope event(String type, String target, Instant deadline, byte[] inline, String ref) {
-        return new AgentBusEventEnvelope("1.0", type, "m-1", "tenant-a", "source", target, null, "corr-1", "trace-1",
+        return new AgentBusEventEnvelope(type, "m-1", "tenant-a", "source", target, null, "corr-1", "trace-1",
                 "idem-1", deadline, "application/json", inline, ref, Map.of());
     }
 
     private AgentBusEventEnvelope withTenant(AgentBusEventEnvelope event, String tenantId) {
-        return new AgentBusEventEnvelope(event.schemaVersion(), event.eventType(), event.messageId(), tenantId,
-                event.sourceServiceId(), event.targetServiceId(), event.routeHandle(), event.correlationId(),
-                event.traceId(), event.idempotencyKey(), event.deadline(), event.payloadContentType(),
-                event.inlinePayload(),
+        return new AgentBusEventEnvelope(event.eventType(), event.messageId(), tenantId, event.sourceServiceId(),
+                event.targetServiceId(), event.routeHandle(), event.correlationId(), event.traceId(),
+                event.idempotencyKey(), event.deadline(), event.payloadContentType(), event.inlinePayload(),
                 event.payloadRef(), event.metadata());
     }
 }

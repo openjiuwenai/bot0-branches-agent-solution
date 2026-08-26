@@ -26,7 +26,7 @@ import java.util.Optional;
 class BrokerDeliveryLoopTest {
     @Test
     void commitsConsumedAndRejectsRetry() {
-        var event = new AgentBusEventEnvelope("1.0", "A2A_CALL_REQUESTED", "m", "t", "s", "r", null, "c", "x", "i",
+        var event = new AgentBusEventEnvelope("A2A_CALL_REQUESTED", "m", "t", "s", "r", null, "c", "x", "i",
                 java.time.Instant.now().plusSeconds(10), "application/json", new byte[]{1}, null, Map.of());
         var seen = new ArrayList<String>();
         var delivery = new AgentBusBrokerDeliveryPort.Delivery(event, new byte[]{1});
@@ -63,7 +63,7 @@ class BrokerDeliveryLoopTest {
     }
 
     private static AgentBusEventEnvelope event(String messageId) {
-        return new AgentBusEventEnvelope("1.0", "CLIENT_INVOCATION_QUERY_REQUESTED", messageId, "t", "s", "r", null,
+        return new AgentBusEventEnvelope("CLIENT_INVOCATION_QUERY_REQUESTED", messageId, "t", "s", "r", null,
                 "c", "trace", "i", java.time.Instant.now().plusSeconds(10), "application/json", null, "ref://x",
                 Map.of());
     }

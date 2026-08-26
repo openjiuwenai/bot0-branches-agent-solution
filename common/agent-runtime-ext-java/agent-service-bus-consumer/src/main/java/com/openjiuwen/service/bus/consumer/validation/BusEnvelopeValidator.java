@@ -28,7 +28,6 @@ public final class BusEnvelopeValidator {
     private final Clock clock;
     private final String tenantId;
     private final String targetServiceId;
-    private final int schemaMajor;
     private final int maxInlinePayloadBytes;
     private final int maxMetadataBytes;
     private final long maxDeadlineAheadSeconds;
@@ -44,7 +43,7 @@ public final class BusEnvelopeValidator {
      *            the targetServiceId value
      */
     public BusEnvelopeValidator(Clock clock, String tenantId, String targetServiceId) {
-        this(clock, tenantId, targetServiceId, 1, 65_536, 16_384, 86_400);
+        this(clock, tenantId, targetServiceId, 65_536, 16_384, 86_400);
     }
 
     /**
@@ -56,8 +55,6 @@ public final class BusEnvelopeValidator {
      *            the configured agent-bus tenant scope
      * @param targetServiceId
      *            the targetServiceId value
-     * @param schemaMajor
-     *            the schemaMajor value
      * @param maxInlinePayloadBytes
      *            the maxInlinePayloadBytes value
      * @param maxMetadataBytes
@@ -65,15 +62,14 @@ public final class BusEnvelopeValidator {
      * @param maxDeadlineAheadSeconds
      *            the maxDeadlineAheadSeconds value
      */
-    public BusEnvelopeValidator(Clock clock, String tenantId, String targetServiceId, int schemaMajor,
-            int maxInlinePayloadBytes, int maxMetadataBytes, long maxDeadlineAheadSeconds) {
-        if (schemaMajor < 1 || maxInlinePayloadBytes < 1 || maxMetadataBytes < 1 || maxDeadlineAheadSeconds < 1) {
+    public BusEnvelopeValidator(Clock clock, String tenantId, String targetServiceId, int maxInlinePayloadBytes,
+            int maxMetadataBytes, long maxDeadlineAheadSeconds) {
+        if (maxInlinePayloadBytes < 1 || maxMetadataBytes < 1 || maxDeadlineAheadSeconds < 1) {
             throw new IllegalArgumentException("validator limits must be positive");
         }
         this.clock = clock;
         this.tenantId = tenantId;
         this.targetServiceId = targetServiceId;
-        this.schemaMajor = schemaMajor;
         this.maxInlinePayloadBytes = maxInlinePayloadBytes;
         this.maxMetadataBytes = maxMetadataBytes;
         this.maxDeadlineAheadSeconds = maxDeadlineAheadSeconds;
@@ -90,9 +86,6 @@ public final class BusEnvelopeValidator {
     public Optional<String> validate(AgentBusEventEnvelope envelope) {
         if (envelope == null) {
             return Optional.of("ENVELOPE_NULL");
-        }
-        if (!supportedSchema(envelope.schemaVersion())) {
-            return Optional.of("UNSUPPORTED_SCHEMA_VERSION");
         }
         if (!EVENTS.contains(envelope.eventType())) {
             return Optional.of("UNSUPPORTED_EVENT_TYPE");
@@ -142,13 +135,6 @@ public final class BusEnvelopeValidator {
     private static Stream<String> requiredFields(AgentBusEventEnvelope envelope) {
         return Stream.of(envelope.messageId(), envelope.tenantId(), envelope.sourceServiceId(),
                 envelope.targetServiceId(), envelope.correlationId(), envelope.traceId(), envelope.idempotencyKey());
-    }
-
-    private boolean supportedSchema(String version) {
-        if (blank(version) || !version.matches("[0-9]+\\.[0-9]+(?:\\.[0-9]+)?")) {
-            return false;
-        }
-        return Integer.parseInt(version.substring(0, version.indexOf('.'))) == schemaMajor;
     }
 
     private static int metadataBytes(Map<String, String> metadata) {

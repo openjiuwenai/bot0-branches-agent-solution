@@ -310,7 +310,7 @@ class RequestHandlerBusA2aBridgeTest {
     }
 
     private static AgentBusEventEnvelope event(String type) {
-        return new AgentBusEventEnvelope("1.0", type, "message-1", "tenant-a", "source", "runtime-a", null, "corr-1",
+        return new AgentBusEventEnvelope(type, "message-1", "tenant-a", "source", "runtime-a", null, "corr-1",
                 "trace-1", "idem-1", Instant.now().plusSeconds(60), "application/json", new byte[]{1}, null, Map.of());
     }
 }
