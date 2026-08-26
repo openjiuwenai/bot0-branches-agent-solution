@@ -5,6 +5,7 @@
 package com.openjiuwen.service.adapters.agentcore.ext.concurrency;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
@@ -100,11 +101,47 @@ class TaskAdmissionControlTest {
     }
 
     @Test
-    void release_belowZeroGuard_isClamped() {
+    void release_withoutAcquire_failsLoudly() {
         TaskAdmissionControl gate = new TaskAdmissionControl(1);
-        gate.tryAcquire();
+        assertThatThrownBy(gate::release)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("double-release");
+        assertThat(gate.currentCount()).isZero();
+    }
+
+    @Test
+    void release_doubleRelease_failsLoudly_andGateRemainsUsable() {
+        TaskAdmissionControl gate = new TaskAdmissionControl(1);
+        assertThat(gate.tryAcquire()).isTrue();
         gate.release();
+        assertThatThrownBy(gate::release)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("current count already at 0");
+        assertThat(gate.currentCount()).isZero();
+        assertThat(gate.tryAcquire()).isTrue();
         gate.release();
+        assertThat(gate.currentCount()).isZero();
+    }
+
+    @Test
+    void release_concurrent_exactlyOneSucceeds() throws InterruptedException {
+        TaskAdmissionControl gate = new TaskAdmissionControl(2);
+        assertThat(gate.tryAcquire()).isTrue();
+        AtomicInteger failures = new AtomicInteger();
+        Runnable releaseTask = () -> {
+            try {
+                gate.release();
+            } catch (IllegalStateException e) {
+                failures.incrementAndGet();
+            }
+        };
+        Thread a = new Thread(releaseTask, "release-a");
+        Thread b = new Thread(releaseTask, "release-b");
+        a.start();
+        b.start();
+        a.join();
+        b.join();
+        assertThat(failures.get()).isEqualTo(1);
         assertThat(gate.currentCount()).isZero();
     }
 

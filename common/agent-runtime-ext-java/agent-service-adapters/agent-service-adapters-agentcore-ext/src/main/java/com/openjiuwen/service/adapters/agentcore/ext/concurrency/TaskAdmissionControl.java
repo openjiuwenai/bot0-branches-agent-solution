@@ -6,9 +6,6 @@ package com.openjiuwen.service.adapters.agentcore.ext.concurrency;
 
 import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -18,11 +15,17 @@ import java.util.concurrent.atomic.AtomicInteger;
  * of concurrent tasks. When {@code maxConcurrentTasks < 0} the gate is
  * unlimited and {@code tryAcquire()} always returns {@code true}.
  *
+ * <p>{@code release()} pairs strictly with a successful
+ * {@code tryAcquire()}: an unpaired release (double-release or release
+ * without acquire) throws {@link IllegalStateException} instead of silently
+ * clamping the counter, so caller-side pairing bugs surface immediately.
+ * The counter itself never goes negative. Note that {@code reset()} discards
+ * outstanding permits — a late release of a pre-reset acquire therefore also
+ * fails loudly.
+ *
  * @since 0.1.0
  */
 public class TaskAdmissionControl implements TaskAdmissionGate {
-    private static final Logger log = LoggerFactory.getLogger(TaskAdmissionControl.class);
-
     private final int maxConcurrentTasks;
     private final AtomicInteger currentCount = new AtomicInteger(0);
     private volatile boolean shutdown = false;
@@ -62,7 +65,8 @@ public class TaskAdmissionControl implements TaskAdmissionGate {
         }
         int prev = currentCount.getAndUpdate(v -> Math.max(0, v - 1));
         if (prev <= 0) {
-            log.warn("Admission release when count already at {}, possible double-release", prev);
+            throw new IllegalStateException("Admission release without matching acquire: "
+                    + "current count already at " + prev + " (double-release or unpaired release detected)");
         }
     }
 
