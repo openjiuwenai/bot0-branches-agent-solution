@@ -11,7 +11,7 @@ import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.foundation.llm.schema.BaseMessage;
 import com.openjiuwen.core.foundation.llm.schema.SystemMessage;
 import com.openjiuwen.core.foundation.llm.schema.UserMessage;
-import com.openjiuwen.studio.dsl.llm.ConversationUserMessage;
+import com.openjiuwen.studio.dsl.conversation.ConversationUserMessage;
 import com.openjiuwen.studio.dsl.testsupport.StubModelContext;
 
 import org.junit.jupiter.api.Test;

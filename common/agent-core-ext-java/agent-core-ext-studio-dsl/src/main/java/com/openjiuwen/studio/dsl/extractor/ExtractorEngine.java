@@ -7,7 +7,7 @@ package com.openjiuwen.studio.dsl.extractor;
 import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.foundation.llm.schema.BaseMessage;
 import com.openjiuwen.core.session.NodeSessionApi;
-import com.openjiuwen.studio.dsl.llm.MessageHistorySupport;
+import com.openjiuwen.studio.dsl.conversation.MessageHistorySupport;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 

@@ -10,7 +10,7 @@ import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.BranchRouter;
 import com.openjiuwen.studio.dsl.contract.ToolRegistry;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
-import com.openjiuwen.studio.dsl.llm.MessageHistorySupport;
+import com.openjiuwen.studio.dsl.conversation.MessageHistorySupport;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 
 import java.util.ArrayList;
