@@ -20,7 +20,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>4.0.5</version>
+    <version>4.0.7</version>
     <relativePath/>
   </parent>
 
@@ -42,11 +42,34 @@
     <archunit.version>1.4.2</archunit.version>
     <embedded-postgres.version>2.0.7</embedded-postgres.version>
     <embedded-postgres-binaries.version>16.2.0</embedded-postgres-binaries.version>
-    <a2a-sdk-spec.version>1.0.0.CR1</a2a-sdk-spec.version>
-    <!-- springdoc-openapi 3.0.x targets Spring Boot 4.x (artifact names like
-         spring-boot-starter-webmvc-test confirm Boot 4 baseline). Pinned
-         explicitly — not managed by spring-boot-starter-parent BOM. -->
+    <a2a-sdk-spec.version>1.0.0.Final</a2a-sdk-spec.version>
+    <!-- springdoc-openapi 3.0.x targets Spring Boot 4.x（Boot 4 ↔ springdoc 3.0.x，不降级无需变） -->
     <springdoc.version>3.0.3</springdoc.version>
+    <!-- A 桶：覆盖 spring-boot-dependencies 4.0.7 BOM 同名属性以对齐 core 830。
+         这些属性不在本 pom 内用 ${} 引用——由 Boot BOM 内部消费
+         (consumer 设同名属性即覆盖 Boot 默认值，如 otel Boot 默认 1.55.0 → 覆盖为 1.64.0)。
+         验证: dependency:tree 显示 otel 1.64.0、slf4j 2.0.12 等已对齐(非 Boot 默认)。
+         机制见 Spring Boot 文档: Overriding Version Management。 -->
+    <jackson-2-bom.version>2.21.5</jackson-2-bom.version>
+    <opentelemetry.version>1.64.0</opentelemetry.version>
+    <pulsar.version>4.2.3</pulsar.version>
+    <mockito.version>5.14.2</mockito.version>
+    <byte-buddy.version>1.15.11</byte-buddy.version>
+    <snakeyaml.version>2.2</snakeyaml.version>
+    <slf4j.version>2.0.12</slf4j.version>
+    <logback.version>1.5.37</logback.version>
+    <commons-lang3.version>3.18.0</commons-lang3.version>
+    <commons-codec.version>1.20.0</commons-codec.version>
+    <postgresql.version>42.7.12</postgresql.version>
+    <mysql.version>9.7.0</mysql.version>
+    <h2.version>2.2.224</h2.version>
+    <sqlite-jdbc.version>3.53.2.1</sqlite-jdbc.version>
+    <lombok.version>1.18.32</lombok.version>
+    <log4j2.version>2.26.1</log4j2.version>
+    <kotlin.version>2.4.10</kotlin.version>
+    <!-- C 桶：Boot 不管/管理值非 core，显式 pin 防漂移 -->
+    <gson.version>2.11.0</gson.version>
+    <protobuf.version>4.33.2</protobuf.version>
 
 
     <!-- Default off: macOS kern.sysv.shmmni is often 32; parallel class init of
@@ -106,6 +129,22 @@
         <artifactId>embedded-postgres-binaries-linux-arm64v8</artifactId>
         <version>${embedded-postgres-binaries.version}</version>
         <scope>test</scope>
+      </dependency>
+      <!-- C 桶：Boot 不管/管理值非 core，显式 pin 防漂移（同 edp-agent-java） -->
+      <dependency>
+        <groupId>com.google.code.gson</groupId>
+        <artifactId>gson</artifactId>
+        <version>${gson.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.google.protobuf</groupId>
+        <artifactId>protobuf-java</artifactId>
+        <version>${protobuf.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.google.protobuf</groupId>
+        <artifactId>protobuf-java-util</artifactId>
+        <version>${protobuf.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
