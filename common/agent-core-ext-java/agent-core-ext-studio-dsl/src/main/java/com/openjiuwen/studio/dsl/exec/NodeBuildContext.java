@@ -4,18 +4,9 @@
 
 package com.openjiuwen.studio.dsl.exec;
 
-import com.openjiuwen.studio.dsl.bridge.ConfigDrivenCoreExecutableFactory;
-import com.openjiuwen.studio.dsl.bridge.DefaultAgentInvoker;
-import com.openjiuwen.studio.dsl.bridge.DefaultMcpToolInvoker;
-import com.openjiuwen.studio.dsl.bridge.InMemoryAgentRegistry;
-import com.openjiuwen.studio.dsl.bridge.InMemoryToolRegistry;
 import com.openjiuwen.studio.dsl.config.StudioDslNodeProperties;
-import com.openjiuwen.studio.dsl.registry.CodeLogicRegistry;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
-import com.openjiuwen.studio.dsl.contract.AgentInvoker;
-import com.openjiuwen.studio.dsl.contract.AgentRegistry;
-import com.openjiuwen.studio.dsl.contract.CoreExecutableFactory;
-import com.openjiuwen.studio.dsl.contract.McpToolInvoker;
+import com.openjiuwen.studio.dsl.contract.EmptyToolRegistry;
 import com.openjiuwen.studio.dsl.contract.PythonCodeExecutor;
 import com.openjiuwen.studio.dsl.contract.SubWorkflowResolver;
 import com.openjiuwen.studio.dsl.contract.ToolRegistry;
@@ -30,13 +21,8 @@ public final class NodeBuildContext {
     private final int nestingDepth;
     private final int maxNestingDepth;
     private final PythonCodeExecutor pythonExecutor;
-    private final CodeLogicRegistry codeLogicRegistry;
     private final SubWorkflowResolver subWorkflowResolver;
-    private final CoreExecutableFactory coreExecutableFactory;
-    private final McpToolInvoker mcpToolInvoker;
-    private final AgentInvoker agentInvoker;
     private final ToolRegistry toolRegistry;
-    private final AgentRegistry agentRegistry;
     private final NodeTypeRegistry nodeTypeRegistry;
     private final WorkflowVariableScope variableScope;
     private final String tenantId;
@@ -49,7 +35,6 @@ public final class NodeBuildContext {
      * @param nestingDepth nestingDepth
      * @param maxNestingDepth maxNestingDepth
      * @param pythonExecutor pythonExecutor
-     * @param codeLogicRegistry codeLogicRegistry
      * @param subWorkflowResolver subWorkflowResolver
      */
     public NodeBuildContext(
@@ -57,20 +42,14 @@ public final class NodeBuildContext {
             int nestingDepth,
             int maxNestingDepth,
             PythonCodeExecutor pythonExecutor,
-            CodeLogicRegistry codeLogicRegistry,
             SubWorkflowResolver subWorkflowResolver) {
         this(
                 workflowId,
                 nestingDepth,
                 maxNestingDepth,
                 pythonExecutor,
-                codeLogicRegistry,
                 subWorkflowResolver,
-                new ConfigDrivenCoreExecutableFactory(),
-                new DefaultMcpToolInvoker(),
-                null,
-                new InMemoryToolRegistry(),
-                new InMemoryAgentRegistry(),
+                EmptyToolRegistry.INSTANCE,
                 null,
                 new WorkflowVariableScope(),
                 null,
@@ -84,13 +63,8 @@ public final class NodeBuildContext {
      * @param nestingDepth nestingDepth
      * @param maxNestingDepth maxNestingDepth
      * @param pythonExecutor pythonExecutor
-     * @param codeLogicRegistry codeLogicRegistry
      * @param subWorkflowResolver subWorkflowResolver
-     * @param coreExecutableFactory coreExecutableFactory
-     * @param mcpToolInvoker mcpToolInvoker
-     * @param agentInvoker agentInvoker
      * @param toolRegistry toolRegistry
-     * @param agentRegistry agentRegistry
      * @param nodeTypeRegistry nodeTypeRegistry
      */
     public NodeBuildContext(
@@ -98,26 +72,16 @@ public final class NodeBuildContext {
             int nestingDepth,
             int maxNestingDepth,
             PythonCodeExecutor pythonExecutor,
-            CodeLogicRegistry codeLogicRegistry,
             SubWorkflowResolver subWorkflowResolver,
-            CoreExecutableFactory coreExecutableFactory,
-            McpToolInvoker mcpToolInvoker,
-            AgentInvoker agentInvoker,
             ToolRegistry toolRegistry,
-            AgentRegistry agentRegistry,
             NodeTypeRegistry nodeTypeRegistry) {
         this(
                 workflowId,
                 nestingDepth,
                 maxNestingDepth,
                 pythonExecutor,
-                codeLogicRegistry,
                 subWorkflowResolver,
-                coreExecutableFactory,
-                mcpToolInvoker,
-                agentInvoker,
                 toolRegistry,
-                agentRegistry,
                 nodeTypeRegistry,
                 new WorkflowVariableScope(),
                 null,
@@ -131,13 +95,8 @@ public final class NodeBuildContext {
      * @param nestingDepth nestingDepth
      * @param maxNestingDepth maxNestingDepth
      * @param pythonExecutor pythonExecutor
-     * @param codeLogicRegistry codeLogicRegistry
      * @param subWorkflowResolver subWorkflowResolver
-     * @param coreExecutableFactory coreExecutableFactory
-     * @param mcpToolInvoker mcpToolInvoker
-     * @param agentInvoker agentInvoker
      * @param toolRegistry toolRegistry
-     * @param agentRegistry agentRegistry
      * @param nodeTypeRegistry nodeTypeRegistry
      * @param variableScope variableScope
      * @param tenantId tenantId
@@ -148,13 +107,8 @@ public final class NodeBuildContext {
             int nestingDepth,
             int maxNestingDepth,
             PythonCodeExecutor pythonExecutor,
-            CodeLogicRegistry codeLogicRegistry,
             SubWorkflowResolver subWorkflowResolver,
-            CoreExecutableFactory coreExecutableFactory,
-            McpToolInvoker mcpToolInvoker,
-            AgentInvoker agentInvoker,
             ToolRegistry toolRegistry,
-            AgentRegistry agentRegistry,
             NodeTypeRegistry nodeTypeRegistry,
             WorkflowVariableScope variableScope,
             String tenantId,
@@ -163,14 +117,8 @@ public final class NodeBuildContext {
         this.nestingDepth = nestingDepth;
         this.maxNestingDepth = maxNestingDepth;
         this.pythonExecutor = pythonExecutor;
-        this.codeLogicRegistry = codeLogicRegistry;
         this.subWorkflowResolver = subWorkflowResolver;
-        this.coreExecutableFactory = coreExecutableFactory;
-        this.mcpToolInvoker = mcpToolInvoker;
-        this.toolRegistry = toolRegistry == null ? new InMemoryToolRegistry() : toolRegistry;
-        this.agentRegistry = agentRegistry == null ? new InMemoryAgentRegistry() : agentRegistry;
-        this.agentInvoker =
-                agentInvoker != null ? agentInvoker : new DefaultAgentInvoker(this.agentRegistry);
+        this.toolRegistry = toolRegistry == null ? EmptyToolRegistry.INSTANCE : toolRegistry;
         this.nodeTypeRegistry = nodeTypeRegistry;
         this.variableScope = variableScope == null ? new WorkflowVariableScope() : variableScope;
         this.tenantId = tenantId;
@@ -201,7 +149,6 @@ public final class NodeBuildContext {
                 0,
                 p.getMaxNestingDepth(),
                 null,
-                new CodeLogicRegistry(),
                 configs -> {
                     throw new NodeExecutionException(
                             "n/a",
@@ -209,11 +156,7 @@ public final class NodeBuildContext {
                             com.openjiuwen.studio.dsl.model.NodeCauseCode.SUBWORKFLOW_REF_INVALID,
                             "no SubWorkflowResolver configured");
                 },
-                new ConfigDrivenCoreExecutableFactory(),
-                new DefaultMcpToolInvoker(),
-                null,
-                new InMemoryToolRegistry(),
-                new InMemoryAgentRegistry(),
+                EmptyToolRegistry.INSTANCE,
                 null,
                 new WorkflowVariableScope(),
                 null,
@@ -235,7 +178,6 @@ public final class NodeBuildContext {
                 0,
                 p.getMaxNestingDepth(),
                 null,
-                new CodeLogicRegistry(),
                 configs -> {
                     throw new NodeExecutionException(
                             "n/a",
@@ -243,11 +185,7 @@ public final class NodeBuildContext {
                             com.openjiuwen.studio.dsl.model.NodeCauseCode.SUBWORKFLOW_REF_INVALID,
                             "no SubWorkflowResolver configured");
                 },
-                new ConfigDrivenCoreExecutableFactory(),
-                new DefaultMcpToolInvoker(),
-                null,
-                new InMemoryToolRegistry(),
-                new InMemoryAgentRegistry(),
+                EmptyToolRegistry.INSTANCE,
                 null,
                 new WorkflowVariableScope(),
                 tenantId,
@@ -266,13 +204,8 @@ public final class NodeBuildContext {
                 nestingDepth,
                 maxNestingDepth,
                 pythonExecutor,
-                codeLogicRegistry,
                 subWorkflowResolver,
-                coreExecutableFactory,
-                mcpToolInvoker,
-                agentInvoker,
                 toolRegistry,
-                agentRegistry,
                 registry,
                 variableScope,
                 tenantId,
@@ -316,15 +249,6 @@ public final class NodeBuildContext {
     }
 
     /**
-     * codeLogicRegistry.
-     *
-     * @return result
-     */
-    public CodeLogicRegistry codeLogicRegistry() {
-        return codeLogicRegistry;
-    }
-
-    /**
      * subWorkflowResolver.
      *
      * @return result
@@ -334,48 +258,12 @@ public final class NodeBuildContext {
     }
 
     /**
-     * coreExecutableFactory.
-     *
-     * @return result
-     */
-    public CoreExecutableFactory coreExecutableFactory() {
-        return coreExecutableFactory;
-    }
-
-    /**
-     * mcpToolInvoker.
-     *
-     * @return result
-     */
-    public McpToolInvoker mcpToolInvoker() {
-        return mcpToolInvoker;
-    }
-
-    /**
-     * agentInvoker.
-     *
-     * @return result
-     */
-    public AgentInvoker agentInvoker() {
-        return agentInvoker;
-    }
-
-    /**
      * toolRegistry.
      *
      * @return result
      */
     public ToolRegistry toolRegistry() {
         return toolRegistry;
-    }
-
-    /**
-     * agentRegistry.
-     *
-     * @return result
-     */
-    public AgentRegistry agentRegistry() {
-        return agentRegistry;
     }
 
     /**
@@ -425,13 +313,8 @@ public final class NodeBuildContext {
                 nestingDepth + 1,
                 maxNestingDepth,
                 pythonExecutor,
-                codeLogicRegistry,
                 subWorkflowResolver,
-                coreExecutableFactory,
-                mcpToolInvoker,
-                agentInvoker,
                 toolRegistry,
-                agentRegistry,
                 nodeTypeRegistry,
                 new WorkflowVariableScope(),
                 tenantId,

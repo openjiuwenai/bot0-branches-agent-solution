@@ -8,101 +8,75 @@ import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.adapter.AbstractStudioNode;
-import com.openjiuwen.studio.dsl.adapter.PassthroughStudioNode;
-import com.openjiuwen.studio.dsl.adapter.StudioStreamFrames;
-import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
-import com.openjiuwen.studio.dsl.model.AssembledNode;
-import com.openjiuwen.studio.dsl.model.NodePayload;
 import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
+import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
+import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
+import com.openjiuwen.studio.dsl.flowcard.FlowCardConfig;
+import com.openjiuwen.studio.dsl.flowcard.FlowCardEngine;
+import com.openjiuwen.studio.dsl.model.AssembledNode;
+import com.openjiuwen.studio.dsl.model.NodeCauseCode;
+import com.openjiuwen.studio.dsl.model.NodePayload;
 
-import java.util.LinkedHashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * jiuwen.card — emit card payload via session stream (Studio FlowCard).
+ * jiuwen.card — strict 1:1 with Python {@code jiuwen/extension/workflow_node/flow_card.py}.
  *
  * @since 2026-08-17
  */
 public final class CardNodeHandler implements NodeHandlerFactory {
-    /**
-     * canonicalType.
-     *
-     * @return result
-     */
     @Override
     public String canonicalType() {
         return "jiuwen.card";
     }
 
-    /**
-     * aliases.
-     *
-     * @return result
-     */
     @Override
     public Set<String> aliases() {
         return Set.of("jiuwen.flowCard");
     }
 
-    /**
-     * create.
-     *
-     * @param node node
-     * @param ctx ctx
-     * @return result
-     */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
-        return new CardExecutable(node);
+        FlowCardConfig config = FlowCardConfig.fromNodeConfigs(node.configs());
+        if (config.template() == null || config.template().isBlank()) {
+            throw new NodeExecutionException(
+                    node.id(),
+                    "jiuwen.card",
+                    NodeCauseCode.NODE_CONFIG_INVALID,
+                    "conf.template is required and must be non-empty");
+        }
+        return new CardExecutable(node, config);
     }
 
     static final class CardExecutable extends AbstractStudioNode {
-        CardExecutable(AssembledNode node) {
+        private final FlowCardEngine engine;
+
+        CardExecutable(AssembledNode node, FlowCardConfig config) {
             super(node);
+            this.engine = new FlowCardEngine(node.id(), config);
         }
 
-        /**
-         * doInvoke.
-         *
-         * @param inputs inputs
-         * @param session session
-         * @param context context
-         * @return result
-         */
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
-            Map<String, Object> uf = new LinkedHashMap<>(userFieldsOf(inputs));
-            Object card = node.configs().getOrDefault("card", node.configs().get("cardConfig"));
-            if (card == null) {
-                card = node.configs();
-            }
-            uf.put("card", card);
-            uf.put("componentType", "card");
-            if (session != null) {
-                try {
-                    Map<String, Object> stream = new LinkedHashMap<>();
-                    stream.put("answer", card);
-                    stream.put("result", card);
-                    stream.put("card", card);
-                    stream.put("node_id", node.id());
-                    stream.put("node_type", "jiuwen.card");
-                    stream.put("should_interrupt", false);
-                    StudioStreamFrames.emitPartialAndMessageEnd(session, stream);
-                    Map<String, Object> frame = new LinkedHashMap<>();
-                    frame.put("type", "jiuwen.card");
-                    frame.put("event", "card");
-                    frame.put("card", card);
-                    frame.put("nodeId", node.id());
-                    session.writeCustomStream(frame);
-                } catch (IllegalStateException
-                        | NullPointerException
-                        | ClassCastException
-                        | UnsupportedOperationException ignored) {
-                    // mock session
-                }
-            }
-            return NodePayload.userFields(uf).withMediaPassthrough(PassthroughStudioNode.extractMedia(inputs));
+            // Python invoke → {"result": rendered}; stream frames only on stream/transform.
+            return NodePayload.ofFields(engine.invoke(inputs, session));
+        }
+
+        @Override
+        public Iterator<Object> stream(Object inputs, NodeSessionApi session, ModelContext context) {
+            return engine.stream(asMap(inputs), session);
+        }
+
+        @Override
+        public Object collect(Object inputs, NodeSessionApi session, ModelContext context) {
+            return engine.collect(inputs, session);
+        }
+
+        @Override
+        public Iterator<Object> transform(Object inputs, NodeSessionApi session, ModelContext context) {
+            return engine.transform(inputs, session);
         }
     }
 }

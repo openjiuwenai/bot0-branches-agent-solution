@@ -35,8 +35,5 @@ public enum NodeCauseCode {
     SUBWORKFLOW_REF_INVALID,
 
     /** Code path is ambiguous. */
-    CODE_PATH_AMBIGUOUS,
-
-    /** CodeLogic not found. */
-    CODE_LOGIC_NOT_FOUND
+    CODE_PATH_AMBIGUOUS
 }

@@ -8,15 +8,24 @@ import com.openjiuwen.core.session.NodeSessionApi;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 
 /**
  * Snapshot / restore session local state around nested sub-workflow execution (FEAT §5.5).
  * Interact / stream still forward to the parent session (needed for questioner / message).
  *
+ * <p>Child interrupt keys ({@code questioner_state} / {@code flow_qa_state} /
+ * {@code flow_input_state}) are re-seeded into the isolated frame and merged back after restore so
+ * nested input/questioner can resume (Python {@code CHILD_INTERRUPT_STATE_KEYS}).
+ *
  * @since 2026-08-17
  */
 public final class SessionStateIsolator {
+    /** Align with Python {@code CHILD_INTERRUPT_STATE_KEYS}. */
+    public static final Set<String> CHILD_INTERRUPT_STATE_KEYS =
+            Set.of("questioner_state", "flow_qa_state", "flow_input_state");
+
     private SessionStateIsolator() {}
 
     /**
@@ -33,9 +42,21 @@ public final class SessionStateIsolator {
         Map<String, Object> snap = snapshot(session);
         try {
             clearLocal(session);
+            reseedInterruptKeys(session, snap);
             return body.get();
         } finally {
+            Map<String, Object> childInterrupt = copyInterruptKeys(session);
             restore(session, snap);
+            if (!childInterrupt.isEmpty()) {
+                try {
+                    session.updateState(childInterrupt);
+                } catch (IllegalStateException
+                        | NullPointerException
+                        | ClassCastException
+                        | UnsupportedOperationException ignored) {
+                    // mock / read-only session
+                }
+            }
         }
     }
 
@@ -94,5 +115,48 @@ public final class SessionStateIsolator {
                 | UnsupportedOperationException ignored) {
             // mock / read-only session
         }
+    }
+
+    static void reseedInterruptKeys(NodeSessionApi session, Map<String, Object> snap) {
+        Map<String, Object> patch = copyInterruptKeysFrom(snap);
+        if (patch.isEmpty()) {
+            return;
+        }
+        try {
+            session.updateState(patch);
+        } catch (IllegalStateException
+                | NullPointerException
+                | ClassCastException
+                | UnsupportedOperationException ignored) {
+            // mock / read-only session
+        }
+    }
+
+    static Map<String, Object> copyInterruptKeys(NodeSessionApi session) {
+        try {
+            Map<String, Object> current = session.dumpState();
+            if (current == null) {
+                return Map.of();
+            }
+            return copyInterruptKeysFrom(current);
+        } catch (IllegalStateException
+                | NullPointerException
+                | ClassCastException
+                | UnsupportedOperationException e) {
+            return Map.of();
+        }
+    }
+
+    static Map<String, Object> copyInterruptKeysFrom(Map<String, Object> source) {
+        if (source == null || source.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        for (String key : CHILD_INTERRUPT_STATE_KEYS) {
+            if (source.containsKey(key) && source.get(key) != null) {
+                out.put(key, DeepCopies.value(source.get(key)));
+            }
+        }
+        return out;
     }
 }

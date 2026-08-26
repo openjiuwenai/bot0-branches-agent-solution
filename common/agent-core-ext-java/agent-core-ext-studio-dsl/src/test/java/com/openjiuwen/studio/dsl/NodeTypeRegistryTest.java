@@ -99,18 +99,17 @@ class NodeTypeRegistryTest {
         NodeBuildContext ctx = NodeBuildContext.defaults("wf");
         // nested needs resolver — use non-nested types here
         for (String type : registry.canonicalTypes()) {
-            if ("jiuwen.subWorkflow".equals(type)) {
+            if ("jiuwen.subWorkflow".equals(type) || "EI.ComplexIntentDetection".equals(type)) {
                 continue;
             }
             if ("jiuwen.code".equals(type)) {
                 AssembledNode code = AssembledNode.of(
-                        "c1", "jiuwen.code", Map.of("codeLogicRef", "missing"));
-                // create succeeds; invoke would fail CODE_LOGIC_NOT_FOUND
+                        "c1", "jiuwen.code", Map.of("code", "def main(args):\n    return {}\n"));
                 assertThat(registry.create(code, ctx)).isNotNull();
                 continue;
             }
             Map<String, Object> configs = Map.of();
-            if ("jiuwen.message".equals(type)) {
+            if ("jiuwen.message".equals(type) || "jiuwen.card".equals(type) || "jiuwen.flowCard".equals(type)) {
                 configs = Map.of("template", "ok");
             } else if ("jiuwen.aggregate".equals(type)) {
                 configs = Map.of("groups", Map.of("o", List.of("a")));

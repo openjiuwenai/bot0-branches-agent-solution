@@ -77,7 +77,6 @@ public final class StudioDslProperties {
         p.setPythonWorkdirRoot(python.getWorkdirRoot());
         p.setPythonInheritEnv(python.isInheritEnv());
         p.setPythonEnvWhitelist(python.getEnvWhitelist());
-        p.setJavaCodeLogicEnabled(code.isJavaCodeLogicEnabled());
         p.setUnsupportedModalityPolicy(media.getUnsupportedModalityPolicy());
         p.setVariablesScope(variables.getScope());
         return p;
@@ -231,30 +230,11 @@ public final class StudioDslProperties {
     }
 
     /**
-     * Java {@code CodeLogic} settings for {@code jiuwen.code}.
+     * Code-node settings for {@code jiuwen.code} (Python only).
      */
     public static final class Code {
-        private boolean javaCodeLogicEnabled = true;
         /** LOCAL_CODE_EXEC_MODE analogue. */
         private String localExecMode = "inprocess";
-
-        /**
-         * isJavaCodeLogicEnabled.
-         *
-         * @return result
-         */
-        public boolean isJavaCodeLogicEnabled() {
-            return javaCodeLogicEnabled;
-        }
-
-        /**
-         * setJavaCodeLogicEnabled.
-         *
-         * @param javaCodeLogicEnabled javaCodeLogicEnabled
-         */
-        public void setJavaCodeLogicEnabled(boolean javaCodeLogicEnabled) {
-            this.javaCodeLogicEnabled = javaCodeLogicEnabled;
-        }
 
         /**
          * getLocalExecMode.

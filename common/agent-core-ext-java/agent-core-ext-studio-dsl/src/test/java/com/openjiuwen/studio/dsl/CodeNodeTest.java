@@ -6,89 +6,90 @@ package com.openjiuwen.studio.dsl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.mock;
 
-import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
+import com.openjiuwen.studio.dsl.config.StudioDslNodeProperties;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
-import com.openjiuwen.studio.dsl.registry.CodeLogicRegistry;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
-import com.openjiuwen.studio.dsl.contract.CodeLogic;
-import com.openjiuwen.studio.dsl.contract.CodeLogicContext;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
- * CodeNodeTest for Studio DSL node-type extension (FEAT-031).
+ * jiuwen.code — Python FlowCode path only (no Java CodeLogic).
  *
  * @since 2026-08-17
  */
 class CodeNodeTest {
-    @Test
-    void javaCodeLogic_executesAndReturnsUserFields() throws Exception {
-        NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
-        CodeLogicRegistry logics = new CodeLogicRegistry();
-        logics.register(new CodeLogic() {
-            @Override
-            public String name() {
-                return "double";
-            }
+    private static boolean pythonAvailable;
 
-            @Override
-            public Map<String, Object> execute(Map<String, Object> inputs, CodeLogicContext ctx) {
-                Object v = inputs.get("n");
-                long n = v instanceof Number num ? num.longValue() : Long.parseLong(String.valueOf(v));
-                return Map.of("n", n * 2);
+    @BeforeAll
+    static void checkPython() throws Exception {
+        try {
+            Process p = new ProcessBuilder("python3", "-c", "print(1)").start();
+            try (java.io.InputStream out = p.getInputStream();
+                    java.io.InputStream err = p.getErrorStream()) {
+                out.transferTo(java.io.OutputStream.nullOutputStream());
+                err.transferTo(java.io.OutputStream.nullOutputStream());
+                pythonAvailable = p.waitFor(5, TimeUnit.SECONDS) && p.exitValue() == 0;
             }
-        });
-        NodeBuildContext ctx = new NodeBuildContext("wf", 0, 5, null, logics, c -> null);
+        } catch (IOException e) {
+            pythonAvailable = false;
+        }
+    }
+
+    @Test
+    void pythonCode_executesMain() {
+        assumeTrue(pythonAvailable, "python3 not available");
+        StudioDslNodeProperties props = new StudioDslNodeProperties();
+        props.setLocalExecMode("inprocess");
+        NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
         ComponentExecutable exec = registry.create(
-                AssembledNode.of("c1", "jiuwen.code", Map.of("codeLogicRef", "double")), ctx);
+                AssembledNode.of(
+                        "c1",
+                        "jiuwen.code",
+                        Map.of(
+                                "code",
+                                "def main(args):\n    return {'n': int(args.get('n', 0)) * 2}\n")),
+                NodeBuildContext.defaults("wf", props));
 
         @SuppressWarnings("unchecked")
         Map<String, Object> out = (Map<String, Object>)
-                exec.invoke(
-                        Map.of("userFields", Map.of("n", 21)),
-                        mock(NodeSessionApi.class),
-                        mock(ModelContext.class));
-        assertThat(out).containsKey("userFields");
+                exec.invoke(Map.of("userFields", Map.of("n", 21)), mock(NodeSessionApi.class), null);
         @SuppressWarnings("unchecked")
         Map<String, Object> uf = (Map<String, Object>) out.get("userFields");
         assertThat(uf.get("n")).isEqualTo(42L);
     }
 
     @Test
-    void missingCodeLogic_failsWithSurface() {
+    void missingCode_failsConfig() {
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
-        NodeBuildContext ctx = NodeBuildContext.defaults("wf");
-        ComponentExecutable exec = registry.create(
-                AssembledNode.of("c1", "jiuwen.code", Map.of("codeLogicRef", "nope")), ctx);
-        assertThatThrownBy(() -> exec.invoke(Map.of(), mock(NodeSessionApi.class), mock(ModelContext.class)))
+        ComponentExecutable exec =
+                registry.create(AssembledNode.of("c1", "jiuwen.code", Map.of()), NodeBuildContext.defaults("wf"));
+        assertThatThrownBy(() -> exec.invoke(Map.of(), mock(NodeSessionApi.class), null))
                 .isInstanceOf(NodeExecutionException.class)
-                .extracting(e -> e instanceof NodeExecutionException ne ? ne.causeCode() : null)
-                .isEqualTo(NodeCauseCode.CODE_LOGIC_NOT_FOUND);
+                .hasMessageContaining("code must be a non-empty string");
     }
 
     @Test
-    void bothJavaAndPythonWithoutLanguage_isAmbiguous() {
+    void unsupportedLanguage_rejected() {
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
-        NodeBuildContext ctx = NodeBuildContext.defaults("wf");
         ComponentExecutable exec = registry.create(
-                AssembledNode.of(
-                        "c1",
-                        "jiuwen.code",
-                        Map.of("codeLogicRef", "double", "code", "def main(args):\n  return {}\n")),
-                ctx);
-        assertThatThrownBy(() -> exec.invoke(
-                Map.of("userFields", Map.of()), mock(NodeSessionApi.class), mock(ModelContext.class)))
+                AssembledNode.of("c1", "jiuwen.code", Map.of("language", "java", "code", "x = 1")),
+                NodeBuildContext.defaults("wf"));
+        assertThatThrownBy(() -> exec.invoke(Map.of(), mock(NodeSessionApi.class), null))
                 .isInstanceOf(NodeExecutionException.class)
                 .extracting(e -> e instanceof NodeExecutionException ne ? ne.causeCode() : null)
-                .isEqualTo(NodeCauseCode.CODE_PATH_AMBIGUOUS);
+                .isEqualTo(NodeCauseCode.NODE_CONFIG_INVALID);
     }
 }

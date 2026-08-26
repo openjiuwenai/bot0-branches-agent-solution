@@ -186,4 +186,56 @@ class CodeNodeParityTest {
         Map<String, Object> uf = (Map<String, Object>) out.get("userFields");
         assertThat(uf.get("ok")).isEqualTo(true);
     }
+
+    @Test
+    void stream_yieldsSingleInvokeResult() {
+        assumeTrue(pythonAvailable, "python3 not available");
+        StudioDslNodeProperties props = new StudioDslNodeProperties();
+        props.setLocalExecMode("inprocess");
+        NodeBuildContext ctx = NodeBuildContext.defaults("wf", props);
+        NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
+        ComponentExecutable exec = registry.create(
+                AssembledNode.of(
+                        "c1",
+                        "jiuwen.code",
+                        Map.of(
+                                "language",
+                                "python",
+                                "code",
+                                "def main(args):\n    return {'v': 1}\n")),
+                ctx);
+        java.util.Iterator<Object> it = exec.stream(Map.of("userFields", Map.of()), null, null);
+        java.util.List<Object> frames = new java.util.ArrayList<>();
+        it.forEachRemaining(frames::add);
+        assertThat(frames).hasSize(1);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> out = (Map<String, Object>) frames.get(0);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> uf = (Map<String, Object>) out.get("userFields");
+        assertThat(uf.get("v")).isEqualTo(1L);
+    }
+
+    @Test
+    void invoke_tracesCodeInfo() {
+        assumeTrue(pythonAvailable, "python3 not available");
+        StudioDslNodeProperties props = new StudioDslNodeProperties();
+        props.setLocalExecMode("inprocess");
+        NodeBuildContext ctx = NodeBuildContext.defaults("wf", props);
+        NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
+        ComponentExecutable exec = registry.create(
+                AssembledNode.of(
+                        "c1",
+                        "jiuwen.code",
+                        Map.of(
+                                "language",
+                                "python",
+                                "code",
+                                "def main(args):\n    print('hi')\n    return {'ok': True}\n")),
+                ctx);
+        com.openjiuwen.core.session.NodeSessionApi session =
+                org.mockito.Mockito.mock(com.openjiuwen.core.session.NodeSessionApi.class);
+        exec.invoke(Map.of("userFields", Map.of()), session, null);
+        org.mockito.Mockito.verify(session, org.mockito.Mockito.atLeastOnce())
+                .trace(org.mockito.ArgumentMatchers.argThat(m -> m != null && m.containsKey("code_info")));
+    }
 }

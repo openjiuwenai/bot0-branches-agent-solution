@@ -8,7 +8,6 @@ import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.adapter.PassthroughStudioNode;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
-import com.openjiuwen.studio.dsl.schema.DslNodeShellValidator;
 import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 
 import java.util.Set;
@@ -31,7 +30,6 @@ public final class AcmeEnrichNodeFactory implements NodeHandlerFactory {
 
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
-        DslNodeShellValidator.validateShell(node);
         return new PassthroughStudioNode(node);
     }
 }

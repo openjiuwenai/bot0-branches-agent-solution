@@ -25,8 +25,10 @@ public final class QuestionerState {
     private int responseNum;
     private final Map<String, Object> extractedFields = new LinkedHashMap<>();
     private final Set<String> fieldsCheckFailed = new HashSet<>();
-    private boolean needUserConfirm;
+    private boolean needUserConfirm = true;
     private boolean userBreak;
+    private final Map<String, Object> inputs = new LinkedHashMap<>();
+    private final Map<String, Object> reflectionMap = new LinkedHashMap<>();
 
     /**
      * fromMap.
@@ -62,8 +64,17 @@ public final class QuestionerState {
                 s.fieldsCheckFailed.add(String.valueOf(o));
             }
         }
-        s.needUserConfirm = raw.get("need_user_confirm") instanceof Boolean b && b;
+        Object reflection = raw.get("reflection_map");
+        if (reflection instanceof Map<?, ?> rm) {
+            rm.forEach((k, v) -> s.reflectionMap.put(String.valueOf(k), v));
+        }
+        Object nuc = raw.get("need_user_confirm");
+        s.needUserConfirm = nuc instanceof Boolean b ? b : true;
         s.userBreak = raw.get("user_break") instanceof Boolean ub && ub;
+        Object ins = raw.get("inputs");
+        if (ins instanceof Map<?, ?> im) {
+            im.forEach((k, v) -> s.inputs.put(String.valueOf(k), v));
+        }
         return s;
     }
 
@@ -81,6 +92,8 @@ public final class QuestionerState {
         m.put("fields_check_failed", Set.copyOf(fieldsCheckFailed));
         m.put("need_user_confirm", needUserConfirm);
         m.put("user_break", userBreak);
+        m.put("inputs", new LinkedHashMap<>(inputs));
+        m.put("reflection_map", new LinkedHashMap<>(reflectionMap));
         return m;
     }
 
@@ -163,5 +176,27 @@ public final class QuestionerState {
      */
     public void setUserBreak(boolean userBreak) {
         this.userBreak = userBreak;
+    }
+
+    /** @return reflectionMap (Python {@code reflection_map}) */
+    public Map<String, Object> reflectionMap() {
+        return reflectionMap;
+    }
+
+    /** @return inputs snapshot */
+    public Map<String, Object> inputs() {
+        return inputs;
+    }
+
+    /**
+     * setInputs.
+     *
+     * @param raw raw inputs
+     */
+    public void setInputs(Map<String, Object> raw) {
+        inputs.clear();
+        if (raw != null) {
+            inputs.putAll(raw);
+        }
     }
 }

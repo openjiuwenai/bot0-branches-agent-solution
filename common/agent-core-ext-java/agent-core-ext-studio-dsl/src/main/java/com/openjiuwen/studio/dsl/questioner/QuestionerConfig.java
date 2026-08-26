@@ -4,13 +4,16 @@
 
 package com.openjiuwen.studio.dsl.questioner;
 
+import com.openjiuwen.core.foundation.llm.schema.ModelClientConfig;
+import com.openjiuwen.core.foundation.llm.schema.ModelRequestConfig;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Questioner IR config (Python {@code QuestionerConfig} subset).
+ * Questioner IR config (Python {@code QuestionerConfig}).
  *
  * @since 2026-08-25
  */
@@ -27,6 +30,13 @@ public final class QuestionerConfig {
     private final List<QuestionerField> keyFields;
     private final Map<String, Object> railsConfig;
     private final Map<String, Object> mockExtractedFields;
+    private final String extraPromptForFieldsExtraction;
+    private final String exampleContent;
+    private final String promptTemplate;
+    private final boolean withChatHistory;
+    private final ModelClientConfig modelClientConfig;
+    private final ModelRequestConfig modelRequestConfig;
+    private final Map<String, Object> rawConfigs;
 
     QuestionerConfig(
             String questionContent,
@@ -40,7 +50,14 @@ public final class QuestionerConfig {
             boolean enumVisible,
             List<QuestionerField> keyFields,
             Map<String, Object> railsConfig,
-            Map<String, Object> mockExtractedFields) {
+            Map<String, Object> mockExtractedFields,
+            String extraPromptForFieldsExtraction,
+            String exampleContent,
+            String promptTemplate,
+            boolean withChatHistory,
+            ModelClientConfig modelClientConfig,
+            ModelRequestConfig modelRequestConfig,
+            Map<String, Object> rawConfigs) {
         this.questionContent = questionContent;
         this.extractFieldsFromResponse = extractFieldsFromResponse;
         this.questionConstructionMethod = questionConstructionMethod;
@@ -53,14 +70,15 @@ public final class QuestionerConfig {
         this.keyFields = List.copyOf(keyFields);
         this.railsConfig = railsConfig;
         this.mockExtractedFields = mockExtractedFields;
+        this.extraPromptForFieldsExtraction = extraPromptForFieldsExtraction == null ? "" : extraPromptForFieldsExtraction;
+        this.exampleContent = exampleContent == null ? "" : exampleContent;
+        this.promptTemplate = promptTemplate == null ? "" : promptTemplate;
+        this.withChatHistory = withChatHistory;
+        this.modelClientConfig = modelClientConfig;
+        this.modelRequestConfig = modelRequestConfig;
+        this.rawConfigs = rawConfigs == null ? Map.of() : Map.copyOf(rawConfigs);
     }
 
-    /**
-     * fromNodeConfigs.
-     *
-     * @param configs configs
-     * @return result
-     */
     @SuppressWarnings("unchecked")
     public static QuestionerConfig fromNodeConfigs(Map<String, Object> configs) {
         Map<String, Object> c = configs == null ? Map.of() : configs;
@@ -79,10 +97,25 @@ public final class QuestionerConfig {
         String template = str(c.get("autoAskTemplate"));
         boolean allowConfirm = bool(c.get("allowNodeConfirm"), false);
         boolean allowBreak = bool(c.get("allowNodeBreak"), false);
-        boolean enumVisible = bool(c.get("enumVisible"), true);
+        boolean enumVisible = bool(c.get("enumVisible"), false);
         List<QuestionerField> fields = parseFields(c);
         Map<String, Object> rails = mapOf(c.get("railsConfig"));
         Map<String, Object> mock = mapOf(c.get("mockExtractedFields"));
+        String extra = str(c.getOrDefault("extraPromptForFieldsExtraction", c.get("extra_prompt_for_fields_extraction")));
+        String example = str(c.getOrDefault("exampleContent", c.get("example_content")));
+        String promptTpl = str(c.getOrDefault("promptTemplate", c.get("prompt_template")));
+        boolean withChat = bool(c.getOrDefault("withChatHistory", c.get("with_chat_history")), false);
+
+        ModelClientConfig clientCfg = null;
+        ModelRequestConfig reqCfg = null;
+        if (QuestionerLlmExtractor.hasModelWiring(c)) {
+            clientCfg = buildClient(c);
+            reqCfg = buildRequest(c);
+        }
+
+        Map<String, Object> raw = new LinkedHashMap<>();
+        c.forEach((k, v) -> raw.put(String.valueOf(k), v));
+
         return new QuestionerConfig(
                 questionContent,
                 extract,
@@ -95,7 +128,54 @@ public final class QuestionerConfig {
                 enumVisible,
                 fields,
                 rails,
-                mock);
+                mock,
+                extra,
+                example,
+                promptTpl,
+                withChat,
+                clientCfg,
+                reqCfg,
+                raw);
+    }
+
+    private static ModelClientConfig buildClient(Map<String, Object> c) {
+        Object nested = c.get("modelClientConfig");
+        ModelClientConfig.Builder b = ModelClientConfig.builder();
+        Map<String, Object> src = nested instanceof Map<?, ?> m ? cast(m) : c;
+        if (src.get("apiKey") != null) {
+            b.apiKey(String.valueOf(src.get("apiKey")));
+        }
+        Object base = src.getOrDefault("apiBase", src.get("baseUrl"));
+        if (base != null) {
+            b.apiBase(String.valueOf(base));
+        }
+        Object provider = src.getOrDefault("clientProvider", src.get("provider"));
+        b.clientProvider(provider == null ? "OpenAI" : String.valueOf(provider));
+        Object clientId = src.get("clientId");
+        if (clientId != null) {
+            b.clientId(String.valueOf(clientId));
+        } else {
+            Object model = c.getOrDefault("modelId", c.getOrDefault("model", c.get("modelName")));
+            b.clientId(model == null ? "studio-questioner" : String.valueOf(model));
+        }
+        return b.build();
+    }
+
+    private static ModelRequestConfig buildRequest(Map<String, Object> c) {
+        Object nested = c.get("modelConfig");
+        Map<String, Object> src = nested instanceof Map<?, ?> m ? cast(m) : c;
+        ModelRequestConfig.ModelRequestConfigBuilder b = ModelRequestConfig.builder();
+        Object name = src.getOrDefault("modelName", src.getOrDefault("model", c.get("model")));
+        if (name != null) {
+            b.modelName(String.valueOf(name));
+        }
+        return b.build();
+    }
+
+    private static Map<String, Object> cast(Map<?, ?> m) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        m.forEach((k, v) -> out.put(String.valueOf(k), v));
+        return out;
     }
 
     @SuppressWarnings("unchecked")
@@ -148,73 +228,105 @@ public final class QuestionerConfig {
         return Boolean.parseBoolean(String.valueOf(o));
     }
 
-    /** @return questionContent */
     public String questionContent() {
         return questionContent;
     }
 
-    /** @return extractFieldsFromResponse */
     public boolean extractFieldsFromResponse() {
         return extractFieldsFromResponse;
     }
 
-    /** @return questionConstructionMethod */
     public String questionConstructionMethod() {
         return questionConstructionMethod;
     }
 
-    /** @return maxResponse */
     public int maxResponse() {
         return maxResponse;
     }
 
-    /** @return acceptLanguage */
     public String acceptLanguage() {
         return acceptLanguage;
     }
 
-    /** @return autoAskTemplate */
     public String autoAskTemplate() {
         return autoAskTemplate;
     }
 
-    /** @return allowNodeConfirm */
     public boolean allowNodeConfirm() {
         return allowNodeConfirm;
     }
 
-    /** @return allowNodeBreak */
     public boolean allowNodeBreak() {
         return allowNodeBreak;
     }
 
-    /** @return enumVisible */
     public boolean enumVisible() {
         return enumVisible;
     }
 
-    /** @return keyFields */
     public List<QuestionerField> keyFields() {
         return keyFields;
     }
 
-    /** @return railsConfig */
     public Map<String, Object> railsConfig() {
         return railsConfig;
     }
 
-    /** @return mockExtractedFields */
     public Map<String, Object> mockExtractedFields() {
         return mockExtractedFields;
     }
 
-    /** @return has question content */
+    public String extraPromptForFieldsExtraction() {
+        return extraPromptForFieldsExtraction;
+    }
+
+    public String exampleContent() {
+        return exampleContent;
+    }
+
+    public String promptTemplate() {
+        return promptTemplate;
+    }
+
+    public boolean withChatHistory() {
+        return withChatHistory;
+    }
+
+    public ModelClientConfig modelClientConfig() {
+        return modelClientConfig;
+    }
+
+    public ModelRequestConfig modelRequestConfig() {
+        return modelRequestConfig;
+    }
+
+    public Map<String, Object> rawConfigs() {
+        return rawConfigs;
+    }
+
+    public boolean hasModelWiring() {
+        return modelClientConfig != null && modelRequestConfig != null;
+    }
+
     public boolean hasQuestionContent() {
         return questionContent != null && !questionContent.isBlank();
     }
 
-    /** @return need extract */
     public boolean needExtractFields() {
         return extractFieldsFromResponse && !keyFields.isEmpty();
+    }
+
+    /**
+     * Python {@code _need_extract_fields} — still extracting when configured fields exceed extracted count.
+     *
+     * @param state state
+     * @return true when more extraction rounds are needed
+     */
+    public boolean needExtractFields(QuestionerState state) {
+        if (!extractFieldsFromResponse || keyFields.isEmpty()) {
+            return false;
+        }
+        int extracted = state == null ? 0 : state.extractedFields().size();
+        return keyFields.size() > extracted;
     }
 }

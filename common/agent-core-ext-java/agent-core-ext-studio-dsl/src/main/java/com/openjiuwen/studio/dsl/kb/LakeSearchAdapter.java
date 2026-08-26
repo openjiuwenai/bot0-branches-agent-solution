@@ -12,7 +12,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * LakeSearch HTTP adapter (Python {@code LakeSearchAdapter}; KERBEROS not supported — fail fast).
+ * LakeSearch HTTP adapter (Python {@code LakeSearchAdapter}; BASIC / TOKEN / KERBEROS).
  *
  * @since 2026-08-25
  */
@@ -38,13 +38,28 @@ public final class LakeSearchAdapter implements KBServiceAdapter {
         if (endpoint.isBlank()) {
             throw new IllegalStateException("LakeSearch endpoint is empty");
         }
-        if ("KERBEROS".equalsIgnoreCase(authMode)) {
-            throw new IllegalStateException(
-                    "LakeSearch KERBEROS auth is not supported in studio-dsl Java adapter; use BASIC/TOKEN");
-        }
         Map<String, String> headers = new LinkedHashMap<>();
         headers.put("Content-Type", "application/json");
-        if (!authorization.isBlank()) {
+        if ("KERBEROS".equalsIgnoreCase(authMode)) {
+            Map<String, Object> kerberosConfig = KerberosAuth.extractKerberosConfig(extra);
+            if (kerberosConfig == null) {
+                throw new IllegalArgumentException(
+                        "KERBEROS auth mode requires: host_names, cluster_ips, user_keytab_file, krb5_file"
+                                + " in connection params");
+            }
+            @SuppressWarnings("unchecked")
+            java.util.List<String> hostNames = (java.util.List<String>) kerberosConfig.get("host_names");
+            String hostname = hostNames != null && !hostNames.isEmpty() ? hostNames.get(0) : "";
+            if (hostname.isBlank()) {
+                try {
+                    java.net.URI uri = java.net.URI.create(endpoint);
+                    hostname = uri.getHost();
+                } catch (Exception ignored) {
+                    hostname = "";
+                }
+            }
+            headers.put("Authorization", KerberosAuth.buildNegotiateAuthorization(hostname, kerberosConfig));
+        } else if (!authorization.isBlank()) {
             if ("BASIC".equalsIgnoreCase(authMode)) {
                 headers.put("Authorization", "Basic " + authorization);
             } else if ("TOKEN".equalsIgnoreCase(authMode)) {

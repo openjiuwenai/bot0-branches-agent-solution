@@ -222,4 +222,62 @@ class StartNodeParityTest {
 
         assertThat(store.getMap("global.vals.wf-1.c1").get("topic")).isEqualTo("user-set");
     }
+
+    @Test
+    void redisColdStart_doesNotPersistUndefinedDefaults() {
+        AssembledNode node =
+                AssembledNode.of(
+                        "s",
+                        "jiuwen.start",
+                        Map.of(
+                                "preDefinedFields",
+                                Map.of(
+                                        "inputs",
+                                        List.of(
+                                                Map.of(
+                                                        "id",
+                                                        "memory",
+                                                        "storage_method",
+                                                        "assignment",
+                                                        "aging_level",
+                                                        "session",
+                                                        "schema",
+                                                        List.of(
+                                                                Map.of(
+                                                                        "id",
+                                                                        "topic",
+                                                                        "type",
+                                                                        "string",
+                                                                        "default_value",
+                                                                        "t0",
+                                                                        "storage_method",
+                                                                        "assignment",
+                                                                        "aging_level",
+                                                                        "session"),
+                                                                Map.of(
+                                                                        "id",
+                                                                        "other",
+                                                                        "type",
+                                                                        "string",
+                                                                        "default_value",
+                                                                        "o0",
+                                                                        "storage_method",
+                                                                        "assignment",
+                                                                        "aging_level",
+                                                                        "session")))))));
+
+        var exec = new StartNodeHandler().create(node, NodeBuildContext.defaults("wf-1"));
+        exec.invoke(
+                Map.of(
+                        "userFields",
+                        Map.of(
+                                "global_variables",
+                                Map.of("conversationId", "c1", "appId", "wf-1", "topic", "user-set"))),
+                null,
+                null);
+
+        Map<String, Object> stored = store.getMap("global.vals.wf-1.c1");
+        assertThat(stored.get("topic")).isEqualTo("user-set");
+        assertThat(stored).doesNotContainKey("other");
+    }
 }

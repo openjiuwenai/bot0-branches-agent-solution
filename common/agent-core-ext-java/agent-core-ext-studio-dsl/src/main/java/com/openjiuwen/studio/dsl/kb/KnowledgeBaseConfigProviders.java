@@ -1,0 +1,68 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
+package com.openjiuwen.studio.dsl.kb;
+
+import com.openjiuwen.studio.dsl.contract.KnowledgeBaseConfigProvider;
+import com.openjiuwen.studio.dsl.contract.KnowledgeStorageProvider;
+import com.openjiuwen.studio.dsl.contract.SecretDecryptor;
+
+/**
+ * Global KB config provider + storage wiring (Python {@code FlowKnowledgeRetrieval.set_kb_provider}).
+ *
+ * @since 2026-08-26
+ */
+public final class KnowledgeBaseConfigProviders {
+    private static volatile KnowledgeBaseConfigProvider provider = new ObsKnowledgeBaseConfigProvider();
+    private static volatile KnowledgeStorageProvider storageProvider;
+    private static volatile SecretDecryptor secretDecryptor;
+
+    private KnowledgeBaseConfigProviders() {}
+
+    public static KnowledgeBaseConfigProvider get() {
+        return provider;
+    }
+
+    public static void setProvider(KnowledgeBaseConfigProvider p) {
+        provider = p == null ? new ObsKnowledgeBaseConfigProvider() : p;
+    }
+
+    public static KnowledgeStorageProvider storage() {
+        KnowledgeStorageProvider s = storageProvider;
+        if (s != null) {
+            return s;
+        }
+        return key -> {
+            throw new IllegalStateException(
+                    "KnowledgeStorageProvider not configured; call KnowledgeBaseConfigProviders.setStorageProvider"
+                            + " or provide inline kbConfig");
+        };
+    }
+
+    public static void setStorageProvider(KnowledgeStorageProvider storage) {
+        storageProvider = storage;
+    }
+
+    public static void setSecretDecryptor(SecretDecryptor decryptor) {
+        secretDecryptor = decryptor;
+    }
+
+    static String maybeDecrypt(String code, String value) {
+        if (value == null || value.isBlank()) {
+            return value;
+        }
+        if (!ObsKnowledgeBaseConfigProvider.SECRET_PARAM_CODES.contains(code)) {
+            return value;
+        }
+        SecretDecryptor d = secretDecryptor;
+        if (d == null) {
+            return value;
+        }
+        try {
+            return d.decrypt(value);
+        } catch (RuntimeException e) {
+            return value;
+        }
+    }
+}

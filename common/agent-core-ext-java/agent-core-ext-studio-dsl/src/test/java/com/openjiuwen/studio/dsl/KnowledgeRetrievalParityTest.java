@@ -11,11 +11,16 @@ import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.kb.GeneralKBAdapter;
+import com.openjiuwen.studio.dsl.kb.InMemoryKnowledgeStorageProvider;
 import com.openjiuwen.studio.dsl.kb.KBAdapterFactory;
 import com.openjiuwen.studio.dsl.kb.KBSearchResult;
 import com.openjiuwen.studio.dsl.kb.KBServiceAdapter;
+import com.openjiuwen.studio.dsl.kb.KerberosAuth;
+import com.openjiuwen.studio.dsl.kb.KnowledgeBaseConfigProviders;
+import com.openjiuwen.studio.dsl.kb.KnowledgeRetrievalCacheStore;
 import com.openjiuwen.studio.dsl.kb.KnowledgeRetrievalEngine;
 import com.openjiuwen.studio.dsl.kb.LakeSearchAdapter;
+import com.openjiuwen.studio.dsl.kb.ObsKnowledgeBaseConfigProvider;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 
@@ -39,6 +44,11 @@ class KnowledgeRetrievalParityTest {
         // restore General registration (tests may override)
         KBAdapterFactory.register("General", GeneralKBAdapter::new);
         KBAdapterFactory.register("FakeKB", () -> (q, c, k, p) -> List.of());
+        KnowledgeRetrievalCacheStore.clearMemory();
+        KnowledgeRetrievalCacheStore.setJedis(null);
+        KnowledgeBaseConfigProviders.setStorageProvider(null);
+        KnowledgeBaseConfigProviders.setProvider(new ObsKnowledgeBaseConfigProvider());
+        KerberosAuth.clearCache();
     }
 
     @Test
@@ -175,5 +185,51 @@ class KnowledgeRetrievalParityTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> uf = (Map<String, Object>) out.get("userFields");
         assertThat(uf.get("documents")).isInstanceOf(List.class);
+    }
+
+    @Test
+    void obsProvider_loadsConnectionAndKbFromStorage() {
+        InMemoryKnowledgeStorageProvider storage = new InMemoryKnowledgeStorageProvider();
+        storage.put(
+                "kb-connection/ir/connection/conn-1.json",
+                """
+                {"connectionId":"conn-1","connectorId":"FakeKB","knowledgeSource":"LakeSearch",\
+                "params":[{"code":"endpoint","value":"http://x"},{"code":"project_id","value":"p"},\
+                {"code":"app_id","value":"a"}]}
+                """);
+        storage.put(
+                "kb-connection/ir/knowledge-base/kb-1.json",
+                """
+                {"knowledgeBaseId":"kb-1","externalId":"ext-1","status":"OPEN","type":"INTERNAL"}
+                """);
+        KnowledgeBaseConfigProviders.setStorageProvider(storage);
+        KBAdapterFactory.register("FakeKB", () -> (q, c, k, p) ->
+                List.of(new KBSearchResult().setText("hit").setScore(1.0).setSource("ext-1")));
+
+        KnowledgeRetrievalEngine engine = new KnowledgeRetrievalEngine(
+                "k1",
+                Map.of(
+                        "connectionId", "conn-1",
+                        "knowledgeBaseIds", List.of("kb-1"),
+                        "retrievalConfig", Map.of("topK", 3)));
+        Map<String, Object> out = engine.invoke(Map.of("userFields", Map.of("query", "hello")), null);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> list = (List<Map<String, Object>>) out.get("output_list");
+        assertThat(list).hasSize(1);
+        assertThat(list.get(0).get("text")).isEqualTo("hit");
+    }
+
+    @Test
+    void kerberosConfig_requiresAllFields() {
+        Map<String, Object> cfg =
+                KerberosAuth.extractKerberosConfig(
+                        Map.of(
+                                "host_names", "host1",
+                                "cluster_ips", "1.2.3.4",
+                                "user_keytab_file", "/tmp/k.keytab",
+                                "krb5_file", "/tmp/krb5.conf"));
+        assertThat(cfg).isNotNull();
+        assertThat(cfg.get("keytab_path")).isEqualTo("/tmp/k.keytab");
+        assertThat(KerberosAuth.extractKerberosConfig(Map.of("host_names", "only"))).isNull();
     }
 }

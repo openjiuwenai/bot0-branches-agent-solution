@@ -7,29 +7,15 @@ package com.openjiuwen.studio.dsl.rails.formatters;
 import com.openjiuwen.studio.dsl.rails.ActionConfig;
 import com.openjiuwen.studio.dsl.rails.ValidateAction;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
-import java.util.List;
 
 /**
- * date_time_format — parse common patterns and rewrite to target (Python subset without dateutil).
+ * date_time_format — parse via {@link DateUtilCompatibleParser} (dateutil-compatible fuzzy parse).
  *
  * @since 2026-08-25
  */
 public final class DateTimeFormatValidateAction extends ValidateAction {
-    private static final List<String> TIME_FORMATS = List.of(
-            "yyyy-MM-dd HH:mm:ss",
-            "yyyy-MM-dd HH:mm",
-            "yyyy-MM-dd",
-            "yyyy/MM/dd HH:mm:ss",
-            "yyyy/MM/dd",
-            "HH:mm:ss",
-            "HH:mm",
-            "yyyyMMdd");
-
     /**
      * DateTimeFormatValidateAction.
      *
@@ -62,23 +48,7 @@ public final class DateTimeFormatValidateAction extends ValidateAction {
     }
 
     public static LocalDateTime tryParse(String value) {
-        for (String fmt : TIME_FORMATS) {
-            DateTimeFormatter f = DateTimeFormatter.ofPattern(fmt);
-            try {
-                if (fmt.contains("HH") && fmt.contains("yyyy")) {
-                    return LocalDateTime.parse(value, f);
-                }
-                if (fmt.contains("yyyy") && !fmt.contains("HH")) {
-                    return LocalDate.parse(value, f).atStartOfDay();
-                }
-                if (fmt.contains("HH") && !fmt.contains("yyyy")) {
-                    return LocalDate.now().atTime(LocalTime.parse(value, f));
-                }
-            } catch (DateTimeParseException ignored) {
-                // next
-            }
-        }
-        return null;
+        return DateUtilCompatibleParser.tryParse(value);
     }
 
     public static String toJavaPattern(String py) {

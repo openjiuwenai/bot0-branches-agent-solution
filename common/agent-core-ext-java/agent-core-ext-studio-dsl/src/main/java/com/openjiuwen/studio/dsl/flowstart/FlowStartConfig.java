@@ -1,0 +1,37 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
+package com.openjiuwen.studio.dsl.flowstart;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * Start node configs from Studio IR — Python {@code Start.__init__} conf_dict.
+ *
+ * @since 2026-08-26
+ */
+public final class FlowStartConfig {
+    private final Map<String, Object> raw;
+    private final String nodeName;
+
+    public FlowStartConfig(Map<String, Object> raw, String nodeName) {
+        this.raw = raw == null ? Map.of() : Map.copyOf(new LinkedHashMap<>(raw));
+        this.nodeName = nodeName;
+    }
+
+    public static FlowStartConfig fromNodeConfigs(Map<String, Object> configs, String nodeId) {
+        Map<String, Object> c = configs == null ? Map.of() : configs;
+        Object name = c.get("name");
+        return new FlowStartConfig(c, name == null ? nodeId : String.valueOf(name));
+    }
+
+    public Map<String, Object> raw() {
+        return raw;
+    }
+
+    public String nodeName() {
+        return nodeName;
+    }
+}

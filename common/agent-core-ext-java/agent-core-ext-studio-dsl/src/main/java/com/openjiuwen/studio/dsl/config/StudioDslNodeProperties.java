@@ -22,8 +22,6 @@ public final class StudioDslNodeProperties {
     private String pythonWorkdirRoot;
     private boolean pythonInheritEnv = false;
     private List<String> pythonEnvWhitelist = new ArrayList<>(List.of("PATH", "LANG"));
-    /** Whether Java {@code CodeLogic} path is allowed for {@code jiuwen.code}. */
-    private boolean javaCodeLogicEnabled = true;
     private String unsupportedModalityPolicy = "passthrough";
     private String variablesScope = "workflow-execution";
 
@@ -170,24 +168,6 @@ public final class StudioDslNodeProperties {
     public void setPythonEnvWhitelist(List<String> pythonEnvWhitelist) {
         this.pythonEnvWhitelist =
                 pythonEnvWhitelist == null ? new ArrayList<>() : new ArrayList<>(pythonEnvWhitelist);
-    }
-
-    /**
-     * isJavaCodeLogicEnabled.
-     *
-     * @return result
-     */
-    public boolean isJavaCodeLogicEnabled() {
-        return javaCodeLogicEnabled;
-    }
-
-    /**
-     * setJavaCodeLogicEnabled.
-     *
-     * @param javaCodeLogicEnabled javaCodeLogicEnabled
-     */
-    public void setJavaCodeLogicEnabled(boolean javaCodeLogicEnabled) {
-        this.javaCodeLogicEnabled = javaCodeLogicEnabled;
     }
 
     /**

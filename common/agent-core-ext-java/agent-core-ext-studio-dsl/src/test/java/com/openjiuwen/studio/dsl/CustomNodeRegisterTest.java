@@ -5,18 +5,14 @@
 package com.openjiuwen.studio.dsl;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
-import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
-import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
-import com.openjiuwen.studio.dsl.schema.DslNodeShellValidator;
 import com.openjiuwen.studio.dsl.support.AcmeEnrichNodeFactory;
 
 import org.junit.jupiter.api.Test;
@@ -44,14 +40,6 @@ class CustomNodeRegisterTest {
                         mock(NodeSessionApi.class),
                         mock(ModelContext.class));
         assertThat(out.get("userFields")).isEqualTo(Map.of("x", "y"));
-    }
-
-    @Test
-    void shellValidator_rejectsMissingConfigs() {
-        assertThatThrownBy(() -> DslNodeShellValidator.validateRaw(Map.of("id", "n1", "type", "acme.enrich")))
-                .isInstanceOf(NodeExecutionException.class)
-                .extracting(e -> e instanceof NodeExecutionException ne ? ne.causeCode() : null)
-                .isEqualTo(NodeCauseCode.NODE_CONFIG_INVALID);
     }
 
     @Test

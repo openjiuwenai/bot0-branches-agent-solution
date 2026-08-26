@@ -11,7 +11,6 @@ import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.AssembledWorkflow;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
-import com.openjiuwen.studio.dsl.registry.CodeLogicRegistry;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 
 import org.junit.jupiter.api.Test;
@@ -33,7 +32,6 @@ class NestingDepthTest {
                 5,
                 5,
                 null,
-                new CodeLogicRegistry(),
                 configs -> new AssembledWorkflow("child", List.of(AssembledNode.of("s", "jiuwen.start", Map.of()))));
 
         assertThatThrownBy(() -> registry.create(

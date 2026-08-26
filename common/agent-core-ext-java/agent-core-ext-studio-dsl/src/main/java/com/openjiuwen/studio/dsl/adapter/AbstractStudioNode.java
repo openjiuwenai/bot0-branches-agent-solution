@@ -5,9 +5,12 @@
 package com.openjiuwen.studio.dsl.adapter;
 
 import com.openjiuwen.core.context.ModelContext;
+import com.openjiuwen.core.graph.pregel.GraphInterrupt;
 import com.openjiuwen.core.session.NodeSessionApi;
+import com.openjiuwen.core.session.interaction.WorkflowInteraction;
 import com.openjiuwen.core.workflow.WorkflowComponent;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
+import com.openjiuwen.studio.dsl.flowexception.WorkflowAbortException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
@@ -53,10 +56,33 @@ public abstract class AbstractStudioNode extends WorkflowComponent {
             return out.toInvokeMap();
         } catch (NodeExecutionException e) {
             throw e;
+        } catch (WorkflowAbortException e) {
+            // Python ExceptionInfo — do not wrap as NodeExecutionException
+            throw e;
+        } catch (RuntimeException e) {
+            if (isGraphInterrupt(e) || e instanceof WorkflowAbortException) {
+                throw e;
+            }
+            throw new NodeExecutionException(
+                    node.id(), node.canonicalType(), NodeCauseCode.NODE_INVOKE_FAILED, e.getMessage(), e);
+        } catch (GraphInterrupt e) {
+            throw new WorkflowInteraction.GraphInterruptRuntimeWrapper(e);
         } catch (Exception e) {
             throw new NodeExecutionException(
                     node.id(), node.canonicalType(), NodeCauseCode.NODE_INVOKE_FAILED, e.getMessage(), e);
         }
+    }
+
+    static boolean isGraphInterrupt(Throwable e) {
+        Throwable cur = e;
+        while (cur != null) {
+            if (cur instanceof GraphInterrupt
+                    || cur instanceof WorkflowInteraction.GraphInterruptRuntimeWrapper) {
+                return true;
+            }
+            cur = cur.getCause();
+        }
+        return false;
     }
 
     /**

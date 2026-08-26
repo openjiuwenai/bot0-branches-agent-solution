@@ -9,6 +9,7 @@ import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,16 +19,20 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Knowledge retrieval orchestration (Python {@code FlowKnowledgeRetrieval} main path).
+ * Knowledge retrieval orchestration — strict 1:1 with Python {@code FlowKnowledgeRetrieval}.
  *
- * <p>OBS provider is replaced by inline {@code kbConfig} on node configs (or host-injected map).
- * Redis image/file cache is optional best-effort (skipped when no Redis).
+ * <p>KB config: inline {@code kbConfig}, or OBS via {@link ObsKnowledgeBaseConfigProvider}.
+ * Search: FAQ priority, CLOSE filter, CUSTOM path, KooSearchInside multi-KB, recallThreshold/topK.
+ * Redis image/file cache via {@link KnowledgeRetrievalCacheStore}.
+ * Tests: {@code mockDocuments} stub, or {@link KBAdapterFactory#register}.
  *
  * @since 2026-08-25
  */
 public final class KnowledgeRetrievalEngine {
     private static final Pattern IMAGE_ID_PATTERN = Pattern.compile("\\{(img-[a-z0-9-]+)}", Pattern.CASE_INSENSITIVE);
     private static final String RETRIEVAL_IMAGE_FORMAT = "![img](https://agent_arts_knowledge_img_url/%s)";
+    private static final String FILE_TYPE_DOC = "doc";
+    private static final String FILE_TYPE_FAQ = "faq";
 
     private final String nodeId;
     private final Map<String, Object> configs;
@@ -51,13 +56,13 @@ public final class KnowledgeRetrievalEngine {
      * @return userFields
      */
     public Map<String, Object> invoke(Map<String, Object> inputs, NodeSessionApi session) {
-        // Explicit mockDocuments (L2 / existing FEAT path)
+        // Explicit mockDocuments (test / host stub — not in Python, keeps FEAT smoke)
         Object docs = configs.get("mockDocuments");
         if (docs instanceof List<?> list) {
-            Map<String, Object> uf = new LinkedHashMap<>(userFieldsOf(inputs));
+            Map<String, Object> uf = new LinkedHashMap<>();
+            uf.put("output_list", list);
             uf.put("documents", list);
             uf.put("knowledgeResults", list);
-            uf.put("output_list", list);
             return uf;
         }
 
@@ -117,7 +122,8 @@ public final class KnowledgeRetrievalEngine {
         for (KBSearchResult r : results) {
             outputList.add(r.toOutputMap());
         }
-        Map<String, Object> uf = new LinkedHashMap<>(userFieldsOf(inputs));
+        // Python invoke: userFields = { output_list }; keep documents/knowledgeResults aliases for FEAT hosts
+        Map<String, Object> uf = new LinkedHashMap<>();
         uf.put("output_list", outputList);
         uf.put("documents", outputList);
         uf.put("knowledgeResults", outputList);
@@ -247,7 +253,7 @@ public final class KnowledgeRetrievalEngine {
         return adapter.search(query, connection, customKbs, customParams);
     }
 
-    private List<KBSearchResult> normalizeResults(
+    List<KBSearchResult> normalizeResults(
             List<KBSearchResult> results,
             List<Map<String, Object>> knowledgeBases,
             Map<String, Object> retrievalParams) {
@@ -267,6 +273,7 @@ public final class KnowledgeRetrievalEngine {
         }
         boolean retrieveImage = Boolean.TRUE.equals(retrievalParams.get("retrieveImage"))
                 || "true".equalsIgnoreCase(String.valueOf(retrievalParams.get("retrieveImage")));
+        int ttlSeconds = KnowledgeRetrievalCacheStore.defaultTtlSeconds();
         Map<String, String> fileCache = new LinkedHashMap<>();
         for (KBSearchResult item : results) {
             String sourceId = item.source().isBlank() ? item.knowledgeBaseId() : item.source();
@@ -277,31 +284,53 @@ public final class KnowledgeRetrievalEngine {
             }
             String realFileId = item.fileId();
             if (!realFileId.isBlank() && !item.knowledgeBaseId().isBlank()) {
+                String fileType = FILE_TYPE_FAQ.equals(item.type()) ? FILE_TYPE_FAQ : FILE_TYPE_DOC;
                 String cacheKey = item.knowledgeBaseId() + ":" + realFileId;
                 String virtual = fileCache.computeIfAbsent(cacheKey, k -> UUID.randomUUID().toString());
                 item.setFileId(virtual);
+                KnowledgeRetrievalCacheStore.set(
+                        KnowledgeRetrievalCacheStore.FILE_PREFIX + virtual,
+                        item.knowledgeBaseId() + "," + fileType + "," + realFileId,
+                        ttlSeconds);
             }
-            String[] processed = replaceImageIds(item.text(), retrieveImage);
-            item.setText(processed[0]);
+            ImageReplaceResult processed = replaceImageIds(item.text(), retrieveImage);
+            item.setText(processed.content());
+            if (!processed.imageAccessMap().isEmpty() && !item.knowledgeBaseId().isBlank()) {
+                processed.imageAccessMap().forEach((imageId, accessKey) ->
+                        KnowledgeRetrievalCacheStore.set(
+                                KnowledgeRetrievalCacheStore.IMAGE_PREFIX + accessKey,
+                                item.knowledgeBaseId() + "," + imageId,
+                                ttlSeconds));
+            }
         }
         return results;
     }
 
-    private static String[] replaceImageIds(String content, boolean retrieveImage) {
+    private record ImageReplaceResult(String content, Map<String, String> imageAccessMap) {}
+
+    private static ImageReplaceResult replaceImageIds(String content, boolean retrieveImage) {
         if (content == null || content.isEmpty()) {
-            return new String[] {"", ""};
+            return new ImageReplaceResult("", Map.of());
         }
         if (!retrieveImage) {
-            return new String[] {IMAGE_ID_PATTERN.matcher(content).replaceAll(""), ""};
+            return new ImageReplaceResult(IMAGE_ID_PATTERN.matcher(content).replaceAll(""), Map.of());
         }
+        Map<String, String> imageAccessMap = new LinkedHashMap<>();
         Matcher m = IMAGE_ID_PATTERN.matcher(content);
         StringBuffer sb = new StringBuffer();
         while (m.find()) {
-            String accessKey = UUID.randomUUID().toString().replace("-", "");
+            String imageId = m.group(1);
+            String accessKey = generateImageAccessKey();
+            imageAccessMap.put(imageId, accessKey);
             m.appendReplacement(sb, Matcher.quoteReplacement(String.format(RETRIEVAL_IMAGE_FORMAT, accessKey)));
         }
         m.appendTail(sb);
-        return new String[] {sb.toString(), ""};
+        return new ImageReplaceResult(sb.toString(), imageAccessMap);
+    }
+
+    private static String generateImageAccessKey() {
+        String uuidText = UUID.randomUUID().toString();
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(uuidText.getBytes());
     }
 
     static boolean isCustomSource(Map<String, Object> connection) {
@@ -312,6 +341,10 @@ public final class KnowledgeRetrievalEngine {
         Object inline = configs.get("kbConfig");
         if (inline instanceof Map<?, ?>) {
             return KbHttp.mapOf(inline);
+        }
+        String connectionId = KbHttp.str(configs.get("connectionId"));
+        if (!connectionId.isBlank()) {
+            return KnowledgeBaseConfigProviders.get().getKbConfig(configs);
         }
         // Build minimal config from IR fields when host embeds connection under configs
         Object connection = configs.get("connection");
@@ -327,7 +360,7 @@ public final class KnowledgeRetrievalEngine {
                 nodeId,
                 "jiuwen.knowledgeRetrieval",
                 NodeCauseCode.NODE_CONFIG_INVALID,
-                "kbConfig missing; provide inline kbConfig (connection/knowledge_bases/retrieval_params),"
+                "kbConfig missing; provide inline kbConfig, connectionId (OBS),"
                         + " or mockDocuments / core KnowledgeRetrievalExecutable");
     }
 
@@ -346,13 +379,25 @@ public final class KnowledgeRetrievalEngine {
                 if (gq instanceof String s && !s.isBlank()) {
                     return s;
                 }
+                Object startUf = session.getState("node_start.userFields.query");
+                if (startUf instanceof String s && !s.isBlank()) {
+                    return s;
+                }
+                Object startSf = session.getState("node_start.systemFields.query");
+                if (startSf instanceof String s && !s.isBlank()) {
+                    return s;
+                }
                 Object tq = session.getState("query");
                 if (tq instanceof String s && !s.isBlank()) {
                     return s;
                 }
-                Object startUf = session.getState("node_start.userFields.query");
-                if (startUf instanceof String s && !s.isBlank()) {
-                    return s;
+                Object startUserFields = session.getState("node_start.userFields");
+                if (startUserFields instanceof Map<?, ?> m) {
+                    for (Map.Entry<?, ?> e : m.entrySet()) {
+                        if (e.getValue() instanceof String s && !s.isBlank()) {
+                            return s;
+                        }
+                    }
                 }
             } catch (RuntimeException ignored) {
                 // mock

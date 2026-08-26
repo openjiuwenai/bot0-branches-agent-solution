@@ -13,7 +13,6 @@ import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.AssembledWorkflow;
-import com.openjiuwen.studio.dsl.registry.CodeLogicRegistry;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 
 import org.junit.jupiter.api.Test;
@@ -35,7 +34,6 @@ class NestedWorkflowTest {
                 0,
                 5,
                 null,
-                new CodeLogicRegistry(),
                 configs -> new AssembledWorkflow(
                         "child",
                         List.of(

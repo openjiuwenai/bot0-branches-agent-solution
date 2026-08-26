@@ -17,7 +17,6 @@ import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
-import com.openjiuwen.studio.dsl.registry.CodeLogicRegistry;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 
@@ -35,7 +34,7 @@ class NodeFailureSurfaceTest {
     @Test
     void subWorkflow_nullResolverResult_isRefInvalidAtCreate() {
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
-        NodeBuildContext ctx = new NodeBuildContext("wf", 0, 5, null, new CodeLogicRegistry(), configs -> null);
+        NodeBuildContext ctx = new NodeBuildContext("wf", 0, 5, null, configs -> null);
         assertThatThrownBy(() -> registry.create(
                         AssembledNode.of("nest", "jiuwen.subWorkflow", Map.of("workflowId", "missing")), ctx))
                 .isInstanceOf(NodeExecutionException.class)
@@ -57,7 +56,6 @@ class NodeFailureSurfaceTest {
                 0,
                 5,
                 null,
-                new CodeLogicRegistry(),
                 configs -> {
                     throw new IllegalArgumentException("bad ref");
                 });

@@ -4,6 +4,12 @@
 
 package com.openjiuwen.studio.dsl.questioner;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openjiuwen.core.context.ContextWindow;
+import com.openjiuwen.core.context.ModelContext;
+import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
+import com.openjiuwen.core.foundation.llm.schema.BaseMessage;
+import com.openjiuwen.core.foundation.llm.schema.UserMessage;
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
@@ -16,20 +22,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
- * Questioner invoke engine — agent_runtime Flow Questioner main path (no Redis trace / reflection).
+ * Questioner invoke engine — strict 1:1 with Python
+ * {@code agent_runtime...questioner.Questioner} / {@code QuestionerDirectReplyHandler}.
  *
  * @since 2026-08-25
  */
 public final class QuestionerEngine {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final Pattern TEMPLATE_VAR = Pattern.compile("\\{\\{\\s*([\\w.]+)\\s*\\}\\}");
-    private static final List<String> USER_CONFIRM_INFO = List.of("确认", "是的", "好的", "yes", "y", "ok", "confirm");
-    private static final List<String> USER_BREAK_INFO = List.of("退出", "取消", "结束", "exit", "quit", "cancel", "break");
 
     private final String nodeId;
     private final QuestionerConfig config;
+    private final QuestionerLlmExtractor.ModelInvoker modelInvoker;
 
     /**
      * QuestionerEngine.
@@ -38,8 +44,20 @@ public final class QuestionerEngine {
      * @param config config
      */
     public QuestionerEngine(String nodeId, QuestionerConfig config) {
+        this(nodeId, config, null);
+    }
+
+    /**
+     * QuestionerEngine with injectable LLM (tests).
+     *
+     * @param nodeId nodeId
+     * @param config config
+     * @param modelInvoker modelInvoker
+     */
+    public QuestionerEngine(String nodeId, QuestionerConfig config, QuestionerLlmExtractor.ModelInvoker modelInvoker) {
         this.nodeId = nodeId;
         this.config = config;
+        this.modelInvoker = modelInvoker;
     }
 
     /**
@@ -50,10 +68,23 @@ public final class QuestionerEngine {
      * @return userFields map (already mapped names when finished); may still be interacting
      */
     public Map<String, Object> invoke(Map<String, Object> inputs, NodeSessionApi session) {
+        return invoke(inputs, session, null);
+    }
+
+    /**
+     * invoke with model context (Python {@code context} for chat history).
+     *
+     * @param inputs inputs
+     * @param session session
+     * @param context model context
+     * @return userFields
+     */
+    public Map<String, Object> invoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
+        assertResponseType();
         Map<String, Object> in = inputs == null ? Map.of() : inputs;
         Map<String, Object> userFields = userFieldsOf(in);
+        mergeContextChatHistory(userFields, context);
 
-        // Short-circuit: already answered in inputs (host resume payload)
         if (userFields.containsKey("answer")
                 || userFields.containsKey("userAnswer")
                 || userFields.containsKey("USER_RESPONSE")) {
@@ -61,27 +92,29 @@ public final class QuestionerEngine {
         }
 
         QuestionerState state = loadState(session, in);
+        state.setInputs(in);
         boolean resuming = state.isUndergoingInteraction() || bool(in.get("__single_debug_recovery__"));
+        syncTraceRedis(session, resuming);
+
+        String query = queryOf(in, userFields);
+        traceUser(session, query);
 
         Map<String, Object> result;
         if (!resuming) {
-            result = handleStart(userFields, in);
+            result = handleStart(userFields, in, session, context, state);
         } else {
             if (!state.isUndergoingInteraction()) {
-                // recover status from inputs if present
                 state.setStatus(QuestionerState.USER_INTERACT);
             }
-            result = handleUserInteract(state, userFields, in, session);
+            result = handleUserInteract(state, userFields, in, session, context);
         }
 
-        // After start/interact handlers, state may have been mutated via result meta
         QuestionerState current = stateFromResult(result, state);
 
         if (QuestionerState.USER_INTERACT.equals(current.status())) {
             storeState(session, current);
             publishInterrupt(session, current.question());
             collectViaInteract(session, current);
-            // If interact returned synchronously (test/fake), continue as resume once
             if (session != null) {
                 Object reply = tryLatestReply(session, current.question());
                 if (reply != null) {
@@ -89,10 +122,11 @@ public final class QuestionerEngine {
                     resumeIn.put("query", reply);
                     resumeIn.put("__single_debug_recovery__", true);
                     current.incrementResponseNum();
-                    result = handleUserInteract(current, userFields, resumeIn, session);
+                    result = handleUserInteract(current, userFields, resumeIn, session, context);
                     current = stateFromResult(result, current);
                     if (!QuestionerState.USER_INTERACT.equals(current.status())) {
                         storeState(session, new QuestionerState());
+                        deleteTraceRedis(session);
                         return convertOutputNames(result);
                     }
                 }
@@ -107,41 +141,51 @@ public final class QuestionerEngine {
         }
 
         storeState(session, new QuestionerState());
+        deleteTraceRedis(session);
         return convertOutputNames(result);
     }
 
-    private Map<String, Object> handleStart(Map<String, Object> userFields, Map<String, Object> inputs) {
+    private void assertResponseType() {
+        Object raw =
+                config.rawConfigs()
+                        .getOrDefault("responseType", config.rawConfigs().get("response_type"));
+        if (raw == null) {
+            return;
+        }
+        String type = String.valueOf(raw).trim();
+        if (type.isEmpty() || "reply_directly".equals(type)) {
+            return;
+        }
+        throw new NodeExecutionException(
+                nodeId,
+                "jiuwen.questioner",
+                NodeCauseCode.NODE_CONFIG_INVALID,
+                "unsupported response_type for agent_runtime questioner: " + type);
+    }
+
+    private Map<String, Object> handleStart(
+            Map<String, Object> userFields,
+            Map<String, Object> inputs,
+            NodeSessionApi session,
+            ModelContext context,
+            QuestionerState unused) {
+        String query = queryOf(inputs, userFields);
+        writeUserToContext(context, query);
+
         if (config.hasQuestionContent()) {
             String question = formatTemplate(config.questionContent(), userFields);
             QuestionerState state = new QuestionerState();
             state.setStatus(QuestionerState.USER_INTERACT);
             state.setQuestion(question);
+            writeAssistantToContext(context, question);
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("question", question);
             out.put("_state", state.toMap());
+            traceAssistant(session, question);
             return out;
         }
         if (config.needExtractFields()) {
-            Map<String, Object> extracted = extractFields(queryOf(inputs, userFields), userFields);
-            applyDefaults(extracted);
-            RailsResult rails = applyRails(extracted, queryOf(inputs, userFields));
-            mergeExtracted(new QuestionerState(), rails.arguments());
-            QuestionerState state = new QuestionerState();
-            state.extractedFields().putAll(rails.arguments());
-            state.fieldsCheckFailed().addAll(rails.failedFields());
-            boolean continueAsk = shouldContinueAsk(state);
-            Map<String, Object> out = new LinkedHashMap<>(rails.arguments());
-            if (continueAsk) {
-                String q = constructContinueAsk(state);
-                state.setStatus(QuestionerState.USER_INTERACT);
-                state.setQuestion(q);
-                out.put("question", q);
-            } else {
-                state.setStatus(QuestionerState.END);
-                out.put("status", "end");
-            }
-            out.put("_state", state.toMap());
-            return out;
+            return runExtractCycle(new QuestionerState(), query, userFields, inputs, session, context);
         }
         throw new NodeExecutionException(
                 nodeId,
@@ -151,10 +195,13 @@ public final class QuestionerEngine {
     }
 
     private Map<String, Object> handleUserInteract(
-            QuestionerState state, Map<String, Object> userFields, Map<String, Object> inputs, NodeSessionApi session) {
+            QuestionerState state,
+            Map<String, Object> userFields,
+            Map<String, Object> inputs,
+            NodeSessionApi session,
+            ModelContext context) {
         String query = queryOf(inputs, userFields);
         if (bool(inputs.get("__single_debug_recovery__"))) {
-            // response_num already incremented by caller when sync interact
             if (state.responseNum() == 0) {
                 state.incrementResponseNum();
             }
@@ -166,30 +213,32 @@ public final class QuestionerEngine {
             }
         }
 
-        if (config.allowNodeBreak() && matchesKeyword(query, USER_BREAK_INFO)) {
+        writeUserToContext(context, query);
+
+        if (config.allowNodeBreak() && QuestionerKeywords.matchesBreak(query)) {
             state.setUserBreak(true);
             state.setStatus(QuestionerState.END);
             Map<String, Object> out = new LinkedHashMap<>(state.extractedFields());
             out.put("user_response", query);
-            out.put("question", state.question());
+            out.put("question", QuestionerKeywords.MSG_BREAK);
             out.put("status", "break");
             out.put("_state", state.toMap());
             return out;
         }
         if (config.allowNodeConfirm()
                 && state.needUserConfirm()
-                && matchesKeyword(query, USER_CONFIRM_INFO)) {
+                && QuestionerKeywords.matchesConfirm(query)) {
+            state.setNeedUserConfirm(false);
             state.setStatus(QuestionerState.END);
             Map<String, Object> out = new LinkedHashMap<>(state.extractedFields());
             out.put("user_response", query);
-            out.put("question", state.question());
+            out.put("question", QuestionerKeywords.MSG_CONFIRMED);
             out.put("status", "confirmed");
             out.put("_state", state.toMap());
             return out;
         }
 
-        // Path A: question only
-        if (config.hasQuestionContent() && !config.needExtractFields()) {
+        if (config.hasQuestionContent() && !config.needExtractFields(state)) {
             state.setStatus(QuestionerState.END);
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("user_response", query);
@@ -199,9 +248,17 @@ public final class QuestionerEngine {
             return out;
         }
 
-        // Path B: extract
-        Map<String, Object> extracted = extractFields(query, userFields);
-        // merge previous
+        return runExtractCycle(state, query, userFields, inputs, session, context);
+    }
+
+    private Map<String, Object> runExtractCycle(
+            QuestionerState state,
+            String query,
+            Map<String, Object> userFields,
+            Map<String, Object> inputs,
+            NodeSessionApi session,
+            ModelContext context) {
+        Map<String, Object> extracted = extractFields(query, userFields, state, session);
         Map<String, Object> merged = new LinkedHashMap<>(state.extractedFields());
         extracted.forEach((k, v) -> {
             if (v != null && !"".equals(v) && !"null".equalsIgnoreCase(String.valueOf(v))) {
@@ -209,44 +266,73 @@ public final class QuestionerEngine {
             }
         });
         applyDefaults(merged);
-        RailsResult rails = applyRails(merged, query);
+        RailsResult rails = applyRails(merged, query, state, inputs);
         state.extractedFields().clear();
         state.extractedFields().putAll(rails.arguments());
         state.fieldsCheckFailed().clear();
         state.fieldsCheckFailed().addAll(rails.failedFields());
 
-        boolean continueAsk = shouldContinueAsk(state);
-        Map<String, Object> out = new LinkedHashMap<>(rails.arguments());
-        out.put("user_response", query);
-        if (continueAsk) {
-            String q = constructContinueAsk(state);
+        ContinueAskDecision decision = checkIfContinueAsk(state);
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (decision.continueAsk()) {
             state.setStatus(QuestionerState.USER_INTERACT);
-            state.setQuestion(q);
-            out.put("question", q);
+            state.setQuestion(decision.question());
+            state.setNeedUserConfirm(decision.needUserConfirm());
+            out.put("question", decision.question());
+            writeAssistantToContext(context, decision.question());
+            traceAssistant(session, decision.question());
         } else {
             state.setStatus(QuestionerState.END);
-            out.put("question", state.question());
             out.put("status", "end");
-            // failed fields → ""
-            for (String f : state.fieldsCheckFailed()) {
-                out.put(f, "");
-            }
+            out.put("question", state.question());
+            Map<String, Object> finalFields = finalKeyFields(state);
+            out.putAll(finalFields);
+            writeAssistantToContext(context, jsonFields(finalFields));
+        }
+        if (query != null && !query.isBlank()) {
+            out.put("user_response", query);
         }
         out.put("_state", state.toMap());
         return out;
     }
 
-    private boolean shouldContinueAsk(QuestionerState state) {
+    private ContinueAskDecision checkIfContinueAsk(QuestionerState state) {
         List<QuestionerField> missing = nonExtracted(state);
-        if (missing.isEmpty() && state.fieldsCheckFailed().isEmpty()) {
-            return false;
+        if (!missing.isEmpty()) {
+            if (state.responseNum() >= config.maxResponse()) {
+                state.fieldsCheckFailed().clear();
+                return ContinueAskDecision.end();
+            }
+            String q = QuestionerRailsHints.constructContinueQuestion(config, missing);
+            state.setNeedUserConfirm(false);
+            return ContinueAskDecision.ask(q, false);
         }
-        if (state.responseNum() >= config.maxResponse()) {
-            // force end — clear failed
-            state.fieldsCheckFailed().clear();
-            return false;
+        if (config.allowNodeConfirm()) {
+            String q = QuestionerRailsHints.constructConfirmationQuestion(config, state.extractedFields());
+            state.setNeedUserConfirm(true);
+            return ContinueAskDecision.ask(q, true);
         }
-        return true;
+        return ContinueAskDecision.end();
+    }
+
+    private static Map<String, Object> finalKeyFields(QuestionerState state) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> e : state.extractedFields().entrySet()) {
+            if (state.fieldsCheckFailed().contains(e.getKey())) {
+                out.put(e.getKey(), "");
+            } else {
+                out.put(e.getKey(), e.getValue());
+            }
+        }
+        return out;
+    }
+
+    private static String jsonFields(Map<String, Object> fields) {
+        try {
+            return MAPPER.writeValueAsString(fields);
+        } catch (Exception e) {
+            return String.valueOf(fields);
+        }
     }
 
     private List<QuestionerField> nonExtracted(QuestionerState state) {
@@ -265,45 +351,35 @@ public final class QuestionerEngine {
         return missing;
     }
 
-    private String constructContinueAsk(QuestionerState state) {
-        List<QuestionerField> missing = nonExtracted(state);
-        String names = missing.stream().map(QuestionerField::cnFieldName).collect(Collectors.joining("、"));
-        if (!config.autoAskTemplate().isBlank()) {
-            return config.autoAskTemplate().replace("{unextracted_cn_field_names}", names);
-        }
-        if ("en".equalsIgnoreCase(config.acceptLanguage())) {
-            return "Please provide: " + names;
-        }
-        return "请补充以下信息：" + names;
-    }
-
-    private Map<String, Object> extractFields(String query, Map<String, Object> userFields) {
+    private Map<String, Object> extractFields(
+            String query, Map<String, Object> userFields, QuestionerState state, NodeSessionApi session) {
         if (!config.mockExtractedFields().isEmpty()) {
             return new LinkedHashMap<>(config.mockExtractedFields());
         }
-        // JSON object in query
+        if (config.hasModelWiring() || modelInvoker != null) {
+            QuestionerLlmExtractor extractor =
+                    new QuestionerLlmExtractor(nodeId, config, modelInvoker);
+            List<Map<String, String>> history = chatHistoryFrom(userFields, query);
+            return extractor.extract(query, history, state, session);
+        }
         String trimmed = query == null ? "" : query.trim();
         if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
             try {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> parsed =
-                        (Map<String, Object>)
-                                com.openjiuwen.studio.dsl.python.SubprocessPythonCodeExecutor
-                                        .parseJsonObject(trimmed);
-                return filterKnown(parsed);
+                Map<String, Object> parsed = QuestionerLlmExtractor.parseJsonObject(trimmed);
+                if (!parsed.isEmpty()) {
+                    return filterKnown(parsed);
+                }
             } catch (Exception ignored) {
                 // fall through
             }
         }
-        // single required field → whole query
         List<QuestionerField> required =
                 config.keyFields().stream().filter(QuestionerField::required).toList();
-        if (required.size() == 1 && trimmed.length() > 0) {
+        if (required.size() == 1 && !trimmed.isEmpty()) {
             Map<String, Object> one = new LinkedHashMap<>();
             one.put(required.get(0).fieldName(), convertType(trimmed, required.get(0).type()));
             return one;
         }
-        // copy overlapping keys from userFields
         Map<String, Object> out = new LinkedHashMap<>();
         for (QuestionerField f : config.keyFields()) {
             if (userFields.containsKey(f.fieldName())) {
@@ -311,6 +387,182 @@ public final class QuestionerEngine {
             }
         }
         return out;
+    }
+
+    private static List<Map<String, String>> chatHistoryFrom(Map<String, Object> userFields, String query) {
+        List<Map<String, String>> history = new ArrayList<>();
+        Object raw = userFields.get("chatHistory");
+        if (raw instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> m) {
+                    Map<String, String> turn = new LinkedHashMap<>();
+                    Object role = m.get("role");
+                    Object content = m.get("content");
+                    turn.put("role", role == null ? "user" : String.valueOf(role));
+                    turn.put("content", content == null ? "" : String.valueOf(content));
+                    history.add(turn);
+                }
+            }
+        }
+        if (history.isEmpty()
+                || "assistant".equalsIgnoreCase(history.get(history.size() - 1).get("role"))) {
+            if (query != null && !query.isBlank()) {
+                Map<String, String> turn = new LinkedHashMap<>();
+                turn.put("role", "user");
+                turn.put("content", query);
+                history.add(turn);
+            }
+        }
+        return history;
+    }
+
+    private void mergeContextChatHistory(Map<String, Object> userFields, ModelContext context) {
+        if (!config.withChatHistory() || context == null) {
+            return;
+        }
+        if (userFields.containsKey("chatHistory")) {
+            return;
+        }
+        try {
+            Integer dialogueRound = chatHistoryMaxRounds();
+            ContextWindow window = context.getContextWindow(null, null, null, dialogueRound);
+            List<BaseMessage> messages =
+                    window != null && window.getMessages() != null
+                            ? window.getMessages()
+                            : context.getMessages();
+            if (messages == null || messages.isEmpty()) {
+                return;
+            }
+            List<Map<String, String>> history = new ArrayList<>();
+            for (BaseMessage msg : messages) {
+                if (msg == null) {
+                    continue;
+                }
+                Map<String, String> turn = new LinkedHashMap<>();
+                String role = msg.getRole();
+                if (role == null || role.isBlank()) {
+                    String simple = msg.getClass().getSimpleName().toLowerCase();
+                    if (simple.contains("system")) {
+                        role = "system";
+                    } else if (simple.contains("assistant")) {
+                        role = "assistant";
+                    } else {
+                        role = "user";
+                    }
+                }
+                turn.put("role", role);
+                turn.put("content", msg.getContent() == null ? "" : String.valueOf(msg.getContent()));
+                history.add(turn);
+            }
+            if (!history.isEmpty()) {
+                userFields.put("chatHistory", history);
+            }
+        } catch (RuntimeException ignored) {
+            // soft-fail
+        }
+    }
+
+    private void writeUserToContext(ModelContext context, String content) {
+        if (!config.withChatHistory() || context == null || content == null || content.isBlank()) {
+            return;
+        }
+        try {
+            context.addMessages(new UserMessage(content));
+        } catch (RuntimeException ignored) {
+            // soft-fail
+        }
+    }
+
+    private void writeAssistantToContext(ModelContext context, String content) {
+        if (!config.withChatHistory() || context == null || content == null || content.isBlank()) {
+            return;
+        }
+        try {
+            context.addMessages(new AssistantMessage(content));
+        } catch (RuntimeException ignored) {
+            // soft-fail
+        }
+    }
+
+    private Integer chatHistoryMaxRounds() {
+        Object raw =
+                config.rawConfigs()
+                        .getOrDefault(
+                                "chatHistoryMaxRounds",
+                                config.rawConfigs().get("chat_history_max_rounds"));
+        int n = 5;
+        if (raw instanceof Number num) {
+            n = num.intValue();
+        } else if (raw != null && !String.valueOf(raw).isBlank()) {
+            try {
+                n = Integer.parseInt(String.valueOf(raw).trim());
+            } catch (NumberFormatException ignored) {
+                n = 5;
+            }
+        }
+        return n > 0 ? n : null;
+    }
+
+    private void syncTraceRedis(NodeSessionApi session, boolean resuming) {
+        String sessionId = sessionIdOf(session);
+        if (sessionId == null) {
+            return;
+        }
+        if (resuming) {
+            QuestionerTraceStore.recoverToSession(sessionId, nodeId, session);
+        } else {
+            QuestionerTraceStore.delete(sessionId, nodeId);
+        }
+    }
+
+    private void deleteTraceRedis(NodeSessionApi session) {
+        String sessionId = sessionIdOf(session);
+        if (sessionId != null) {
+            QuestionerTraceStore.delete(sessionId, nodeId);
+        }
+    }
+
+    private void traceUser(NodeSessionApi session, String user) {
+        Map<String, Object> userTrace = Map.of("user", user == null ? "" : user);
+        softTrace(session, userTrace);
+        appendRedisTrace(session, userTrace);
+    }
+
+    private void traceAssistant(NodeSessionApi session, String assistant) {
+        Map<String, Object> asstTrace = Map.of("assistant", assistant == null ? "" : assistant);
+        softTrace(session, asstTrace);
+        appendRedisTrace(session, asstTrace);
+    }
+
+    private void softTrace(NodeSessionApi session, Map<String, Object> data) {
+        if (session == null) {
+            return;
+        }
+        try {
+            session.trace(data);
+        } catch (RuntimeException ignored) {
+            // mock
+        }
+    }
+
+    private void appendRedisTrace(NodeSessionApi session, Map<String, Object> data) {
+        String sessionId = sessionIdOf(session);
+        if (sessionId == null) {
+            return;
+        }
+        QuestionerTraceStore.append(sessionId, nodeId, data);
+    }
+
+    private static String sessionIdOf(NodeSessionApi session) {
+        if (session == null) {
+            return null;
+        }
+        try {
+            String id = session.getSessionId();
+            return id == null || id.isBlank() ? null : id;
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     private Map<String, Object> filterKnown(Map<String, Object> parsed) {
@@ -326,19 +578,23 @@ public final class QuestionerEngine {
     private void applyDefaults(Map<String, Object> fields) {
         for (QuestionerField f : config.keyFields()) {
             Object v = fields.get(f.fieldName());
-            if ((v == null || "".equals(v)) && f.defaultValue() != null) {
+            if ((v == null || "".equals(v)) && f.defaultValue() != null && !"".equals(f.defaultValue())) {
                 fields.put(f.fieldName(), f.defaultValue());
             }
         }
     }
 
-    private RailsResult applyRails(Map<String, Object> fields, String userInput) {
+    private RailsResult applyRails(
+            Map<String, Object> fields, String userInput, QuestionerState state, Map<String, Object> inputs) {
         Map<String, Object> before = new LinkedHashMap<>(fields);
         if (config.railsConfig() == null || config.railsConfig().isEmpty()) {
             return new RailsResult(before, List.of());
         }
         Map<String, Object> ctx = new LinkedHashMap<>();
         ctx.put("arguments", before);
+        ctx.put("inputs", state.inputs().isEmpty() ? inputs : state.inputs());
+        ctx.put("outputs", QuestionerRailsHints.fieldOutputsForRails(config));
+        ctx.put("extracted_args", new LinkedHashMap<>(state.extractedFields()));
         ctx.put("user_input", userInput == null ? "" : userInput);
         Map<String, Object> after = RailsRegistry.executeRails(config.railsConfig(), ctx);
         List<String> failed = new ArrayList<>();
@@ -347,9 +603,9 @@ public final class QuestionerEngine {
             Object a = after.get(e.getKey());
             if (b != null && !"".equals(b) && a == null) {
                 failed.add(e.getKey());
+                after.put(e.getKey(), null);
             }
         }
-        // type convert remaining
         for (QuestionerField f : config.keyFields()) {
             if (after.containsKey(f.fieldName()) && after.get(f.fieldName()) != null) {
                 after.put(f.fieldName(), convertType(after.get(f.fieldName()), f.type()));
@@ -360,10 +616,6 @@ public final class QuestionerEngine {
 
     private static Object convertType(Object value, String type) {
         return TypeCoercer.coerce(value, type, null, false);
-    }
-
-    private static void mergeExtracted(QuestionerState state, Map<String, Object> args) {
-        state.extractedFields().putAll(args);
     }
 
     private QuestionerState stateFromResult(Map<String, Object> result, QuestionerState fallback) {
@@ -382,12 +634,13 @@ public final class QuestionerEngine {
             if ("_state".equals(e.getKey())) {
                 continue;
             }
-            String key = switch (e.getKey()) {
-                case "user_response" -> "USER_RESPONSE";
-                case "question" -> "QUESTION";
-                case "status" -> "STATUS";
-                default -> e.getKey();
-            };
+            String key =
+                    switch (e.getKey()) {
+                        case "user_response" -> "USER_RESPONSE";
+                        case "question" -> "QUESTION";
+                        case "status" -> "STATUS";
+                        default -> e.getKey();
+                    };
             out.put(key, e.getValue());
         }
         out.put("questionerState", "answered");
@@ -544,22 +797,19 @@ public final class QuestionerEngine {
         return uq == null ? "" : String.valueOf(uq);
     }
 
-    private static boolean matchesKeyword(String query, List<String> keywords) {
-        if (query == null) {
-            return false;
-        }
-        String t = query.trim().toLowerCase();
-        for (String k : keywords) {
-            if (t.equals(k.toLowerCase()) || t.contains(k.toLowerCase())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private static boolean bool(Object o) {
         return o instanceof Boolean b ? b : o != null && Boolean.parseBoolean(String.valueOf(o));
     }
 
     private record RailsResult(Map<String, Object> arguments, List<String> failedFields) {}
+
+    private record ContinueAskDecision(boolean continueAsk, String question, boolean needUserConfirm) {
+        static ContinueAskDecision end() {
+            return new ContinueAskDecision(false, "", false);
+        }
+
+        static ContinueAskDecision ask(String question, boolean needUserConfirm) {
+            return new ContinueAskDecision(true, question, needUserConfirm);
+        }
+    }
 }
