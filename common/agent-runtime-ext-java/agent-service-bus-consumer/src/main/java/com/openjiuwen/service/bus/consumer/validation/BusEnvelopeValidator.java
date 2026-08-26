@@ -6,10 +6,8 @@ package com.openjiuwen.service.bus.consumer.validation;
 
 import com.openjiuwen.service.bus.consumer.model.AgentBusEventEnvelope;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -29,7 +27,6 @@ public final class BusEnvelopeValidator {
     private final String tenantId;
     private final String targetServiceId;
     private final int maxInlinePayloadBytes;
-    private final int maxMetadataBytes;
     private final long maxDeadlineAheadSeconds;
 
     /**
@@ -43,7 +40,7 @@ public final class BusEnvelopeValidator {
      *            the targetServiceId value
      */
     public BusEnvelopeValidator(Clock clock, String tenantId, String targetServiceId) {
-        this(clock, tenantId, targetServiceId, 65_536, 16_384, 86_400);
+        this(clock, tenantId, targetServiceId, 65_536, 86_400);
     }
 
     /**
@@ -57,21 +54,18 @@ public final class BusEnvelopeValidator {
      *            the targetServiceId value
      * @param maxInlinePayloadBytes
      *            the maxInlinePayloadBytes value
-     * @param maxMetadataBytes
-     *            the maxMetadataBytes value
      * @param maxDeadlineAheadSeconds
      *            the maxDeadlineAheadSeconds value
      */
     public BusEnvelopeValidator(Clock clock, String tenantId, String targetServiceId, int maxInlinePayloadBytes,
-            int maxMetadataBytes, long maxDeadlineAheadSeconds) {
-        if (maxInlinePayloadBytes < 1 || maxMetadataBytes < 1 || maxDeadlineAheadSeconds < 1) {
+            long maxDeadlineAheadSeconds) {
+        if (maxInlinePayloadBytes < 1 || maxDeadlineAheadSeconds < 1) {
             throw new IllegalArgumentException("validator limits must be positive");
         }
         this.clock = clock;
         this.tenantId = tenantId;
         this.targetServiceId = targetServiceId;
         this.maxInlinePayloadBytes = maxInlinePayloadBytes;
-        this.maxMetadataBytes = maxMetadataBytes;
         this.maxDeadlineAheadSeconds = maxDeadlineAheadSeconds;
     }
 
@@ -118,9 +112,6 @@ public final class BusEnvelopeValidator {
         if (envelope.inlinePayload() != null && !"application/json".equalsIgnoreCase(envelope.payloadContentType())) {
             return Optional.of("CONTENT_TYPE_UNSUPPORTED");
         }
-        if (metadataBytes(envelope.metadata()) > maxMetadataBytes) {
-            return Optional.of("METADATA_TOO_LARGE");
-        }
         return Optional.empty();
     }
 
@@ -135,21 +126,6 @@ public final class BusEnvelopeValidator {
     private static Stream<String> requiredFields(AgentBusEventEnvelope envelope) {
         return Stream.of(envelope.messageId(), envelope.tenantId(), envelope.sourceServiceId(),
                 envelope.targetServiceId(), envelope.correlationId(), envelope.traceId(), envelope.idempotencyKey());
-    }
-
-    private static int metadataBytes(Map<String, String> metadata) {
-        if (metadata == null) {
-            return 0;
-        }
-        int bytes = 0;
-        for (Map.Entry<String, String> entry : metadata.entrySet()) {
-            bytes += utf8(entry.getKey()) + utf8(entry.getValue());
-        }
-        return bytes;
-    }
-
-    private static int utf8(String value) {
-        return value == null ? 0 : value.getBytes(StandardCharsets.UTF_8).length;
     }
 
     private static boolean tooLong(String value) {

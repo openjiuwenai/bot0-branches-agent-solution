@@ -60,6 +60,14 @@ class BusEnvelopeValidatorTest {
     }
 
     @Test
+    void acceptsMetadataWithoutAnIndependentSizeLimit() {
+        AgentBusEventEnvelope event = event("CLIENT_INVOCATION_REQUESTED", "runtime-a", now.plusSeconds(10),
+                new byte[]{1}, null);
+        assertThat(validator.validate(withMetadata(event, Map.of("context", "x".repeat(16_385)))))
+                .isEmpty();
+    }
+
+    @Test
     void parsesClientAndA2aEventFamilies() {
         assertThat(event("A2A_CALL_REQUESTED", "runtime-a", now.plusSeconds(1), new byte[]{1}, null).parsedEventType())
                 .isEqualTo(AgentBusEventType.A2A_CALL_REQUESTED);
@@ -77,5 +85,12 @@ class BusEnvelopeValidatorTest {
                 event.targetServiceId(), event.routeHandle(), event.correlationId(), event.traceId(),
                 event.idempotencyKey(), event.deadline(), event.payloadContentType(), event.inlinePayload(),
                 event.payloadRef(), event.metadata());
+    }
+
+    private AgentBusEventEnvelope withMetadata(AgentBusEventEnvelope event, Map<String, String> metadata) {
+        return new AgentBusEventEnvelope(event.eventType(), event.messageId(), event.tenantId(),
+                event.sourceServiceId(), event.targetServiceId(), event.routeHandle(), event.correlationId(),
+                event.traceId(), event.idempotencyKey(), event.deadline(), event.payloadContentType(),
+                event.inlinePayload(), event.payloadRef(), metadata);
     }
 }
