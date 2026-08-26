@@ -81,14 +81,14 @@ public class OtelRemoteAgentCallerDecorator implements RemoteAgentCaller {
     public CompletableFuture<RemoteCallOutcome> callOutcome(RemoteCall call,
                                                             RemoteAgentCaller.EventObserver eventObserver) {
         boolean versatile = VERSATILE_AGENT_NAME.equals(call.agentName());
-        call = withParentRunId(call);
-        Span span = startSpan(call, versatile);
+        RemoteCall effectiveCall = withParentRunId(call);
+        Span span = startSpan(effectiveCall, versatile);
         long startNanos = System.nanoTime();
         // 接口不声明受检异常、实现可抛任意运行时异常——用成功标记 finally 代替 broad catch
         boolean invoked = false;
         // makeCurrent 让 SDK/装饰层在该线程读到 dispatch span 的上下文（SPI header 注入取值为它）
         try (io.opentelemetry.context.Scope ignored = span.makeCurrent()) {
-            CompletableFuture<RemoteCallOutcome> future = delegate.callOutcome(call, eventObserver);
+            CompletableFuture<RemoteCallOutcome> future = delegate.callOutcome(effectiveCall, eventObserver);
             invoked = true;
             future.whenComplete((outcome, error) -> {
                 if (error != null) {

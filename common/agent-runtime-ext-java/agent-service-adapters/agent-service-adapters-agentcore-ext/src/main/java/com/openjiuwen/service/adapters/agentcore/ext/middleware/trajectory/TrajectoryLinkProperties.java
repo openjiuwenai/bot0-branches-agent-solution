@@ -98,7 +98,7 @@ public class TrajectoryLinkProperties {
      * @return effective ttl seconds
      */
     public long effectiveTtlSeconds() {
-        return ttlSeconds != null && ttlSeconds > 0 ? ttlSeconds : DEFAULT_TTL_SECONDS;
+        return ttlSeconds != null && ttlSeconds.longValue() > 0L ? ttlSeconds.longValue() : DEFAULT_TTL_SECONDS;
     }
 
     /**

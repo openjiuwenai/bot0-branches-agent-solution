@@ -32,6 +32,7 @@ public class OtelRemoteAgentCallerPostProcessor implements BeanPostProcessor, Or
      *
      * @param tracer           tracer for dispatch spans
      * @param registryProvider remote agent card registry provider (for sub_agent_url)
+     * @param carrierProvider  trace context carrier provider (for parent_run_id injection)
      */
     public OtelRemoteAgentCallerPostProcessor(Tracer tracer,
                                               ObjectProvider<A2ARemoteAgentCardRegistry> registryProvider,

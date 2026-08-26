@@ -38,6 +38,7 @@ public class RunTreeRegistrar implements BeanPostProcessor, Ordered {
      * @param carrierProvider carrier provider
      * @param storeProvider   store provider
      * @param writerProvider  writer provider
+     * @param auditProvider   audit collector provider
      */
     public RunTreeRegistrar(ObjectProvider<TraceContextCarrier> carrierProvider,
                             ObjectProvider<RedisTrajectoryStore> storeProvider,

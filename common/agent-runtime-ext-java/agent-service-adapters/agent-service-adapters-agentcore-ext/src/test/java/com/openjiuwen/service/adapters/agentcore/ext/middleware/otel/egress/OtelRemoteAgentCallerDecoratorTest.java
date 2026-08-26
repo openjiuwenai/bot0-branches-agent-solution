@@ -7,6 +7,7 @@ package com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.egress;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity.TraceContextCarrier;
 import com.openjiuwen.service.app.a2a.catalog.A2ARemoteAgentCardRegistry;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCall;
@@ -60,10 +61,9 @@ class OtelRemoteAgentCallerDecoratorTest {
     @Test
     void parentRunIdIsInjectedIntoOutboundMetadata() {
         // carrier 有本轮 run 标记时，出站 RemoteCall metadata 注入 parent_run_id
-        com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity.TraceContextCarrier carrier =
-                com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity.TraceContextCarrier.create(86400L);
-        carrier.put("conv-1", new com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity
-                .TraceContextCarrier.Entry("t", false, "a2a", "tenant", java.time.Instant.now()));
+        TraceContextCarrier carrier = TraceContextCarrier.create(86400L);
+        carrier.put("conv-1", new TraceContextCarrier.Entry("t", false, "a2a", "tenant",
+                java.time.Instant.now()));
         carrier.updateCurrentRunId("conv-1", "task-1#2");
         java.util.concurrent.atomic.AtomicReference<RemoteCall> seen = new java.util.concurrent.atomic.AtomicReference<>();
         OtelRemoteAgentCallerDecorator decorator = new OtelRemoteAgentCallerDecorator(

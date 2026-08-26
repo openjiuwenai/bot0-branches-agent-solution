@@ -131,7 +131,7 @@ class TraceIdentityFilterTest {
 
     private static MockHttpServletRequest request(String body, String traceparent, String tenant) {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/a2a");
-        request.setContent(body.getBytes());
+        request.setContent(body.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         if (traceparent != null) {
             request.addHeader("traceparent", traceparent);
         }

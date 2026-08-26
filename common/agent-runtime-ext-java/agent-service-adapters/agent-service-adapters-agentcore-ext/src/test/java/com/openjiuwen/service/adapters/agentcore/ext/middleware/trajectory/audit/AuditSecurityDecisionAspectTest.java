@@ -16,7 +16,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -59,16 +58,12 @@ class AuditSecurityDecisionAspectTest {
     }
 
     @Test
-    void denyIsRecordedAndRethrown() {
+    void denyIsRecordedAndRethrown() throws Throwable {
         AtomicReference<Map<String, Object>> captured = new AtomicReference<>();
         AuditEventBridge.register(new StubCollector(captured));
         ProceedingJoinPoint joinPoint = mock(ProceedingJoinPoint.class);
-        try {
-            when(joinPoint.proceed()).thenThrow(
-                    new AuthorizationDeniedException("no permission", "wallet", "read"));
-        } catch (Throwable e) {
-            throw new IllegalStateException(e);
-        }
+        when(joinPoint.proceed()).thenThrow(
+                new AuthorizationDeniedException("no permission", "wallet", "read"));
         assertThatThrownBy(() -> aspect.observe(joinPoint))
                 .isInstanceOf(AuthorizationDeniedException.class);
         assertThat(captured.get()).containsEntry("decision", "deny")

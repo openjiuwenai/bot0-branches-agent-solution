@@ -27,73 +27,53 @@ public final class RunTreeRecord {
     /**
      * Builds the node-open record JSON.
      *
-     * @param runId    run id ({taskId}#{roundSeq})
-     * @param kind     node kind (local / remote)
-     * @param startedAt ISO-8601 start time with zone
-     * @param traceId  trace id, may be null
-     * @param tenantId tenant id, may be null
-     * @param parentRunId parent run id from ingress metadata, may be null
+     * @param fields node fields (endedAt/finalState unused for open)
      * @return node JSON
      */
-    public static String nodeOpen(String runId, String kind, String startedAt, String traceId, String tenantId,
-                                  String parentRunId) {
+    public static String nodeOpen(NodeFields fields) {
         Map<String, Object> node = new LinkedHashMap<>();
-        node.put("runId", runId);
-        node.put("kind", kind);
-        node.put("startedAt", startedAt);
-        putIfPresent(node, "traceId", traceId);
-        putIfPresent(node, "tenantId", tenantId);
-        putIfPresent(node, "parentRunId", parentRunId);
+        node.put("runId", fields.runId());
+        node.put("kind", fields.kind());
+        node.put("startedAt", fields.startedAt());
+        putIfPresent(node, "traceId", fields.traceId());
+        putIfPresent(node, "tenantId", fields.tenantId());
+        putIfPresent(node, "parentRunId", fields.parentRunId());
         return toJson(node);
     }
 
     /**
      * Builds the node-close record JSON (completes the open record's fields).
      *
-     * @param runId      run id
-     * @param kind       node kind
-     * @param startedAt  ISO-8601 start time
-     * @param endedAt    ISO-8601 end time
-     * @param finalState terminal state name
-     * @param traceId    trace id, may be null
-     * @param tenantId   tenant id, may be null
-     * @param parentRunId parent run id from ingress metadata, may be null
+     * @param fields node fields (endedAt/finalState required)
      * @return node JSON
      */
-    public static String nodeClose(String runId, String kind, String startedAt, String endedAt,
-                                   String finalState, String traceId, String tenantId, String parentRunId) {
+    public static String nodeClose(NodeFields fields) {
         Map<String, Object> node = new LinkedHashMap<>();
-        node.put("runId", runId);
-        node.put("kind", kind);
-        node.put("startedAt", startedAt);
-        node.put("endedAt", endedAt);
-        node.put("finalState", finalState);
-        putIfPresent(node, "traceId", traceId);
-        putIfPresent(node, "tenantId", tenantId);
-        putIfPresent(node, "parentRunId", parentRunId);
+        node.put("runId", fields.runId());
+        node.put("kind", fields.kind());
+        node.put("startedAt", fields.startedAt());
+        node.put("endedAt", fields.endedAt());
+        node.put("finalState", fields.finalState());
+        putIfPresent(node, "traceId", fields.traceId());
+        putIfPresent(node, "tenantId", fields.tenantId());
+        putIfPresent(node, "parentRunId", fields.parentRunId());
         return toJson(node);
     }
 
     /**
      * Builds the delegation edge record JSON.
      *
-     * @param parentRunId    parent run id (full form {taskId}#{roundSeq})
-     * @param runId          child (remote) run id
-     * @param toolCallId     tool call id that triggered the delegation
-     * @param agentName      remote agent name
-     * @param state          member state
-     * @param resultCategory result category, may be null
+     * @param fields edge fields (resultCategory may be null)
      * @return edge JSON
      */
-    public static String edge(String parentRunId, String runId, String toolCallId,
-                              String agentName, String state, String resultCategory) {
+    public static String edge(EdgeFields fields) {
         Map<String, Object> edge = new LinkedHashMap<>();
-        edge.put("parentRunId", parentRunId);
-        edge.put("runId", runId);
-        edge.put("toolCallId", toolCallId);
-        edge.put("agentName", agentName);
-        edge.put("state", state);
-        putIfPresent(edge, "resultCategory", resultCategory);
+        edge.put("parentRunId", fields.parentRunId());
+        edge.put("runId", fields.runId());
+        edge.put("toolCallId", fields.toolCallId());
+        edge.put("agentName", fields.agentName());
+        edge.put("state", fields.state());
+        putIfPresent(edge, "resultCategory", fields.resultCategory());
         return toJson(edge);
     }
 
@@ -129,6 +109,36 @@ public final class RunTreeRecord {
     }
 
     /**
+     * Node record fields (parameter object; endedAt/finalState only used by nodeClose).
+     *
+     * @param runId       run id ({taskId}#{roundSeq})
+     * @param kind        node kind (local / remote)
+     * @param startedAt   round start time (ISO-8601 with zone)
+     * @param endedAt     round end time
+     * @param finalState  terminal state name
+     * @param traceId     trace id, may be null
+     * @param tenantId    tenant id, may be null
+     * @param parentRunId parent run id from ingress metadata, may be null
+     */
+    public record NodeFields(String runId, String kind, String startedAt, String endedAt,
+            String finalState, String traceId, String tenantId, String parentRunId) {
+    }
+
+    /**
+     * Delegation edge fields (parameter object).
+     *
+     * @param parentRunId    parent run id (full form {taskId}#{roundSeq})
+     * @param runId          child (remote) run id
+     * @param toolCallId     tool call id that triggered the delegation
+     * @param agentName      remote agent name
+     * @param state          member state
+     * @param resultCategory result category, may be null
+     */
+    public record EdgeFields(String parentRunId, String runId, String toolCallId,
+            String agentName, String state, String resultCategory) {
+    }
+
+    /**
      * Recoverable fields of a node record.
      *
      * @param traceId     trace id
@@ -138,8 +148,7 @@ public final class RunTreeRecord {
      * @param finalState  terminal state when the node is already closed
      */
     public record NodeView(Optional<String> traceId, Optional<String> tenantId,
-                           Optional<String> parentRunId, Optional<String> startedAt,
-                           Optional<String> finalState) {
+            Optional<String> parentRunId, Optional<String> startedAt, Optional<String> finalState) {
     }
 
     private static void putIfPresent(Map<String, Object> map, String key, String value) {

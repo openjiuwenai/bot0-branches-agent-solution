@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -33,7 +34,7 @@ public class AsyncTrajectoryWriter implements AutoCloseable {
     private final AtomicLong droppedCount = new AtomicLong();
     private final AtomicLong failedCount = new AtomicLong();
     private final AtomicLong lastRestartMs = new AtomicLong();
-    private volatile Thread worker;
+    private volatile ThreadPoolExecutor executor;
     private volatile boolean running;
     private volatile boolean closed;
 
@@ -56,23 +57,27 @@ public class AsyncTrajectoryWriter implements AutoCloseable {
             return;
         }
         running = true;
-        worker = new Thread(this::flushLoop, "trajectory-link-writer");
-        worker.setDaemon(true);
-        // 线程级兜底：未捕获的运行时异常（如 Redis 客户端实现的私有异常类型）致线程死亡时
-        // 退避后重启（10s 窗口内最多一次，防死亡-重启风暴）；close 后不再复活（start 已判 closed）
-        worker.setUncaughtExceptionHandler((dead, error) -> {
-            long now = System.currentTimeMillis();
-            if (now - lastRestartMs.get() < RESTART_BACKOFF_MS) {
-                LOGGER.error("trajectory writer thread died again within backoff window, stays dead: {}",
-                        error.getMessage());
-                return;
-            }
-            lastRestartMs.set(now);
-            LOGGER.error("trajectory writer thread died, restarting: {}", error.getMessage());
-            running = false;
-            start();
+        // 线程经池化管控（G.CON.12）：单线程池承载刷写循环；守护线程工厂
+        executor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>(), runnable -> {
+            Thread thread = new Thread(runnable, "trajectory-link-writer");
+            thread.setDaemon(true);
+            // 线程级兜底：未捕获的运行时异常致刷写线程死亡时退避后重启（防风暴）
+            thread.setUncaughtExceptionHandler((dead, error) -> {
+                long now = System.currentTimeMillis();
+                if (now - lastRestartMs.get() < RESTART_BACKOFF_MS) {
+                    LOGGER.error("trajectory writer thread died again within backoff window, stays dead: {}",
+                            error.getMessage());
+                    return;
+                }
+                lastRestartMs.set(now);
+                LOGGER.error("trajectory writer thread died, restarting: {}", error.getMessage());
+                running = false;
+                start();
+            });
+            return thread;
         });
-        worker.start();
+        executor.execute(this::flushLoop);
     }
 
     /**
@@ -116,14 +121,11 @@ public class AsyncTrajectoryWriter implements AutoCloseable {
     public synchronized void close() {
         closed = true;
         running = false;
-        if (worker != null) {
-            worker.interrupt();
-            try {
-                worker.join(TimeUnit.SECONDS.toMillis(5));
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            worker = null;
+        if (executor != null) {
+            // 协作式停止：不中断线程，刷写循环经 running=false 与 poll 超时自然退出
+            executor.shutdown();
+            boolean ignored = awaitTerminationQuietly();
+            executor = null;
         }
         drainOnce();
     }
@@ -140,9 +142,16 @@ public class AsyncTrajectoryWriter implements AutoCloseable {
                 queue.drainTo(batch);
                 runBatch(batch);
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
                 return;
             }
+        }
+    }
+
+    private boolean awaitTerminationQuietly() {
+        try {
+            return executor.awaitTermination(5, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            return false;
         }
     }
 

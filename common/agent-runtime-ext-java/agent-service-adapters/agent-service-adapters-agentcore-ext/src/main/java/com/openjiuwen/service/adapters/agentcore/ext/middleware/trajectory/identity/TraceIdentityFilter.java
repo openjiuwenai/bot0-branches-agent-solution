@@ -113,6 +113,8 @@ public class TraceIdentityFilter extends OncePerRequestFilter {
             replacement = Optional.of(MAPPER.writeValueAsBytes(root));
         } else if (contextId.isEmpty()) {
             contextId = resolveContextIdByTask(payload.taskId());
+        } else {
+            // contextId 已存在，直接使用
         }
         contextId.ifPresent(id -> writeCarrier(request, id, payload));
         return replacement;
@@ -185,7 +187,7 @@ public class TraceIdentityFilter extends OncePerRequestFilter {
 
     /** 入站 JSON-RPC body 的标识字段视图。 */
     private record IngressPayload(Optional<String> contextId, Optional<String> taskId,
-                                  Optional<String> metadataTraceId, Optional<String> parentRunId) {
+            Optional<String> metadataTraceId, Optional<String> parentRunId) {
         static IngressPayload from(JsonNode root) {
             JsonNode message = root.path("params").path("message");
             JsonNode metadata = root.path("params").path("metadata");

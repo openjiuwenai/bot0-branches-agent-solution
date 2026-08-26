@@ -121,6 +121,8 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
             } else if (current == TaskState.TASK_STATE_WORKING && round.lastState != null
                     && round.lastState.isInterrupted()) {
                 openRound(task, round, round.roundSeq + 1);
+            } else {
+                // 其余状态不变更轮次
             }
             if (current != null && isTerminal(current)) {
                 closeRound(round, current);
@@ -156,17 +158,17 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
 
     private void recordShadowDelegations(Task task) {
         Object snapshot = task.metadata() != null ? task.metadata().get(REMOTE_BATCH_METADATA) : null;
-        if (!(snapshot instanceof Map<? , ?> batch) || !(batch.get("members") instanceof List<?> memberList)
+        if (!(snapshot instanceof Map<?, ?> batch) || !(batch.get("members") instanceof List<?> memberList)
                 || !(batch.get("parentTaskId") instanceof String parentId)) {
             return;
         }
         for (Object member : memberList) {
             if (member instanceof Map<?, ?> memberMap
                     && memberMap.get("remoteTaskId") instanceof String remote && !remote.isBlank()) {
-                audit.recordDelegation(task.contextId(), parentId,
+                audit.recordDelegation(new AuditEventCollector.Delegation(task.contextId(), parentId,
                         text(memberMap.get("agentName")).orElse("unknown"), remote,
                         text(memberMap.get("resultCategory")).orElse(null),
-                        text(memberMap.get("toolCallId")).orElse(null), fullRunId(parentId));
+                        text(memberMap.get("toolCallId")).orElse(null), fullRunId(parentId)));
             }
         }
     }
@@ -176,9 +178,9 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
         if (!(remoteTaskId instanceof String remote) || remote.isBlank()) {
             return;
         }
-        String edgeJson = RunTreeRecord.edge(parentRunId, remote,
+        String edgeJson = RunTreeRecord.edge(new RunTreeRecord.EdgeFields(parentRunId, remote,
                 text(member.get("toolCallId")).orElse(null), text(member.get("agentName")).orElse(null),
-                text(member.get("state")).orElse(null), text(member.get("resultCategory")).orElse(null));
+                text(member.get("state")).orElse(null), text(member.get("resultCategory")).orElse(null)));
         writer.submit(() -> {
             store.putRecord(RedisTrajectoryStore.runEdgeKey(parentRunId, remote), edgeJson);
             store.putIndex(RedisTrajectoryStore.parentIndexKey(parentRunId, remote));
@@ -196,8 +198,8 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
         round.traceId = entry.map(TraceContextCarrier.Entry::getTraceId).orElse(null);
         round.tenantId = entry.map(TraceContextCarrier.Entry::getTenantId).orElse(null);
         round.parentRunId = entry.flatMap(TraceContextCarrier.Entry::getParentRunId).orElse(null);
-        String nodeJson = RunTreeRecord.nodeOpen(round.runId, "local", round.startedAt,
-                round.traceId, round.tenantId, round.parentRunId);
+        String nodeJson = RunTreeRecord.nodeOpen(new RunTreeRecord.NodeFields(round.runId, "local",
+                round.startedAt, null, null, round.traceId, round.tenantId, round.parentRunId));
         String runId = round.runId;
         String traceId = round.traceId;
         String contextId = task.contextId();
@@ -213,8 +215,8 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
         carrier.updateCurrentRunId(task.contextId(), runId);
         if (audit != null && task.contextId() != null) {
             boolean degraded = entry.map(TraceContextCarrier.Entry::isDegraded).orElse(false);
-            round.auditSeq = audit.openRound(round.tenantId, task.contextId(), task.id(),
-                    round.traceId, degraded, round.runId);
+            round.auditSeq = audit.openRound(new AuditEventCollector.RoundOpen(round.tenantId,
+                    task.contextId(), task.id(), round.traceId, degraded, round.runId));
             if (seq > 1) {
                 audit.recordDecision(round.tenantId, task.contextId(), "approval",
                         Map.of("action", "resume", "runId", round.runId));
@@ -227,8 +229,8 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
             // 恢复出的已闭轮节点不再覆写（重复终态 save 不毁历史记录）
             return;
         }
-        String nodeJson = RunTreeRecord.nodeClose(round.runId, "local", round.startedAt, now(),
-                finalState.name(), round.traceId, round.tenantId, round.parentRunId);
+        String nodeJson = RunTreeRecord.nodeClose(new RunTreeRecord.NodeFields(round.runId, "local",
+                round.startedAt, now(), finalState.name(), round.traceId, round.tenantId, round.parentRunId));
         String runId = round.runId;
         round.closedFinal = true;
         writer.submit(() -> store.putRecord(RedisTrajectoryStore.runKey(runId), nodeJson));

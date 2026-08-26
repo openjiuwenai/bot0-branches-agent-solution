@@ -9,7 +9,6 @@ import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.store
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import redis.clients.jedis.exceptions.JedisException;
 
 import java.util.ArrayList;

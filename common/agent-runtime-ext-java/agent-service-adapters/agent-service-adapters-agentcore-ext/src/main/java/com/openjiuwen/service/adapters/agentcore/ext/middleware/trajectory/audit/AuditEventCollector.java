@@ -70,27 +70,22 @@ public class AuditEventCollector {
      * Opens a round: occupies the audit seq, opens the round buffer, and binds the
      * conversation to its current task.
      *
-     * @param tenantId       tenant id (may be null, stored as "unknown")
-     * @param conversationId conversation id
-     * @param taskId         task id
-     * @param traceId        trace id (may be null)
-     * @param degraded       trace degraded flag
-     * @param runId          run id
+     * @param open round-open parameters (tenant id may be null, stored as "unknown")
      * @return allocated seq, or -1 when seq occupation failed (round evidence dropped)
      */
-    public long openRound(String tenantId, String conversationId, String taskId,
-                          String traceId, boolean degraded, String runId) {
-        if (conversationId == null || taskId == null) {
+    public long openRound(RoundOpen open) {
+        if (open.conversationId() == null || open.taskId() == null) {
             return -1L;
         }
-        String tenant = tenantId != null ? tenantId : "unknown";
-        long seq = snapshots.occupy(tenant, conversationId);
+        String tenant = open.tenantId() != null ? open.tenantId() : "unknown";
+        long seq = snapshots.occupy(tenant, open.conversationId());
         if (seq < 0) {
             return -1L;
         }
-        RoundBuffer buffer = new RoundBuffer(seq, tenant, conversationId, taskId, runId, traceId, degraded);
-        buffers.put(key(conversationId, taskId), buffer);
-        currentTask.put(conversationId, taskId);
+        RoundBuffer buffer = new RoundBuffer(seq, tenant, open.conversationId(), open.taskId(),
+                open.runId(), open.traceId(), open.degraded());
+        buffers.put(key(open.conversationId(), open.taskId()), buffer);
+        currentTask.put(open.conversationId(), open.taskId());
         return seq;
     }
 
@@ -144,39 +139,31 @@ public class AuditEventCollector {
     /**
      * Records a cross-boundary delegation (shadow batch member).
      *
-     * @param conversationId conversation id
-     * @param taskId         parent task id
-     * @param agentName      remote agent name
-     * @param remoteRunId    remote run id
-     * @param resultCategory result category (may be null)
-     * @param toolCallId     tool call id that triggered the delegation (may be null)
-     * @param sourceRunId    source (parent) run id, for joining back to the run tree (may be null)
+     * @param delegation delegation fields (toolCallId/sourceRunId/resultCategory may be null)
      */
-    public void recordDelegation(String conversationId, String taskId, String agentName,
-                                 String remoteRunId, String resultCategory, String toolCallId,
-                                 String sourceRunId) {
-        RoundBuffer buffer = buffers.get(key(conversationId, taskId));
+    public void recordDelegation(Delegation delegation) {
+        RoundBuffer buffer = buffers.get(key(delegation.conversationId(), delegation.taskId()));
         if (buffer == null) {
             return;
         }
-        if (!buffer.delegationSeen.add(remoteRunId)) {
+        if (!buffer.delegationSeen.add(delegation.remoteRunId())) {
             // 影子 Task 在 resume 路径会被重复 save——同一 remoteTaskId 每轮只记一次
             return;
         }
-        Map<String, Object> delegation = new LinkedHashMap<>();
-        delegation.put("agentName", agentName);
-        delegation.put("remoteRunId", remoteRunId);
-        if (toolCallId != null && !toolCallId.isBlank()) {
-            delegation.put("toolCallId", toolCallId);
+        Map<String, Object> record = new LinkedHashMap<>();
+        record.put("agentName", delegation.agentName());
+        record.put("remoteRunId", delegation.remoteRunId());
+        if (delegation.toolCallId() != null && !delegation.toolCallId().isBlank()) {
+            record.put("toolCallId", delegation.toolCallId());
         }
-        if (sourceRunId != null && !sourceRunId.isBlank()) {
-            delegation.put("sourceRunId", sourceRunId);
+        if (delegation.sourceRunId() != null && !delegation.sourceRunId().isBlank()) {
+            record.put("sourceRunId", delegation.sourceRunId());
         }
-        if (resultCategory != null && !resultCategory.isBlank()) {
-            delegation.put("resultCategory", resultCategory);
+        if (delegation.resultCategory() != null && !delegation.resultCategory().isBlank()) {
+            record.put("resultCategory", delegation.resultCategory());
         }
-        buffer.delegations.add(delegation);
-        recordDecision(buffer.tenantId, conversationId, "delegation", delegation);
+        buffer.delegations.add(record);
+        recordDecision(buffer.tenantId, delegation.conversationId(), "delegation", record);
     }
 
     /**
@@ -289,6 +276,35 @@ public class AuditEventCollector {
         } catch (JsonProcessingException e) {
             return "{}";
         }
+    }
+
+    /**
+     * Round-open parameters (parameter object).
+     *
+     * @param tenantId       tenant id (may be null)
+     * @param conversationId conversation id
+     * @param taskId         task id
+     * @param traceId        trace id (may be null)
+     * @param degraded       trace degraded flag
+     * @param runId          run id
+     */
+    public record RoundOpen(String tenantId, String conversationId, String taskId,
+            String traceId, boolean degraded, String runId) {
+    }
+
+    /**
+     * Delegation fields (parameter object; L2 §4.6 四元组 + 结果类别).
+     *
+     * @param conversationId conversation id
+     * @param taskId         parent task id
+     * @param agentName      remote agent name
+     * @param remoteRunId    remote run id
+     * @param resultCategory result category (may be null)
+     * @param toolCallId     tool call id (may be null)
+     * @param sourceRunId    source run id (may be null)
+     */
+    public record Delegation(String conversationId, String taskId, String agentName,
+            String remoteRunId, String resultCategory, String toolCallId, String sourceRunId) {
     }
 
     /** Per-round evidence buffer. */

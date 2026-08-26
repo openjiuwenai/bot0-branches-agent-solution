@@ -44,6 +44,7 @@ public class SessionFilteredAgentRail extends AgentRail {
     private final OtelRail delegate;
     private final Span httpSpan;
     private Scope bridgeScope;
+    private volatile String pendingQuery;
 
     public SessionFilteredAgentRail(String conversationId, OtelRail delegate, Span httpSpan) {
         this.conversationId = conversationId;
@@ -163,8 +164,6 @@ public class SessionFilteredAgentRail extends AgentRail {
         String text = String.valueOf(args);
         return text.length() <= 200 ? text : text.substring(0, 200);
     }
-
-    private volatile String pendingQuery;
 
     private void safe(AgentCallbackContext ctx, Runnable action) {
         try {

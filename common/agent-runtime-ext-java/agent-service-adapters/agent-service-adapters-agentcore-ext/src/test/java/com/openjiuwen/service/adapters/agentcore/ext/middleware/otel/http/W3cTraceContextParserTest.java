@@ -26,8 +26,8 @@ class W3cTraceContextParserTest {
         assertThat(W3cTraceContextParser.parseTraceId(null)).isEmpty();
         assertThat(W3cTraceContextParser.parseTraceId("")).isEmpty();
         assertThat(W3cTraceContextParser.parseTraceId("00-abc-def-01")).isEmpty();
-        assertThat(W3cTraceContextParser.parseTraceId("00-" + TRACE_ID.toUpperCase() + "-" + SPAN_ID + "-01"))
-                .isEmpty();
+        assertThat(W3cTraceContextParser.parseTraceId(
+                "00-" + TRACE_ID.toUpperCase(java.util.Locale.ROOT) + "-" + SPAN_ID + "-01")).isEmpty();
         assertThat(W3cTraceContextParser.parseTraceId("00-zz0e9b4ebc1bc708de6aae571b089ce-" + SPAN_ID + "-01"))
                 .isEmpty();
     }

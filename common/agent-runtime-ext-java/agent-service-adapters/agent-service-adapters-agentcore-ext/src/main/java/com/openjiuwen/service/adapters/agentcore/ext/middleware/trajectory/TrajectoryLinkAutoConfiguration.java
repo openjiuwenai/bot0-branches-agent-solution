@@ -66,6 +66,7 @@ public class TrajectoryLinkAutoConfiguration {
      * @param carrierProvider carrier provider
      * @param storeProvider   store provider
      * @param writerProvider  writer provider
+     * @param auditProvider   audit collector provider
      * @return the registrar
      */
     @Bean

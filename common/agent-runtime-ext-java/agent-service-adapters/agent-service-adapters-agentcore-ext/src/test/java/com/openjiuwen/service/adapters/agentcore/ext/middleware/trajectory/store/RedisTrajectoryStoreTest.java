@@ -143,7 +143,7 @@ class RedisTrajectoryStoreTest {
 
         @Override
         public long del(String... keys) {
-            long removed = 0;
+            long removed = 0L;
             for (String key : keys) {
                 if (stringValues.remove(key) != null) {
                     removed++;
@@ -154,7 +154,7 @@ class RedisTrajectoryStoreTest {
 
         @Override
         public long del(byte[]... keys) {
-            long removed = 0;
+            long removed = 0L;
             for (byte[] key : keys) {
                 if (stringValues.remove(new String(key, StandardCharsets.UTF_8)) != null) {
                     removed++;
