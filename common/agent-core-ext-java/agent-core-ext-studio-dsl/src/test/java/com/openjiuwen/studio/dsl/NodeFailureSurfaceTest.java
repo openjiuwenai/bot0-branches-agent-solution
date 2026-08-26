@@ -18,12 +18,10 @@ import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
-import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
-import java.util.Set;
 
 /**
  * L2 §7.3 negative surfaces that were previously only implemented, not asserted.
@@ -68,31 +66,13 @@ class NodeFailureSurfaceTest {
 
     @Test
     void unexpectedInvokeException_wrapsAsNodeInvokeFailed() {
-        NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
-        registry.register(new NodeHandlerFactory() {
+        AbstractStudioNode exec = new AbstractStudioNode(AssembledNode.of("b1", "demo.boom", Map.of())) {
             @Override
-            public String canonicalType() {
-                return "demo.boom";
+            protected NodePayload doInvoke(
+                    Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
+                throw new IllegalStateException("unexpected");
             }
-
-            @Override
-            public Set<String> aliases() {
-                return Set.of();
-            }
-
-            @Override
-            public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
-                return new AbstractStudioNode(node) {
-                    @Override
-                    protected NodePayload doInvoke(
-                            Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
-                        throw new IllegalStateException("unexpected");
-                    }
-                };
-            }
-        });
-        ComponentExecutable exec =
-                registry.create(AssembledNode.of("b1", "demo.boom", Map.of()), NodeBuildContext.defaults("wf"));
+        };
         assertThatThrownBy(() -> exec.invoke(
                 Map.of("userFields", Map.of()), mock(NodeSessionApi.class), mock(ModelContext.class)))
                 .isInstanceOf(NodeExecutionException.class)

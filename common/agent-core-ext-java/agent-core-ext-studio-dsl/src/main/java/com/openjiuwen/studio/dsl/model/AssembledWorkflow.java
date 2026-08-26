@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Assembled workflow graph consumed by WorkflowAssemblerBridge.
+ * Assembled workflow graph consumed by {@link com.openjiuwen.studio.dsl.exec.WorkflowAssemblyBridge}.
  *
  * @since 2026-08-17
  */

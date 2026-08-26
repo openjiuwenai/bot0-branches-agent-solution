@@ -12,7 +12,8 @@ import com.openjiuwen.studio.dsl.model.AssembledNode;
 import java.util.Set;
 
 /**
- * Factory for one IR node type (built-in or explicitly registered).
+ * Internal factory for one built-in IR node type ({@code adapter.*NodeHandler}).
+ * Not a host extension SPI — custom node registration is OUT of FEAT-031.
  *
  * @since 2026-08-17
  */

@@ -28,11 +28,11 @@ public final class NodeTypeRegistry {
     private final Map<String, String> aliasToCanonical = new LinkedHashMap<>();
 
     /**
-     * register — fails if canonical or any alias already occupied.
+     * Built-in bootstrap only ({@link BuiltinNodeBootstrap}); not a public extension API (FEAT-031 OUT).
      *
      * @param factory factory
      */
-    public synchronized void register(NodeHandlerFactory factory) {
+    synchronized void register(NodeHandlerFactory factory) {
         Objects.requireNonNull(factory, "factory");
         String canonical = factory.canonicalType();
         Objects.requireNonNull(canonical, "canonicalType");

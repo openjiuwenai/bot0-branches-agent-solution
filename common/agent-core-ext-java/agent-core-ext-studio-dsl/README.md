@@ -33,7 +33,7 @@ ComponentExecutable exec = module.registry().create(
 exec.invoke(Map.of("userFields", Map.of()), null, null);
 ```
 
-- 入口：`StudioDslModule`（无 Spring 时）或 classpath 上的 Spring 自动配置
+- 入口：`StudioDslModule.create()`（编程式装配；本模块不提供 Spring Boot 自动配置）
 - 多节点映射：`module.mapExecutables(workflow, ctx)`
 - 单测链式跑通：`src/test/.../LinearWorkflowTestSupport`（非生产 API）
 - 未知节点类型 → `NodeExecutionException` + `NodeCauseCode.UNKNOWN_NODE_TYPE`
@@ -47,13 +47,12 @@ exec.invoke(Map.of("userFields", Map.of()), null, null);
 | 交互 | `input` / `message` / `card` / `questioner`；`EI.qa` |
 | 外部 | `code`（仅 Python，`main(args)->dict`）/ `plugin` / `mcp` / `agent` / `streamTransform`；`EI.ParamOutput` / `EI.ComplexIntentDetection` |
 
-自定义类型：`NodeTypeRegistry.register(NodeHandlerFactory)` 显式注册，不可覆盖 canonical。
+内置节点在模块内固定注册，不可覆盖；自定义节点类型扩展不在 FEAT-031 范围。
 
 ## 宿主契约（`contract`）
 
 | 接口 | 用途 |
 | --- | --- |
-| `NodeHandlerFactory` | 节点工厂 |
 | `PythonCodeExecutor` | 代码节点 |
 | `ToolRegistry` | Plugin |
 | `SubWorkflowResolver` | 嵌套工作流 |
@@ -69,6 +68,7 @@ exec.invoke(Map.of("userFields", Map.of()), null, null);
 
 ## 更多文档
 
+- [`MODULE-GUIDE.md`](./MODULE-GUIDE.md) — 模块 / package / 文件全景说明
 - [`PACKAGES.md`](./PACKAGES.md) — 包结构与 FEAT 对照
 - [`PYTHON-NODE-COVERAGE.md`](./PYTHON-NODE-COVERAGE.md) — Python 覆盖矩阵
-- 烟雾 IT：`mvn -Dtest=StudioDslHostIT test`
+- 模块烟雾：`StudioDslModuleTest`（含在默认 `mvn test` 中）

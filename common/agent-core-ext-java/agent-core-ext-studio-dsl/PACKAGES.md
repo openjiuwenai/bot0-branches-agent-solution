@@ -58,7 +58,7 @@
 
 模块与节点配置属性。
 
-- 典型类型：`StudioDslProperties`、`StudioDslNodeProperties`
+- 典型类型：`StudioDslNodeProperties`
 - 作用：嵌套深度、节点相关开关等，供 `StudioDslModule` 读取
 
 ---
@@ -69,8 +69,8 @@
 
 节点公共壳。
 
-- 典型类型：`AbstractStudioNode`、`DelegatingStudioNode`、`PassthroughStudioNode`、`SimpleNodeFactory`
-- 作用：统一 invoke → userFields 包装、委托 core 可执行体、默认透传（含媒体）
+- 典型类型：`AbstractStudioNode`、`StudioStreamFrames`
+- 作用：统一 invoke → userFields 包装；各 `*NodeHandler` 委托对应 `*Engine`
 
 ### `com.openjiuwen.studio.dsl.adapter.control`
 
@@ -131,7 +131,7 @@
 
 | 契约 | 作用 |
 | --- | --- |
-| `NodeHandlerFactory` | 节点类型工厂（内置 + 显式 `register`） |
+| `NodeHandlerFactory` | 内置 Handler 内部工厂契约（非宿主扩展 SPI） |
 | `PythonCodeExecutor` | Python 执行器 |
 | `ToolRegistry` / `EmptyToolRegistry` | Plugin / Tool 查找 |
 | `SubWorkflowResolver` | 嵌套子工作流解析 |
@@ -141,7 +141,7 @@
 
 | 东西 | 谁实现 |
 | --- | --- |
-| `NodeHandlerFactory` | **内置已实现**（`BuiltinNodeBootstrap`）；宿主可 `register` **新类型**，**不能**覆盖已有 canonical |
+| `NodeHandlerFactory` | **内置已实现**（`BuiltinNodeBootstrap`）；仅模块内注册，**不能**覆盖已有 canonical |
 | `PythonCodeExecutor` | **模块已有默认** `SubprocessPythonCodeExecutor`；宿主可在构造时注入替换 |
 | `ToolRegistry` / `SubWorkflowResolver` / KB providers | **模块有默认 / 占位**；生产再注入 |
 
@@ -162,7 +162,7 @@
 
 运行时骨架。
 
-- 典型类型：`NodeBuildContext`、`WorkflowAssemblyBridge`、`WorkflowVariableScope`、`NodeExecutionException`；以及旧名兼容 `WorkflowAssemblerBridge`
+- 典型类型：`NodeBuildContext`、`WorkflowAssemblyBridge`、`WorkflowVariableScope`、`NodeExecutionException`
 - 作用：构建上下文、`AssembledWorkflow` → 可执行体映射（`mapExecutables`）、子工作流步骤合并（`mergeLinearStep`）、可区分失败异常
 
 ### `com.openjiuwen.studio.dsl.model`
@@ -231,7 +231,7 @@ FEAT 定黑盒能力；包名由 L2 / 本模块落地拆分。下表说明每个
 | --- | --- | --- |
 | `com.openjiuwen.studio.dsl`（根，`StudioDslModule`） | §3「入口」整体；§1 代码落地 | 编程式模块入口，把节点 / contract / 执行拼起来；非 HTTP |
 | `com.openjiuwen.studio.dsl.contract` | §2「节点工厂契约」；§3 节点工厂；§5.3 | 统一扩展契约（`NodeHandlerFactory`、`PythonCodeExecutor`、`ToolRegistry` 等） |
-| `com.openjiuwen.studio.dsl.registry` | §2「自定义节点类型扩展」；§5.1 / §5.3；§3 自定义节点注册 | 内置节点注册、别名、按 IR 创建（无 ServiceLoader） |
+| `com.openjiuwen.studio.dsl.registry` | §5.1 内置 21 节点；§2 节点执行 | 内置节点注册、别名、按 IR 创建 |
 | `com.openjiuwen.studio.dsl.adapter` | §5.3（内置经 NodeHandlerFactory 接入）；公共壳 | Handler 基类 / 委托 / 透传 |
 | `com.openjiuwen.studio.dsl.adapter.control` | §2 编排控制 8 行；§5.1 编排控制类 | start / end / branch / loop / aggregate / nested / setVariable / exception |
 | `com.openjiuwen.studio.dsl.adapter.model` | §2 模型推理 4 行；§5.1 模型推理类 | LLM / intent / extractor / knowledge |
@@ -248,7 +248,7 @@ FEAT 定黑盒能力；包名由 L2 / 本模块落地拆分。下表说明每个
 | FEAT 章节 | 主要落在哪些包 |
 | --- | --- |
 | §2 / §5.1 四大类 21 节点 | `com.openjiuwen.studio.dsl.adapter.control` / `com.openjiuwen.studio.dsl.adapter.model` / `com.openjiuwen.studio.dsl.adapter.interact` / `com.openjiuwen.studio.dsl.adapter.external` + `com.openjiuwen.studio.dsl.registry` |
-| §2 / §5.3 节点工厂 + 自定义 | `com.openjiuwen.studio.dsl.contract` + `com.openjiuwen.studio.dsl.registry` |
+| §5.1 内置节点工厂 | `com.openjiuwen.studio.dsl.registry` + `com.openjiuwen.studio.dsl.adapter.*` |
 | §2 代码节点（仅 Python） | `com.openjiuwen.studio.dsl.python` + `PythonCodeExecutor` + `adapter.external`（code） |
 | §2 / §5.2 Python | `com.openjiuwen.studio.dsl.python` + `PythonCodeExecutor` + `com.openjiuwen.studio.dsl.adapter.external` |
 | §2 / §5.4 数据与多模态 | `com.openjiuwen.studio.dsl.model` + `com.openjiuwen.studio.dsl.util`（如 `MediaSupport`） |

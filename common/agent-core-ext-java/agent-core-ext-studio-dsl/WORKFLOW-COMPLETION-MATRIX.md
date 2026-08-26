@@ -70,7 +70,7 @@
 | `store/*`（含 Jedis） | `ConversationValsStore` / `JedisConversationValsStore` | FEAT 未要求 Redis 客户端；1:1 Start 对齐引入 | 无 Redis 时 in-memory |
 | `contract/*` | `ToolRegistry` / `SubWorkflowResolver` / `PythonCodeExecutor` / KB providers / … | 宿主注入契约（Agent 走 `FlowAgentEngine`） |
 | `python/*` 沙箱插槽 | `SandboxPythonCodeExecutor` 等 | FEAT-031 OUT 沙箱；用例多用 mock/subprocess | 真实沙箱依赖外部 |
-| `config` | `StudioDslProperties` 等 | 编程式配置，非 workflow_node 测试面 | — |
+| `config` | `StudioDslNodeProperties` 等 | 编程式配置，非 workflow_node 测试面 | — |
 | `schema` / `bridge` / `exec` 装配桥 | DSL 壳与线性执行 | 承接装配，超出单测用例目录本身 | 线性链支撑 Cases |
 | 文档副产物 | `PYTHON-1TO1-PORT.md` / `WORKFLOW-NODE-CASES.md` / 本文件 | 工程资产 | — |
 

@@ -10,7 +10,7 @@ import static org.mockito.Mockito.mock;
 import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
-import com.openjiuwen.studio.dsl.adapter.PassthroughStudioNode;
+import com.openjiuwen.studio.dsl.util.MediaSupport;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.MediaPart;
@@ -29,18 +29,11 @@ import java.util.Map;
 class DataAndMediaTest {
     @Test
     void media_passthrough_preserved() {
-        PassthroughStudioNode exec =
-                new PassthroughStudioNode(AssembledNode.of("p1", "passthrough", Map.of()));
         MediaPart img = new MediaPart("image", "image/png", "file:///a.png", null, Map.of());
-        @SuppressWarnings("unchecked")
-        Map<String, Object> out = (Map<String, Object>) exec.invoke(
-                Map.of("userFields", Map.of("text", "hi"), "__media__", List.of(img)),
-                mock(NodeSessionApi.class),
-                mock(ModelContext.class));
-        assertThat(out.get("__media__")).isEqualTo(List.of(img));
-        @SuppressWarnings("unchecked")
-        Map<String, Object> uf = (Map<String, Object>) out.get("userFields");
-        assertThat(uf).containsEntry("text", "hi");
+        assertThat(MediaSupport.mediaOf(Map.of("__media__", List.of(img)))).isEqualTo(List.of(img));
+        Map<String, Object> enriched =
+                MediaSupport.withConsumableMedia(Map.of("text", "hi"), List.of(img));
+        assertThat(enriched).containsEntry("text", "hi").containsEntry("hasMedia", true);
     }
 
     @Test

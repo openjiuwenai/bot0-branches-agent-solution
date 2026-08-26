@@ -4,7 +4,6 @@
 
 package com.openjiuwen.studio.dsl.util;
 
-import com.openjiuwen.studio.dsl.adapter.PassthroughStudioNode;
 import com.openjiuwen.studio.dsl.model.MediaPart;
 
 import java.util.ArrayList;
@@ -28,7 +27,20 @@ public final class MediaSupport {
      * @return result
      */
     public static List<MediaPart> mediaOf(Map<String, Object> inputs) {
-        return PassthroughStudioNode.extractMedia(inputs);
+        if (inputs == null) {
+            return List.of();
+        }
+        Object raw = inputs.get("__media__");
+        if (!(raw instanceof List<?> list)) {
+            return List.of();
+        }
+        List<MediaPart> out = new ArrayList<>();
+        for (Object o : list) {
+            if (o instanceof MediaPart mp) {
+                out.add(mp);
+            }
+        }
+        return out;
     }
 
     /**

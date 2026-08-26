@@ -14,13 +14,11 @@ import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.registry.BuiltinNodeBootstrap;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
-import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * NodeTypeRegistryTest for Studio DSL node-type extension (FEAT-031).
@@ -52,43 +50,10 @@ class NodeTypeRegistryTest {
     }
 
     @Test
-    void programmaticCustomFactory_canRegisterAndCreate() {
-        NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
-        registry.register(new NodeHandlerFactory() {
-            @Override
-            public String canonicalType() {
-                return "demo.custom";
-            }
-
-            @Override
-            public Set<String> aliases() {
-                return Set.of();
-            }
-
-            @Override
-            public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
-                return registry.create(AssembledNode.of(node.id(), "jiuwen.start", Map.of()), ctx);
-            }
-        });
-        ComponentExecutable exec =
-                registry.create(AssembledNode.of("n1", "demo.custom", Map.of()), NodeBuildContext.defaults("wf"));
-        assertThat(exec).isNotNull();
-    }
-
-    @Test
-    void register_stillRejectsDuplicateWithoutReplace() {
-        NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
-        assertThatThrownBy(() -> registry.register(new NodeHandlerFactory() {
-                    @Override
-                    public String canonicalType() {
-                        return "jiuwen.start";
-                    }
-
-                    @Override
-                    public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
-                        return null;
-                    }
-                }))
+    void duplicateBuiltinRegistration_fails() {
+        NodeTypeRegistry registry = new NodeTypeRegistry();
+        BuiltinNodeBootstrap.registerAll(registry);
+        assertThatThrownBy(() -> BuiltinNodeBootstrap.registerAll(registry))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("duplicate");
     }
