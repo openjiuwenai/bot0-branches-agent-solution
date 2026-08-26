@@ -190,14 +190,15 @@ public class SubagentDelegateRail extends BaseInterruptRail {
         }
 
         // ── 正常委派：从参数读取 agent_name，构造 a2a_delegate 中断 ──
+        String remoteAgentName = asString(args.get("agent_name"));
+        if (remoteAgentName.isBlank()) {
+            LOGGER.error("[SubagentDelegateRail] agent_name is empty, rejecting call_subagent");
+            ctx.getExtra().put(KEY_NORMALIZE_PENDING, Boolean.FALSE);
+            return reject(failedResult("agent_name 必填，未提供目标智能体"));
+        }
         injectCachedQueryDescription(args, ctx);
         String remoteInput = extractRemoteInput(toolCall, args);
         String queryIntent = asString(args.get("query_intent"));
-        String remoteAgentName = asString(args.get("agent_name"));
-        if (remoteAgentName.isBlank()) {
-            LOGGER.warn("[SubagentDelegateRail] agent_name is empty, falling back to versatile-agent");
-            remoteAgentName = VersatileDelegateRail.REMOTE_AGENT_NAME;
-        }
         LOGGER.info("[SubagentDelegateRail] delegating to agent='{}', queryIntent='{}', remoteInputLen={}",
                 remoteAgentName, abbreviate(desensitize(queryIntent), 60), remoteInput.length());
 
