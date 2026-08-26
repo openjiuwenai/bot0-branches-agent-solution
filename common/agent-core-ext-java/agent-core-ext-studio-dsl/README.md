@@ -66,9 +66,6 @@ exec.invoke(Map.of("userFields", Map.of()), null, null);
 
 **不做**：图调度、IR 引用解析、协议入口、远端 MCP/Agent/KB 真实现。
 
-## 更多文档
+## 测试
 
-- [`MODULE-GUIDE.md`](./MODULE-GUIDE.md) — 模块 / package / 文件全景说明
-- [`PACKAGES.md`](./PACKAGES.md) — 包结构与 FEAT 对照
-- [`PYTHON-NODE-COVERAGE.md`](./PYTHON-NODE-COVERAGE.md) — Python 覆盖矩阵
-- 模块烟雾：`StudioDslModuleTest`（含在默认 `mvn test` 中）
+模块烟雾：`StudioDslModuleTest`（含在默认 `mvn test` 中）。
