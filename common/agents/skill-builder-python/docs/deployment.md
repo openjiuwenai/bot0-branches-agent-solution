@@ -1,62 +1,57 @@
-# Deployment
+# 部署说明
 
-## Deployment model
+## 部署形态
 
-Skill Builder is currently an installable Python Agent package, not a standalone
-HTTP/A2A server. Deploy it inside a Python host background process:
+Skill Builder 当前是可安装的 Python Agent 包，不是独立 HTTP/A2A 服务。它部署在 Python 宿主的后台进程中：
 
 ```text
-Host API / task worker
+宿主 API / 任务进程
 └── SkillBuilderClient
-    ├── Agent Core child process
-    ├── shared/persistent StateStore and workspace
+    ├── Agent Core 子进程
+    ├── 持久化 StateStore 和 workspace
     └── JiuwenboxExecutionPort
             │
             ▼
-      separate Jiuwenbox service
+      独立 Jiuwenbox 服务
 ```
 
-The host owns HTTP, authentication, tenant isolation, queueing, one-workspace
-write locks, HITL/continue/retry endpoints, object storage, and publication.
+宿主负责 HTTP、鉴权、租户隔离、任务队列、同 workspace 单写锁、HITL/继续/重试入口、对象存储和发布。
 
-## Prerequisites
+## 环境要求
 
-- Linux deployment supported by the selected OpenJiuwen and Jiuwenbox builds;
-- Python `>=3.11.4` for the host and Agent Core workers;
-- an OpenAI-compatible model endpoint and credential;
-- a separately installed Jiuwenbox service reachable from the host;
-- persistent, writable workspace and state storage;
-- optional Playwright/Chromium for material recording.
+- 运行环境满足 OpenJiuwen 与 Jiuwenbox 的 Linux 支持要求；
+- 宿主和 Agent Core worker 使用 Python `>=3.11.4`；
+- 可用的 OpenAI-compatible 模型地址和密钥；
+- 宿主能够访问独立 Jiuwenbox 服务；
+- 持久、可写的 workspace 和 state 存储；
+- 可选录屏需要 Playwright/Chromium。
 
-`jiuwenbox` is not installed by the Skill Builder wheel. Obtain its approved
-distribution separately and verify its module before deployment:
+Skill Builder wheel 不包含 Jiuwenbox。请通过已批准的渠道单独安装，并在部署前验证：
 
 ```bash
 /opt/jiuwenbox/.venv/bin/python -m jiuwenbox.server.launcher --help
 ```
 
-## Filesystem layout
+## 目录规划
 
-One possible production layout is:
+一种生产目录布局：
 
 ```text
-/opt/skill-builder-python/             installed application/venv
-/etc/skill-builder/skill-builder.env   environment and secret references
-/var/lib/skill-builder/workspaces/     persistent workspace roots
-/var/lib/skill-builder/state/          state when not stored per workspace
-/var/log/skill-builder/                host logs
-/var/log/jiuwenbox/                    optional sandbox audit logs
+/opt/skill-builder-python/             应用和虚拟环境
+/etc/skill-builder/skill-builder.env   配置及密钥引用
+/var/lib/skill-builder/workspaces/     持久 workspace
+/var/lib/skill-builder/state/          独立 state 根目录（如未放在 workspace）
+/var/log/skill-builder/                宿主日志
+/var/log/jiuwenbox/                    可选沙箱审计日志
 ```
 
-Each workspace must be confined to its own directory. Do not use `/`, a user
-home, or the repository root as a generated workspace. The host service account
-needs write access only to its configured workspace/state roots.
+每个 workspace 必须位于独立受控目录。禁止把 `/`、用户 home 或仓库根目录作为生成 workspace。宿主服务账号只应拥有配置的 workspace/state 根目录写权限。
 
-For multi-instance hosts, local `JsonFileStateStore` is insufficient by itself.
-Use a shared `SkillBuilderStateStore` with transaction/CAS semantics, a shared
-workspace filesystem, and a distributed one-writer lease per `workspace_id`.
+多实例宿主不能只依赖本地 `JsonFileStateStore`。需要共享 `SkillBuilderStateStore`、共享 workspace 存储，以及按 `workspace_id` 的分布式单写锁或 CAS。
 
-## Install from source
+## 安装 Skill Builder
+
+源码开发安装：
 
 ```bash
 cd common/agents/skill-builder-python
@@ -65,8 +60,7 @@ python3.11 -m venv .venv
 .venv/bin/python -m pip install '.[agent-openjiuwen-python]'
 ```
 
-For development this is editable installation. For production, build and
-install the wheel into the host environment:
+生产环境建议构建 wheel 后安装到宿主虚拟环境：
 
 ```bash
 python -m build
@@ -75,14 +69,11 @@ python -m build
 /opt/skill-builder-host/.venv/bin/python -m pip install 'openjiuwen==0.1.12'
 ```
 
-The Agent Core child uses `AgentCoreProcessConfig.python_executable`, which
-defaults to the host's `sys.executable`. That interpreter must be able to import
-both `skill_builder` and `openjiuwen`.
+Agent Core 子进程使用 `AgentCoreProcessConfig.python_executable`，默认等于宿主 `sys.executable`。该解释器必须能导入 `skill_builder` 和 `openjiuwen`。
 
-## Configure environment
+## 配置环境变量
 
-Start from `.env.example` and provide real secrets through the deployment
-secret manager:
+以 `.env.example` 为模板，通过部署密钥系统注入真实值：
 
 ```dotenv
 SKILL_BUILDER_LLM_PROVIDER=OpenAI
@@ -94,7 +85,7 @@ SKILL_BUILDER_SANDBOX_ENABLED=true
 SKILL_BUILDER_JIUWENBOX_URL=http://127.0.0.1:8321
 ```
 
-The package does not load `.env` automatically. For a local smoke only:
+包不会自动加载 `.env`。仅本地 smoke 可使用：
 
 ```bash
 set -a
@@ -102,16 +93,11 @@ set -a
 set +a
 ```
 
-Production process managers should use an environment file or secret injection
-instead. Never write the real API key into the repository, workspace, worker
-request/result files, or event payloads.
+生产进程应使用 EnvironmentFile 或密钥注入，禁止把真实 API key 写入仓库、workspace、worker request/result 或事件。完整配置见[配置参考](configuration.md)。
 
-See [Configuration](configuration.md) for phase budgets, gate rollout,
-Jiuwenbox, and recording variables.
+## 启动 Jiuwenbox
 
-## Start Jiuwenbox
-
-For a same-host deployment, bind Jiuwenbox to loopback:
+同机部署建议只监听 loopback：
 
 ```bash
 /opt/jiuwenbox/.venv/bin/python -m jiuwenbox.server.launcher \
@@ -120,34 +106,29 @@ For a same-host deployment, bind Jiuwenbox to loopback:
   --save-logs /var/log/jiuwenbox
 ```
 
-Check readiness:
+健康检查：
 
 ```bash
 curl --fail --silent http://127.0.0.1:8321/health
 ```
 
-Expected response includes `status=ok`. Check the reported runtime and sandbox
-security capability according to the deployment's security baseline.
+返回应包含 `status=ok`。还应按部署安全基线检查 runtime 和沙箱安全能力。
 
-Do not expose an unauthenticated Jiuwenbox management endpoint to public or
-untrusted networks. For a remote/container deployment, use network policy,
-service authentication/gateway controls where available, and set:
+禁止把无鉴权的 Jiuwenbox 管理端口暴露到公网或不可信网络。跨主机/容器部署时应配置网络策略和受控服务地址：
 
 ```dotenv
 SKILL_BUILDER_JIUWENBOX_URL=http://jiuwenbox.internal:8321
 ```
 
-## Start the host
+## 启动宿主
 
-Skill Builder itself has no server start command. The host creates one shared
-`SubprocessAgentRunner`, constructs `SkillBuilderClient`, and exposes its own
-API/task endpoints. See:
+Skill Builder 没有独立服务启动命令。宿主创建共享的 `SubprocessAgentRunner`、构造 `SkillBuilderClient`，并提供自己的 API/任务入口。参考：
 
-- [Host Integration](host-integration.md)
-- [Status and Host Actions](status-and-actions.md)
-- [host_background.py](../examples/host_background.py)
+- [宿主接入](host-integration.md)
+- [状态与宿主动作](status-and-actions.md)
+- [空宿主示例](../examples/host_background.py)
 
-A local end-to-end smoke can use the example host:
+真实模型/Jiuwenbox 本地 smoke：
 
 ```bash
 .venv/bin/python examples/host_background.py \
@@ -160,31 +141,26 @@ A local end-to-end smoke can use the example host:
   --output /tmp/skill-builder-smoke/sample-role-skill.zip
 ```
 
-The smoke uses the configured real model and Jiuwenbox. It is opt-in and is not
-part of default CI.
+该 smoke 是 opt-in 验证，不属于默认 CI。
 
-## Required host endpoints
+## 宿主必须提供的操作入口
 
-The host should expose separate operations for:
-
-| Operation | Required semantics |
+| 操作 | 必需语义 |
 |---|---|
-| Build | Start a background `client.build` under the workspace lock |
-| HITL answer | Persist/validate the answer and call Core `resume` with the pending token |
-| Continue failed run | Preserve outputs/checkpoints and call `reconcile` with a `kind="resume"` recovery message |
-| Retry failed run | Build a `kind="retry"` message, reset generated outputs, then start a fresh `build`; preserve `inputs/` |
-| Validate | Load current execution and call `validate` |
-| Repair | Only for confirmed mechanically repairable diagnostics |
-| Export | Construct archive; host returns or stores it |
-| Cancel | Cancel and await the active host task, then release worker/sandbox resources |
+| Build | 获取 workspace 锁后，在后台调用 `client.build` |
+| HITL 回答 | 校验并持久化答案，使用 pending token 调用 Core `resume` |
+| 失败后继续 | 保留候选和检查点，使用 `kind="resume"` 恢复消息调用 `reconcile` |
+| 失败后重试 | 生成 `kind="retry"` 消息，清理旧输出后重新 `build`；保留 `inputs/` |
+| Validate | 加载当前 execution 后调用 `validate` |
+| Repair | 只处理已确认的机械可修复诊断 |
+| Export | Core 构造归档，宿主返回或保存 |
+| Cancel | 取消并等待宿主后台 task，随后释放 worker/Sandbox |
 
-HITL answer, failed-run continue, and failed-run retry are not aliases. Detailed
-reference implementations are in [Host Integration](host-integration.md) and
-the example host.
+HITL 回答、失败后继续和失败后重试不是同一个操作。参考实现见[宿主接入](host-integration.md)和空宿主示例。
 
-## systemd example
+## systemd 示例
 
-Jiuwenbox unit template:
+Jiuwenbox unit：
 
 ```ini
 [Unit]
@@ -203,7 +179,7 @@ RestartSec=3
 WantedBy=multi-user.target
 ```
 
-Host service template (replace `your_host.main` with the actual host module):
+宿主 unit（将 `your_host.main` 替换为真实宿主模块）：
 
 ```ini
 [Unit]
@@ -226,104 +202,77 @@ TimeoutStopSec=45
 WantedBy=multi-user.target
 ```
 
-The host shutdown handler must cancel and await active Skill Builder tasks and
-stop process-local recordings before exit.
+宿主停止时必须取消并等待活动 Skill Builder task，并停止当前进程中的录屏。
 
-## Container deployment
+## 容器部署
 
-Use at least two service boundaries:
+至少保留两个服务边界：
 
 ```text
-host container       SkillBuilder package + OpenJiuwen + host API/worker
-jiuwenbox container  sandbox management service
+host container       Skill Builder 包 + OpenJiuwen + 宿主 API/worker
+jiuwenbox container  沙箱管理服务
 ```
 
-Persist host workspaces/state on volumes or external storage. Configure the
-host with the Jiuwenbox service URL; do not use `127.0.0.1` when Jiuwenbox is in
-another container. No shared filesystem with Jiuwenbox is required by the
-current adapter because workspace content is transferred through the client.
+宿主 workspace/state 使用持久卷或外部存储。Jiuwenbox 位于另一容器时不能配置 `127.0.0.1`。当前 adapter 通过 client 传输 workspace 内容，不要求两个容器共享文件系统。
 
-The repository does not currently ship a Jiuwenbox image or a complete host
-application image. Image selection, OS packages, sandbox privileges, network
-policy, and registry provenance must follow the deployment environment's
-approved Jiuwenbox distribution.
+仓库当前不提供 Jiuwenbox 镜像或完整宿主镜像。镜像来源、OS 依赖、沙箱权限、网络策略和 registry provenance 必须遵循部署环境批准的 Jiuwenbox 发行方式。
 
-## Optional recording
+## 可选录屏部署
 
 ```bash
 .venv/bin/python -m pip install '.[recording]'
 .venv/bin/python -m playwright install chromium
 ```
 
-Configure headless/viewer or headed/X11 mode as described in
-[Recording Integration](recording-integration.md). Active recordings are
-process-local. A multi-worker host needs sticky routing for all operations of
-one recording or a dedicated recording service.
+headless/viewer 或 headed/X11 配置见[录屏接入](recording-integration.md)。活动录屏对象保存在进程内；多 worker 宿主必须为同一录屏提供 sticky routing，或部署独立录屏服务。
 
-Recording profiles, storage state, screenshots, downloads, and traces may
-contain sensitive session data. Store and expire them separately from the
-exported Skill package.
+录屏 profile、storage state、截图、下载和 trace 可能包含会话敏感信息，应与导出 Skill 包分开存储和清理。
 
-## Health, readiness, and observability
+## 健康检查与可观测性
 
-The host readiness check should verify without printing secrets:
+宿主 readiness 至少检查以下内容，且不得打印密钥：
 
-- Skill Builder and OpenJiuwen imports;
-- required model variables are present;
-- workspace/state roots are writable;
-- Jiuwenbox `/health` succeeds when sandbox execution is required;
-- the host StateStore and workspace lease backend are reachable.
+- 能导入 Skill Builder 和 OpenJiuwen；
+- 必需模型变量已配置；
+- workspace/state 根目录可写；
+- 需要沙箱执行时 Jiuwenbox `/health` 成功；
+- StateStore 和 workspace 锁服务可用。
 
-Track phase latency, model request failures, worker exit/timeout, HITL pause
-duration, Repair count, validation state, and Jiuwenbox lifecycle. Persisted
-state is authoritative; events are progress/diagnostic data.
+建议监控阶段耗时、模型请求失败、worker 退出/超时、HITL 等待时长、Repair 次数、Validation 状态和 Jiuwenbox 生命周期。持久化状态是事实源，事件只是进度和诊断数据。
 
-## Upgrade and rollback
+## 升级与回滚
 
-Before upgrade:
+升级前：
 
-1. stop accepting new mutating tasks;
-2. wait for or cancel active Agent Core workers;
-3. stop active recordings;
-4. back up StateStore and persistent workspaces;
-5. install the new wheel in a new environment;
-6. run package tests and one opt-in smoke;
-7. switch the host process to the new environment.
+1. 停止接收新的写任务；
+2. 等待或取消活动 Agent Core worker；
+3. 停止活动录屏；
+4. 备份 StateStore 和持久 workspace；
+5. 在新环境安装新 wheel；
+6. 运行包级测试和一次 opt-in smoke；
+7. 将宿主切换到新环境。
 
-State schema and policy versions are validated. Do not silently load an
-unsupported state version. Rollback must restore a compatible wheel and state
-backup together.
+状态 schema 和 policy version 会被校验。禁止静默加载不支持的状态版本。回滚时必须同时恢复兼容的 wheel 和 state 备份。
 
-## Future Python Runtime deployment
+## 未来 Python Runtime 独立部署
 
-When a supported Python Agent Runtime becomes available, Skill Builder can run
-as an independently addressable Agent service:
+支持的 Python Agent Runtime 就绪后，可以把 Skill Builder 部署为可独立寻址的 Agent 服务：
 
 ```text
 Client -> Python Runtime -> SkillBuilder Runtime Adapter -> SkillBuilderClient
-                                                   ├── Agent Core child
-                                                   └── Jiuwenbox service
+                                                   ├── Agent Core 子进程
+                                                   └── Jiuwenbox 服务
 ```
 
-The Runtime adapter maps requests, events, HITL, cancellation, and artifacts to
-the existing public client. It must not reimplement Scenario, Author, Repair,
-Acceptance, or delivery decisions.
+Runtime adapter 只映射请求、事件、HITL、取消和制品，不得重写 Scenario、Author、Repair、Acceptance 或交付判断。
 
-If the Runtime already provides service/process lifecycle, do not add a second
-`SkillBuilderProcessClient`. Multi-instance Runtime deployment still requires a
-shared StateStore, workspace storage, and per-workspace write lease. Recording
-still needs sticky routing or a separate recording service.
+如果 Runtime 已提供服务和进程生命周期，不再增加第二套 `SkillBuilderProcessClient`。多实例 Runtime 仍需要共享 StateStore、workspace 和按 workspace 的单写锁；录屏仍需要 sticky routing 或独立录屏服务。
 
-## Deployment verification
-
-From the project directory:
+## 部署验证
 
 ```bash
 python -m pytest
 python -m build
 ```
 
-The default tests use fake Agent runners and do not require a model or network.
-Before production, additionally run the host/Jiuwenbox smoke with non-sensitive
-test material and verify that no Agent worker or sandbox remains after
-completion/cancellation.
+默认测试使用 Fake Agent Runner，不依赖模型或网络。生产上线前还应使用非敏感测试材料运行宿主/Jiuwenbox smoke，并确认完成或取消后没有残留 Agent worker 和沙箱。

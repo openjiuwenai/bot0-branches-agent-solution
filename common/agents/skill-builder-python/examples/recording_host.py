@@ -1,4 +1,4 @@
-"""Host adapter example for optional Playwright material recording."""
+"""可选 Playwright 材料录屏的宿主 adapter 示例。"""
 
 from __future__ import annotations
 
@@ -17,10 +17,10 @@ from skill_builder.recording import (
 
 
 class RecordingHost:
-    """Map authenticated host endpoints to the standalone recording core.
+    """把完成鉴权的宿主入口映射到独立录屏核心。
 
-    Callers must apply tenant/workspace authorization and URL/network policy
-    before invoking these methods. Active recordings are process-local.
+    调用前必须完成租户/workspace 权限及 URL/网络策略检查。
+    活动录屏对象只存在于当前进程。
     """
 
     def __init__(self, workspace_root: Path, workspace_id: str) -> None:
@@ -34,7 +34,7 @@ class RecordingHost:
         title: str | None = None,
         goal: str | None = None,
     ) -> dict[str, Any]:
-        # Enforce host URL/domain/network policy before this call.
+        # 调用前执行宿主 URL、域名和网络策略。
         recording, capability = await start_recording(
             root=self.workspace_root,
             workspace_id=self.workspace_id,
@@ -69,7 +69,7 @@ class RecordingHost:
         delta_y: float | None = None,
         url: str | None = None,
     ) -> dict[str, Any]:
-        # Enforce host authorization for risky/irreversible actions first.
+        # 风险或不可逆动作必须先完成宿主授权。
         recording = await perform_recording_action(
             root=self.workspace_root,
             workspace_id=self.workspace_id,
@@ -95,7 +95,7 @@ class RecordingHost:
         if not recording.material_path:
             raise RuntimeError("recording completed without a material path")
         material_path = (self.workspace_root / recording.material_path).resolve()
-        # Register material_path and markdown in the host asset store here.
+        # 在此处把 material_path 和 markdown 登记到宿主资产存储。
         return {
             **recording_snapshot(recording),
             "material_path": str(material_path),

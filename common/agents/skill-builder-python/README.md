@@ -1,31 +1,24 @@
 # Skill Builder Agent
 
-Skill Builder converts workspace materials into a validated Skill package. It
-is a standalone Python Agent project: generation, HITL, acceptance, bounded
-repair, state recovery, and archive construction live in this directory. HTTP,
-ORM, authentication, object storage, and external publishing remain host
-responsibilities.
+Skill Builder 将工作区材料抽取为经过验收的 Skill 包。它是一个独立 Python Agent 工程，生成、HITL、验收、有界修复、状态恢复和归档构造均在本目录实现；HTTP、ORM、鉴权、对象存储和外部发布由宿主负责。
 
-The migrated source is based on `skillbuilder/refactor/skill-builder-boundaries`
-commit `045732d`. The target branch is based on `agent-solution/common` commit
-`70ffe929`.
+迁移来源为 `skillbuilder/refactor/skill-builder-boundaries@045732d`，目标基线为 `agent-solution/common@70ffe929`。
 
-## Runtime topology
+## 运行拓扑
 
 ```text
-Python host/background task
-└── SkillBuilderClient                  lifecycle and durable decisions
+Python 宿主/后台任务
+└── SkillBuilderClient                  生命周期与持久化决策
     ├── SubprocessAgentRunner
-    │   └── Agent Core child process    Scenario / Author / Repair
-    │       └── Jiuwenbox workspace     separate sandbox service
-    ├── JiuwenboxExecutionPort          final Acceptance smoke
-    └── State/Event/HITL ports           host-replaceable adapters
+    │   └── Agent Core 子进程           Scenario / Author / Repair
+    │       └── Jiuwenbox workspace     独立沙箱服务
+    ├── JiuwenboxExecutionPort          最终 Acceptance smoke
+    └── State/Event/HITL Ports          宿主可替换
 ```
 
-`SkillBuilderClient` is a Python facade, not a server or process. The default
-host example keeps this controller in the host and isolates only Agent Core.
+`SkillBuilderClient` 是 Python 公共门面，不是服务或进程。默认接入方式是在宿主进程中保留生命周期控制器，只隔离 Agent Core 阶段。
 
-## Install
+## 安装
 
 ```bash
 cd common/agents/skill-builder-python
@@ -34,24 +27,20 @@ python -m venv .venv
 cp .env.example .env
 ```
 
-Export the variables from `.env` through the deployment environment. The
-package deliberately does not load secret files automatically.
+通过部署系统把 `.env` 中的变量加载到进程环境。Skill Builder 不会自动读取密钥文件。
 
-Jiuwenbox must be reachable separately. The default endpoint is
-`http://127.0.0.1:8321` and can be changed with
-`SKILL_BUILDER_JIUWENBOX_URL`.
+Jiuwenbox 需要单独部署。默认地址为 `http://127.0.0.1:8321`，可通过 `SKILL_BUILDER_JIUWENBOX_URL` 修改。
 
-Optional recording requires the recording extra and a browser installation:
+可选录屏需要安装 Playwright 和 Chromium：
 
 ```bash
 .venv/bin/python -m pip install -e '.[recording]'
 .venv/bin/python -m playwright install chromium
 ```
 
-## Host integration
+## 宿主接入
 
-The complete reference host is [examples/host_background.py](examples/host_background.py).
-Its essential wiring is:
+完整参考实现见 [examples/host_background.py](examples/host_background.py)，核心接线如下：
 
 ```python
 from skill_builder import SkillBuilderClient
@@ -74,64 +63,52 @@ client = SkillBuilderClient(
 )
 ```
 
-With `SubprocessAgentRunner`, do not also set `SkillBuilderAdapters.workspace`:
-the child process creates the Jiuwenbox workspace adapter from environment
-configuration. An in-process host can instead combine
-`OpenJiuwenPythonAgentAdapter` with `JiuwenboxWorkspacePort`.
+使用 `SubprocessAgentRunner` 时不要同时设置 `SkillBuilderAdapters.workspace`；子进程会根据环境配置创建 Jiuwenbox workspace adapter。进程内模式可组合 `OpenJiuwenPythonAgentAdapter` 与 `JiuwenboxWorkspacePort`。
 
-See [Host Integration](docs/host-integration.md) for build, materials, HITL,
-recovery, persistence, cancellation, edits, validation, and export behavior.
+详细调用方式见 [宿主接入](docs/host-integration.md)，包含材料准备、HITL、失败后继续/重试、恢复、持久化、取消、编辑、验证和导出。
 
-## Delivery states
+## 交付状态
 
-| State | Meaning | Host action |
+| 状态 | 含义 | 宿主动作 |
 |---|---|---|
-| `waiting_for_user` | A real business decision is missing | Render the pending form and call `resume` |
-| `ready` | Acceptance passed and the receipt matches the current package | Export is allowed; host may enable its own publish action |
-| `needs_review` | Package can be inspected/exported but a blocking external or human decision remains | Never auto-publish |
-| `failed` | Generation/runtime did not produce an acceptable candidate | Show the structured failure and available retry action |
+| `waiting_for_user` | 缺少真实业务决策 | 展示表单并调用 HITL `resume` |
+| `ready` | 当前包已通过验收且 receipt 有效 | 允许导出；是否发布仍由宿主审批 |
+| `needs_review` | 包可检查/导出，但人工或外部边界阻断自动发布 | 禁止自动发布 |
+| `failed` | 当前运行未形成可接受候选 | 展示结构化错误以及继续/重试入口 |
 
-Warnings do not create a separate lifecycle state. A `ready` result may contain
-non-blocking warnings only when verified usability is unaffected. External
-publishing is never executed by this package.
+warning 不是独立生命周期状态。当 warning 不影响已验证可用性时，可以出现 `ready + warn`。本包不会执行外部发布。
 
-## Project layout
+## 项目结构
 
 ```text
 src/skill_builder/
-├── api.py                 stable SkillBuilderClient facade
-├── application/           lifecycle and acceptance orchestration
-├── domain/                state and package contracts
-├── ports/                 host extension interfaces
-├── adapters/              OpenJiuwen, subprocess, state, and Jiuwenbox adapters
-├── agent_worker.py        one Agent Core phase per child process
-├── resources/             internal Scenario and Author Skills
-└── recording.py           optional Playwright recording support
+├── api.py                 SkillBuilderClient 公共门面
+├── application/           生命周期与验收编排
+├── domain/                状态与包契约
+├── ports/                 宿主扩展接口
+├── adapters/              OpenJiuwen、子进程、状态和 Jiuwenbox adapter
+├── agent_worker.py        单个 Agent Core 阶段子进程入口
+├── resources/             内置 Scenario/Author Skill
+└── recording.py           可选 Playwright 录屏核心
 ```
 
-Configuration is documented in [Configuration](docs/configuration.md). The
-source boundary and migration decisions are recorded in
-[Architecture and Migration](docs/architecture-and-migration.md).
-Completed checks are recorded in [Verification](docs/verification.md).
+## 文档导航
 
-Host-facing contracts:
+- [部署说明](docs/deployment.md)
+- [配置参考](docs/configuration.md)
+- [宿主接入](docs/host-integration.md)
+- [状态与宿主动作](docs/status-and-actions.md)
+- [录屏接入](docs/recording-integration.md)
+- [架构与迁移](docs/architecture-and-migration.md)
+- [测试说明](docs/testing.md)
 
-- [Deployment](docs/deployment.md)
-- [Status and Host Actions](docs/status-and-actions.md)
-- [Recording Integration](docs/recording-integration.md)
-- [Host Integration](docs/host-integration.md)
-- [Configuration](docs/configuration.md)
+录屏宿主示例见 [examples/recording_host.py](examples/recording_host.py)。
 
-The optional recording adapter example is
-[examples/recording_host.py](examples/recording_host.py).
-
-## Tests
+## 测试
 
 ```bash
 python -m pytest
 python -m build
 ```
 
-CI tests use deterministic fake Agent runners and do not require a real model
-or network. Real-host smoke requires configured LLM credentials and a healthy
-Jiuwenbox service.
+默认 CI 使用 Fake Agent Runner，不依赖真实模型或网络。真实宿主 smoke 需要配置模型并启动健康的 Jiuwenbox 服务。

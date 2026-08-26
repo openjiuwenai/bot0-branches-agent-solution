@@ -1,70 +1,64 @@
-# Recording Integration
+# 录屏接入
 
-## Scope
+## 能力范围
 
-`skill_builder.recording` is an optional material-capture runtime. It records a
-user-demonstrated web workflow and produces Markdown that Scenario can consume.
+`skill_builder.recording` 是可选材料采集运行时，用于记录用户展示的网页流程并生成 Scenario 可消费的 Markdown。
 
-It is not:
+它不是：
 
-- part of the normal `SkillBuilderClient.build` lifecycle;
-- a Jiuwenbox sandbox;
-- live browser verification of a generated Skill;
-- a host HTTP/UI implementation;
-- persistent recording coordination across host process restarts.
+- `SkillBuilderClient.build` 的默认生命周期阶段；
+- Jiuwenbox Sandbox；
+- 生成 Skill 的浏览器真实性验证；
+- 宿主 HTTP/UI 实现；
+- 跨宿主进程重启的持久录屏协调器。
 
-## Install
+## 安装
 
 ```bash
 python -m pip install 'openjiuwen-skill-builder[recording]'
 python -m playwright install chromium
 ```
 
-Run `playwright install chromium` with the same Python environment and
-`PLAYWRIGHT_BROWSERS_PATH` used by the host process.
+执行 `playwright install chromium` 的 Python 环境和 `PLAYWRIGHT_BROWSERS_PATH` 必须与宿主进程一致。
 
-## Configuration
+## 配置
 
-| Variable | Default | Purpose |
+| 变量 | 默认值 | 作用 |
 |---|---:|---|
-| `PLAYWRIGHT_BROWSERS_PATH` | Playwright default | Shared Chromium cache/location |
-| `WEB_RECORDING_HEADLESS` | `auto` | `auto`, `true/headless/viewer`, or `false/headed/desktop` |
-| `WEB_RECORDING_DISPLAY` | `DISPLAY` | X11 display for headed mode |
-| `WEB_RECORDING_XAUTHORITY` | `XAUTHORITY` or readable user fallback | X11 authorization file |
-| `WEB_RECORDING_DISPLAY_PROBE_TIMEOUT_SECONDS` | `3` | X11 capability probe, bounded to 1-10 seconds |
-| `WEB_RECORDING_WINDOW_WIDTH` | `1280` | Recording viewport/window width |
-| `WEB_RECORDING_WINDOW_HEIGHT` | `860` | Recording viewport/window height |
+| `PLAYWRIGHT_BROWSERS_PATH` | Playwright 默认值 | Chromium 缓存/安装目录 |
+| `WEB_RECORDING_HEADLESS` | `auto` | `auto`、`true/headless/viewer` 或 `false/headed/desktop` |
+| `WEB_RECORDING_DISPLAY` | `DISPLAY` | headed 模式 X11 display |
+| `WEB_RECORDING_XAUTHORITY` | `XAUTHORITY` 或可读 fallback | X11 授权文件 |
+| `WEB_RECORDING_DISPLAY_PROBE_TIMEOUT_SECONDS` | `3` | X11 探测超时，范围 1-10 秒 |
+| `WEB_RECORDING_WINDOW_WIDTH` | `1280` | 浏览器窗口宽度 |
+| `WEB_RECORDING_WINDOW_HEIGHT` | `860` | 浏览器窗口高度 |
 
-In headless/viewer mode, the host shows frames from
-`capture_recording_frame()` and sends explicit actions. In headed mode, the
-user can operate the visible browser and the host can still poll snapshots.
+headless/viewer 模式下，宿主展示 `capture_recording_frame()` 返回的画面并发送明确操作；headed 模式下用户操作可见浏览器，宿主仍可轮询状态和画面。
 
-## Host ownership
+## 职责边界
 
-Skill Builder recording core owns:
+Skill Builder 录屏核心负责：
 
-- URL syntax validation for HTTP/HTTPS;
-- Playwright context creation;
-- page event, screenshot, download, and trace capture;
-- best-effort masking of password-like input in the Markdown event record;
-- generation of the final `web-recording.md` material;
-- normal stop and Playwright cleanup.
+- HTTP/HTTPS URL 基础格式校验；
+- 创建 Playwright context；
+- 捕获页面事件、截图、下载和 trace；
+- 对 Markdown 事件中的密码类输入做尽力脱敏；
+- 生成最终 `web-recording.md`；
+- 正常 stop 和 Playwright 清理。
 
-The host adapter owns:
+宿主 adapter 负责：
 
-- authenticated start/frame/action/stop endpoints and UI;
-- workspace and tenant authorization;
-- URL, DNS, proxy, domain, and network egress policy;
-- Chromium installation and display/X11 configuration;
-- asset records, object storage, retention, and access control;
-- graceful stop during task cancellation, workspace deletion, and shutdown;
-- inclusion of the generated Markdown in the next material bundle.
+- 带鉴权的开始、画面、操作、停止 API 和 UI；
+- workspace/租户权限；
+- URL、DNS、代理、域名和网络出站策略；
+- Chromium 安装及 display/X11 配置；
+- 资产登记、对象存储、保留期限和访问控制；
+- 任务取消、workspace 删除和宿主停止时的清理；
+- 将 Markdown 加入下一次材料聚合。
 
-The built-in URL check only accepts HTTP/HTTPS syntax. It is not an SSRF or
-domain allowlist. Production hosts must enforce their own network policy before
-calling `start_recording` or a `navigate` action.
+内置 URL 校验只检查 HTTP/HTTPS 格式，不是 SSRF 防护或域名白名单。生产宿主必须在调用 `start_recording` 和 `navigate` 前执行网络策略。
 
-## Public API
+## 公共 API
 
 ```python
 from skill_builder.recording import (
@@ -78,15 +72,15 @@ from skill_builder.recording import (
 )
 ```
 
-### Start
+### 开始录屏
 
 ```python
 recording, capability = await start_recording(
     root=workspace_root,
     workspace_id=workspace_id,
     start_url="https://approved.example/app",
-    title="Invoice approval demonstration",
-    goal="Show the normal review and submission flow",
+    title="Sample workflow",
+    goal="Demonstrate the normal flow",
 )
 
 response = {
@@ -95,9 +89,9 @@ response = {
 }
 ```
 
-Only one active recording is allowed per `workspace_id` in one host process.
+同一宿主进程中，每个 `workspace_id` 只允许一个活动录屏。
 
-### Poll status and frame
+### 查询状态和画面
 
 ```python
 recording = get_active_recording(workspace_id)
@@ -109,13 +103,11 @@ png = await capture_recording_frame(
 )
 ```
 
-The host can return `png` as an authenticated image response. Do not publish it
-as a public static asset by default.
+宿主可把 `png` 作为鉴权图片响应返回，不能默认发布为公共静态资源。
 
-### Perform a viewer action
+### 执行 viewer 操作
 
-Supported actions are `click`, `type`, `press`, `scroll`, `navigate`, and
-`refresh`:
+支持 `click`、`type`、`press`、`scroll`、`navigate` 和 `refresh`：
 
 ```python
 recording = await perform_recording_action(
@@ -124,20 +116,11 @@ recording = await perform_recording_action(
     recording_id=recording_id,
     action=RecordingAction(action="click", x=420, y=260),
 )
-
-recording = await perform_recording_action(
-    root=workspace_root,
-    workspace_id=workspace_id,
-    recording_id=recording_id,
-    action=RecordingAction(action="type", text="example input"),
-)
 ```
 
-The host must obtain explicit user authorization before sending risky or
-irreversible actions. The recording API demonstrates user operations; it does
-not grant business authorization.
+风险或不可逆动作必须先获得用户明确授权。录屏 API 只记录用户演示，不授予业务操作权限。
 
-### Stop and register material
+### 停止并登记材料
 
 ```python
 recording, markdown = await stop_recording(
@@ -150,18 +133,15 @@ material_path = workspace_root / recording.material_path
 assert material_path.read_text(encoding="utf-8") == markdown
 ```
 
-The final material path is:
+最终材料路径：
 
 ```text
 inputs/external-sources/<recording_id>/web-recording.md
 ```
 
-The host registers this path as a Markdown material and includes it in the
-material index/`materials_markdown` passed to `SkillBuilderInput`. Screenshots,
-downloads, trace, profile, and storage state are diagnostic assets, not model
-material unless the host deliberately preprocesses and authorizes them.
+宿主把该路径登记为 Markdown 材料，并纳入传给 `SkillBuilderInput` 的材料索引/`materials_markdown`。截图、下载、trace、profile 和 storage state 是诊断资产，除非宿主明确预处理和授权，否则不作为模型材料。
 
-## Workspace outputs
+## Workspace 产物
 
 ```text
 playwright/
@@ -178,50 +158,38 @@ inputs/external-sources/<recording_id>/
 └── web-recording.md
 ```
 
-`storage-state.json`, screenshots, downloads, and traces may contain session
-cookies, personal data, internal URLs, or visible secrets. Restrict access,
-encrypt storage where required, and define deletion/retention policy.
+`storage-state.json`、截图、下载和 trace 可能包含 cookie、个人数据、内部 URL 或可见密钥，必须限制访问、按需加密并设置删除期限。
 
-Password-like typed values are masked in the Markdown event record on a
-best-effort basis. This does not redact screenshots or downloaded files.
+密码类输入只在 Markdown 事件记录中尽力脱敏，不会自动遮挡截图或下载文件。
 
-## Suggested host endpoints
+## 建议宿主入口
 
-| Host endpoint | Recording call | Response |
+| 宿主入口 | Recording 调用 | 返回 |
 |---|---|---|
-| `POST /workspaces/{id}/recording` | `start_recording` | snapshot plus display capability |
-| `GET /workspaces/{id}/recording` | `get_active_recording` + `recording_snapshot` | current snapshot or empty |
-| `GET /workspaces/{id}/recording/frame` | `capture_recording_frame` | authenticated PNG |
-| `POST /workspaces/{id}/recording/actions` | `perform_recording_action` | updated snapshot |
-| `DELETE /workspaces/{id}/recording` | `stop_recording` | completed snapshot and material path |
+| `POST /workspaces/{id}/recording` | `start_recording` | snapshot 和 display capability |
+| `GET /workspaces/{id}/recording` | `get_active_recording` + `recording_snapshot` | 当前 snapshot 或空 |
+| `GET /workspaces/{id}/recording/frame` | `capture_recording_frame` | 鉴权 PNG |
+| `POST /workspaces/{id}/recording/actions` | `perform_recording_action` | 更新后 snapshot |
+| `DELETE /workspaces/{id}/recording` | `stop_recording` | 完成 snapshot 和材料路径 |
 
-These are suggested host routes, not routes implemented by this package.
+这些是建议宿主路由，本包不会注册 HTTP route。完成鉴权和审计后，宿主可以映射 `RecordingError.status_code`，但不能向用户暴露原始 Playwright 异常或本地路径。
 
-Map `RecordingError.status_code` to the host transport only after authentication
-and auditing. Do not expose raw Playwright exceptions or local paths to end
-users.
+## 进程生命周期限制
 
-## Process lifecycle limitation
+活动 Playwright 对象保存在当前进程的 `_ACTIVE_WEB_RECORDINGS`。宿主重启后，其他进程无法继续原活动录屏。因此宿主必须：
 
-Active Playwright objects are held in the current process in
-`_ACTIVE_WEB_RECORDINGS`. A different process cannot resume an active recording
-after a host restart. Therefore the host must:
+- 把一个录屏的所有操作路由到同一进程；
+- 优雅停止时关闭活动录屏；
+- 异常重启后把进行中的资产记录标为中断；
+- 清理部署级孤立浏览器和临时资产；
+- 新建录屏，而不是声称旧录屏已续跑。
 
-- route all operations for one active recording to the same process;
-- stop active recordings during graceful shutdown;
-- mark in-progress asset records interrupted after an unexpected restart;
-- clean deployment-level orphan browser processes and temporary assets;
-- start a new recording rather than claiming the interrupted one continued.
+这只影响录屏采集。已写入 `inputs/` 的 Markdown 仍是持久材料。
 
-This limitation affects recording capture only. Generated Markdown already
-written to `inputs/` remains ordinary durable input material.
+## 与浏览器验证的关系
 
-## Relationship to browser validation
+录屏回答：“用户展示了什么操作流程？”
 
-Recording answers: "What workflow did the user demonstrate?"
+浏览器验证回答：“生成 Skill 能否在获批外部环境中正确执行声明的浏览器能力？”
 
-Browser validation answers: "Can the generated Skill execute its declared
-browser capability correctly in an approved external environment?"
-
-The first is implemented here. The second is a separate future Acceptance
-adapter and must not be inferred from recording success.
+前者已实现，后者属于未来独立 Acceptance adapter。录屏成功不能替代浏览器验证。

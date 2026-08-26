@@ -1,4 +1,4 @@
-"""Minimal host that runs Skill Builder without product-specific services."""
+"""不依赖特定产品服务的最小 Skill Builder 宿主。"""
 
 from __future__ import annotations
 
@@ -58,13 +58,13 @@ def create_client(workspace_root: Path) -> SkillBuilderClient:
 
 
 class SkillBuilderHost:
-    """Small host facade; replace its adapters with host infrastructure."""
+    """小型宿主门面；生产环境应替换为宿主基础设施 adapter。"""
 
     def __init__(self, workspace_root: Path) -> None:
         self.workspace_root = workspace_root.resolve()
         self.client = create_client(self.workspace_root)
-        # Demonstration-only process-local lock. Production hosts need a task
-        # table constraint, distributed lease, or StateStore CAS.
+        # 仅用于示例的进程内锁。生产宿主需要任务表约束、分布式 lease
+        # 或 StateStore CAS。
         self._write_lock = asyncio.Lock()
 
     def start_build(
@@ -115,7 +115,7 @@ class SkillBuilderHost:
         *,
         message: str | None = None,
     ) -> SkillBuilderExecution:
-        """Continue a failed run without deleting its candidate/checkpoints."""
+        """继续失败运行，不删除候选和检查点。"""
 
         async with self._write_lock:
             current = await self.client.load(workspace_id)
@@ -141,7 +141,7 @@ class SkillBuilderHost:
         *,
         message: str | None = None,
     ) -> SkillBuilderExecution:
-        """Start a fresh extraction while preserving durable input materials."""
+        """保留持久输入材料并启动一次全新抽取。"""
 
         async with self._write_lock:
             current = await self.client.load(workspace_id)
@@ -181,7 +181,7 @@ class SkillBuilderHost:
         *,
         instruction: str,
     ) -> SkillBuilderExecution:
-        """Run only after a structured diagnostic is mechanically repairable."""
+        """仅在结构化诊断确认可机械修复后调用。"""
 
         async with self._write_lock:
             return await self.client.repair(

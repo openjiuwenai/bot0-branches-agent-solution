@@ -1,19 +1,18 @@
-# Host Integration
+# 宿主接入
 
-## Ownership boundary
+## 职责边界
 
-Skill Builder owns the complete business lifecycle and returns typed state.
-The host owns task scheduling, database/object-storage adapters, user identity,
-HTTP, UI, and any external publish action.
+Skill Builder 负责完整业务生命周期并返回类型化状态。宿主负责任务调度、数据库/对象存储、用户身份、HTTP、UI 和外部发布。
 
-The host must not reimplement Scenario, Author, Repair, Acceptance, or derive a
-second delivery decision. Use `SkillBuilderClient.present(execution)` for the
-state shown to users.
+宿主不得重新实现 Scenario、Author、Repair、Acceptance 或计算第二套交付结论。页面状态必须来自：
 
-## Create one host client
+```python
+view = client.present(execution)
+```
 
-Create one `SubprocessAgentRunner` per host process so its concurrency limit is
-shared by all workspaces:
+## 构造客户端
+
+每个宿主进程创建一个共享 `SubprocessAgentRunner`，使并发限制覆盖该进程中的所有 workspace：
 
 ```python
 from pathlib import Path
@@ -31,7 +30,7 @@ from skill_builder.spi import (
 )
 
 async def persist_event(event_type, summary, payload):
-    # Replace with the host event table or message bus.
+    # 替换为宿主事件表或消息总线。
     print(event_type, summary)
 
 runner = SubprocessAgentRunner(
@@ -50,28 +49,21 @@ client = SkillBuilderClient(
 )
 ```
 
-`timeout_seconds=None` leaves phase deadlines to the existing activity-aware
-Agent Core limits. A host-level timeout is a hard operational stop and should
-not be used to compensate for model or contract failures.
+`timeout_seconds=None` 表示使用 Agent Core 的活动感知阶段超时。宿主硬超时只用于操作保护，不能用来掩盖模型或契约问题。
 
-## Prepare workspace and materials
+## 准备 workspace 和材料
 
-The host owns upload and material preprocessing. For each workspace it should:
+宿主负责上传和材料预处理：
 
-1. allocate a tenant-confined writable root;
-2. store original uploads under `inputs/` using safe relative names;
-3. reject path traversal and untrusted symbolic links;
-4. enforce file count, individual size, total size, and type policy;
-5. convert PDF/DOCX/XLSX or other binary documents into traceable Markdown;
-6. preserve both the original path and parsed-material path in the material
-   index;
-7. construct bounded `materials_markdown` and `SkillBuilderInput`.
+1. 分配租户隔离、可写的 workspace 根目录；
+2. 使用安全相对路径把原始材料保存到 `inputs/`；
+3. 拒绝路径穿越和不可信软链接；
+4. 限制文件数量、单文件/总大小和文件类型；
+5. 将 PDF/DOCX/XLSX 等二进制材料转换为可追溯 Markdown；
+6. 在材料索引中保留原始路径和解析路径；
+7. 构造有界的 `materials_markdown` 和 `SkillBuilderInput`。
 
-Skill Builder owns material reading budgets after the input is prepared. It
-does not own host upload authentication, malware scanning, object storage, or a
-database asset table.
-
-An illustrative workspace is:
+示例目录：
 
 ```text
 workspace-root/
@@ -87,51 +79,62 @@ workspace-root/
 └── .skill-builder/
 ```
 
-Do not put `validation/`, `.skill-builder/`, `workspace/`, or `playwright/`
-inside the exported Skill package.
+`validation/`、`.skill-builder/`、`workspace/` 和 `playwright/` 不得进入导出 Skill 包。
 
-## Start in a background task
+Skill Builder 接管准备完成后的材料读取预算，但不负责宿主上传鉴权、病毒扫描、对象存储或资产表。
+
+## 后台任务和单写锁
 
 ```python
 task = asyncio.create_task(client.build(builder_input))
 execution = await task
 ```
 
-Cancelling this task terminates the current Agent Core child process. State
-checkpoints already written by `JsonFileStateStore` remain available.
+取消该 task 会终止当前 Agent Core 子进程，StateStore 已写入的检查点保留。
 
-The host must allow only one mutating lifecycle task for a `workspace_id` at a
-time. `SubprocessAgentRunner.max_concurrency` limits model-worker concurrency
-for the host process; it is not a per-workspace lock. Use a task-table unique
-constraint, distributed lease, or StateStore compare-and-set before calling
-`build`, `resume`, mutating `run_turn`, or `repair`.
+同一 `workspace_id` 同时只能运行一个写生命周期。`SubprocessAgentRunner.max_concurrency` 只是进程级模型并发限制，不是 workspace 锁。宿主应在调用 `build`、HITL `resume`、失败后继续/重试、写入型 `run_turn` 或 `repair` 前获取任务表唯一约束、分布式 lease 或 StateStore CAS。
 
-Production hosts normally replace `JsonFileStateStore` with their own
-`SkillBuilderStateStore`. The stored document must preserve the public
-`SkillBuilderState.to_dict()` representation and reject unsupported schema
-versions rather than silently coercing them.
+生产宿主通常用自己的 `SkillBuilderStateStore` 替换 `JsonFileStateStore`。存储必须保留 `SkillBuilderState.to_dict()` 结构，并拒绝不支持的 schema version，不能静默转换。
 
-## Public operation mapping
+## 公共操作映射
 
-| Host operation | Skill Builder call | Notes |
+| 宿主操作 | Skill Builder 调用 | 说明 |
 |---|---|---|
-| Start generation | `client.build(builder_input)` | Starts Scenario, optional HITL, Author, Acceptance |
-| Recover uncertain/interrupted work | `client.reconcile(builder_input, advance=...)` | Uses persisted state to select the legal next step |
-| Load current state | `client.load(workspace_id)` | Requires a StateStore |
-| Submit HITL answer | `client.resume(workspace_id, resume_token=..., answer=...)` | Only for `waiting_for_user`; use the exact pending token |
-| Continue failed execution | Build a `kind="resume"` recovery message and call `client.reconcile(..., advance=True)` without resetting outputs | Preserve candidate, checkpoints, and inputs |
-| Retry failed execution | Build a `kind="retry"` recovery message, call `reset_generated_outputs`, then `client.build(...)` | Fresh extraction; preserve `inputs/` and retained confirmations |
-| Validate current package | `client.validate(execution.input, hitl_confirmations=...)` | Does not require a model for pure checks |
-| Explicit mechanical repair | `client.repair(execution, instruction=...)` | Only for structured, mechanically repairable diagnostics |
-| Read/edit conversation | `client.run_turn(workspace_id, SkillBuilderTurnRequest(...))` | Core applies read/write policy and rollback |
-| Register host-side manual edit | `client.invalidate_receipt(workspace_id)` | Clears stale Acceptance identity |
-| Export | `client.build_export_archive(execution)` | Host writes bytes to local/object storage |
-| Build compatibility publish archive | `client.build_publish_archive(execution, author=...)` | Requires Core `publishable`; still does not publish externally |
+| 启动生成 | `client.build(builder_input)` | Scenario、可选 HITL、Author、Acceptance |
+| 协调中断状态 | `client.reconcile(builder_input, advance=...)` | 根据持久状态选择唯一合法下一步 |
+| 加载状态 | `client.load(workspace_id)` | 需要 StateStore |
+| 提交 HITL 答案 | `client.resume(workspace_id, resume_token=..., answer=...)` | 只用于 `waiting_for_user` |
+| 失败后继续 | 使用 `kind="resume"` 恢复消息调用 `reconcile`，不清理输出 | 保留候选、检查点和 inputs |
+| 失败后重试 | 使用 `kind="retry"` 消息，清理旧输出后调用 `build` | 全新抽取，保留 inputs |
+| 验证当前包 | `client.validate(execution.input, hitl_confirmations=...)` | 纯检查不依赖模型 |
+| 显式机械修复 | `client.repair(execution, instruction=...)` | 只处理结构化、机械可修复诊断 |
+| 问答/编辑 | `client.run_turn(workspace_id, SkillBuilderTurnRequest(...))` | Core 负责写入策略和回滚 |
+| 登记宿主手工编辑 | `client.invalidate_receipt(workspace_id)` | 清除旧 Acceptance 身份 |
+| 导出 | `client.build_export_archive(execution)` | 宿主负责写本地/对象存储 |
+| 构造兼容发布包 | `client.build_publish_archive(execution, author=...)` | 要求 `publishable`，但不会外部发布 |
 
-HITL resume, failed-run continue, and failed-run retry are three different host
-operations. Do not route them to one generic "run again" method.
+## HITL、继续和重试
 
-Recommended failed-run continue implementation:
+这三种操作必须使用不同宿主入口，不能统一成“再运行一次”。
+
+### HITL 回答
+
+只用于 `waiting_for_user`：
+
+```python
+pending = execution.pending_request
+execution = await client.resume(
+    execution.workspace_id,
+    resume_token=pending.resume_token,
+    answer=answer,
+)
+```
+
+宿主必须展示 Core 提供的表单，绑定已登录用户/workspace，防止重复提交；答案不完整时继续保留 pending request。
+
+### 失败后继续
+
+“继续”保留候选、诊断、Draft Workspace、revision、检查点和 `inputs/`：
 
 ```python
 from dataclasses import replace
@@ -145,7 +148,6 @@ message = client.build_recovery_message(
     kind="resume",
     user_message=user_message,
 )
-
 execution = await client.reconcile(
     replace(current.input, user_message=message),
     options=replace(current.options, run_phase="workflow"),
@@ -154,11 +156,11 @@ execution = await client.reconcile(
 )
 ```
 
-Continue preserves the current candidate, validation diagnostics, Draft
-Workspace, revision/checkpoint state, and `inputs/`. Core resumes a committed
-candidate when one exists; otherwise it selects the next legal generation step.
+存在有效候选时 Core 会恢复候选并验收；没有候选时选择下一合法生成步骤。
 
-Recommended failed-run retry implementation:
+### 失败后重试
+
+“重试”是全新抽取：
 
 ```python
 from dataclasses import replace
@@ -183,36 +185,28 @@ execution = await client.build(
 )
 ```
 
-Retry removes `generated-skill/`, `validation/`, `playwright/`, generation
-checkpoints, state, drafts, revisions, and private context. It preserves
-`inputs/`; the host may pass still-valid structured confirmations explicitly.
-The host must update any asset records that pointed at removed diagnostic files.
+重试会删除 `generated-skill/`、`validation/`、`playwright/`、旧状态、draft、revision、context 和 generation checkpoint，但保留 `inputs/`。宿主需同步清理指向已删除诊断文件的资产记录。仍有效的结构化确认必须显式传入。
 
-There is no public `client.retry()` method because reset policy belongs to the
-host's workspace/storage boundary. Neither continue nor retry may replay an
-Agent worker request directly.
+没有公共 `client.retry()`，因为 reset 范围涉及宿主 workspace 和资产存储边界。继续和重试都不能直接重放上一个 Agent worker request。
 
-All three operations are mutating. The host must acquire the same workspace
-lease used by `build` before calling them.
+## 建议宿主入口
 
-## Suggested host endpoints
-
-| Endpoint | Host behavior |
+| 入口 | 行为 |
 |---|---|
-| `POST /skill-builder/workspaces/{id}/build` | Construct input and start `client.build` in a background task |
-| `GET /skill-builder/workspaces/{id}` | `client.load` then `client.present` |
-| `POST /skill-builder/workspaces/{id}/hitl/{request_id}/answer` | Persist/validate the answer, acquire lock, call Core `resume` |
-| `POST /skill-builder/workspaces/{id}/continue` | Failed-run continue; preserve outputs and call `reconcile` |
-| `POST /skill-builder/workspaces/{id}/retry` | Failed-run fresh extraction; reset outputs then call `build` |
-| `POST /skill-builder/workspaces/{id}/validate` | Load current execution and call `client.validate` |
-| `POST /skill-builder/workspaces/{id}/repair` | Only for a confirmed mechanically repairable diagnostic |
-| `POST /skill-builder/workspaces/{id}/turns` | Call `client.run_turn` with an explicit/auto action |
-| `GET /skill-builder/workspaces/{id}/export` | Build archive and let the host return/store it |
-| `DELETE /skill-builder/workspaces/{id}/active-task` | Cancel and await the host background task |
+| `POST /skill-builder/workspaces/{id}/build` | 后台启动 `client.build` |
+| `GET /skill-builder/workspaces/{id}` | `client.load` 后调用 `client.present` |
+| `POST /skill-builder/workspaces/{id}/hitl/{request_id}/answer` | 保存/校验答案后调用 HITL `resume` |
+| `POST /skill-builder/workspaces/{id}/continue` | 失败后继续，保留输出并调用 `reconcile` |
+| `POST /skill-builder/workspaces/{id}/retry` | 失败后重试，reset 后重新 `build` |
+| `POST /skill-builder/workspaces/{id}/validate` | 加载并调用 `validate` |
+| `POST /skill-builder/workspaces/{id}/repair` | 只处理已确认机械可修复问题 |
+| `POST /skill-builder/workspaces/{id}/turns` | 调用 `run_turn` |
+| `GET /skill-builder/workspaces/{id}/export` | 构造归档后由宿主返回/存储 |
+| `DELETE /skill-builder/workspaces/{id}/active-task` | 取消并等待后台 task |
 
-These are suggested routes. Skill Builder does not provide an HTTP server.
+这些只是建议路由，本包不提供 HTTP 服务。
 
-Example validation after loading state:
+## 验证与对话编辑
 
 ```python
 execution = await client.load(workspace_id)
@@ -225,120 +219,64 @@ execution = await client.validate(
 )
 ```
 
-Example conversational edit:
-
 ```python
 from skill_builder import SkillBuilderTurnRequest
 
 execution = await client.run_turn(
     workspace_id,
     SkillBuilderTurnRequest(
-        message="Update the output template using the supplied policy material.",
+        message="根据已有材料更新输出模板。",
         requested_action="edit",
     ),
 )
 ```
 
-## HITL and resume
-
-When no synchronous HITL provider is configured, a real ambiguity returns:
-
-```python
-execution.status.value == "waiting_for_user"
-execution.pending_request.request
-execution.pending_request.resume_token
-```
-
-Render `pending_request.request` as provided. After the user completes it:
-
-```python
-execution = await client.resume(
-    execution.workspace_id,
-    resume_token=resume_token,
-    answer=answer,
-)
-```
-
-Do not auto-reject a pending request and do not construct a replacement form in
-the host. The token binds the answer to the durable pending decision.
-
-## Display and delivery
+## 状态与交付
 
 ```python
 view = client.present(execution)
 ```
 
-Use `view.workspace_status`, `view.validation_status`,
-`view.delivery_decision`, `view.summary`, `view.blockers`, and
-`view.available_actions` directly.
+直接使用 `workspace_status`、`validation_status`、`delivery_decision`、`summary`、`blockers` 和 `available_actions`。完整映射见[状态与宿主动作](status-and-actions.md)。
 
-The complete mapping, including `ready + warn`, is in
-[Status and Host Actions](status-and-actions.md).
+- `ready`：当前 artifact 有有效验收 receipt；
+- `needs_review`：允许检查和宿主导出，禁止自动发布；
+- `failed`：使用结构化 `failure.code/category/retryable/repairable`，不要解析错误文本。
 
-- `ready`: the current artifact has a valid acceptance receipt.
-- `needs_review`: inspection and host-controlled export are allowed, but the
-  host must disable automatic publish.
-- `failed`: use `execution.failure.code/category/retryable/repairable`; never
-  classify exception text.
-
-Skill Builder can construct a safe export archive:
+导出：
 
 ```python
 archive = client.build_export_archive(execution)
 target.write_bytes(archive.content)
 ```
 
-Writing it to object storage, returning it to a user, approval, and publishing
-are host operations. `build_publish_archive` is retained only as a compatibility
-archive builder and does not call a marketplace.
+对象存储、用户下载、审批和发布均由宿主完成。`build_publish_archive` 只是兼容归档构造，不会调用市场。
 
-Use `execution.artifact_sha256` as the stable identity of generated Skill
-content. ZIP metadata includes construction time in the inherited implementation,
-so rebuilding an archive later may produce a different archive SHA without a
-change to the accepted Skill artifact.
+使用 `execution.artifact_sha256` 标识 Skill 内容。ZIP 元数据包含构造时间，因此稍后重建 ZIP 时 archive SHA 可能不同，但 artifact 身份未变。
 
-## Host-side edits
+## 宿主手工编辑
 
-If the host edits `generated-skill/` without using `run_turn`, invalidate the
-old receipt immediately:
+宿主绕过 `run_turn` 修改 `generated-skill/` 后，立即调用：
 
 ```python
 execution = await client.invalidate_receipt(workspace_id)
-view = client.present(execution)
 ```
 
-Then run `validate` before enabling any publication action. Never retain a
-previous `ready` UI state after package content changes.
+重新渲染状态并执行 `validate`，不得继续显示旧 `ready` 或开放发布。
 
-## Sandbox behavior
+## Sandbox 与录屏
 
-Agent Core child processes create Jiuwenbox workspace sessions when
-`SKILL_BUILDER_SANDBOX_ENABLED=true`. Final Acceptance uses a separate
-short-lived session through `JiuwenboxExecutionPort`.
+`SKILL_BUILDER_SANDBOX_ENABLED=true` 时，Agent Core 子进程创建 Jiuwenbox workspace。最终 Acceptance 使用独立短生命周期 `JiuwenboxExecutionPort`。密钥只通过进程环境继承，不写入 worker 文件。
 
-The Jiuwenbox daemon remains a separate service. LLM keys are inherited through
-the child environment and are never written to worker request/result files.
+录屏是生成前的材料采集流程。宿主调用 `skill_builder.recording`，登记最终 `web-recording.md`，然后再调用 `build/reconcile`。详细说明见[录屏接入](recording-integration.md)。录屏成功不能映射成浏览器 Acceptance 成功。
 
-## Recording adapter
+## 宿主停止与 workspace 删除
 
-Recording is a separate pre-build material-capture lifecycle. The host calls
-the public functions in `skill_builder.recording`, registers the final
-`web-recording.md` as input material, and then calls `build/reconcile`.
+删除 workspace 或停止宿主 worker 前：
 
-See [Recording Integration](recording-integration.md) for exact calls, suggested
-host endpoints, Chromium/display setup, sensitive asset handling, and the
-process-local recording limitation.
-
-Recording success must not be mapped to browser Acceptance success.
-
-## Host shutdown and workspace deletion
-
-Before removing a workspace or stopping a host worker:
-
-- cancel and await the active Skill Builder task;
-- stop any active Playwright recording in that same process;
-- release the host workspace lease;
-- request cleanup of any Jiuwenbox sessions owned by the workspace;
-- preserve inputs and the latest committed state unless the user explicitly
-  requested permanent deletion;
-- do not delete object-storage artifacts through Core cleanup code.
+- 取消并等待活动 Skill Builder task；
+- 停止同一进程内的活动录屏；
+- 释放 workspace lease；
+- 清理该 workspace 的 Jiuwenbox session；
+- 除非用户明确永久删除，否则保留 inputs 和最后有效状态；
+- Core 清理不得删除宿主对象存储。

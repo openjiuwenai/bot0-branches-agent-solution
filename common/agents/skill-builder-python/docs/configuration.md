@@ -1,174 +1,146 @@
-# Configuration
+# 配置参考
 
-Skill Builder reads runtime configuration from the host process environment.
-It deliberately does not load `.env` files automatically. The deployment
-system is responsible for loading secrets and non-secret settings before
-constructing `SkillBuilderClient`; Agent Core child processes inherit them.
+Skill Builder 从宿主进程环境读取配置，不会自动加载 `.env`。部署系统必须在构造 `SkillBuilderClient` 前注入普通配置和密钥，Agent Core 子进程会继承这些变量。
 
-## Installation profiles
+## 安装组合
 
 ```bash
-# Validate, load state, and package only
+# 只使用状态加载、验收和打包
 python -m pip install openjiuwen-skill-builder
 
-# Generate with OpenJiuwen Agent Core
+# 使用 OpenJiuwen Agent Core 生成
 python -m pip install 'openjiuwen-skill-builder[agent-openjiuwen-python]'
 
-# Optional Playwright material recording
+# 可选 Playwright 材料录屏
 python -m pip install 'openjiuwen-skill-builder[recording]'
 python -m playwright install chromium
 
-# Generation plus recording
+# 生成和录屏全部安装
 python -m pip install 'openjiuwen-skill-builder[full]'
 ```
 
-The migration keeps the source-verified `openjiuwen==0.1.12`. Upgrade it only
-in a separate compatibility-tested change.
+当前锁定经过来源测试验证的 `openjiuwen==0.1.12`。版本升级应作为单独的兼容性变更处理。
 
-## Required model settings
+## 模型必需配置
 
-These variables are required for `build`, model-backed `run_turn`, and
-`repair`. Core-only load/structural validation/package operations must remain
-importable without a configured model.
+`build`、模型驱动的 `run_turn` 和 `repair` 需要以下模型配置。纯 Core 的 load、结构验收和打包不应依赖模型配置。
 
-| Variable | Required | Default | Description |
+| 变量 | 必填 | 默认值 | 说明 |
 |---|---|---:|---|
-| `SKILL_BUILDER_LLM_API_BASE` | Yes | none | OpenAI-compatible endpoint |
-| `SKILL_BUILDER_LLM_API_KEY` | Yes | none | Model credential; environment only |
-| `SKILL_BUILDER_LLM_MODEL` | Yes | none | Customer-configured model name |
-| `SKILL_BUILDER_LLM_PROVIDER` | No | `OpenAI` | Provider label used by the adapter |
-| `SKILL_BUILDER_LLM_TIMEOUT_SECONDS` | No | `120` | One model HTTP request timeout |
-| `SKILL_BUILDER_LLM_MAX_TOKENS` | No | `16384` | Default response token budget |
-| `SKILL_BUILDER_LLM_MAX_REQUEST_BYTES` | No | `524288` | Serialized request hard budget |
-| `SKILL_BUILDER_LLM_REQUEST_HEADROOM_RATIO` | No | `0.8` | Usable fraction of request budget |
-| `SKILL_BUILDER_LLM_TEMPERATURE` | No | `0.2` | Sampling temperature |
-| `SKILL_BUILDER_LLM_TOP_P` | No | `0.9` | Sampling top-p |
+| `SKILL_BUILDER_LLM_API_BASE` | 是 | 无 | OpenAI-compatible 模型地址 |
+| `SKILL_BUILDER_LLM_API_KEY` | 是 | 无 | 模型密钥，只能通过安全环境注入 |
+| `SKILL_BUILDER_LLM_MODEL` | 是 | 无 | 客户配置的模型名称 |
+| `SKILL_BUILDER_LLM_PROVIDER` | 否 | `OpenAI` | Adapter 使用的 provider 标识 |
+| `SKILL_BUILDER_LLM_TIMEOUT_SECONDS` | 否 | `120` | 单次模型 HTTP 请求超时 |
+| `SKILL_BUILDER_LLM_MAX_TOKENS` | 否 | `16384` | 默认输出 token 预算 |
+| `SKILL_BUILDER_LLM_MAX_REQUEST_BYTES` | 否 | `524288` | 完整序列化请求字节上限 |
+| `SKILL_BUILDER_LLM_REQUEST_HEADROOM_RATIO` | 否 | `0.8` | 实际可用请求预算比例 |
+| `SKILL_BUILDER_LLM_TEMPERATURE` | 否 | `0.2` | temperature |
+| `SKILL_BUILDER_LLM_TOP_P` | 否 | `0.9` | top-p |
 
-## Phase-specific model settings
+## 分阶段模型配置
 
-| Variable | Example | Description |
+| 变量 | 示例 | 说明 |
 |---|---:|---|
-| `SKILL_BUILDER_LLM_ENABLE_THINKING` | `auto` | Default thinking control; `auto` omits the parameter |
-| `SKILL_BUILDER_LLM_SCENARIO_ENABLE_THINKING` | `false` | Scenario override |
-| `SKILL_BUILDER_LLM_AUTHOR_ENABLE_THINKING` | `false` | Author override |
-| `SKILL_BUILDER_LLM_REPAIR_ENABLE_THINKING` | `true` | Repair override |
-| `SKILL_BUILDER_LLM_SCENARIO_MAX_TOKENS` | `8192` | Scenario response ceiling |
-| `SKILL_BUILDER_LLM_AUTHOR_MAX_TOKENS` | `12288` | Author response ceiling |
-| `SKILL_BUILDER_LLM_REPAIR_MAX_TOKENS` | `8192` | Repair response ceiling |
+| `SKILL_BUILDER_LLM_ENABLE_THINKING` | `auto` | 默认 thinking 控制；`auto` 表示不发送该参数 |
+| `SKILL_BUILDER_LLM_SCENARIO_ENABLE_THINKING` | `false` | Scenario 覆盖值 |
+| `SKILL_BUILDER_LLM_AUTHOR_ENABLE_THINKING` | `false` | Author 覆盖值 |
+| `SKILL_BUILDER_LLM_REPAIR_ENABLE_THINKING` | `true` | Repair 覆盖值 |
+| `SKILL_BUILDER_LLM_SCENARIO_MAX_TOKENS` | `8192` | Scenario 输出上限 |
+| `SKILL_BUILDER_LLM_AUTHOR_MAX_TOKENS` | `12288` | Author 输出上限 |
+| `SKILL_BUILDER_LLM_REPAIR_MAX_TOKENS` | `8192` | Repair 输出上限 |
 
-Model parameters are customer-configurable. A host must not limit customers to
-one model family, but should run compatibility checks for any model-specific
-request parameters.
+模型参数由客户配置。宿主不能限制为单一模型，但应对模型专用参数做兼容测试。
 
 ## Jiuwenbox
 
-Jiuwenbox is a separate service. The supplied adapters use it for Agent
-workspace operations and final Acceptance execution.
+Jiuwenbox 是独立服务，默认 adapter 使用它完成 Agent workspace 操作和最终 Acceptance 执行。
 
-| Variable | Default | Description |
+| 变量 | 默认值 | 说明 |
 |---|---:|---|
-| `SKILL_BUILDER_SANDBOX_ENABLED` | `false` in code; example sets `true` | Enable Jiuwenbox workspace creation in Agent workers |
-| `SKILL_BUILDER_JIUWENBOX_URL` | `JIUWENBOX_URL` or `http://127.0.0.1:8321` | Jiuwenbox endpoint |
-| `SKILL_BUILDER_JIUWENBOX_TIMEOUT_SECONDS` | `JIUWENBOX_TIMEOUT_SECONDS` or `30` | Client request timeout |
-| `SKILL_BUILDER_SANDBOX_COMMAND_TIMEOUT_SECONDS` | `120` | Default Agent workspace command timeout |
-| `SKILL_BUILDER_SANDBOX_IO_TIMEOUT_SECONDS` | `20` | Bounded upload/read/download timeout |
-| `SKILL_BUILDER_SANDBOX_WRITE_TIMEOUT_SECONDS` | `30` | Bounded write/sync timeout |
-| `SKILL_BUILDER_SANDBOX_KEEP` | `false` | Keep phase sandboxes for restricted diagnostics |
+| `SKILL_BUILDER_SANDBOX_ENABLED` | 代码默认 `false`，示例为 `true` | Agent worker 是否创建 Jiuwenbox workspace |
+| `SKILL_BUILDER_JIUWENBOX_URL` | `JIUWENBOX_URL` 或 `http://127.0.0.1:8321` | Jiuwenbox 地址 |
+| `SKILL_BUILDER_JIUWENBOX_TIMEOUT_SECONDS` | `JIUWENBOX_TIMEOUT_SECONDS` 或 `30` | client 请求超时 |
+| `SKILL_BUILDER_SANDBOX_COMMAND_TIMEOUT_SECONDS` | `120` | Agent workspace 命令默认超时 |
+| `SKILL_BUILDER_SANDBOX_IO_TIMEOUT_SECONDS` | `20` | 上传、读取和下载超时 |
+| `SKILL_BUILDER_SANDBOX_WRITE_TIMEOUT_SECONDS` | `30` | 写入和同步超时 |
+| `SKILL_BUILDER_SANDBOX_KEEP` | `false` | 是否为受限诊断保留阶段沙箱 |
 
-Production must not execute generated scripts in the host process as a silent
-fallback. If Jiuwenbox is unavailable, Core may still perform checks that do not
-execute untrusted code, but required execution evidence remains unverified or
-blocking according to the Skill contract.
+生产环境不能在 Jiuwenbox 不可用时静默改为宿主进程执行生成脚本。Core 可以继续执行不需要运行不可信代码的检查，但必需执行证据应按契约标记为未验证或阻断。
 
-The feature-neutral Jiuwenbox client also recognizes `JIUWENBOX_URL` and
-`JIUWENBOX_TIMEOUT_SECONDS`. Prefer the `SKILL_BUILDER_` names for this Agent so
-multiple products can use different instances.
+平台中立 Jiuwenbox client 也兼容 `JIUWENBOX_URL` 和 `JIUWENBOX_TIMEOUT_SECONDS`。建议优先使用 `SKILL_BUILDER_` 前缀，以便不同产品连接不同实例。
 
-## Agent Core budgets
+## Agent Core 预算
 
-| Variable | Example | Meaning |
+| 变量 | 示例 | 含义 |
 |---|---:|---|
-| `SKILL_BUILDER_AGENT_TOTAL_TIMEOUT_SECONDS` | `1200` | Absolute phase ceiling fallback |
-| `SKILL_BUILDER_AGENT_CHAT_TIMEOUT_SECONDS` | `120` | Read-only chat deadline |
-| `SKILL_BUILDER_AGENT_EDIT_TIMEOUT_SECONDS` | `360` | Transactional edit deadline |
-| `SKILL_BUILDER_AGENT_SCENARIO_TIMEOUT_SECONDS` | `240` | Scenario phase deadline |
-| `SKILL_BUILDER_AGENT_AUTHOR_TIMEOUT_SECONDS` | `900` | Author phase deadline |
-| `SKILL_BUILDER_AGENT_REPAIR_TIMEOUT_SECONDS` | `480` | Repair phase deadline |
-| `SKILL_BUILDER_AGENT_REPAIR_RESERVE_TIMEOUT_SECONDS` | `180` | Bounded reserve after a rejected submission |
-| `SKILL_BUILDER_AGENT_IDLE_TIMEOUT_SECONDS` | `240` | No-stream-activity deadline |
-| `SKILL_BUILDER_AGENT_CHAT_MAX_ITERATIONS` | `6` | Chat single-session safety ceiling |
-| `SKILL_BUILDER_AGENT_EDIT_MAX_ITERATIONS` | `12` | Edit single-session safety ceiling |
-| `SKILL_BUILDER_AGENT_SCENARIO_MAX_ITERATIONS` | `8` | Scenario single-session safety ceiling |
-| `SKILL_BUILDER_AGENT_AUTHOR_MAX_ITERATIONS` | `32` | Author single-session safety ceiling |
-| `SKILL_BUILDER_AGENT_REPAIR_MAX_ITERATIONS` | `12` | Repair single-session safety ceiling |
-| `SKILL_BUILDER_AUTHOR_SELF_CHECK_MAX_RUNS` | `4` | Author self-check execution ceiling |
-| `SKILL_BUILDER_MAX_REPAIR_ATTEMPTS` | `1` | Automatic mechanical Repair count, hard range `0-1` |
+| `SKILL_BUILDER_AGENT_TOTAL_TIMEOUT_SECONDS` | `1200` | 阶段绝对超时兜底 |
+| `SKILL_BUILDER_AGENT_CHAT_TIMEOUT_SECONDS` | `120` | 只读问答超时 |
+| `SKILL_BUILDER_AGENT_EDIT_TIMEOUT_SECONDS` | `360` | 事务编辑超时 |
+| `SKILL_BUILDER_AGENT_SCENARIO_TIMEOUT_SECONDS` | `240` | Scenario 超时 |
+| `SKILL_BUILDER_AGENT_AUTHOR_TIMEOUT_SECONDS` | `900` | Author 超时 |
+| `SKILL_BUILDER_AGENT_REPAIR_TIMEOUT_SECONDS` | `480` | Repair 超时 |
+| `SKILL_BUILDER_AGENT_REPAIR_RESERVE_TIMEOUT_SECONDS` | `180` | 候选提交被拒后的有界预留时间 |
+| `SKILL_BUILDER_AGENT_IDLE_TIMEOUT_SECONDS` | `240` | 无流事件超时 |
+| `SKILL_BUILDER_AGENT_CHAT_MAX_ITERATIONS` | `6` | Chat 单会话安全上限 |
+| `SKILL_BUILDER_AGENT_EDIT_MAX_ITERATIONS` | `12` | Edit 单会话安全上限 |
+| `SKILL_BUILDER_AGENT_SCENARIO_MAX_ITERATIONS` | `8` | Scenario 单会话安全上限 |
+| `SKILL_BUILDER_AGENT_AUTHOR_MAX_ITERATIONS` | `32` | Author 单会话安全上限 |
+| `SKILL_BUILDER_AGENT_REPAIR_MAX_ITERATIONS` | `12` | Repair 单会话安全上限 |
+| `SKILL_BUILDER_AUTHOR_SELF_CHECK_MAX_RUNS` | `4` | Author 自检执行上限 |
+| `SKILL_BUILDER_MAX_REPAIR_ATTEMPTS` | `1` | 自动机械 Repair 次数，硬范围 `0-1` |
 
-Iterations are not retries. Increasing them does not increase Repair attempts
-and should not be used to hide repeated no-progress behavior.
+Iteration 不是重试次数。提高 iteration 不会增加 Repair 次数，也不应被用于掩盖无进展循环。
 
-`AgentCoreProcessConfig.timeout_seconds` is a separate host hard stop. Keep it
-`None` normally so the activity-aware phase deadlines own healthy runs. If set,
-timeout or task cancellation terminates the child process.
+`AgentCoreProcessConfig.timeout_seconds` 是额外的宿主硬超时，通常保持 `None`，让阶段内活动感知超时负责正常运行。设置后，超时或取消会终止子进程。
 
-## Gate rollout
+## Gate 灰度配置
 
-| Variable | Default | Description |
+| 变量 | 默认值 | 说明 |
 |---|---:|---|
-| `SKILL_BUILDER_CAPABILITY_GATE_MODE` | `shadow` | Heuristic capability prose findings |
-| `SKILL_BUILDER_DOCUMENTATION_GATE_MODE` | `shadow` | Heuristic documentation findings |
-| `SKILL_BUILDER_OFFLINE_PROTOCOL_GATE_MODE` | `shadow` | Generated self-check protocol diagnostics |
-| `SKILL_BUILDER_HEURISTIC_GATE_MODE` | `shadow` | Legacy shared fallback |
+| `SKILL_BUILDER_CAPABILITY_GATE_MODE` | `shadow` | 能力文本启发式 finding |
+| `SKILL_BUILDER_DOCUMENTATION_GATE_MODE` | `shadow` | 文档启发式 finding |
+| `SKILL_BUILDER_OFFLINE_PROTOCOL_GATE_MODE` | `shadow` | 生成自检协议诊断 |
+| `SKILL_BUILDER_HEURISTIC_GATE_MODE` | `shadow` | 旧版共享 fallback |
 
-Typed contract failures, unusable package structure, syntax errors, failed
-required replay, and invalid receipts remain blocking regardless of rollout
-flags. Move a heuristic from shadow to enforce only after representative
-regression testing.
+类型化契约失败、不可用包结构、语法错误、必需重放失败和无效 receipt 不受上述灰度配置影响，始终阻断。启发式规则从 shadow 切换到 enforce 前必须经过代表性样本回归。
 
-## Recording
+## 录屏配置
 
-Recording is optional input capture and is not browser validation.
+录屏是可选材料采集能力，不是浏览器真实性验证。
 
-| Variable | Default | Description |
+| 变量 | 默认值 | 说明 |
 |---|---:|---|
-| `PLAYWRIGHT_BROWSERS_PATH` | Playwright default | Chromium installation/cache used by the host |
-| `WEB_RECORDING_HEADLESS` | `auto` | `auto`, `true/headless/viewer`, or `false/headed/desktop` |
-| `WEB_RECORDING_DISPLAY` | `DISPLAY` | X11 display for headed mode |
-| `WEB_RECORDING_XAUTHORITY` | `XAUTHORITY` or readable fallback | X11 authorization file |
-| `WEB_RECORDING_DISPLAY_PROBE_TIMEOUT_SECONDS` | `3` | Display probe, bounded to 1-10 seconds |
-| `WEB_RECORDING_WINDOW_WIDTH` | `1280` | Browser width |
-| `WEB_RECORDING_WINDOW_HEIGHT` | `860` | Browser height |
+| `PLAYWRIGHT_BROWSERS_PATH` | Playwright 默认值 | 宿主使用的 Chromium 安装/缓存目录 |
+| `WEB_RECORDING_HEADLESS` | `auto` | `auto`、`true/headless/viewer` 或 `false/headed/desktop` |
+| `WEB_RECORDING_DISPLAY` | `DISPLAY` | headed 模式的 X11 display |
+| `WEB_RECORDING_XAUTHORITY` | `XAUTHORITY` 或可读 fallback | X11 授权文件 |
+| `WEB_RECORDING_DISPLAY_PROBE_TIMEOUT_SECONDS` | `3` | display 探测超时，范围 1-10 秒 |
+| `WEB_RECORDING_WINDOW_WIDTH` | `1280` | 浏览器宽度 |
+| `WEB_RECORDING_WINDOW_HEIGHT` | `860` | 浏览器高度 |
 
-See [Recording Integration](recording-integration.md) for API/UI, asset,
-security, and process-lifecycle requirements.
+详细 API/UI、资产、安全和进程生命周期要求见[录屏接入](recording-integration.md)。
 
-See [Deployment](deployment.md) for process layout, Jiuwenbox startup,
-systemd/container boundaries, health checks, and future Runtime deployment.
+进程布局、Jiuwenbox 启动、systemd/容器边界、健康检查和未来 Runtime 部署见[部署说明](deployment.md)。
 
-## Host configuration not represented by environment variables
+## 不通过环境变量表达的宿主配置
 
-The host must separately configure:
+宿主还必须单独配置：
 
-- workspace and state roots;
-- one-active-write-task-per-workspace locking or StateStore CAS;
-- Agent worker concurrency and host task queue limits;
-- material type/size policy and binary preprocessing;
-- model data-region, retention, and user-consent policy;
-- Jiuwenbox CPU/memory/network policy and health checks;
-- event retention and sensitive payload access;
-- object storage, export, review, and external publish policy;
-- recording URL/domain policy and asset retention.
+- workspace 和 state 根目录；
+- 同 workspace 单写锁或 StateStore CAS；
+- Agent worker 并发和宿主任务队列；
+- 材料类型/大小策略和二进制预处理；
+- 模型数据地域、保留期限和用户授权策略；
+- Jiuwenbox CPU、内存、网络策略和健康检查；
+- 事件保留与敏感 payload 访问权限；
+- 对象存储、导出、审核和外部发布；
+- 录屏 URL/域名策略和资产保留期限。
 
-These are host concerns and must not be encoded as hidden Skill Builder business
-rules.
+这些属于宿主职责，不应变成隐藏的 Skill Builder 业务规则。
 
-## Secrets
+## 密钥
 
-Do not place credentials in source, workspace materials, worker request files,
-events, or result JSON. Pass them through the host process environment or its
-secret manager. Agent Core children inherit the environment; event and result
-serialization must not echo secret values.
+禁止把凭据写入源码、workspace 材料、worker 请求/结果或事件 JSON。通过宿主进程环境或密钥管理系统注入。Agent Core 子进程继承环境，但事件和结果序列化不得回显密钥。
 
-Recording browser profiles and `storage-state.json` may also contain session
-credentials. Treat them as secrets even though they are files rather than
-environment variables.
+录屏 browser profile 和 `storage-state.json` 也可能包含会话凭据，应按密钥文件管理。
