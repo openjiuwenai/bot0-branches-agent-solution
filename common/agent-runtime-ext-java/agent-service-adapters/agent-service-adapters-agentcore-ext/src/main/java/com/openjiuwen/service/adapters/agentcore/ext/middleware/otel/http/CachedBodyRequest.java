@@ -14,6 +14,9 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.List;
 
 /**
  * Request wrapper that caches the body once and replays it to downstream consumers.
@@ -64,6 +67,22 @@ public class CachedBodyRequest extends HttpServletRequestWrapper {
             return String.valueOf(body.length);
         }
         return super.getHeader(name);
+    }
+
+    @Override
+    public int getIntHeader(String name) {
+        if ("Content-Length".equalsIgnoreCase(name)) {
+            return body.length;
+        }
+        return super.getIntHeader(name);
+    }
+
+    @Override
+    public Enumeration<String> getHeaders(String name) {
+        if ("Content-Length".equalsIgnoreCase(name)) {
+            return Collections.enumeration(List.of(String.valueOf(body.length)));
+        }
+        return super.getHeaders(name);
     }
 
     /**

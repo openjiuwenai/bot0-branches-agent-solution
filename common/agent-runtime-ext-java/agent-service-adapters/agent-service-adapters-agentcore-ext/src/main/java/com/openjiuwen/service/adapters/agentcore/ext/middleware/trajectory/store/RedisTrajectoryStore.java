@@ -283,7 +283,7 @@ public class RedisTrajectoryStore {
      * @return matching node keys
      */
     public List<String> scanRoundKeys(String taskId) {
-        return client.scanIter(runKeyPrefix(taskId) + "*");
+        return scan(runKeyPrefix(taskId) + "*");
     }
 
     /**

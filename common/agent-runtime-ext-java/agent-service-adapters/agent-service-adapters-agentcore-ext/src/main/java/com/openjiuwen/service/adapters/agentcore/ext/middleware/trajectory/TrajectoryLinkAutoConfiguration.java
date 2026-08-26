@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -29,11 +30,14 @@ import org.springframework.context.annotation.Configuration;
  *
  * <p>enabled=true 但 Redis 未配置（{@link RuntimeRedisClient} 未注册 Bean）时启动 WARN
  * 并保持关闭（V-8 口径）——依赖 Redis 的 Bean 集中在 {@link RedisAssembly} 经
- * {@link ConditionalOnBean} 条件化，缺失即整体不装配。
+ * {@link ConditionalOnBean} 条件化，缺失即整体不装配。@AutoConfigureAfter 保证求值
+ * 时 provider（adapters-common 的 RedisMiddlewareAutoConfiguration，FQN 字典序排在本类之后）
+ * 的 bean definition 已注册——{@code @ConditionalOnBean} 只看得见已处理的定义。
  *
  * @since 2026-08-26
  */
 @AutoConfiguration
+@AutoConfigureAfter(name = "com.openjiuwen.service.adapters.common.middleware.redis.RedisMiddlewareAutoConfiguration")
 @ConditionalOnProperty(prefix = "openjiuwen.service.trajectory.link", name = "enabled", havingValue = "true")
 @EnableConfigurationProperties(TrajectoryLinkProperties.class)
 public class TrajectoryLinkAutoConfiguration {

@@ -198,6 +198,9 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
         writer.submit(() -> store.putRecord(RedisTrajectoryStore.runKey(runId), nodeJson));
     }
 
+    // 注意：对未知 parent 的 computeIfAbsent 会播种 roundSeq=0 的 RoundState（该 parent
+    // 后续真开轮时恰好从 round 1 起算，语义巧合成立）；锁外读 volatile roundSeq 在父并发
+    // 推进轮次时可能指向上一轮——边落点偏差一轮属可接受口径，不再加锁放大复杂度。
     private String fullRunId(String parentTaskId) {
         RoundState parentRound = rounds.computeIfAbsent(parentTaskId, this::recoverRound);
         int seq = Math.max(parentRound.roundSeq, 1);
@@ -222,8 +225,19 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
                     recovered.parentRunId = node.parentRunId().orElse(null);
                     recovered.startedAt = node.startedAt().orElse(recovered.startedAt);
                     recovered.closedFinal = node.finalState().isPresent();
+                    // finalState 映回 lastState：重启后从 input-required 续跑才能触发开新轮
+                    node.finalState().ifPresent(state -> toTaskState(state)
+                            .ifPresent(parsed -> recovered.lastState = parsed));
                 });
         return recovered;
+    }
+
+    private static Optional<TaskState> toTaskState(String stateName) {
+        try {
+            return Optional.of(TaskState.valueOf(stateName));
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
     }
 
     private static boolean isTerminal(TaskState state) {

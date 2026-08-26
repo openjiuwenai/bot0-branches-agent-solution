@@ -48,13 +48,30 @@ class TrajectoryLinkAutoConfigurationTest {
 
     @Test
     void fullAssemblyWhenEnabledWithRedis() {
-        runner.withPropertyValues("openjiuwen.service.trajectory.link.enabled=true")
-                .withBean(RuntimeRedisClient.class, () -> new StubRedisClient())
+        // provider 以 auto-config 形态注册（模拟生产时序：@ConditionalOnBean 求值时
+        // provider 的 bean definition 已注册，而非 withBean 的用户定义先行形态）
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(TrajectoryLinkAutoConfiguration.class,
+                        StubRedisProviderAutoConfiguration.class))
+                .withPropertyValues("openjiuwen.service.trajectory.link.enabled=true")
                 .run(context -> {
                     assertThat(context).hasSingleBean(TraceContextCarrier.class);
                     assertThat(context).hasSingleBean(RedisTrajectoryStore.class);
                     assertThat(context).hasSingleBean(AsyncTrajectoryWriter.class);
+                    assertThat(context.getBeanProvider(
+                            org.springframework.boot.web.servlet.FilterRegistrationBean.class).getIfAvailable()
+                            instanceof org.springframework.boot.web.servlet.FilterRegistrationBean).isTrue();
                 });
+    }
+
+    /** 以 auto-configuration 形态提供 RuntimeRedisClient 的 stub（模拟生产 provider 时序）。 */
+    @org.springframework.boot.autoconfigure.AutoConfiguration
+    @org.springframework.boot.autoconfigure.AutoConfigureBefore(TrajectoryLinkAutoConfiguration.class)
+    static class StubRedisProviderAutoConfiguration {
+        @org.springframework.context.annotation.Bean
+        RuntimeRedisClient stubRedisClient() {
+            return new StubRedisClient();
+        }
     }
 
     /** 最小 RuntimeRedisClient stub（装配测试不触碰命令）。 */
