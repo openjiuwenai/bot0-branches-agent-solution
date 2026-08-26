@@ -58,6 +58,14 @@ public class CachedBodyRequest extends HttpServletRequestWrapper {
         return body.length;
     }
 
+    @Override
+    public String getHeader(String name) {
+        if ("Content-Length".equalsIgnoreCase(name)) {
+            return String.valueOf(body.length);
+        }
+        return super.getHeader(name);
+    }
+
     /**
      * Returns the cached body bytes.
      *

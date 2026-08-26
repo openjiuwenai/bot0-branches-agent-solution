@@ -6,6 +6,11 @@ package com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.stor
 
 import com.openjiuwen.service.spec.spi.RuntimeRedisClient;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import redis.clients.jedis.exceptions.JedisException;
+
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
@@ -25,6 +30,8 @@ import java.util.Optional;
  * @since 2026-08-26
  */
 public class RedisTrajectoryStore {
+    private static final Logger LOGGER = LoggerFactory.getLogger(RedisTrajectoryStore.class);
+
     private static final String RUN_PREFIX = "runtime:run:";
     private static final String RUN_EDGE_PREFIX = "runtime:run-edge:";
     private static final String IDX_TRACE_PREFIX = "runtime:run-idx:trace:";
@@ -199,8 +206,14 @@ public class RedisTrajectoryStore {
      * @return record JSON, or empty
      */
     public Optional<String> getRecord(String key) {
-        Object value = client.get(key);
-        return value instanceof String str ? Optional.of(str) : Optional.empty();
+        // 同步读在 filter/save 线程上执行——Redis 故障只 WARN 降级，不拖垮主流程
+        try {
+            Object value = client.get(key);
+            return value instanceof String str ? Optional.of(str) : Optional.empty();
+        } catch (JedisException | IllegalStateException e) {
+            LOGGER.warn("trajectory store read failed ({}), degraded to miss", e.getClass().getSimpleName());
+            return Optional.empty();
+        }
     }
 
     /**
@@ -210,7 +223,12 @@ public class RedisTrajectoryStore {
      * @return true when present
      */
     public boolean exists(String key) {
-        return client.exists(key);
+        try {
+            return client.exists(key);
+        } catch (JedisException | IllegalStateException e) {
+            LOGGER.warn("trajectory store exists failed ({}), degraded to false", e.getClass().getSimpleName());
+            return false;
+        }
     }
 
     /**
@@ -250,7 +268,12 @@ public class RedisTrajectoryStore {
      * @return matching keys
      */
     public List<String> scan(String pattern) {
-        return client.scanIter(pattern);
+        try {
+            return client.scanIter(pattern);
+        } catch (JedisException | IllegalStateException e) {
+            LOGGER.warn("trajectory store scan failed ({}), degraded to empty", e.getClass().getSimpleName());
+            return List.of();
+        }
     }
 
     /**

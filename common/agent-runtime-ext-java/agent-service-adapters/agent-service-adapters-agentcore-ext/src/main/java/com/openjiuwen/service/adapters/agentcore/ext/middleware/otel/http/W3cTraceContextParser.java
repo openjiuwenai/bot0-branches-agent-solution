@@ -41,13 +41,14 @@ public final class W3cTraceContextParser {
      * @return parent context (root when not parseable)
      */
     public static Context parseToContext(String traceparent) {
-        String[] parts = split(traceparent);
-        if (parts == null) {
+        Optional<String[]> parts = split(traceparent);
+        if (parts.isEmpty()) {
             return Context.root();
         }
+        String[] segments = parts.get();
         try {
             return Context.root().with(Span.wrap(SpanContext.createFromRemoteParent(
-                    parts[1], parts[2], TraceFlags.fromHex(parts[3], 0), TraceState.getDefault())));
+                    segments[1], segments[2], TraceFlags.fromHex(segments[3], 0), TraceState.getDefault())));
         } catch (IllegalArgumentException | IllegalStateException e) {
             LOGGER.warn("illegal traceparent ignored: {}", e.getClass().getSimpleName());
             return Context.root();
@@ -61,20 +62,17 @@ public final class W3cTraceContextParser {
      * @return trace id, or empty when absent/malformed
      */
     public static Optional<String> parseTraceId(String traceparent) {
-        String[] parts = split(traceparent);
-        if (parts == null) {
-            return Optional.empty();
-        }
-        return isLowerHex(parts[1], TRACE_ID_LENGTH) && isLowerHex(parts[2], SPAN_ID_LENGTH)
-                ? Optional.of(parts[1]) : Optional.empty();
+        return split(traceparent)
+                .filter(parts -> isLowerHex(parts[1], TRACE_ID_LENGTH) && isLowerHex(parts[2], SPAN_ID_LENGTH))
+                .map(parts -> parts[1]);
     }
 
-    private static String[] split(String traceparent) {
+    private static Optional<String[]> split(String traceparent) {
         if (traceparent == null) {
-            return null;
+            return Optional.empty();
         }
         String[] parts = traceparent.trim().split("-");
-        return parts.length == PART_COUNT ? parts : null;
+        return parts.length == PART_COUNT ? Optional.of(parts) : Optional.empty();
     }
 
     private static boolean isLowerHex(String value, int length) {

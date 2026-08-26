@@ -152,8 +152,8 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
             return;
         }
         String edgeJson = RunTreeRecord.edge(parentRunId, remote,
-                text(member.get("toolCallId")), text(member.get("agentName")),
-                text(member.get("state")), text(member.get("resultCategory")));
+                text(member.get("toolCallId")).orElse(null), text(member.get("agentName")).orElse(null),
+                text(member.get("state")).orElse(null), text(member.get("resultCategory")).orElse(null));
         writer.submit(() -> {
             store.putRecord(RedisTrajectoryStore.runEdgeKey(parentRunId, remote), edgeJson);
             store.putIndex(RedisTrajectoryStore.parentIndexKey(parentRunId, remote));
@@ -164,6 +164,7 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
         round.roundSeq = seq;
         round.runId = task.id() + "#" + seq;
         round.startedAt = now();
+        round.closedFinal = false;
         Optional<TraceContextCarrier.Entry> entry = carrier.find(task.contextId());
         round.traceId = entry.map(TraceContextCarrier.Entry::getTraceId).orElse(null);
         round.tenantId = entry.map(TraceContextCarrier.Entry::getTenantId).orElse(null);
@@ -186,12 +187,14 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
     }
 
     private void closeRound(RoundState round, TaskState finalState) {
-        if (round.runId == null) {
+        if (round.runId == null || round.closedFinal) {
+            // 恢复出的已闭轮节点不再覆写（重复终态 save 不毁历史记录）
             return;
         }
         String nodeJson = RunTreeRecord.nodeClose(round.runId, "local", round.startedAt, now(),
                 finalState.name(), round.traceId, round.tenantId, round.parentRunId);
         String runId = round.runId;
+        round.closedFinal = true;
         writer.submit(() -> store.putRecord(RedisTrajectoryStore.runKey(runId), nodeJson));
     }
 
@@ -210,9 +213,16 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
         recovered.roundSeq = Math.max(count, 1);
         recovered.runId = taskId + "#" + recovered.roundSeq;
         recovered.startedAt = now();
-        // 从最近一轮节点读回 traceId，闭轮覆写时不丢字段
+        // 从最近一轮节点读回全部可恢复字段——闭轮覆写时不丢字段；已闭轮节点不再覆写
         store.getRecord(RedisTrajectoryStore.runKey(recovered.runId))
-                .ifPresent(node -> recovered.traceId = RunTreeRecord.readTraceId(node).orElse(null));
+                .flatMap(RunTreeRecord::readNode)
+                .ifPresent(node -> {
+                    recovered.traceId = node.traceId().orElse(null);
+                    recovered.tenantId = node.tenantId().orElse(null);
+                    recovered.parentRunId = node.parentRunId().orElse(null);
+                    recovered.startedAt = node.startedAt().orElse(recovered.startedAt);
+                    recovered.closedFinal = node.finalState().isPresent();
+                });
         return recovered;
     }
 
@@ -221,8 +231,8 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
                 || state == TaskState.TASK_STATE_CANCELED || state.isInterrupted();
     }
 
-    private static String text(Object value) {
-        return value instanceof String str ? str : null;
+    private static Optional<String> text(Object value) {
+        return value instanceof String str ? Optional.of(str) : Optional.empty();
     }
 
     private static String now() {
@@ -238,5 +248,6 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
         private volatile String tenantId;
         private volatile String parentRunId;
         private volatile TaskState lastState;
+        private volatile boolean closedFinal;
     }
 }

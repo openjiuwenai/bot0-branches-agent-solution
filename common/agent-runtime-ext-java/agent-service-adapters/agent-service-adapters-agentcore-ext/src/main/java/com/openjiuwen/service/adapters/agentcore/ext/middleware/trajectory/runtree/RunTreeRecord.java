@@ -5,6 +5,7 @@
 package com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.runtree;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.LinkedHashMap;
@@ -103,13 +104,42 @@ public final class RunTreeRecord {
      * @return trace id, or empty
      */
     public static Optional<String> readTraceId(String nodeJson) {
+        return readNode(nodeJson).flatMap(NodeView::traceId);
+    }
+
+    /**
+     * Reads the recoverable fields of a node record JSON (restart recovery reads these
+     * back so closes do not wipe them).
+     *
+     * @param nodeJson node record JSON
+     * @return node field view, or empty when unparseable
+     */
+    public static Optional<NodeView> readNode(String nodeJson) {
         try {
-            return Optional.ofNullable(MAPPER.readTree(nodeJson).get("traceId"))
-                    .filter(JsonNode -> JsonNode.isTextual())
-                    .map(JsonNode -> JsonNode.asText());
+            JsonNode node = MAPPER.readTree(nodeJson);
+            return Optional.of(new NodeView(text(node.get("traceId")), text(node.get("tenantId")),
+                    text(node.get("parentRunId")), text(node.get("startedAt")), text(node.get("finalState"))));
         } catch (JsonProcessingException e) {
             return Optional.empty();
         }
+    }
+
+    private static Optional<String> text(JsonNode node) {
+        return node != null && node.isTextual() ? Optional.of(node.asText()) : Optional.empty();
+    }
+
+    /**
+     * Recoverable fields of a node record.
+     *
+     * @param traceId     trace id
+     * @param tenantId    tenant id
+     * @param parentRunId parent run id
+     * @param startedAt   round start time
+     * @param finalState  terminal state when the node is already closed
+     */
+    public record NodeView(Optional<String> traceId, Optional<String> tenantId,
+                           Optional<String> parentRunId, Optional<String> startedAt,
+                           Optional<String> finalState) {
     }
 
     private static void putIfPresent(Map<String, Object> map, String key, String value) {

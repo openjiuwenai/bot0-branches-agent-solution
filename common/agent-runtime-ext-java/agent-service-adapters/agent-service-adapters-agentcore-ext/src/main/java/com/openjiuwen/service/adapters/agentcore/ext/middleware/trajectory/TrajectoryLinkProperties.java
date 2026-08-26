@@ -15,8 +15,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "openjiuwen.service.trajectory.link")
 public class TrajectoryLinkProperties {
-    /** 默认记录 TTL（秒）：沿用 checkpointer 60 分钟口径，显式配置时覆盖。 */
-    public static final long DEFAULT_TTL_SECONDS = 3600L;
+    /** 默认记录 TTL（秒）：7 天（对齐 L2 §6.1 示例）——须不短于 carrier TTL，否则重启恢复/轮次恢复被默认值架空。 */
+    public static final long DEFAULT_TTL_SECONDS = 604800L;
 
     /** carrier 条目惰性清理默认 TTL（秒）：24h。 */
     public static final long DEFAULT_CARRIER_TTL_SECONDS = 86400L;

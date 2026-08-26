@@ -78,7 +78,11 @@ public final class TraceContextCarrier {
      */
     public Optional<Entry> find(String contextId) {
         evictExpired();
-        return resolveKey(contextId).map(entries::get);
+        // 滑动 TTL：命中即刷新 receivedAt——持续活跃的会话不因建档时刻超期而 trace 分叉
+        return resolveKey(contextId).map(entries::get).map(entry -> {
+            entry.touch();
+            return entry;
+        });
     }
 
     /**
@@ -128,6 +132,9 @@ public final class TraceContextCarrier {
      * @param runId        current run id
      */
     public void updateCurrentRunId(String conversationId, String runId) {
+        if (conversationId == null || runId == null) {
+            return;
+        }
         Entry entry = entries.get(conversationId);
         if (entry != null) {
             entry.currentRunId = runId;
@@ -205,7 +212,7 @@ public final class TraceContextCarrier {
         private final boolean degraded;
         private final String ingressChannel;
         private final String tenantId;
-        private final Instant receivedAt;
+        private volatile Instant receivedAt;
         private volatile String parentRunId;
         private volatile String currentRunId;
 
@@ -263,12 +270,19 @@ public final class TraceContextCarrier {
         }
 
         /**
-         * Returns when the entry was recorded.
+         * Returns when the entry was recorded (last activity after sliding-TTL refresh).
          *
          * @return received-at instant
          */
         public Instant getReceivedAt() {
             return receivedAt;
+        }
+
+        /**
+         * Refreshes the last-activity timestamp (sliding TTL).
+         */
+        public void touch() {
+            receivedAt = Instant.now();
         }
 
         /**

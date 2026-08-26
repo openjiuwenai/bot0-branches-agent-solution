@@ -38,15 +38,11 @@ class TrajectoryLinkAutoConfigurationTest {
     void carrierOnlyWhenEnabledWithoutRedis() {
         runner.withPropertyValues("openjiuwen.service.trajectory.link.enabled=true").run(context -> {
             assertThat(context).hasSingleBean(TraceContextCarrier.class);
-            // V-8：Redis 缺失时 @Bean 方法返回 null（Spring 登记 NullBean），消费侧拿不到可用实例
-            assertThat(context.getBeanProvider(RedisTrajectoryStore.class).getIfAvailable()
-                    instanceof RedisTrajectoryStore).isFalse();
-            assertThat(context.getBeanProvider(AsyncTrajectoryWriter.class).getIfAvailable()
-                    instanceof AsyncTrajectoryWriter).isFalse();
-            // V-8：入口 filter 同样不注册（整体保持关闭）
-            assertThat(context.getBeanProvider(
-                    org.springframework.boot.web.servlet.FilterRegistrationBean.class).getIfAvailable()
-                    instanceof org.springframework.boot.web.servlet.FilterRegistrationBean).isFalse();
+            // V-8：Redis 缺失时 RedisAssembly 整体不装配（@ConditionalOnBean）
+            assertThat(context).doesNotHaveBean(RedisTrajectoryStore.class);
+            assertThat(context).doesNotHaveBean(AsyncTrajectoryWriter.class);
+            assertThat(context).doesNotHaveBean(
+                    org.springframework.boot.web.servlet.FilterRegistrationBean.class);
         });
     }
 
