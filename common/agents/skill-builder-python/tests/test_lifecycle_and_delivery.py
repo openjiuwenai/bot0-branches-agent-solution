@@ -19,6 +19,7 @@ from skill_builder.application.agent_submission import (
 )
 from skill_builder.application.implementation_plan import persist_implementation_plan
 from skill_builder.domain.scenario_contract import normalize_scenario_contract
+from skill_builder.host_support import reset_generated_outputs
 from skill_builder.spi import CallableAgentRunner, JsonFileStateStore, SkillBuilderAdapters
 
 
@@ -269,3 +270,35 @@ def test_explicit_repair_rolls_back_an_invalid_candidate(tmp_path: Path) -> None
     assert (tmp_path / "generated-skill" / "SKILL.md").read_text(
         encoding="utf-8"
     ) == original
+
+
+def test_retry_reset_preserves_inputs_and_removes_previous_outputs(tmp_path: Path) -> None:
+    source = tmp_path / "inputs" / "source.md"
+    source.parent.mkdir(parents=True)
+    source.write_text("durable input", encoding="utf-8")
+    for relative in (
+        "generated-skill/SKILL.md",
+        "validation/report.json",
+        "playwright/trace.zip",
+        ".skill-builder/state/state.json",
+        ".skill-builder/drafts/current.json",
+        ".skill-builder/revisions/current.json",
+        ".skill-builder/context/current.json",
+        ".skill-builder/checkpoints/generation.json",
+        "workspace/verify/result.json",
+        "workspace/material_digest.md",
+    ):
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("old", encoding="utf-8")
+
+    reset_generated_outputs(tmp_path)
+
+    assert source.read_text(encoding="utf-8") == "durable input"
+    assert not (tmp_path / "generated-skill").exists()
+    assert not (tmp_path / "validation").exists()
+    assert not (tmp_path / "playwright").exists()
+    assert not (tmp_path / ".skill-builder" / "state").exists()
+    assert not (tmp_path / ".skill-builder" / "drafts").exists()
+    assert not (tmp_path / ".skill-builder" / "revisions").exists()
+    assert not (tmp_path / ".skill-builder" / "context").exists()

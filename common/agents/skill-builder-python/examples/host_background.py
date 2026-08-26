@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,7 @@ from skill_builder.spi import (
     JsonFileStateStore,
     SkillBuilderAdapters,
 )
+from skill_builder.host_support import reset_generated_outputs
 
 
 async def print_event(
@@ -93,7 +95,7 @@ class SkillBuilderHost:
                 advance=advance,
             )
 
-    async def resume(
+    async def resume_hitl(
         self,
         workspace_id: str,
         *,
@@ -105,6 +107,59 @@ class SkillBuilderHost:
                 workspace_id,
                 resume_token=resume_token,
                 answer=answer,
+            )
+
+    async def continue_failed(
+        self,
+        workspace_id: str,
+        *,
+        message: str | None = None,
+    ) -> SkillBuilderExecution:
+        """Continue a failed run without deleting its candidate/checkpoints."""
+
+        async with self._write_lock:
+            current = await self.client.load(workspace_id)
+            if current is None:
+                raise KeyError(workspace_id)
+            if current.status.value != "failed":
+                raise RuntimeError("continue requires a failed execution")
+            recovery_message = self.client.build_recovery_message(
+                current,
+                kind="resume",
+                user_message=message,
+            )
+            return await self.client.reconcile(
+                replace(current.input, user_message=recovery_message),
+                options=replace(current.options, run_phase="workflow"),
+                hitl_confirmations=current.hitl_confirmations,
+                advance=True,
+            )
+
+    async def retry_failed(
+        self,
+        workspace_id: str,
+        *,
+        message: str | None = None,
+    ) -> SkillBuilderExecution:
+        """Start a fresh extraction while preserving durable input materials."""
+
+        async with self._write_lock:
+            current = await self.client.load(workspace_id)
+            if current is None:
+                raise KeyError(workspace_id)
+            if current.status.value != "failed":
+                raise RuntimeError("retry requires a failed execution")
+            recovery_message = self.client.build_recovery_message(
+                current,
+                kind="retry",
+                user_message=message,
+            )
+            confirmations = current.hitl_confirmations
+            reset_generated_outputs(self.workspace_root)
+            return await self.client.build(
+                replace(current.input, user_message=recovery_message),
+                options=replace(current.options, run_phase="workflow"),
+                hitl_confirmations=confirmations,
             )
 
     async def load(self, workspace_id: str) -> SkillBuilderExecution | None:

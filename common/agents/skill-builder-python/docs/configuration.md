@@ -142,6 +142,9 @@ Recording is optional input capture and is not browser validation.
 See [Recording Integration](recording-integration.md) for API/UI, asset,
 security, and process-lifecycle requirements.
 
+See [Deployment](deployment.md) for process layout, Jiuwenbox startup,
+systemd/container boundaries, health checks, and future Runtime deployment.
+
 ## Host configuration not represented by environment variables
 
 The host must separately configure:

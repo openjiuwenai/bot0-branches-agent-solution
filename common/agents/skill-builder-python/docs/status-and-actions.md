@@ -111,9 +111,17 @@ repaired = await client.repair(execution, instruction=instruction)
 Do not offer Repair for business ambiguity, capability direction, fixture
 semantics, or missing external proof.
 
-There is no public `client.retry()` method. If Core returns the `retry` action,
-the host starts a new `build` or calls `reconcile` according to its task policy.
-It must not replay the last Agent Core request directly.
+There is no public `client.retry()` method. A host may expose two failed-state
+actions under the workspace lock:
+
+- Continue: preserve outputs and call `reconcile(..., advance=True)` with a
+  `kind="resume"` recovery message.
+- Retry: create a `kind="retry"` recovery message, call the host-facing
+  `reset_generated_outputs`, then start a fresh `build` while preserving
+  `inputs/` and explicitly retained confirmations.
+
+Neither action may replay the last Agent Core request directly. HITL `resume`
+is separate and requires `waiting_for_user`, a pending token, and an answer.
 
 ## HITL mapping
 

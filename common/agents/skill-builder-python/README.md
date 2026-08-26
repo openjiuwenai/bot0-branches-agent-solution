@@ -116,6 +116,7 @@ Completed checks are recorded in [Verification](docs/verification.md).
 
 Host-facing contracts:
 
+- [Deployment](docs/deployment.md)
 - [Status and Host Actions](docs/status-and-actions.md)
 - [Recording Integration](docs/recording-integration.md)
 - [Host Integration](docs/host-integration.md)

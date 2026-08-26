@@ -7,7 +7,7 @@ Date: 2026-08-26
 - Source commit: `skillbuilder/refactor/skill-builder-boundaries@045732d`
 - Source baseline: `415 passed, 4 skipped`
 - Migrated package loaded ahead of the source package: `415 passed, 4 skipped`
-- Target package tests: `20 passed`
+- Target package tests: `21 passed`
 
 The parity run uses the source repository's complete Skill Builder test set with
 `PYTHONPATH` pointing to this project's `src`. It covers the inherited Scenario,

@@ -118,7 +118,9 @@ versions rather than silently coercing them.
 | Start generation | `client.build(builder_input)` | Starts Scenario, optional HITL, Author, Acceptance |
 | Recover uncertain/interrupted work | `client.reconcile(builder_input, advance=...)` | Uses persisted state to select the legal next step |
 | Load current state | `client.load(workspace_id)` | Requires a StateStore |
-| Resume HITL | `client.resume(workspace_id, resume_token=..., answer=...)` | Use the exact pending token |
+| Submit HITL answer | `client.resume(workspace_id, resume_token=..., answer=...)` | Only for `waiting_for_user`; use the exact pending token |
+| Continue failed execution | Build a `kind="resume"` recovery message and call `client.reconcile(..., advance=True)` without resetting outputs | Preserve candidate, checkpoints, and inputs |
+| Retry failed execution | Build a `kind="retry"` recovery message, call `reset_generated_outputs`, then `client.build(...)` | Fresh extraction; preserve `inputs/` and retained confirmations |
 | Validate current package | `client.validate(execution.input, hitl_confirmations=...)` | Does not require a model for pure checks |
 | Explicit mechanical repair | `client.repair(execution, instruction=...)` | Only for structured, mechanically repairable diagnostics |
 | Read/edit conversation | `client.run_turn(workspace_id, SkillBuilderTurnRequest(...))` | Core applies read/write policy and rollback |
@@ -126,9 +128,89 @@ versions rather than silently coercing them.
 | Export | `client.build_export_archive(execution)` | Host writes bytes to local/object storage |
 | Build compatibility publish archive | `client.build_publish_archive(execution, author=...)` | Requires Core `publishable`; still does not publish externally |
 
-There is no public `client.retry()` method. When `available_actions` contains
-`retry`, the host creates a new task that calls `build` or `reconcile` according
-to its retry policy. It must never replay an Agent worker request directly.
+HITL resume, failed-run continue, and failed-run retry are three different host
+operations. Do not route them to one generic "run again" method.
+
+Recommended failed-run continue implementation:
+
+```python
+from dataclasses import replace
+
+current = await client.load(workspace_id)
+if current is None or current.status.value != "failed":
+    raise Conflict("continue requires a failed execution")
+
+message = client.build_recovery_message(
+    current,
+    kind="resume",
+    user_message=user_message,
+)
+
+execution = await client.reconcile(
+    replace(current.input, user_message=message),
+    options=replace(current.options, run_phase="workflow"),
+    hitl_confirmations=current.hitl_confirmations,
+    advance=True,
+)
+```
+
+Continue preserves the current candidate, validation diagnostics, Draft
+Workspace, revision/checkpoint state, and `inputs/`. Core resumes a committed
+candidate when one exists; otherwise it selects the next legal generation step.
+
+Recommended failed-run retry implementation:
+
+```python
+from dataclasses import replace
+from skill_builder.host_support import reset_generated_outputs
+
+current = await client.load(workspace_id)
+if current is None or current.status.value != "failed":
+    raise Conflict("retry requires a failed execution")
+
+message = client.build_recovery_message(
+    current,
+    kind="retry",
+    user_message=user_message,
+)
+confirmations = current.hitl_confirmations
+reset_generated_outputs(current.input.root)
+
+execution = await client.build(
+    replace(current.input, user_message=message),
+    options=replace(current.options, run_phase="workflow"),
+    hitl_confirmations=confirmations,
+)
+```
+
+Retry removes `generated-skill/`, `validation/`, `playwright/`, generation
+checkpoints, state, drafts, revisions, and private context. It preserves
+`inputs/`; the host may pass still-valid structured confirmations explicitly.
+The host must update any asset records that pointed at removed diagnostic files.
+
+There is no public `client.retry()` method because reset policy belongs to the
+host's workspace/storage boundary. Neither continue nor retry may replay an
+Agent worker request directly.
+
+All three operations are mutating. The host must acquire the same workspace
+lease used by `build` before calling them.
+
+## Suggested host endpoints
+
+| Endpoint | Host behavior |
+|---|---|
+| `POST /skill-builder/workspaces/{id}/build` | Construct input and start `client.build` in a background task |
+| `GET /skill-builder/workspaces/{id}` | `client.load` then `client.present` |
+| `POST /skill-builder/workspaces/{id}/hitl/{request_id}/answer` | Persist/validate the answer, acquire lock, call Core `resume` |
+| `POST /skill-builder/workspaces/{id}/continue` | Failed-run continue; preserve outputs and call `reconcile` |
+| `POST /skill-builder/workspaces/{id}/retry` | Failed-run fresh extraction; reset outputs then call `build` |
+| `POST /skill-builder/workspaces/{id}/validate` | Load current execution and call `client.validate` |
+| `POST /skill-builder/workspaces/{id}/repair` | Only for a confirmed mechanically repairable diagnostic |
+| `POST /skill-builder/workspaces/{id}/turns` | Call `client.run_turn` with an explicit/auto action |
+| `GET /skill-builder/workspaces/{id}/export` | Build archive and let the host return/store it |
+| `DELETE /skill-builder/workspaces/{id}/active-task` | Cancel and await the host background task |
+
+These are suggested routes. Skill Builder does not provide an HTTP server.
 
 Example validation after loading state:
 
