@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 import json
+from pathlib import Path
 
 from skill_builder.application.builder import SkillBuilderEngine
 from skill_builder.application.presentation_projection import project_execution_presentation
@@ -28,6 +29,40 @@ from skill_builder.types import (
     SkillBuilderTurnRequest,
 )
 from skill_builder.domain.conversation import ConversationIntent
+from skill_builder.runtime.serialization import json_safe
+
+
+def _recovery_failure_context(root: Path) -> str:
+    """Return bounded controller facts for a failed recovery attempt."""
+
+    failure_path = root / "validation" / "diagnostics" / "candidate_lifecycle_failure.json"
+    try:
+        failure = json.loads(failure_path.read_text(encoding="utf-8"))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return ""
+    if not isinstance(failure, dict):
+        return ""
+    payload: dict[str, Any] = {
+        key: failure.get(key)
+        for key in ("phase", "error", "issues", "nextAction")
+        if failure.get(key) not in (None, "", [], {})
+    }
+    if str(failure.get("phase") or "") == "scenario":
+        draft_path = root / ".skill-builder" / "drafts" / "scenario" / "current.json"
+        try:
+            draft = json.loads(draft_path.read_text(encoding="utf-8"))
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            draft = None
+        if isinstance(draft, dict):
+            payload["rejectedScenarioDraft"] = draft
+    if not payload:
+        return ""
+    return json.dumps(
+        json_safe(payload, max_text_length=1000),
+        ensure_ascii=False,
+        sort_keys=True,
+        indent=2,
+    )[:12000]
 
 
 class SkillBuilderClient:
@@ -163,7 +198,9 @@ class SkillBuilderClient:
                 user_message=user_message,
                 from_event_id=from_event_id,
                 has_checkpoint=bool(execution.artifact_sha256),
-                previous_failure_context="",
+                previous_failure_context=_recovery_failure_context(
+                    execution.input.root
+                ),
             ),
         )
 

@@ -372,7 +372,7 @@ def _can_finalize_after_agent_failure(
     """
 
     return bool(
-        task_mode in {"author", "author_validate", "repair"}
+        task_mode in {"author", "author_build", "author_validate", "repair"}
         and completion_payload is None
         and skill_artifact_sha256(root / "generated-skill") is not None
     )

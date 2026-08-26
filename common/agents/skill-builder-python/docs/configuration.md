@@ -94,6 +94,8 @@ Jiuwenbox 是独立服务，默认 adapter 使用它完成 Agent workspace 操�
 
 Iteration 不是重试次数。提高 iteration 不会增加 Repair 次数，也不应被用于掩盖无进展循环。
 
+`author`、`author_build` 和 `author_validate` 共用 `SKILL_BUILDER_AGENT_AUTHOR_TIMEOUT_SECONDS`。当模型响应较慢或材料较复杂，并且运行记录显示阶段持续有进展但最终命中 `phase_timeout` 时，可以根据实际阶段耗时适当提高该值。优先调整超时，不要通过提高 iteration 或 Repair 次数补偿模型性能；如果宿主另外设置了 `AgentCoreProcessConfig.timeout_seconds`，该硬超时也必须覆盖调整后的 Author 阶段时长。
+
 `AgentCoreProcessConfig.timeout_seconds` 是额外的宿主硬超时，通常保持 `None`，让阶段内活动感知超时负责正常运行。设置后，超时或取消会终止子进程。
 
 ## Gate 灰度配置

@@ -253,9 +253,12 @@ def _is_business_fixture_path(
     path: str,
     *,
     platform_owned_paths: set[str],
+    expected_suffixes: set[str] | None = None,
 ) -> bool:
     candidate = PurePosixPath(path)
     if not path.startswith("fixtures/") or not candidate.name:
+        return False
+    if expected_suffixes and candidate.suffix.lower() not in expected_suffixes:
         return False
     if platform_owned_paths:
         return path not in platform_owned_paths
@@ -263,6 +266,25 @@ def _is_business_fixture_path(
     # ownership. Match only the exact historical names; Author fixtures such
     # as sample-input-a.xlsx remain business evidence.
     return _LEGACY_PLATFORM_FIXTURE_RE.fullmatch(candidate.name) is None
+
+
+def _structured_input_fixture_suffixes(plan: dict[str, Any]) -> set[str]:
+    signature = plan.get("behaviorSignature")
+    inputs = signature.get("inputs") if isinstance(signature, dict) else []
+    suffixes: set[str] = set()
+    mappings = {
+        "csv": {".csv"},
+        "excel": {".xlsx"},
+        "json": {".json"},
+        "jsonl": {".jsonl"},
+        "xlsx": {".xlsx"},
+    }
+    for item in inputs or []:
+        if not isinstance(item, dict):
+            continue
+        format_name = str(item.get("format") or "").strip().lower()
+        suffixes.update(mappings.get(format_name, set()))
+    return suffixes
 
 
 def _requires_business_fixture(plan: dict[str, Any]) -> bool:
@@ -506,10 +528,12 @@ def normalize_implementation_plan(
         root,
         root / "generated-skill",
     )
+    expected_fixture_suffixes = _structured_input_fixture_suffixes(plan)
     if _requires_business_fixture(plan) and not any(
         _is_business_fixture_path(
             path,
             platform_owned_paths=platform_fixtures,
+            expected_suffixes=expected_fixture_suffixes,
         )
         for path in files
     ):
@@ -659,6 +683,7 @@ def missing_required_plan_paths(
     }
     generated = root / "generated-skill"
     platform_fixtures = platform_owned_fixture_paths(root, generated)
+    expected_fixture_suffixes = _structured_input_fixture_suffixes(plan)
     if plan.get("scriptsRequired") is True:
         production_scripts = [
             str(path)
@@ -676,6 +701,7 @@ def missing_required_plan_paths(
                 if _is_business_fixture_path(
                     str(path),
                     platform_owned_paths=platform_fixtures,
+                    expected_suffixes=expected_fixture_suffixes,
                 )
             ]
             if business_fixtures and not any(

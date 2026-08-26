@@ -68,6 +68,20 @@ def scenario_repair_progress(
     return True, "root_error_changed"
 
 
+def decode_scenario_transport_value(value: Any, expected_type: type) -> Any:
+    """Decode one lossless JSON transport wrapper emitted by some providers."""
+
+    if isinstance(value, expected_type):
+        return value
+    if not isinstance(value, str) or not value.strip():
+        return value
+    try:
+        decoded = json.loads(value)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return value
+    return decoded if isinstance(decoded, expected_type) else value
+
+
 def merge_split_fact_evidence(value: Any) -> Any:
     """Merge adjacent fact/evidence fragments emitted as separate objects.
 
@@ -304,12 +318,22 @@ def create_scenario_tools(
                 # argument into the tool root. Keep both transport shapes;
                 # the same handler and contract compiler remain authoritative.
                 "facts": {
-                    "type": "array",
-                    "items": {"type": "object", "additionalProperties": True},
+                    "anyOf": [
+                        {
+                            "type": "array",
+                            "items": {"type": "object", "additionalProperties": True},
+                        },
+                        {"type": "string"},
+                    ],
                 },
                 "conflicts": {
-                    "type": "array",
-                    "items": {"type": "object", "additionalProperties": True},
+                    "anyOf": [
+                        {
+                            "type": "array",
+                            "items": {"type": "object", "additionalProperties": True},
+                        },
+                        {"type": "string"},
+                    ],
                 },
                 "skillName": {"type": "string"},
                 "displayName": {"type": "string"},
@@ -319,8 +343,8 @@ def create_scenario_tools(
     )
     async def write_scenario_draft(
         content: Any = None,
-        facts: list[Any] | None = None,
-        conflicts: list[Any] | None = None,
+        facts: Any = None,
+        conflicts: Any = None,
         skillName: str = "",
         displayName: str = "",
     ) -> dict[str, Any]:
@@ -336,6 +360,9 @@ def create_scenario_tools(
                 "error": "scenario_turn_already_submitted",
                 "message": "本轮 Scenario 已提交，不能再次提交。",
             }
+        content = decode_scenario_transport_value(content, dict)
+        facts = decode_scenario_transport_value(facts, list)
+        conflicts = decode_scenario_transport_value(conflicts, list)
         if not isinstance(content, dict) and isinstance(facts, list):
             content = {
                 "facts": facts,
@@ -700,6 +727,7 @@ def create_scenario_tools(
 
 
 __all__ = [
+    "decode_scenario_transport_value",
     "merge_split_fact_evidence",
     "ScenarioToolState",
     "ScenarioTools",

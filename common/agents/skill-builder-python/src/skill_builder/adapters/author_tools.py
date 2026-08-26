@@ -199,11 +199,22 @@ def create_author_completion_tool(
                 }
         build_preflight_receipt: dict[str, Any] | None = None
         if root is not None and task_mode in {"author", "author_build"}:
-            preflight = (
-                await build_preflight()
-                if callable(build_preflight)
-                else await accept_skill_package(root, execution_port=None)
-            )
+            try:
+                preflight = (
+                    await build_preflight()
+                    if callable(build_preflight)
+                    else await accept_skill_package(root, execution_port=None)
+                )
+            except Exception as exc:
+                return {
+                    "ok": False,
+                    "error": "author_build_preflight_internal_error",
+                    "message": (
+                        "Core Build preflight 执行异常；候选未提交，"
+                        "且不会交给模型继续修改。"
+                    ),
+                    "details": {"error": str(exc)[:1000]},
+                }
             preflight_payload = (
                 preflight.to_result()
                 if callable(getattr(preflight, "to_result", None))

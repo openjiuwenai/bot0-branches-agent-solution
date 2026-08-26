@@ -23,6 +23,8 @@ AUTHOR_BUILD_INSTRUCTION = (
     "请根据当前阶段的 Scenario 交接生成可复用 Skill 生产包；"
     "直接物化 SKILL.md、必要的生产脚本、references 和业务 fixture，Core 从实际文件生成 ImplementationPlan。"
     "本阶段不生成或执行 self_check；生产包完成后调用 finish_authoring，由 Core 提交候选并执行交付验收。"
+    "结构化浏览器/API 入口必须提供 --validate-only，复用生产输入解析和字段校验，"
+    "并在初始化浏览器、网络、凭据或外部 SDK 前返回。"
 )
 AUTHOR_VALIDATE_INSTRUCTION = (
     "请只验证当前已生成的可执行 Skill 包。读取 ImplementationPlan、SKILL.md、生产脚本和业务 fixture，"
@@ -78,6 +80,7 @@ _AGENT_TOOL_CAPABILITIES = {
     "repair": frozenset({
         "read_workspace_file",
         "write_skill_file",
+        "write_tabular_fixture",
         "write_self_check_plan",
         "replace_skill_file_text",
         "delete_skill_file",

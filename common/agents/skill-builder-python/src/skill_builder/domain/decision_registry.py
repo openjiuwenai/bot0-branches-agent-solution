@@ -52,7 +52,7 @@ class DecisionConceptDefinition:
             and candidate not in {"from_api", "from_browser", "from_file"}
         ):
             # A source-system export is a manual acquisition mode regardless of
-            # the customer-specific system identifier following ``from_``.
+            # the system identifier following ``from_``.
             return "manual"
         if self.closed_values and self.value_aliases:
             return None

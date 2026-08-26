@@ -680,11 +680,98 @@ def _runtime_entrypoint_capabilities(
         except OSError:
             continue
         relative = script.relative_to(generated).as_posix()
+        capabilities = python_runtime_call_capabilities(source)
+        if not capabilities:
+            continue
         result["external_runtime"].append(relative)
-        if re.search(r"\bplaywright\b|\bselenium\b|\bpuppeteer\b", source, re.IGNORECASE):
+        if "browser_runtime" in capabilities:
             result["browser_runtime"].append(relative)
-        if re.search(r"\b(?:requests|httpx|aiohttp|urllib\.request)\b", source, re.IGNORECASE):
+        if "api_runtime" in capabilities:
             result["api_runtime"].append(relative)
+    return result
+
+
+def python_runtime_call_capabilities(source: str) -> set[str]:
+    """Return external capabilities proven by imports and executable calls."""
+
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()
+    imported_modules: set[str] = set()
+    module_aliases: dict[str, str] = {}
+    symbol_aliases: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                imported_modules.add(alias.name.lower())
+                module_aliases[alias.asname or alias.name.split(".", 1)[0]] = (
+                    alias.name
+                )
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add(node.module.lower())
+            for alias in node.names:
+                if alias.name != "*":
+                    symbol_aliases[alias.asname or alias.name] = (
+                        f"{node.module}.{alias.name}"
+                    )
+
+    def qualified_name(value: ast.AST) -> str:
+        parts: list[str] = []
+        current = value
+        while isinstance(current, ast.Attribute):
+            parts.append(current.attr)
+            current = current.value
+        if isinstance(current, ast.Name):
+            parts.append(current.id)
+        raw = ".".join(reversed(parts))
+        if not raw:
+            return ""
+        first, separator, remainder = raw.partition(".")
+        if first in symbol_aliases and not separator:
+            return symbol_aliases[first]
+        if first in module_aliases:
+            module = module_aliases[first]
+            if raw == module or raw.startswith(f"{module}."):
+                return raw
+            return f"{module}.{remainder}" if separator else module
+        return raw
+
+    browser_dependency = any(
+        module == name or module.startswith(f"{name}.")
+        for module in imported_modules
+        for name in ("playwright", "selenium", "puppeteer")
+    )
+    api_dependency = any(
+        module == name or module.startswith(f"{name}.")
+        for module in imported_modules
+        for name in ("requests", "httpx", "aiohttp", "urllib.request")
+    )
+    browser_call = False
+    api_call = False
+    for call in (node for node in ast.walk(tree) if isinstance(node, ast.Call)):
+        name = qualified_name(call.func).lower()
+        if re.search(
+            r"(?:chromium|firefox|webkit)\.launch$|"
+            r"webdriver\.(?:chrome|firefox|edge)$|"
+            r"(?:page|context|browser)\."
+            r"(?:goto|new_page|locator|fill|click|screenshot)$|"
+            r"puppeteer\.launch$",
+            name,
+        ):
+            browser_call = True
+        if re.search(
+            r"(?:requests|httpx)\.(?:get|post|put|patch|delete|request)$|"
+            r"urllib\.request\.urlopen$|aiohttp\.clientsession$|"
+            r"(?:client|session)\.(?:get|post|put|patch|delete|request)$",
+            name,
+        ):
+            api_call = True
+    result: set[str] = set()
+    if browser_dependency and browser_call:
+        result.add("browser_runtime")
+    if api_dependency and api_call:
+        result.add("api_runtime")
     return result
 
 

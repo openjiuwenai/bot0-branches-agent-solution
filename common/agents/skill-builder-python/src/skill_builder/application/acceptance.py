@@ -23,6 +23,7 @@ from skill_builder.application.agent_findings import reconcile_agent_findings
 from skill_builder.application.artifact_digest import candidate_artifact_signature
 from skill_builder.application.capability_observation import (
     observe_capability_relationships,
+    python_runtime_call_capabilities,
 )
 from skill_builder.application.draft_package_validation import validate_draft_package
 from skill_builder.application.python_name_analysis import (
@@ -65,11 +66,22 @@ from skill_builder.application.fixture_builder import (
     platform_fixture_business_replay_issues,
     platform_owned_fixture_paths,
 )
+from skill_builder.application.input_contracts import scenario_structured_input_contracts
 
 
 _INPUT_ARGUMENT_RE = re.compile(r"add_argument\(\s*['\"]--input['\"]")
 _OUTPUT_ARGUMENT_RE = re.compile(r"add_argument\(\s*['\"]--output['\"]")
 _OUTPUT_DIR_ARGUMENT_RE = re.compile(r"add_argument\(\s*['\"]--output-dir['\"]")
+_VALIDATE_ONLY_ARGUMENT_RE = re.compile(
+    r"add_argument\(\s*['\"]--validate-only['\"]"
+)
+_OFFLINE_ARGUMENT_RE = re.compile(r"add_argument\(\s*['\"]--offline['\"]")
+_USE_FIXTURE_ARGUMENT_RE = re.compile(
+    r"add_argument\(\s*['\"]--use-fixture['\"]"
+)
+_QUERY_MODE_ARGUMENT_RE = re.compile(
+    r"add_argument\(\s*['\"]--query-mode['\"]"
+)
 # A first-version Skill is allowed to expose a small positional CLI as well as
 # the preferred ``--input`` form.  Keep this detection deliberately narrow:
 # only the conventional ``sys.argv[1]``/``Path(sys.argv[1])`` input shape is
@@ -96,14 +108,6 @@ _BUSINESS_LITERAL_KEY_RE = re.compile(
     r"(?:amount|balance|price|phone|address)"
     r")",
     re.IGNORECASE,
-)
-
-_EXTERNAL_RUNTIME_PATTERNS = (
-    re.compile(r"\bplaywright\b", re.IGNORECASE),
-    re.compile(r"\bselenium\b", re.IGNORECASE),
-    re.compile(r"\bpuppeteer\b", re.IGNORECASE),
-    re.compile(r"\b(?:requests|httpx|aiohttp)\b", re.IGNORECASE),
-    re.compile(r"\burllib\.request\b", re.IGNORECASE),
 )
 
 # These findings describe the shape/evidence of the generated self-check
@@ -986,13 +990,21 @@ def _choose_smoke_target(
     excluded_fixture_paths: set[str] | None = None,
 ) -> tuple[Path, Path] | None:
     scripts = sorted((generated / "scripts").glob("*.py"))
+    try:
+        skill_text = (generated / "SKILL.md").read_text(
+            encoding="utf-8",
+            errors="replace",
+        )
+    except OSError:
+        skill_text = ""
     excluded = set(excluded_fixture_paths or set())
     fixtures = sorted(
         path
         for path in (generated / "fixtures").rglob("*")
         if path.is_file()
         and path.relative_to(generated).as_posix() not in excluded
-        and path.suffix.lower() in {".csv", ".json", ".jsonl", ".md", ".txt"}
+        and path.suffix.lower()
+        in {".csv", ".json", ".jsonl", ".xlsx", ".md", ".txt"}
     ) if (generated / "fixtures").is_dir() else []
     candidates: list[tuple[int, Path, Path]] = []
     for script in scripts:
@@ -1018,11 +1030,18 @@ def _choose_smoke_target(
                     score += 50 if "checklist" in stem else 0
                 elif suffix in {".json", ".jsonl"}:
                     score += 30 if ("json.load" in lowered or "json.loads" in lowered) else 0
+                elif suffix == ".xlsx":
+                    score += 40 if ("openpyxl" in lowered or "load_workbook" in lowered) else 0
                 elif suffix in {".txt", ".md"}:
                     score += 10 if "open(" in lowered or "read_text" in lowered else 0
                 # Prefer a fixture whose name resembles the script input.
                 if any(token in fixture.stem.lower() for token in stem.replace("_", "-").split("-")):
                     score += 8
+                # A package may contain several valid-looking happy fixtures.
+                # Prefer the one the Skill documents for its production CLI.
+                fixture_path = fixture.relative_to(generated).as_posix()
+                if fixture_path in skill_text:
+                    score += 200
                 fixture_name = fixture.stem.lower().replace("_", "-")
                 if "happy" in fixture_name:
                     score += 100
@@ -1116,6 +1135,360 @@ def _script_output_mode(source: str) -> str | None:
     return "file"
 
 
+_BUSINESS_OUTPUT_SUFFIXES = frozenset(
+    {".csv", ".html", ".json", ".jsonl", ".md", ".txt", ".xlsx"}
+)
+
+
+def _script_output_suffix(source: str, *, documentation: str = "") -> str:
+    """Infer the output suffix from argparse, then the documented CLI."""
+
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return ".json"
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not node.args:
+            continue
+        function = node.func
+        if not (
+            isinstance(function, ast.Attribute) and function.attr == "add_argument"
+            or isinstance(function, ast.Name) and function.id == "add_argument"
+        ):
+            continue
+        first = node.args[0]
+        if not isinstance(first, ast.Constant) or first.value != "--output":
+            continue
+        default = next(
+            (
+                keyword.value.value
+                for keyword in node.keywords
+                if keyword.arg == "default"
+                and isinstance(keyword.value, ast.Constant)
+                and isinstance(keyword.value.value, str)
+            ),
+            "",
+        )
+        suffix = Path(default).suffix.lower()
+        if suffix in _BUSINESS_OUTPUT_SUFFIXES:
+            return suffix
+    for match in re.finditer(
+        r"--output(?!-dir)\b(?:\s+|=)[\"']?([^\s`\"']+)",
+        documentation,
+        re.IGNORECASE,
+    ):
+        suffix = Path(match.group(1).rstrip(".,;:)])")).suffix.lower()
+        if suffix in _BUSINESS_OUTPUT_SUFFIXES:
+            return suffix
+    return ".json"
+
+
+def _business_output_invariant_issues(path: Path) -> list[dict[str, Any]]:
+    """Check a few format-level business invariants without guessing semantics."""
+
+    def reject_non_finite(value: str) -> None:
+        raise ValueError(f"non-finite JSON number: {value}")
+
+    try:
+        payload = json.loads(
+            path.read_text(encoding="utf-8"),
+            parse_constant=reject_non_finite,
+        )
+    except (OSError, UnicodeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        return [
+            {
+                "id": "business_output_json_invalid",
+                "path": path.name,
+                "message": str(exc)[:500],
+            }
+        ]
+    if not isinstance(payload, dict):
+        return []
+    issues: list[dict[str, Any]] = []
+    for total_key, valid_key, error_key in (
+        ("total_rows", "valid_rows", "error_rows"),
+        ("total_count", "valid_count", "error_count"),
+    ):
+        values = [payload.get(key) for key in (total_key, valid_key, error_key)]
+        if not all(isinstance(value, int) and not isinstance(value, bool) for value in values):
+            continue
+        total, valid, error = values
+        if total != valid + error:
+            issues.append(
+                {
+                    "id": "business_output_count_mismatch",
+                    "path": path.name,
+                    "totalField": total_key,
+                    "validField": valid_key,
+                    "errorField": error_key,
+                    "actual": {total_key: total, valid_key: valid, error_key: error},
+                }
+            )
+    return issues
+
+
+def _materialized_output_files(output_path: Path | None) -> list[Path]:
+    """Resolve file, directory, or conventional output-prefix materialization."""
+
+    if output_path is None:
+        return []
+    if output_path.is_dir():
+        return sorted(path for path in output_path.rglob("*") if path.is_file())
+    if output_path.is_file():
+        return [output_path]
+    return sorted(
+        path
+        for path in output_path.parent.glob(f"{output_path.name}.*")
+        if path.is_file()
+    )
+
+
+def _remove_materialized_output(output_path: Path | None) -> None:
+    if output_path is None:
+        return
+    files = _materialized_output_files(output_path)
+    if output_path.is_dir():
+        shutil.rmtree(output_path, ignore_errors=True)
+        return
+    for path in files:
+        path.unlink(missing_ok=True)
+
+
+def _materialize_csv_edge_fixture(
+    root: Path,
+    fixture: Path,
+) -> Path | None:
+    """Create one private invalid-row variant from a real business CSV fixture."""
+
+    if fixture.suffix.lower() != ".csv":
+        return None
+    try:
+        with fixture.open(encoding="utf-8", newline="") as stream:
+            reader = csv.DictReader(stream)
+            rows = list(reader)
+            headers = list(reader.fieldnames or [])
+    except (OSError, UnicodeError, csv.Error):
+        return None
+    if not headers or not rows:
+        return None
+    if any(any(key not in headers for key in row) for row in rows):
+        return None
+    try:
+        scenario = json.loads(
+            (root / "validation" / "scenario_contract.json").read_text(
+                encoding="utf-8"
+            )
+        )
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+    contracts = scenario_structured_input_contracts(scenario)
+    required = [
+        str(name).strip()
+        for contract in contracts
+        if "csv" in str(contract.get("format") or "").lower()
+        for name in contract.get("required_columns") or []
+        if str(name).strip()
+    ]
+    field = next((name for name in required if name in headers), headers[0])
+    rows[0][field] = ""
+    target = (
+        root
+        / "workspace"
+        / "verify"
+        / f".skill-builder-edge-{uuid.uuid4().hex}.csv"
+    )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with target.open("w", encoding="utf-8", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=headers)
+            writer.writeheader()
+            writer.writerows(rows)
+    except (OSError, UnicodeError, ValueError, csv.Error):
+        target.unlink(missing_ok=True)
+        return None
+    return target
+
+
+def _runtime_fixture_input_contracts(
+    root: Path,
+    fixture: Path,
+) -> list[dict[str, Any]]:
+    """Project the Scenario contract relevant to one failed input fixture."""
+
+    scenario = _load_json_object(root / "validation" / "scenario_contract.json")
+    suffix = fixture.suffix.lower()
+    format_tokens = {
+        ".csv": ("csv",),
+        ".xls": ("xls", "excel", "表格"),
+        ".xlsx": ("xlsx", "excel", "表格"),
+        ".json": ("json",),
+        ".jsonl": ("jsonl", "ndjson"),
+    }.get(suffix, ())
+    if not format_tokens:
+        return []
+    result: list[dict[str, Any]] = []
+    for contract in scenario_structured_input_contracts(scenario):
+        format_value = str(contract.get("format") or "").strip()
+        format_text = format_value.lower()
+        if format_tokens and not any(token in format_text for token in format_tokens):
+            continue
+        fields = [
+            field
+            for field in contract.get("fields") or []
+            if isinstance(field, dict) and str(field.get("name") or "").strip()
+        ]
+        validation_rules: list[dict[str, Any]] = []
+
+        def append_rule(
+            rule: Any,
+            *,
+            field_name: str = "",
+            requirement_id: str = "",
+        ) -> None:
+            if rule in (None, "", [], {}):
+                return
+            rule_text = (
+                rule
+                if isinstance(rule, str)
+                else json.dumps(rule, ensure_ascii=False, sort_keys=True)
+            )
+            matching_fields = (
+                [field_name]
+                if field_name
+                else [
+                    str(field["name"]).strip()
+                    for field in fields
+                    if str(field["name"]).strip() in rule_text
+                ]
+            )
+            for matching_field in matching_fields or [""]:
+                projected_rule: dict[str, Any] = {"rule": rule}
+                if matching_field:
+                    projected_rule["field"] = matching_field
+                if requirement_id:
+                    projected_rule["requirementId"] = requirement_id
+                if projected_rule not in validation_rules:
+                    validation_rules.append(projected_rule)
+
+        for field in fields:
+            rule = next(
+                (
+                    field.get(key)
+                    for key in (
+                        "validation",
+                        "validationRule",
+                        "validation_rule",
+                        "校验规则",
+                        "校验",
+                    )
+                    if field.get(key) not in (None, "", [], {})
+                ),
+                None,
+            )
+            append_rule(rule, field_name=str(field["name"]).strip())
+        contract_rules = next(
+            (
+                contract.get(key)
+                for key in (
+                    "validationRules",
+                    "validation_rules",
+                    "validation",
+                    "校验规则",
+                )
+                if contract.get(key) not in (None, "", [], {})
+            ),
+            [],
+        )
+        for rule in contract_rules if isinstance(contract_rules, list) else [contract_rules]:
+            append_rule(rule)
+        for requirement in scenario.get("resolvedRequirements") or []:
+            if not isinstance(requirement, dict):
+                continue
+            rule = requirement.get("value") or requirement.get("sourceQuote")
+            append_rule(
+                rule,
+                requirement_id=str(
+                    requirement.get("requirementId") or ""
+                ).strip(),
+            )
+        projected: dict[str, Any] = {
+            "format": format_value,
+            "fields": [str(field["name"]).strip() for field in fields],
+            "requiredFields": [
+                str(field["name"]).strip()
+                for field in fields
+                if field.get("required") is True
+            ],
+            "validationRules": validation_rules,
+        }
+        if str(contract.get("name") or "").strip():
+            projected["name"] = str(contract["name"]).strip()
+        result.append(projected)
+    return result
+
+
+def _safe_local_mode_arguments(source: str) -> list[str]:
+    """Return only explicit CLI modes that promise no external runtime."""
+
+    if _USE_FIXTURE_ARGUMENT_RE.search(source):
+        return ["--use-fixture"]
+    if _OFFLINE_ARGUMENT_RE.search(source):
+        return ["--offline"]
+    if _QUERY_MODE_ARGUMENT_RE.search(source) and re.search(
+        r"['\"]offline['\"]", source, re.IGNORECASE
+    ):
+        return ["--query-mode", "offline"]
+    return []
+
+
+_OFFLINE_EXTERNAL_CLAIM_RE = re.compile(
+    r"(?:基于|依据).{0,24}(?:公开|官方|在线|实时).{0,12}(?:查询|检索|数据|结果)"
+    r"|(?:based on|using).{0,24}(?:official|public|online|live).{0,16}"
+    r"(?:query|search|data|results?)",
+    re.IGNORECASE,
+)
+_OFFLINE_NEGATION_RE = re.compile(
+    r"(?:未|没有|并未|不曾).{0,12}(?:查询|检索|访问|联网)"
+    r"|(?:离线|本地).{0,12}(?:模拟|规则|fixture)"
+    r"|(?:not|never|without).{0,12}(?:queried|searched|accessed|online)"
+    r"|offline.{0,12}(?:simulation|rules?|fixture)",
+    re.IGNORECASE,
+)
+
+
+def _offline_output_claim_issues(output_path: Path) -> list[dict[str, Any]]:
+    """Reject affirmative online evidence claims from a proven offline run."""
+
+    files = (
+        sorted(path for path in output_path.rglob("*") if path.is_file())
+        if output_path.is_dir()
+        else [output_path]
+        if output_path.is_file()
+        else []
+    )
+    issues: list[dict[str, Any]] = []
+    for path in files:
+        if path.suffix.lower() not in {".md", ".txt", ".json", ".jsonl"}:
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for line_number, line in enumerate(lines, start=1):
+            if _OFFLINE_EXTERNAL_CLAIM_RE.search(line) and not _OFFLINE_NEGATION_RE.search(
+                line
+            ):
+                issues.append(
+                    {
+                        "id": "offline_output_external_evidence_claim",
+                        "path": path.name,
+                        "line": line_number,
+                        "text": line[:500],
+                    }
+                )
+    return issues
+
+
 def _external_runtime_scripts(scripts: list[Path]) -> list[str]:
     """List scripts whose execution depends on a network/browser runtime.
 
@@ -1129,7 +1502,7 @@ def _external_runtime_scripts(scripts: list[Path]) -> list[str]:
             source = script.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        if any(pattern.search(source) for pattern in _EXTERNAL_RUNTIME_PATTERNS):
+        if python_runtime_call_capabilities(source):
             result.append(script.as_posix())
     return result
 
@@ -2207,8 +2580,10 @@ async def accept_skill_package(
     )
 
     skill_entry = generated / "SKILL.md"
+    skill_documentation = ""
     if skill_entry.is_file():
         text = skill_entry.read_text(encoding="utf-8", errors="replace")
+        skill_documentation = text
         missing_links: list[str] = []
         for target in _LOCAL_LINK_RE.findall(text):
             normalized = target.strip().lstrip("./")
@@ -2216,7 +2591,7 @@ async def accept_skill_package(
             # ``{sourceUrl}``; these are output fields, not package paths.
             if not normalized or "{" in normalized or "}" in normalized:
                 continue
-            if not (generated / normalized).is_file():
+            if not (generated / normalized).exists():
                 missing_links.append(normalized)
         if missing_links:
             findings.append(
@@ -2756,13 +3131,209 @@ async def accept_skill_package(
             and target is not None
             and target[0].resolve() in external_script_paths
         ):
+            script, fixture = target
+            source = script.read_text(encoding="utf-8", errors="replace")
+            input_validation: dict[str, Any] | None = None
+            local_mode_arguments = _safe_local_mode_arguments(source)
+            if local_mode_arguments:
+                command = [sys.executable, script.relative_to(generated).as_posix()]
+                input_mode = _script_input_mode(source)
+                command.extend(
+                    ["--input", fixture.relative_to(generated).as_posix()]
+                    if input_mode == "flag"
+                    else [fixture.relative_to(generated).as_posix()]
+                )
+                output_path: Path | None = None
+                output_mode = _script_output_mode(source)
+                if output_mode == "directory":
+                    output_path = (
+                        root
+                        / "workspace"
+                        / "verify"
+                        / f".skill-builder-offline-{uuid.uuid4().hex}"
+                    )
+                    output_path.mkdir(parents=True, exist_ok=True)
+                    output_flag = (
+                        "--output-dir"
+                        if _OUTPUT_DIR_ARGUMENT_RE.search(source)
+                        else "--output"
+                    )
+                    command.extend(
+                        [output_flag, f"../workspace/verify/{output_path.name}"]
+                    )
+                elif output_mode == "file":
+                    output_suffix = _script_output_suffix(
+                        source,
+                        documentation=skill_documentation,
+                    )
+                    output_path = (
+                        root
+                        / "workspace"
+                        / "verify"
+                        / f".skill-builder-offline-{uuid.uuid4().hex}{output_suffix}"
+                    )
+                    output_path.parent.mkdir(parents=True, exist_ok=True)
+                    command.extend(
+                        ["--output", f"../workspace/verify/{output_path.name}"]
+                    )
+                command.extend(local_mode_arguments)
+                validation_result = await execution_port.run(
+                    ExecutionRequest(
+                        command=tuple(command),
+                        cwd=generated,
+                        timeout_seconds=max(1, int(smoke_timeout_seconds)),
+                        env={"PYTHONPATH": "."},
+                    )
+                )
+                validation_failed = bool(
+                    validation_result.timed_out
+                    or validation_result.exit_code not in (0, None)
+                )
+                input_validation = {
+                    "mode": "offline_business_replay",
+                    "status": "fail" if validation_failed else "pass",
+                    "command": command,
+                    "exitCode": validation_result.exit_code,
+                    "timedOut": validation_result.timed_out,
+                }
+                if validation_failed:
+                    finding = _finding(
+                        "offline_smoke_failed",
+                        "外部入口的显式本地模式执行失败。",
+                        severity="fail",
+                        path=script.relative_to(root).as_posix(),
+                        category="execution",
+                    )
+                    finding["details"] = {
+                        **input_validation,
+                        "fixture": fixture.relative_to(generated).as_posix(),
+                        "stdout": (validation_result.stdout or "")[-2000:],
+                        "stderr": (validation_result.stderr or "")[-2000:],
+                    }
+                    findings.append(finding)
+                elif output_path is not None:
+                    output_files = _materialized_output_files(output_path)
+                    if not output_files:
+                        findings.append(
+                            _finding(
+                                "expected_output_missing",
+                                "生产 CLI 本地模式成功退出，但没有生成业务输出。",
+                                severity="fail",
+                                path=script.relative_to(root).as_posix(),
+                                category="execution",
+                            )
+                        )
+                    invariant_issues = [
+                        issue
+                        for path in output_files
+                        if path.suffix.lower() == ".json"
+                        for issue in _business_output_invariant_issues(path)
+                    ]
+                    if invariant_issues:
+                        finding = _finding(
+                            "business_output_invariant_failed",
+                            "本地模式输出违反通用结构化业务不变量。",
+                            severity="fail",
+                            path=script.relative_to(root).as_posix(),
+                            category="execution",
+                        )
+                        finding["details"] = invariant_issues[:20]
+                        findings.append(finding)
+                    claim_issues = [
+                        issue
+                        for path in output_files
+                        for issue in _offline_output_claim_issues(path)
+                    ]
+                    if claim_issues:
+                        finding = _finding(
+                            "offline_output_evidence_mismatch",
+                            "离线运行产物包含未经验证的在线/官方证据声明。",
+                            severity="fail",
+                            path=script.relative_to(root).as_posix(),
+                            category="execution",
+                        )
+                        finding["details"] = claim_issues[:20]
+                        findings.append(finding)
+                _remove_materialized_output(output_path)
+            elif _VALIDATE_ONLY_ARGUMENT_RE.search(source):
+                command = [sys.executable, script.relative_to(generated).as_posix()]
+                input_mode = _script_input_mode(source)
+                command.extend(
+                    ["--input", fixture.relative_to(generated).as_posix()]
+                    if input_mode == "flag"
+                    else [fixture.relative_to(generated).as_posix()]
+                )
+                command.append("--validate-only")
+                validation_result = await execution_port.run(
+                    ExecutionRequest(
+                        command=tuple(command),
+                        cwd=generated,
+                        timeout_seconds=max(1, min(30, int(smoke_timeout_seconds))),
+                        env={"PYTHONPATH": "."},
+                    )
+                )
+                validation_failed = bool(
+                    validation_result.timed_out
+                    or validation_result.exit_code not in (0, None)
+                )
+                input_validation = {
+                    "status": "fail" if validation_failed else "pass",
+                    "command": command,
+                    "exitCode": validation_result.exit_code,
+                    "timedOut": validation_result.timed_out,
+                }
+                if validation_failed:
+                    finding = _finding(
+                        "runtime_fixture_mismatch",
+                        "业务 fixture 未通过生产入口的安全输入预检。",
+                        severity="fail",
+                        path=script.relative_to(root).as_posix(),
+                        category="execution",
+                    )
+                    finding["details"] = {
+                        **input_validation,
+                        "fixture": fixture.relative_to(generated).as_posix(),
+                        "inputContracts": _runtime_fixture_input_contracts(
+                            root,
+                            fixture,
+                        ),
+                        "stdout": (validation_result.stdout or "")[-2000:],
+                        "stderr": (validation_result.stderr or "")[-2000:],
+                    }
+                    findings.append(finding)
+            elif scenario_has_structured_inputs(root):
+                finding = _finding(
+                    "external_input_validation_missing",
+                    "结构化外部生产入口缺少安全本地输入预检模式。",
+                    severity="fail",
+                    path=script.relative_to(root).as_posix(),
+                    category="execution",
+                )
+                finding["details"] = {
+                    "fixture": fixture.relative_to(generated).as_posix(),
+                    "requiredModes": ["explicit_offline_or_fixture_mode", "--validate-only"],
+                }
+                findings.append(finding)
+                input_validation = {
+                    "status": "missing",
+                    "fixture": fixture.relative_to(generated).as_posix(),
+                }
             checks.append(
                 _check(
                     "offline_smoke",
-                    "unverified",
-                    "外部浏览器/API 生产入口不在默认离线 smoke 中直接执行。",
+                    "fail"
+                    if input_validation
+                    and input_validation["status"] in {"fail", "missing"}
+                    else "unverified",
+                    (
+                        "外部入口的本地安全检查失败或缺失；未启动浏览器/API。"
+                        if input_validation
+                        and input_validation["status"] in {"fail", "missing"}
+                        else "外部浏览器/API 生产入口不在默认离线 smoke 中直接执行。"
+                    ),
                     command=None,
                     entrypoint=target[0].relative_to(generated).as_posix(),
+                    inputValidation=input_validation,
                 )
             )
         elif pipeline_entry is None and target is not None:
@@ -2772,13 +3343,11 @@ async def accept_skill_package(
             input_mode = _script_input_mode(source)
             command.extend(["--input", fixture.relative_to(generated).as_posix()] if input_mode == "flag" else [fixture.relative_to(generated).as_posix()])
             output_path: Path | None = None
-            output_is_directory = False
             output_mode = _script_output_mode(source)
             if output_mode == "directory":
                 output_name = f".skill-builder-smoke-{uuid.uuid4().hex}"
                 output_path = root / "workspace" / "verify" / output_name
                 output_path.mkdir(parents=True, exist_ok=True)
-                output_is_directory = True
                 output_flag = (
                     "--output-dir"
                     if _OUTPUT_DIR_ARGUMENT_RE.search(source)
@@ -2786,7 +3355,10 @@ async def accept_skill_package(
                 )
                 command.extend([output_flag, f"../workspace/verify/{output_name}"])
             elif output_mode == "file":
-                output_name = f".skill-builder-smoke-{uuid.uuid4().hex}.json"
+                output_name = (
+                    f".skill-builder-smoke-{uuid.uuid4().hex}"
+                    f"{_script_output_suffix(source, documentation=skill_documentation)}"
+                )
                 output_path = root / "workspace" / "verify" / output_name
                 output_path.parent.mkdir(parents=True, exist_ok=True)
                 command.extend(["--output", f"../workspace/verify/{output_name}"])
@@ -2808,6 +3380,14 @@ async def accept_skill_package(
                     category="execution",
                 )
                 diagnostics = f"{result.stdout}\n{result.stderr}"
+                finding["details"] = {
+                    "command": command,
+                    "fixture": fixture.relative_to(generated).as_posix(),
+                    "exitCode": result.exit_code,
+                    "timedOut": result.timed_out,
+                    "stdout": (result.stdout or "")[-2000:],
+                    "stderr": (result.stderr or "")[-2000:],
+                }
                 if (
                     script.relative_to(generated).as_posix()
                     in external_entrypoints
@@ -2823,27 +3403,24 @@ async def accept_skill_package(
                     command=command,
                 )
             )
-            actual_output_is_directory = bool(
-                output_path is not None and output_path.is_dir()
-            )
-            legacy_json_path = (
-                next(iter(sorted(output_path.rglob("*.json"))), None)
-                if actual_output_is_directory
-                and output_path is not None
-                else output_path
-                if output_path is not None and output_path.is_file()
-                else None
+            materialized_outputs = _materialized_output_files(output_path)
+            legacy_json_path = next(
+                (
+                    path
+                    for path in materialized_outputs
+                    if path.suffix.lower() == ".json"
+                ),
+                None,
             )
             if (
                 not legacy_failed
-                and actual_output_is_directory
                 and output_path is not None
-                and not any(path.is_file() for path in output_path.rglob("*"))
+                and not materialized_outputs
             ):
                 findings.append(
                     _finding(
                         "expected_output_missing",
-                        "生产 CLI 成功退出，但输出目录为空。",
+                        "生产 CLI 成功退出，但没有生成声明的业务输出。",
                         severity="fail",
                         path=script.relative_to(root).as_posix(),
                         category="execution",
@@ -2878,11 +3455,105 @@ async def accept_skill_package(
                             category="execution",
                         )
                     )
-            if output_path is not None:
-                if output_path.is_dir():
-                    shutil.rmtree(output_path, ignore_errors=True)
+                invariant_issues = (
+                    _business_output_invariant_issues(legacy_json_path)
+                    if legacy_payload is not None
+                    else []
+                )
+                if invariant_issues:
+                    finding = _finding(
+                        "business_output_invariant_failed",
+                        "离线脚本输出违反通用结构化业务不变量。",
+                        severity="fail",
+                        path=script.relative_to(root).as_posix(),
+                        category="execution",
+                    )
+                    finding["details"] = invariant_issues[:20]
+                    findings.append(finding)
+            edge_fixture = (
+                _materialize_csv_edge_fixture(root, fixture)
+                if not legacy_failed and output_path is not None
+                else None
+            )
+            edge_output: Path | None = None
+            if edge_fixture is not None:
+                edge_command = list(command)
+                fixture_token = fixture.relative_to(generated).as_posix()
+                edge_input_token = f"../workspace/verify/{edge_fixture.name}"
+                edge_command = [
+                    edge_input_token if token == fixture_token else token
+                    for token in edge_command
+                ]
+                if output_mode == "directory":
+                    edge_output = (
+                        root
+                        / "workspace"
+                        / "verify"
+                        / f".skill-builder-edge-output-{uuid.uuid4().hex}"
+                    )
+                    edge_output.mkdir(parents=True, exist_ok=True)
                 else:
-                    output_path.unlink(missing_ok=True)
+                    edge_output = (
+                        root
+                        / "workspace"
+                        / "verify"
+                        / (
+                            f".skill-builder-edge-output-{uuid.uuid4().hex}"
+                            f"{_script_output_suffix(source, documentation=skill_documentation)}"
+                        )
+                    )
+                if output_path is not None:
+                    output_token = f"../workspace/verify/{output_path.name}"
+                    edge_output_token = f"../workspace/verify/{edge_output.name}"
+                    edge_command = [
+                        edge_output_token if token == output_token else token
+                        for token in edge_command
+                    ]
+                edge_result = await execution_port.run(
+                    ExecutionRequest(
+                        command=tuple(edge_command),
+                        cwd=generated,
+                        timeout_seconds=max(1, int(smoke_timeout_seconds)),
+                        env={"PYTHONPATH": "."},
+                    )
+                )
+                if edge_result.timed_out:
+                    finding = _finding(
+                        "offline_smoke_timeout",
+                        "CSV 边界输入检查超时。",
+                        severity="fail",
+                        path=script.relative_to(root).as_posix(),
+                        category="execution",
+                    )
+                    finding["details"] = {"command": edge_command}
+                    findings.append(finding)
+                elif edge_result.exit_code in (0, None):
+                    edge_json = next(
+                        (
+                            path
+                            for path in _materialized_output_files(edge_output)
+                            if path.suffix.lower() == ".json"
+                        ),
+                        None,
+                    )
+                    edge_issues = (
+                        _business_output_invariant_issues(edge_json)
+                        if edge_json is not None
+                        else []
+                    )
+                    if edge_issues:
+                        finding = _finding(
+                            "business_output_invariant_failed",
+                            "CSV 边界输入输出违反通用结构化业务不变量。",
+                            severity="fail",
+                            path=script.relative_to(root).as_posix(),
+                            category="execution",
+                        )
+                        finding["details"] = edge_issues[:20]
+                        findings.append(finding)
+                edge_fixture.unlink(missing_ok=True)
+                _remove_materialized_output(edge_output)
+            _remove_materialized_output(output_path)
 
     required_runtime = {
         str(key)

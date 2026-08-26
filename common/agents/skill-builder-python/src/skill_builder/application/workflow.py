@@ -34,6 +34,7 @@ from skill_builder.application.fixture_builder import (
     platform_owned_fixture_paths,
 )
 from skill_builder.application.lifecycle_io import SkillBuilderLifecycleIO
+from skill_builder.application.input_contracts import scenario_structured_input_contracts
 from skill_builder.application.repair_scope import persist_repair_plan
 from skill_builder.application.run_artifacts import (
     changed_repair_artifact_files,
@@ -100,7 +101,23 @@ _MECHANICAL_REPAIR_FAMILIES = {
         "skill_reference_missing",
         "nonportable_package_reference",
     },
+    "business_fixture": {"implementation_plan_business_fixture_missing"},
+    "offline_execution": {
+        "business_output_invariant_failed",
+        "offline_smoke_failed",
+        "runtime_fixture_mismatch",
+    },
 }
+_RECOVERABLE_SCENARIO_FAILURES = frozenset(
+    {"agent_tool_input_invalid", "scenario_contract_invalid"}
+)
+_RECOVERABLE_AUTHOR_BUILD_FAILURES = frozenset(
+    {
+        "author_build_completion_missing",
+        "author_build_not_completed",
+        "controller_implementation_plan_invalid",
+    }
+)
 
 
 class CandidateLifecycleState(StrEnum):
@@ -158,6 +175,173 @@ def _failure_status(error: str, *, phase: str, issues: list[str] | None = None) 
     }
 
 
+def _phase_recovery_context(root: Path, status: dict[str, Any]) -> str:
+    """Render bounded deterministic facts for one failed phase retry."""
+
+    generated = root / "generated-skill"
+    files = (
+        sorted(
+            path.relative_to(generated).as_posix()
+            for path in generated.rglob("*")
+            if path.is_file()
+        )
+        if generated.is_dir()
+        else []
+    )
+    payload = {
+        "error": status.get("error"),
+        "issues": status.get("issues") or [],
+        "details": status.get("details") or {},
+        "existingGeneratedFiles": files[:100],
+    }
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2)[:12000]
+
+
+def _scenario_failure_is_recoverable(status: dict[str, Any]) -> bool:
+    error = str(status.get("error") or "").strip()
+    details = status.get("details") if isinstance(status.get("details"), dict) else {}
+    root_error = str(details.get("rootBlockerCode") or details.get("code") or "").strip()
+    return bool({error, root_error} & _RECOVERABLE_SCENARIO_FAILURES)
+
+
+def _author_build_failure_is_recoverable(root: Path, status: dict[str, Any]) -> bool:
+    if not (root / "generated-skill" / "SKILL.md").is_file():
+        return False
+    error = str(status.get("error") or "").strip()
+    details = status.get("details") if isinstance(status.get("details"), dict) else {}
+    code = str(details.get("code") or "").strip()
+    return bool({error, code} & _RECOVERABLE_AUTHOR_BUILD_FAILURES)
+
+
+def _business_fixture_repair_status(
+    root: Path,
+    status: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Translate one controller plan failure into an exact fixture repair."""
+
+    details = status.get("details") if isinstance(status.get("details"), dict) else {}
+    preflight = (
+        details.get("buildPreflightFailure")
+        if isinstance(details.get("buildPreflightFailure"), dict)
+        else {}
+    )
+    issue_ids = {
+        str(item.get("id") or "")
+        for item in preflight.get("issues") or []
+        if isinstance(item, dict)
+    }
+    finding_id = "implementation_plan_business_fixture_missing"
+    if issue_ids != {finding_id}:
+        return None
+    scenario, issues = load_persisted_scenario_contract(root)
+    contracts = scenario_structured_input_contracts(scenario) if not issues else []
+    format_text = str((contracts[0] if contracts else {}).get("format") or "").lower()
+    fields = [
+        str(item.get("name") or "").strip()
+        for item in (contracts[0] if contracts else {}).get("fields") or []
+        if isinstance(item, dict) and str(item.get("name") or "").strip()
+    ]
+    required_fields = [
+        str(item).strip()
+        for item in (contracts[0] if contracts else {}).get("required_fields") or []
+        if str(item).strip()
+    ]
+    validation_rules = [
+        str(item).strip()
+        for item in (contracts[0] if contracts else {}).get("validation_rules") or []
+        if str(item).strip()
+    ]
+    suffix = (
+        ".xlsx"
+        if any(token in format_text for token in ("xlsx", "excel"))
+        else ".csv"
+        if "csv" in format_text
+        else ".jsonl"
+        if "jsonl" in format_text
+        else ".json"
+    )
+    path = f"fixtures/business-input{suffix}"
+    finding = {
+        "id": finding_id,
+        "severity": "fail",
+        "repairable": True,
+        "failureOwner": "package",
+        "path": f"generated-skill/{path}",
+        "message": "可执行包缺少由生产入口消费的业务 happy fixture。",
+        "details": [
+            {
+                "path": path,
+                "format": format_text or suffix.removeprefix("."),
+                "fields": fields,
+                "requiredFields": required_fields,
+                "validationRules": validation_rules,
+            }
+        ],
+    }
+    return {
+        "ok": False,
+        "error": status.get("error"),
+        "stage": "draft_acceptance",
+        "repairable": True,
+        "failureOwners": ["package"],
+        "blockingFindingIds": [finding_id],
+        "acceptance": {"findings": [finding], "checks": []},
+        "details": {"sourceFailure": details},
+    }
+
+
+def _author_build_repair_status(
+    root: Path,
+    status: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Translate exact Build preflight findings into the bounded Repair shape."""
+
+    fixture_status = _business_fixture_repair_status(root, status)
+    if fixture_status is not None:
+        return fixture_status
+    details = status.get("details") if isinstance(status.get("details"), dict) else {}
+    preflight = (
+        details.get("buildPreflightFailure")
+        if isinstance(details.get("buildPreflightFailure"), dict)
+        else {}
+    )
+    findings = [
+        dict(item)
+        for item in preflight.get("findings") or []
+        if isinstance(item, dict) and item.get("severity") == "fail"
+    ]
+    if not findings or not all(
+        item.get("repairable") is True
+        and str(item.get("failureOwner") or "package") == "package"
+        for item in findings
+    ):
+        return None
+    blocker_ids = sorted(
+        {
+            str(item.get("id") or "").strip()
+            for item in findings
+            if str(item.get("id") or "").strip()
+        }
+    )
+    if not blocker_ids:
+        return None
+    return {
+        "ok": False,
+        "error": str(preflight.get("error") or status.get("error") or ""),
+        "stage": "draft_acceptance",
+        "message": str(preflight.get("message") or "")[:2000],
+        "repairable": True,
+        "failureOwners": ["package"],
+        "blockingFindingIds": blocker_ids,
+        "acceptance": {
+            "status": "fail",
+            "findings": findings,
+            "checks": [],
+        },
+        "details": {"sourceFailure": details},
+    }
+
+
 def _candidate_failure(status: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(status, dict):
         return {}
@@ -167,6 +351,33 @@ def _candidate_failure(status: dict[str, Any] | None) -> dict[str, Any]:
         if isinstance(failure, dict):
             return failure
     return status
+
+
+def _repair_finding_has_deterministic_evidence(finding: dict[str, Any]) -> bool:
+    finding_id = str(finding.get("id") or "").strip()
+    if finding_id == "business_output_invariant_failed":
+        return bool(finding.get("details"))
+    if finding_id not in {"offline_smoke_failed", "runtime_fixture_mismatch"}:
+        return True
+    details = finding.get("details")
+    if not isinstance(details, dict):
+        return False
+    command = details.get("command")
+    if not isinstance(command, list) or not command:
+        return False
+    if finding_id == "runtime_fixture_mismatch":
+        if not str(details.get("fixture") or "").strip():
+            return False
+        input_contracts = details.get("inputContracts")
+        if not isinstance(input_contracts, list) or not any(
+            isinstance(contract, dict) and contract
+            for contract in input_contracts
+        ):
+            return False
+    return bool(
+        str(details.get("stderr") or "").strip()
+        or str(details.get("stdout") or "").strip()
+    )
 
 
 def _repairable_candidate_failure(status: dict[str, Any] | None) -> bool:
@@ -188,6 +399,18 @@ def _repairable_candidate_failure(status: dict[str, Any] | None) -> bool:
             if family in families
         )
     ) if families else set()
+    acceptance = failure.get("acceptance")
+    findings = acceptance.get("findings") if isinstance(acceptance, dict) else []
+    blocking_findings = [
+        item
+        for item in findings or []
+        if isinstance(item, dict) and item.get("severity") == "fail"
+    ]
+    finding_ids = {
+        str(item.get("id") or "").strip()
+        for item in blocking_findings
+        if str(item.get("id") or "").strip()
+    }
     return bool(
         failure.get("stage") == "draft_acceptance"
         and failure.get("repairable") is True
@@ -195,6 +418,11 @@ def _repairable_candidate_failure(status: dict[str, Any] | None) -> bool:
         and len(families) == 1
         and blocker_ids
         and blocker_ids.issubset(covered)
+        and finding_ids == blocker_ids
+        and all(
+            _repair_finding_has_deterministic_evidence(item)
+            for item in blocking_findings
+        )
     )
 
 
@@ -357,6 +585,7 @@ def _candidate_repair_message(
             "平台生成预检未通过，请在当前持久化 Draft 上做一次有界修复。",
             "只修复下列 repairable=true 的阻断项；保留已通过文件和业务规则，不重跑 Scenario/HITL，不从头生成。",
             "不得读取 inputs/ 或重新加载材料包；先检查 targetPaths 指向的候选文件，并只处理 rootCauseFamily 对应的机械问题。",
+            "若为 runtime_fixture_mismatch，必须保留 details.fixture 的原 fixture 路径并使用 details.command 的原验证命令复验；不得通过删除或替换 fixture、移除校验参数或改用其他运行模式绕过失败。",
             "修复后返回结构化自检摘要；控制器会自动重跑全部预检并决定是否提交候选。",
             "",
             json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2),
@@ -831,6 +1060,53 @@ async def run_primary_workflow(
         scenario_status = scenario_submission_status(builder_input.root, scenario_result)
         if hasattr(scenario_result, "submission_status"):
             scenario_result.submission_status = scenario_status
+        if not scenario_status.get("ok") and _scenario_failure_is_recoverable(
+            scenario_status
+        ):
+            await lifecycle_io.emit(
+                "agent.scenario_recovery_started",
+                "Scenario 结构化提交失败，使用持久化草稿和精确 issues 重试一次。",
+                {
+                    "phase": "scenario",
+                    "attempt": 1,
+                    "error": scenario_status.get("error"),
+                },
+            )
+            recovery_input = replace(
+                scenario_input,
+                user_message="\n\n".join(
+                    (
+                        scenario_input.user_message,
+                        "上一次 Scenario 提交未通过。只根据以下控制器事实修正结构，"
+                        "不得改变业务方向或补造证据：\n"
+                        + _phase_recovery_context(
+                            builder_input.root,
+                            scenario_status,
+                        ),
+                    )
+                ),
+            )
+            scenario_result = await invoke_agent(
+                recovery_input,
+                scenario_options,
+                lifecycle_io,
+            )
+            scenario_status = scenario_submission_status(
+                builder_input.root,
+                scenario_result,
+            )
+            if hasattr(scenario_result, "submission_status"):
+                scenario_result.submission_status = scenario_status
+            await lifecycle_io.emit(
+                "agent.scenario_recovery_completed",
+                "Scenario 单次结构恢复已完成。",
+                {
+                    "phase": "scenario",
+                    "attempt": 1,
+                    "ok": bool(scenario_status.get("ok")),
+                    "error": scenario_status.get("error"),
+                },
+            )
         if not scenario_status.get("ok"):
             return PrimaryWorkflowResult(
                 scenario_result,
@@ -993,7 +1269,49 @@ async def run_primary_workflow(
         builder_input,
         user_message=author_message,
     )
-    author_result = await invoke_agent(author_input, author_options, lifecycle_io)
+    try:
+        author_result = await invoke_agent(author_input, author_options, lifecycle_io)
+    except Exception as exc:
+        if not scripts_required or not (
+            builder_input.root / "generated-skill" / "SKILL.md"
+        ).is_file():
+            raise
+        await lifecycle_io.emit(
+            "agent.author_build_recovery_started",
+            "Author Build 异常退出但候选检查点存在，续跑一次。",
+            {
+                "phase": "author_build",
+                "attempt": 1,
+                "error": f"{type(exc).__name__}: {exc}"[:1000],
+            },
+        )
+        recovery_input = replace(
+            author_input,
+            user_message="\n\n".join(
+                (
+                    author_input.user_message,
+                    "上一次 Author Build 异常退出，但已有候选文件。保留现有正确文件，"
+                    "只补齐缺失内容并立即调用 finish_authoring。现有检查点：\n"
+                    + _phase_recovery_context(
+                        builder_input.root,
+                        {
+                            "error": "author_build_interrupted",
+                            "details": {"message": str(exc)[:1000]},
+                        },
+                    ),
+                )
+            ),
+        )
+        author_result = await invoke_agent(
+            recovery_input,
+            author_options,
+            lifecycle_io,
+        )
+        await lifecycle_io.emit(
+            "agent.author_build_recovery_completed",
+            "Author Build 检查点续跑已返回。",
+            {"phase": "author_build", "attempt": 1, "ok": True},
+        )
     if scripts_required:
         build_status = author_build_submission_status(
             builder_input.root,
@@ -1001,6 +1319,68 @@ async def run_primary_workflow(
         )
         if hasattr(author_result, "submission_status"):
             author_result.submission_status = build_status
+        preflight_repair_status = _author_build_repair_status(
+            builder_input.root,
+            build_status,
+        )
+        if not build_status.get("ok") and preflight_repair_status is not None:
+            return await _run_candidate_repairs(
+                builder_input=builder_input,
+                options=options,
+                lifecycle_io=lifecycle_io,
+                invoke_agent=invoke_agent,
+                result=author_result,
+                status=preflight_repair_status,
+                source_phase="author_build",
+            )
+        if not build_status.get("ok") and _author_build_failure_is_recoverable(
+            builder_input.root,
+            build_status,
+        ):
+            await lifecycle_io.emit(
+                "agent.author_build_recovery_started",
+                "Author Build 已留下候选检查点，按精确失败信息续跑一次。",
+                {
+                    "phase": "author_build",
+                    "attempt": 1,
+                    "error": build_status.get("error"),
+                },
+            )
+            recovery_input = replace(
+                author_input,
+                user_message="\n\n".join(
+                    (
+                        author_input.user_message,
+                        "当前生产包未通过控制器提交边界。保留已有正确文件，"
+                        "只补齐或修正以下失败事实后立即调用 finish_authoring：\n"
+                        + _phase_recovery_context(
+                            builder_input.root,
+                            build_status,
+                        ),
+                    )
+                ),
+            )
+            author_result = await invoke_agent(
+                recovery_input,
+                author_options,
+                lifecycle_io,
+            )
+            build_status = author_build_submission_status(
+                builder_input.root,
+                author_result,
+            )
+            if hasattr(author_result, "submission_status"):
+                author_result.submission_status = build_status
+            await lifecycle_io.emit(
+                "agent.author_build_recovery_completed",
+                "Author Build 单次检查点续跑已完成。",
+                {
+                    "phase": "author_build",
+                    "attempt": 1,
+                    "ok": bool(build_status.get("ok")),
+                    "error": build_status.get("error"),
+                },
+            )
         if not build_status.get("ok"):
             return PrimaryWorkflowResult(
                 author_result,

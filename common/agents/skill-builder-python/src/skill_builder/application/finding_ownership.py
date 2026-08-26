@@ -83,6 +83,10 @@ FINDING_OWNERSHIP: dict[str, FindingOwnership] = {
         "offline_smoke_business_failed",
         "offline_smoke_failed",
         "offline_smoke_timeout",
+        "runtime_fixture_mismatch",
+        "business_output_invariant_failed",
+        "external_input_validation_missing",
+        "offline_output_evidence_mismatch",
     ),
     **_policies(
         FindingPhase.VALIDATE,
