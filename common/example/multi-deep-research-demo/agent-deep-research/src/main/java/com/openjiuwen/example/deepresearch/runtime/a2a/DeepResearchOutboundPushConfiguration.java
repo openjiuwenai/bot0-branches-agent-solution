@@ -5,7 +5,7 @@
 package com.openjiuwen.example.deepresearch.runtime.a2a;
 
 import com.openjiuwen.service.app.config.A2AProperties;
-import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentCardRegistry;
+import com.openjiuwen.service.app.a2a.catalog.A2ARemoteAgentCardRegistry;
 import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentClient;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 import com.openjiuwen.service.spec.paths.A2AServicePaths;
