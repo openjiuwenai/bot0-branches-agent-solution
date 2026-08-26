@@ -117,15 +117,30 @@ public class SessionFilteredAgentRail extends AgentRail {
     // 审计工具事件：rail 无耗时来源，elapsedMs 取 0（不虚报）；未启用 trajectory 时桥为 no-op
     private void auditTool(AgentCallbackContext ctx, String status) {
         try {
+            // 与委托一致先判会话匹配——共享 agent 上每个 rail 都会收到全部会话的回调，
+            // 不匹配直接跳过（否则一次工具调用被 N 个绑定 rail 重复记录）
+            if (!matches(ctx)) {
+                return;
+            }
             Session session = ctx.getSession();
             if (session == null || session.getSessionId() == null
                     || !(ctx.getInputs() instanceof ToolCallInputs inputs)) {
                 return;
             }
             AuditEventBridge.recordToolCall(session.getSessionId(), inputs.getToolName(), status, 0L);
+            AuditEventBridge.recordToolDecision(session.getSessionId(), inputs.getToolName(), status, 0L,
+                    summarize(inputs.getToolArgs()));
         } catch (IllegalStateException | NullPointerException | ClassCastException e) {
             LOGGER.warn("audit tool event failed: {}", e.getClass().getSimpleName());
         }
+    }
+
+    private static String summarize(Object args) {
+        if (args == null) {
+            return "";
+        }
+        String text = String.valueOf(args);
+        return text.length() <= 200 ? text : text.substring(0, 200);
     }
 
     private void safe(AgentCallbackContext ctx, Runnable action) {

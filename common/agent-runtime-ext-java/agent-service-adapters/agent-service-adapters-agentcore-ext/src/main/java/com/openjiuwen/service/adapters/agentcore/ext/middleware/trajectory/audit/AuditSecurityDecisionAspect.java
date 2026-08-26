@@ -9,6 +9,7 @@ import com.openjiuwen.service.app.security.AuthorizationDeniedException;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
+import org.springframework.core.annotation.Order;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -29,6 +30,7 @@ import java.util.Optional;
  * @since 2026-08-26
  */
 @Aspect
+@Order(0)
 public class AuditSecurityDecisionAspect {
     private static final Logger LOGGER = LoggerFactory.getLogger(AuditSecurityDecisionAspect.class);
     private static final String TENANT_HEADER = "x-tenant-id";
@@ -41,7 +43,7 @@ public class AuditSecurityDecisionAspect {
      * @return the controller method result
      * @throws Throwable propagated from the target method
      */
-    @Around("execution(* com.openjiuwen.service.app.security.ResourceAuthorizationAspect.authorize(..))")
+    @Around("@annotation(com.openjiuwen.service.app.security.AuthorizedResource)")
     public Object observe(ProceedingJoinPoint joinPoint) throws Throwable {
         try {
             Object result = joinPoint.proceed();

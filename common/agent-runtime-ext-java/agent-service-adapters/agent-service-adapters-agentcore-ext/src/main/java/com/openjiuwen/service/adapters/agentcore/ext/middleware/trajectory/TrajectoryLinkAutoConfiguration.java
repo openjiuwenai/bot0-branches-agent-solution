@@ -97,6 +97,12 @@ public class TrajectoryLinkAutoConfiguration {
      *
      * @since 2026-08-26
      */
+    static final class AuditBridgeRegistration {
+        private void clear() {
+            AuditEventBridge.clear();
+        }
+    }
+
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnBean(RuntimeRedisClient.class)
     static class RedisAssembly {
@@ -169,10 +175,10 @@ public class TrajectoryLinkAutoConfiguration {
          * @param collector audit collector
          * @return registration marker
          */
-        @Bean
-        Object auditBridgeRegistrar(AuditEventCollector collector) {
+        @Bean(destroyMethod = "clear")
+        AuditBridgeRegistration auditBridgeRegistrar(AuditEventCollector collector) {
             AuditEventBridge.register(collector);
-            return new Object();
+            return new AuditBridgeRegistration();
         }
 
         /**

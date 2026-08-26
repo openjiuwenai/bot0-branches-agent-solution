@@ -40,6 +40,7 @@ public class AuditSnapshotStore {
     private final RedisTrajectoryStore store;
     private final AsyncTrajectoryWriter writer;
     private final Map<String, Long> openRounds = new ConcurrentHashMap<>();
+    private final Map<String, Long> lastAllocated = new ConcurrentHashMap<>();
 
     /**
      * Creates the snapshot store.
@@ -60,13 +61,18 @@ public class AuditSnapshotStore {
      * @return allocated seq, or -1 when allocation failed (round is then dropped with WARN)
      */
     public long occupy(String tenantId, String conversationId) {
+        String roundKey = key(tenantId, conversationId);
+        // 内存单调下界：latest 索引经异步写推进（可能滞后/被背压丢弃），
+        // 候选 seq 以 max(Redis latest, 本实例已分配下界) 为起点，冲突时递增而非重读
+        long base = Math.max(readLatest(tenantId, conversationId), lastAllocated.getOrDefault(roundKey, 0L));
         for (int attempt = 0; attempt < OCCUPY_MAX_ATTEMPTS; attempt++) {
-            long candidate = readLatest(tenantId, conversationId) + 1;
+            long candidate = base + 1 + attempt;
             String seq = RedisTrajectoryStore.seq8(candidate);
             try {
                 if (store.allocateSeq(RedisTrajectoryStore.auditKey(tenantId, conversationId, seq),
                         seq, SEQ_HOLE_TTL_SECONDS)) {
-                    openRounds.put(key(tenantId, conversationId), candidate);
+                    lastAllocated.put(roundKey, candidate);
+                    openRounds.put(roundKey, candidate);
                     return candidate;
                 }
             } catch (JedisException | IllegalStateException e) {
@@ -76,6 +82,17 @@ public class AuditSnapshotStore {
         }
         LOGGER.warn("audit seq occupy exhausted {} attempts for conversation {}", OCCUPY_MAX_ATTEMPTS, conversationId);
         return -1L;
+    }
+
+    /**
+     * Returns the latest committed round seq (for out-of-round decision records).
+     *
+     * @param tenantId       tenant id
+     * @param conversationId conversation id
+     * @return latest seq (0 when none)
+     */
+    public long latestSeq(String tenantId, String conversationId) {
+        return readLatest(tenantId, conversationId);
     }
 
     /**

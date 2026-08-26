@@ -51,6 +51,23 @@ public final class AuditEventBridge {
     }
 
     /**
+     * Forwards a tool-call decision evidence.
+     *
+     * @param conversationId conversation id
+     * @param toolName       tool name
+     * @param status         finish / error
+     * @param elapsedMs      elapsed milliseconds (0 when unavailable)
+     * @param argsSummary    args summary
+     */
+    public static void recordToolDecision(String conversationId, String toolName, String status,
+                                          long elapsedMs, String argsSummary) {
+        AuditEventCollector current = collector;
+        if (current != null) {
+            current.recordToolDecision(conversationId, toolName, status, elapsedMs, argsSummary);
+        }
+    }
+
+    /**
      * Forwards a user query / agent answer summary pair.
      *
      * @param conversationId conversation id

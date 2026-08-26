@@ -134,7 +134,7 @@ public class RedisTrajectoryStore {
      * @return zero-padded seq
      */
     public static String seq8(long seq) {
-        return String.format("%08d", seq);
+        return String.format(java.util.Locale.ROOT, "%08d", seq);
     }
 
     /**
@@ -144,7 +144,7 @@ public class RedisTrajectoryStore {
      * @return zero-padded seq
      */
     public static String seq4(long seq) {
-        return String.format("%04d", seq);
+        return String.format(java.util.Locale.ROOT, "%04d", seq);
     }
 
     /**

@@ -15,11 +15,13 @@ import org.slf4j.LoggerFactory;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -100,10 +102,28 @@ public class AuditEventCollector {
      * @param elapsedMs      elapsed milliseconds (0 when the rail has no timing source)
      */
     public void recordToolCall(String conversationId, String toolName, String status, long elapsedMs) {
-        RoundBuffer buffer = bufferOf(conversationId);
-        if (buffer != null) {
-            buffer.toolCalls.add(Map.of("name", toolName, "status", status, "elapsedMs", elapsedMs));
-        }
+        bufferOf(conversationId).ifPresent(buffer ->
+                buffer.toolCalls.add(Map.of("name", toolName, "status", status, "elapsedMs", elapsedMs)));
+    }
+
+    /**
+     * Records a tool-call decision evidence (args summary, elapsed, outcome). 不可逆性在
+     * rail 侧不可判定——全部工具调用留证，不可逆子集由下游按工具名过滤。
+     *
+     * @param conversationId conversation id
+     * @param toolName       tool name
+     * @param status         finish / error
+     * @param elapsedMs      elapsed milliseconds (0 when unavailable)
+     * @param argsSummary    args summary (truncated here)
+     */
+    public void recordToolDecision(String conversationId, String toolName, String status,
+                                   long elapsedMs, String argsSummary) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("toolName", toolName);
+        fields.put("status", status);
+        fields.put("elapsedMs", elapsedMs);
+        fields.put("argsSummary", truncate(argsSummary));
+        recordDecision(null, conversationId, "tool-call", fields);
     }
 
     /**
@@ -114,11 +134,10 @@ public class AuditEventCollector {
      * @param agentAnswer    agent answer (truncated)
      */
     public void recordExchange(String conversationId, String userQuery, String agentAnswer) {
-        RoundBuffer buffer = bufferOf(conversationId);
-        if (buffer != null) {
+        bufferOf(conversationId).ifPresent(buffer -> {
             buffer.userQuery = truncate(userQuery);
             buffer.agentAnswer = truncate(agentAnswer);
-        }
+        });
     }
 
     /**
@@ -134,6 +153,10 @@ public class AuditEventCollector {
                                  String remoteRunId, String resultCategory) {
         RoundBuffer buffer = buffers.get(key(conversationId, taskId));
         if (buffer == null) {
+            return;
+        }
+        if (!buffer.delegationSeen.add(remoteRunId)) {
+            // 影子 Task 在 resume 路径会被重复 save——同一 remoteTaskId 每轮只记一次
             return;
         }
         Map<String, Object> delegation = new LinkedHashMap<>();
@@ -157,14 +180,16 @@ public class AuditEventCollector {
      */
     public void recordDecision(String tenantId, String conversationId, String type,
                                Map<String, Object> fields) {
-        RoundBuffer buffer = bufferOf(conversationId);
-        String tenant = tenantId != null ? tenantId : (buffer != null ? buffer.tenantId : "unknown");
-        long seq = buffer != null ? buffer.seq
-                : snapshots.currentSeq(tenant, conversationId).orElse(-1L);
+        Optional<RoundBuffer> buffer = bufferOf(conversationId);
+        String tenant = tenantId != null ? tenantId : buffer.map(b -> b.tenantId).orElse("unknown");
+        // 无 open round（轮外决策，如安全切面）时按 latest 已提交 seq 落盘，不丢弃
+        long seq = buffer.map(b -> b.seq)
+                .orElseGet(() -> snapshots.currentSeq(tenant, conversationId)
+                        .orElseGet(() -> snapshots.latestSeq(tenant, conversationId)));
         if (seq < 0) {
             return;
         }
-        int decisionSeq = buffer != null ? buffer.decisionSeq.incrementAndGet() : 0;
+        int decisionSeq = buffer.map(b -> b.decisionSeq.incrementAndGet()).orElse(0);
         Map<String, Object> record = new LinkedHashMap<>(fields);
         record.put("type", type);
         record.put("seq", seq);
@@ -204,15 +229,24 @@ public class AuditEventCollector {
         snapshots.closeRound(buffer.tenantId, conversationId, toJson(snapshot));
     }
 
-    private RoundBuffer bufferOf(String conversationId) {
+    private Optional<RoundBuffer> bufferOf(String conversationId) {
         evictStale();
         String taskId = currentTask.get(conversationId);
-        return taskId != null ? buffers.get(key(conversationId, taskId)) : null;
+        if (taskId == null) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(buffers.get(key(conversationId, taskId)));
     }
 
     private void evictStale() {
         long cutoff = System.currentTimeMillis() - BUFFER_TIMEOUT_MS;
-        buffers.values().removeIf(buffer -> buffer.createdAtMs < cutoff);
+        buffers.entrySet().removeIf(entry -> {
+            boolean stale = entry.getValue().createdAtMs < cutoff;
+            if (stale) {
+                currentTask.values().removeIf(entry.getValue()::equals);
+            }
+            return stale;
+        });
     }
 
     private static String key(String conversationId, String taskId) {
@@ -249,8 +283,9 @@ public class AuditEventCollector {
         private final boolean degraded;
         private final String startedAt = now();
         private final long createdAtMs = System.currentTimeMillis();
-        private final List<Map<String, Object>> toolCalls = new ArrayList<>();
-        private final List<Map<String, Object>> delegations = new ArrayList<>();
+        private final List<Map<String, Object>> toolCalls = new CopyOnWriteArrayList<>();
+        private final List<Map<String, Object>> delegations = new CopyOnWriteArrayList<>();
+        private final Set<String> delegationSeen = ConcurrentHashMap.newKeySet();
         private final AtomicInteger decisionSeq = new AtomicInteger();
         private volatile String userQuery = "";
         private volatile String agentAnswer = "";
