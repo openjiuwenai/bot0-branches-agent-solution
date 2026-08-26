@@ -50,6 +50,7 @@ public class AuditEventCollector {
     private final AsyncTrajectoryWriter writer;
     private final Map<String, RoundBuffer> buffers = new ConcurrentHashMap<>();
     private final Map<String, String> currentTask = new ConcurrentHashMap<>();
+    private final Map<String, AtomicInteger> outOfRoundCounters = new ConcurrentHashMap<>();
 
     /**
      * Creates the collector.
@@ -148,9 +149,12 @@ public class AuditEventCollector {
      * @param agentName      remote agent name
      * @param remoteRunId    remote run id
      * @param resultCategory result category (may be null)
+     * @param toolCallId     tool call id that triggered the delegation (may be null)
+     * @param sourceRunId    source (parent) run id, for joining back to the run tree (may be null)
      */
     public void recordDelegation(String conversationId, String taskId, String agentName,
-                                 String remoteRunId, String resultCategory) {
+                                 String remoteRunId, String resultCategory, String toolCallId,
+                                 String sourceRunId) {
         RoundBuffer buffer = buffers.get(key(conversationId, taskId));
         if (buffer == null) {
             return;
@@ -162,6 +166,12 @@ public class AuditEventCollector {
         Map<String, Object> delegation = new LinkedHashMap<>();
         delegation.put("agentName", agentName);
         delegation.put("remoteRunId", remoteRunId);
+        if (toolCallId != null && !toolCallId.isBlank()) {
+            delegation.put("toolCallId", toolCallId);
+        }
+        if (sourceRunId != null && !sourceRunId.isBlank()) {
+            delegation.put("sourceRunId", sourceRunId);
+        }
         if (resultCategory != null && !resultCategory.isBlank()) {
             delegation.put("resultCategory", resultCategory);
         }
@@ -189,7 +199,9 @@ public class AuditEventCollector {
         if (seq < 0) {
             return;
         }
-        int decisionSeq = buffer.map(b -> b.decisionSeq.incrementAndGet()).orElse(0);
+        // 轮外（buffer 缺失）决策按 tenant|conv|seq 独立计数——共享槽位会互相覆盖
+        int decisionSeq = buffer.map(b -> b.decisionSeq.incrementAndGet())
+                .orElseGet(() -> outOfRoundSeq(tenant, conversationId, seq));
         Map<String, Object> record = new LinkedHashMap<>(fields);
         record.put("type", type);
         record.put("seq", seq);
@@ -238,12 +250,18 @@ public class AuditEventCollector {
         return Optional.ofNullable(buffers.get(key(conversationId, taskId)));
     }
 
+    private int outOfRoundSeq(String tenant, String conversationId, long seq) {
+        return outOfRoundCounters.computeIfAbsent(
+                tenant + "|" + conversationId + "|" + seq, k -> new AtomicInteger()).incrementAndGet();
+    }
+
     private void evictStale() {
         long cutoff = System.currentTimeMillis() - BUFFER_TIMEOUT_MS;
         buffers.entrySet().removeIf(entry -> {
             boolean stale = entry.getValue().createdAtMs < cutoff;
             if (stale) {
-                currentTask.values().removeIf(entry.getValue()::equals);
+                currentTask.values().removeIf(entry.getValue().taskId::equals);
+                outOfRoundCounters.keySet().removeIf(key -> key.endsWith("|" + entry.getValue().seq));
             }
             return stale;
         });

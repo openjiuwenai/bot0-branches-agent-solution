@@ -7,6 +7,7 @@ package com.openjiuwen.service.adapters.agentcore.ext.middleware.otel;
 import com.openjiuwen.core.session.Session;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.AgentRail;
+import com.openjiuwen.core.singleagent.rail.InvokeInputs;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
 import com.openjiuwen.extensions.tracerotel.OtelRail;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.egress.EgressContextStash;
@@ -59,6 +60,9 @@ public class SessionFilteredAgentRail extends AgentRail {
             if (httpSpan != null) {
                 bridgeScope = httpSpan.storeInContext(Context.root()).makeCurrent();
             }
+            if (ctx.getInputs() instanceof InvokeInputs inputs) {
+                pendingQuery = inputs.getQuery();
+            }
             delegate.beforeInvoke(ctx);
         });
     }
@@ -71,6 +75,7 @@ public class SessionFilteredAgentRail extends AgentRail {
                 bridgeScope.close();
                 bridgeScope = null;
             }
+            auditExchange(ctx);
         });
         // 注意：不在此清理 EgressContextStash——中断型委托（a2a_delegate）的出站发生在
         // 本次 invoke 结束之后（orchestrator/coordinator 驱动），此时清理会丢失父上下文。
@@ -114,6 +119,21 @@ public class SessionFilteredAgentRail extends AgentRail {
         auditTool(ctx, "error");
     }
 
+    // 审计问答摘要：bridge 未注册（trajectory 未启用）时 no-op；rail 按请求绑定，实例字段安全
+    private void auditExchange(AgentCallbackContext ctx) {
+        try {
+            Session session = ctx.getSession();
+            if (session == null || session.getSessionId() == null
+                    || !(ctx.getInputs() instanceof InvokeInputs inputs)) {
+                return;
+            }
+            AuditEventBridge.recordExchange(session.getSessionId(), pendingQuery,
+                    String.valueOf(inputs.getResult()));
+        } catch (IllegalStateException | NullPointerException | ClassCastException e) {
+            LOGGER.warn("audit exchange event failed: {}", e.getClass().getSimpleName());
+        }
+    }
+
     // 审计工具事件：rail 无耗时来源，elapsedMs 取 0（不虚报）；未启用 trajectory 时桥为 no-op
     private void auditTool(AgentCallbackContext ctx, String status) {
         try {
@@ -142,6 +162,8 @@ public class SessionFilteredAgentRail extends AgentRail {
         String text = String.valueOf(args);
         return text.length() <= 200 ? text : text.substring(0, 200);
     }
+
+    private volatile String pendingQuery;
 
     private void safe(AgentCallbackContext ctx, Runnable action) {
         try {

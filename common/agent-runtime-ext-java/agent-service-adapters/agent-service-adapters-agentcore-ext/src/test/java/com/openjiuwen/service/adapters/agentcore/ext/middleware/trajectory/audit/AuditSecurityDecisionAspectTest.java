@@ -31,6 +31,24 @@ class AuditSecurityDecisionAspectTest {
     }
 
     @Test
+    void pointcutMatchesAuthorizedResourceMethod() throws Exception {
+        // 防 FQN 漂移回归：切点表达式必须匹配打了真实注解的方法（FQN 写错时本测试即红）
+        org.springframework.aop.aspectj.AspectJExpressionPointcut pointcut =
+                new org.springframework.aop.aspectj.AspectJExpressionPointcut();
+        pointcut.setExpression("@annotation(com.openjiuwen.service.spec.security.AuthorizedResource)");
+        java.lang.reflect.Method method = DummyResource.class.getDeclaredMethod("serve");
+        assertThat(pointcut.matches(method, DummyResource.class)).isTrue();
+    }
+
+    /** 打了真实 AuthorizedResource 注解的 dummy（切点匹配测试用）。 */
+    static class DummyResource {
+        @com.openjiuwen.service.spec.security.AuthorizedResource(resource = "query", action = "execute")
+        String serve() {
+            return "ok";
+        }
+    }
+
+    @Test
     void allowIsRecorded() throws Throwable {
         AtomicReference<Map<String, Object>> captured = new AtomicReference<>();
         AuditEventBridge.register(new StubCollector(captured));

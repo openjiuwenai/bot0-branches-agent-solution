@@ -10,8 +10,6 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.springframework.core.annotation.Order;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
@@ -32,8 +30,8 @@ import java.util.Optional;
 @Aspect
 @Order(0)
 public class AuditSecurityDecisionAspect {
-    private static final Logger LOGGER = LoggerFactory.getLogger(AuditSecurityDecisionAspect.class);
     private static final String TENANT_HEADER = "x-tenant-id";
+    private static final String TRACEPARENT_HEADER = "traceparent";
     private static final String UNKNOWN = "unknown";
 
     /**
@@ -43,7 +41,7 @@ public class AuditSecurityDecisionAspect {
      * @return the controller method result
      * @throws Throwable propagated from the target method
      */
-    @Around("@annotation(com.openjiuwen.service.app.security.AuthorizedResource)")
+    @Around("@annotation(com.openjiuwen.service.spec.security.AuthorizedResource)")
     public Object observe(ProceedingJoinPoint joinPoint) throws Throwable {
         try {
             Object result = joinPoint.proceed();
@@ -58,6 +56,7 @@ public class AuditSecurityDecisionAspect {
     private void record(String decision, String reason, String resource, String action) {
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("decision", decision);
+        traceId().ifPresent(traceId -> fields.put("traceId", traceId));
         if (reason != null) {
             fields.put("reason", reason);
         }
@@ -68,6 +67,19 @@ public class AuditSecurityDecisionAspect {
             fields.put("action", action);
         }
         AuditEventBridge.recordDecision(tenantId().orElse(UNKNOWN), UNKNOWN, "security", fields);
+    }
+
+    private static Optional<String> traceId() {
+        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attrs) {
+            String header = attrs.getRequest().getHeader(TRACEPARENT_HEADER);
+            if (header != null) {
+                String[] parts = header.trim().split("-");
+                if (parts.length == 4) {
+                    return Optional.of(parts[1]);
+                }
+            }
+        }
+        return Optional.empty();
     }
 
     private static Optional<String> tenantId() {

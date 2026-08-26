@@ -48,7 +48,7 @@ class AuditEventCollectorTest {
     void fullRoundLifecycleProducesSnapshotWithEvidence() {
         collector.openRound("tenant-1", "conv-1", "task-1", "trace-1", false, "task-1#1");
         collector.recordToolCall("conv-1", "todo_create", "finish", 12L);
-        collector.recordDelegation("conv-1", "task-1", "versatile-agent", "remote-9", "COMPLETED");
+        collector.recordDelegation("conv-1", "task-1", "versatile-agent", "remote-9", "COMPLETED", "call_1", "task-1#1");
         collector.recordExchange("conv-1", "推荐基金", "建议配置A");
         collector.closeRound("conv-1", "task-1", "TASK_STATE_COMPLETED");
         flush();
@@ -103,6 +103,18 @@ class AuditEventCollectorTest {
                 eq(RedisTrajectoryStore.auditKey("t", "conv-1", "00000001")), jsonCaptor.capture());
         assertThat(jsonCaptor.getValue()).contains("todo_create");
         AuditEventBridge.clear();
+    }
+
+    @Test
+    void outOfRoundDecisionsGetDistinctKeys() {
+        // 无 open round：两条轮外决策必须落到不同 decisionSeq key（单槽覆盖回归）
+        collector.recordDecision("t", "conv-9", "security", Map.of("decision", "deny"));
+        collector.recordDecision("t", "conv-9", "security", Map.of("decision", "allow"));
+        flush();
+        verify(store).putRecord(eq(RedisTrajectoryStore.auditDecisionKey("t", "conv-9", "00000000", "0001")),
+                contains("deny"));
+        verify(store).putRecord(eq(RedisTrajectoryStore.auditDecisionKey("t", "conv-9", "00000000", "0002")),
+                contains("allow"));
     }
 
     private void flush() {

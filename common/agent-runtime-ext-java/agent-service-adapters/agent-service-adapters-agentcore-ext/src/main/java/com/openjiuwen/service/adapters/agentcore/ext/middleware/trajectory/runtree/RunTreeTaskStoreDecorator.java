@@ -165,7 +165,8 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
                     && memberMap.get("remoteTaskId") instanceof String remote && !remote.isBlank()) {
                 audit.recordDelegation(task.contextId(), parentId,
                         text(memberMap.get("agentName")).orElse("unknown"), remote,
-                        text(memberMap.get("resultCategory")).orElse(null));
+                        text(memberMap.get("resultCategory")).orElse(null),
+                        text(memberMap.get("toolCallId")).orElse(null), fullRunId(parentId));
             }
         }
     }

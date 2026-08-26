@@ -36,10 +36,11 @@ public class AuditSnapshotStore {
     private static final long SEQ_HOLE_TTL_SECONDS = 300L;
 
     private static final int OCCUPY_MAX_ATTEMPTS = 3;
+    private static final long OPEN_ROUND_TIMEOUT_MS = 600_000L;
 
     private final RedisTrajectoryStore store;
     private final AsyncTrajectoryWriter writer;
-    private final Map<String, Long> openRounds = new ConcurrentHashMap<>();
+    private final Map<String, OccupiedRound> openRounds = new ConcurrentHashMap<>();
     private final Map<String, Long> lastAllocated = new ConcurrentHashMap<>();
 
     /**
@@ -72,7 +73,7 @@ public class AuditSnapshotStore {
                 if (store.allocateSeq(RedisTrajectoryStore.auditKey(tenantId, conversationId, seq),
                         seq, SEQ_HOLE_TTL_SECONDS)) {
                     lastAllocated.put(roundKey, candidate);
-                    openRounds.put(roundKey, candidate);
+                    openRounds.put(roundKey, new OccupiedRound(candidate));
                     return candidate;
                 }
             } catch (JedisException | IllegalStateException e) {
@@ -103,7 +104,8 @@ public class AuditSnapshotStore {
      * @return open round seq, or empty when no round is open
      */
     public Optional<Long> currentSeq(String tenantId, String conversationId) {
-        return Optional.ofNullable(openRounds.get(key(tenantId, conversationId)));
+        evictStale();
+        return Optional.ofNullable(openRounds.get(key(tenantId, conversationId))).map(OccupiedRound::seq);
     }
 
     /**
@@ -115,10 +117,12 @@ public class AuditSnapshotStore {
      * @param snapshotJson   snapshot record JSON
      */
     public void closeRound(String tenantId, String conversationId, String snapshotJson) {
-        Long seq = openRounds.remove(key(tenantId, conversationId));
-        if (seq == null) {
+        evictStale();
+        OccupiedRound occupied = openRounds.remove(key(tenantId, conversationId));
+        if (occupied == null) {
             return;
         }
+        long seq = occupied.seq;
         String auditKey = RedisTrajectoryStore.auditKey(tenantId, conversationId, RedisTrajectoryStore.seq8(seq));
         String latestKey = RedisTrajectoryStore.auditLatestKey(tenantId, conversationId);
         String seq8 = RedisTrajectoryStore.seq8(seq);
@@ -163,8 +167,27 @@ public class AuditSnapshotStore {
         }
     }
 
+    private void evictStale() {
+        long cutoff = System.currentTimeMillis() - OPEN_ROUND_TIMEOUT_MS;
+        openRounds.values().removeIf(occupied -> occupied.createdAtMs < cutoff);
+    }
+
     private static String key(String tenantId, String conversationId) {
         return tenantId + "|" + conversationId;
+    }
+
+    /** Occupy record with creation timestamp (stale eviction for never-closed rounds). */
+    private static final class OccupiedRound {
+        private final long seq;
+        private final long createdAtMs = System.currentTimeMillis();
+
+        private OccupiedRound(long seq) {
+            this.seq = seq;
+        }
+
+        private long seq() {
+            return seq;
+        }
     }
 
     /**
