@@ -71,30 +71,54 @@ public final class TraceContextCarrier {
     }
 
     /**
-     * Finds the entry for a (possibly combined) context id: exact match first, then
-     * secondary index, then right-anchored parse, finally longest-prefix match.
+     * Finds the entry for a (possibly combined) context id via {@link #resolveKey}.
      *
      * @param contextId bare or combined context id
      * @return the entry, or empty
      */
     public Optional<Entry> find(String contextId) {
+        evictExpired();
+        return resolveKey(contextId).map(entries::get);
+    }
+
+    /**
+     * Resolves the canonical carrier key for a (possibly combined) context id: exact
+     * match first, then secondary index, then right-anchored parse, finally longest-prefix
+     * match. Lets callers write back under the canonical key instead of aliasing the
+     * combined form into the main index.
+     *
+     * @param contextId bare or combined context id
+     * @return the canonical key, or empty when nothing matches
+     */
+    public Optional<String> resolveKey(String contextId) {
         if (contextId == null || contextId.isBlank()) {
             return Optional.empty();
         }
-        evictExpired();
-        Entry exact = entries.get(contextId);
-        if (exact != null) {
-            return Optional.of(exact);
+        if (entries.containsKey(contextId)) {
+            return Optional.of(contextId);
         }
         String viaSecondary = secondaryIndex.get(contextId);
         if (viaSecondary != null && entries.containsKey(viaSecondary)) {
-            return Optional.of(entries.get(viaSecondary));
+            return Optional.of(viaSecondary);
         }
         Optional<String> anchored = rightAnchorConversationId(contextId);
         if (anchored.isPresent() && entries.containsKey(anchored.get())) {
-            return Optional.of(entries.get(anchored.get()));
+            return anchored;
         }
-        return longestPrefix(contextId);
+        return longestPrefixKey(contextId);
+    }
+
+    /**
+     * Stores the entry only when the key has none (degraded writes must not overwrite
+     * a concurrently written good entry).
+     *
+     * @param conversationId conversation key
+     * @param entry          trace context entry
+     */
+    public void putIfAbsent(String conversationId, Entry entry) {
+        if (conversationId != null && entry != null) {
+            entries.putIfAbsent(conversationId, entry);
+        }
     }
 
     /**
@@ -123,13 +147,12 @@ public final class TraceContextCarrier {
         secondaryIndex.values().removeIf(conversationId::equals);
     }
 
-    private Optional<Entry> longestPrefix(String contextId) {
-        Entry best = null;
+    private Optional<String> longestPrefixKey(String contextId) {
+        String best = null;
         int bestLen = 0;
-        for (Map.Entry<String, Entry> candidate : entries.entrySet()) {
-            String key = candidate.getKey();
+        for (String key : entries.keySet()) {
             if (key.length() > bestLen && contextId.startsWith(key + "_")) {
-                best = candidate.getValue();
+                best = key;
                 bestLen = key.length();
             }
         }
@@ -273,6 +296,16 @@ public final class TraceContextCarrier {
          */
         public Optional<String> getCurrentRunId() {
             return Optional.ofNullable(currentRunId);
+        }
+
+        /**
+         * Sets the current run id (used when an entry is replaced by a fresher one
+         * that should inherit the round marker).
+         *
+         * @param currentRunId current run id
+         */
+        public void setCurrentRunId(String currentRunId) {
+            this.currentRunId = currentRunId;
         }
     }
 }

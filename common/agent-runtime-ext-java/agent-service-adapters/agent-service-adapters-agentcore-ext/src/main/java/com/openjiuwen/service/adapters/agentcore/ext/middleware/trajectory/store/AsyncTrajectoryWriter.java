@@ -26,11 +26,13 @@ public class AsyncTrajectoryWriter implements AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger(AsyncTrajectoryWriter.class);
 
     private static final long DROP_LOG_EVERY = 1000L;
+    private static final long RESTART_BACKOFF_MS = 10_000L;
 
     private final LinkedBlockingQueue<Runnable> queue;
     private final int flushIntervalMs;
     private final AtomicLong droppedCount = new AtomicLong();
     private final AtomicLong failedCount = new AtomicLong();
+    private final AtomicLong lastRestartMs = new AtomicLong();
     private volatile Thread worker;
     private volatile boolean running;
     private volatile boolean closed;
@@ -50,15 +52,22 @@ public class AsyncTrajectoryWriter implements AutoCloseable {
      * Starts the single background flush thread (idempotent).
      */
     public synchronized void start() {
-        if (running) {
+        if (running || closed) {
             return;
         }
         running = true;
         worker = new Thread(this::flushLoop, "trajectory-link-writer");
         worker.setDaemon(true);
         // 线程级兜底：未捕获的运行时异常（如 Redis 客户端实现的私有异常类型）致线程死亡时
-        // 记录并自动重启——避免故障后写入静默积压；门禁禁广捕，故不用 catch 保活
+        // 退避后重启（10s 窗口内最多一次，防死亡-重启风暴）；close 后不再复活（start 已判 closed）
         worker.setUncaughtExceptionHandler((dead, error) -> {
+            long now = System.currentTimeMillis();
+            if (now - lastRestartMs.get() < RESTART_BACKOFF_MS) {
+                LOGGER.error("trajectory writer thread died again within backoff window, stays dead: {}",
+                        error.getMessage());
+                return;
+            }
+            lastRestartMs.set(now);
             LOGGER.error("trajectory writer thread died, restarting: {}", error.getMessage());
             running = false;
             start();
@@ -76,7 +85,8 @@ public class AsyncTrajectoryWriter implements AutoCloseable {
         if (closed || !queue.offer(task)) {
             long dropped = droppedCount.incrementAndGet();
             if (dropped % DROP_LOG_EVERY == 1L) {
-                LOGGER.warn("trajectory writer queue full, dropping write task (total dropped={})", dropped);
+                LOGGER.warn("trajectory write task dropped ({}; total dropped={})",
+                        closed ? "writer closed" : "queue full", dropped);
             }
         }
     }
@@ -138,17 +148,14 @@ public class AsyncTrajectoryWriter implements AutoCloseable {
 
     private void runBatch(List<Runnable> batch) {
         for (Runnable task : batch) {
-            // 成功标记 finally 代替广捕：失败计数并告警（异常仍上抛，由线程级重启兜底）
-            boolean ok = false;
+            // 按任务隔离：本代码可预见的具体异常集吞掉并继续；Redis 客户端实现的私有
+            // 运行时异常不在集内，上抛由线程级退避重启兜底（批内后续任务随之丢弃，有界损失）
             try {
                 task.run();
-                ok = true;
-            } finally {
-                if (!ok) {
-                    long failed = failedCount.incrementAndGet();
-                    if (failed % DROP_LOG_EVERY == 1L) {
-                        LOGGER.warn("trajectory write task failed (total failed={})", failed);
-                    }
+            } catch (IllegalStateException | IllegalArgumentException | ClassCastException e) {
+                long failed = failedCount.incrementAndGet();
+                if (failed % DROP_LOG_EVERY == 1L) {
+                    LOGGER.warn("trajectory write task failed (total failed={}): {}", failed, e.getMessage());
                 }
             }
         }

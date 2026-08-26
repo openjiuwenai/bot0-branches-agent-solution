@@ -31,15 +31,18 @@ public final class RunTreeRecord {
      * @param startedAt ISO-8601 start time with zone
      * @param traceId  trace id, may be null
      * @param tenantId tenant id, may be null
+     * @param parentRunId parent run id from ingress metadata, may be null
      * @return node JSON
      */
-    public static String nodeOpen(String runId, String kind, String startedAt, String traceId, String tenantId) {
+    public static String nodeOpen(String runId, String kind, String startedAt, String traceId, String tenantId,
+                                  String parentRunId) {
         Map<String, Object> node = new LinkedHashMap<>();
         node.put("runId", runId);
         node.put("kind", kind);
         node.put("startedAt", startedAt);
         putIfPresent(node, "traceId", traceId);
         putIfPresent(node, "tenantId", tenantId);
+        putIfPresent(node, "parentRunId", parentRunId);
         return toJson(node);
     }
 
@@ -53,10 +56,11 @@ public final class RunTreeRecord {
      * @param finalState terminal state name
      * @param traceId    trace id, may be null
      * @param tenantId   tenant id, may be null
+     * @param parentRunId parent run id from ingress metadata, may be null
      * @return node JSON
      */
     public static String nodeClose(String runId, String kind, String startedAt, String endedAt,
-                                   String finalState, String traceId, String tenantId) {
+                                   String finalState, String traceId, String tenantId, String parentRunId) {
         Map<String, Object> node = new LinkedHashMap<>();
         node.put("runId", runId);
         node.put("kind", kind);
@@ -65,6 +69,7 @@ public final class RunTreeRecord {
         node.put("finalState", finalState);
         putIfPresent(node, "traceId", traceId);
         putIfPresent(node, "tenantId", tenantId);
+        putIfPresent(node, "parentRunId", parentRunId);
         return toJson(node);
     }
 

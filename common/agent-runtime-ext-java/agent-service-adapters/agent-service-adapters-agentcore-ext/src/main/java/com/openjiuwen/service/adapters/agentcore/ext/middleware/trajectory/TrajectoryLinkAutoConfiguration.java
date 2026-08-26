@@ -99,6 +99,10 @@ public class TrajectoryLinkAutoConfiguration {
     FilterRegistrationBean<TraceIdentityFilter> traceIdentityFilter(
             TraceContextCarrier carrier, ObjectProvider<TaskStore> taskStoreProvider,
             ObjectProvider<RedisTrajectoryStore> storeProvider) {
+        // V-8：Redis 缺失时整体保持关闭——不注册入口 filter（store bean 处已 WARN）
+        if (storeProvider.getIfAvailable() == null) {
+            return null;
+        }
         FilterRegistrationBean<TraceIdentityFilter> registration = new FilterRegistrationBean<>();
         registration.setFilter(new TraceIdentityFilter(carrier, taskStoreProvider.getIfAvailable(),
                 storeProvider.getIfAvailable()));

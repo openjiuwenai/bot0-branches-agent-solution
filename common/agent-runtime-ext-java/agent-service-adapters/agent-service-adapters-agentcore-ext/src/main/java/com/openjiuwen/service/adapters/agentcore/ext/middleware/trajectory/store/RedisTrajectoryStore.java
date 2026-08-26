@@ -51,13 +51,26 @@ public class RedisTrajectoryStore {
     }
 
     /**
-     * Builds the node record key for a run id.
+     * Builds the node record key for a run id. The run id's task segment is
+     * Base64-url encoded while the {@code #roundSeq} separator stays literal, so the
+     * per-task scan prefix ({@link #runKeyPrefix}) really is a prefix of the key
+     * (Base64 whole-string encoding is NOT prefix-preserving).
      *
      * @param runId run id ({taskId}#{roundSeq})
      * @return redis key
      */
     public static String runKey(String runId) {
-        return RUN_PREFIX + encode(runId);
+        return RUN_PREFIX + encodeRunId(runId);
+    }
+
+    /**
+     * Builds the scan prefix covering all round node keys of one task.
+     *
+     * @param taskId task id
+     * @return glob-ready key prefix (append {@code *} for scans)
+     */
+    public static String runKeyPrefix(String taskId) {
+        return RUN_PREFIX + encode(taskId) + "#";
     }
 
     /**
@@ -68,7 +81,7 @@ public class RedisTrajectoryStore {
      * @return redis key
      */
     public static String runEdgeKey(String parentRunId, String runId) {
-        return RUN_EDGE_PREFIX + encode(parentRunId) + ":" + encode(runId);
+        return RUN_EDGE_PREFIX + encodeRunId(parentRunId) + ":" + encodeRunId(runId);
     }
 
     /**
@@ -165,7 +178,7 @@ public class RedisTrajectoryStore {
      * @return index key
      */
     public static String parentIndexKey(String parentRunId, String runId) {
-        return IDX_PARENT_PREFIX + encode(parentRunId) + ":" + encode(runId);
+        return IDX_PARENT_PREFIX + encodeRunId(parentRunId) + ":" + encodeRunId(runId);
     }
 
     /**
@@ -241,6 +254,16 @@ public class RedisTrajectoryStore {
     }
 
     /**
+     * Lists all round node keys of one task (round-seq recovery).
+     *
+     * @param taskId task id
+     * @return matching node keys
+     */
+    public List<String> scanRoundKeys(String taskId) {
+        return client.scanIter(runKeyPrefix(taskId) + "*");
+    }
+
+    /**
      * Deletes keys (session reset cleanup).
      *
      * @param keys redis keys
@@ -253,5 +276,13 @@ public class RedisTrajectoryStore {
 
     private static String encode(String segment) {
         return KEY_ENCODER.encodeToString(segment.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String encodeRunId(String runId) {
+        int hash = runId.lastIndexOf('#');
+        if (hash < 0) {
+            return encode(runId);
+        }
+        return encode(runId.substring(0, hash)) + "#" + runId.substring(hash + 1);
     }
 }

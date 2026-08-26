@@ -21,6 +21,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -29,16 +30,18 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <ul>
  *   <li>新 Task 首次 save（seen-set 判定）→ 开第 1 轮节点（run_id={taskId}#1, kind=local）；
- *   重启后以 {@code runtime:run:{taskId}#1} 节点键存在性补位并恢复 roundSeq（扫描节点键计数）。</li>
+ *   重启后以 {@code runtime:run:{taskId}#1} 节点键存在性补位并经节点键计数恢复 roundSeq。</li>
  *   <li>已有 Task 从 input-required 回到 working → roundSeq+1 开新轮节点。</li>
  *   <li>影子 Task（id 前缀 {@code shadow:}，metadata 含 {@code _remote_batch} 快照）→ 按快照
  *   每个 member 产委托边（parent_run_id 全格式 → member.remoteTaskId）。</li>
  *   <li>终态迁移（completed/failed/canceled/input-required/auth-required）→ 当前轮节点收尾
- *   （endedAt、finalState）。</li>
+ *   （endedAt、finalState）；非中断终态后清理内存轮次（中断态保留以待 resume）。</li>
  * </ul>
  *
- * <p>开轮时回填 carrier 的 currentRunId（供出站装饰器读取）；全部记录写经
- * {@link AsyncTrajectoryWriter} 异步刷写，任何环节失败不阻塞、不影响 save 主流程。
+ * <p>同 task 并发 save（取消/流式写穿/恢复可来自不同线程）按 RoundState 实例串行化状态迁移；
+ * 开轮时回填 carrier 的 currentRunId（供出站装饰器读取）；节点携带 traceId/tenantId/
+ * parentRunId（经 carrier 条目）；全部记录写经 {@link AsyncTrajectoryWriter} 异步刷写，
+ * 任何环节失败不阻塞、不影响 save 主流程。
  *
  * @since 2026-08-26
  */
@@ -106,17 +109,22 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
             return;
         }
         RoundState round = rounds.computeIfAbsent(task.id(), this::recoverRound);
-        TaskState current = task.status() != null ? task.status().state() : null;
-        if (round.roundSeq == 0) {
-            openRound(task, round, 1);
-        } else if (current == TaskState.TASK_STATE_WORKING && round.lastState != null
-                && round.lastState.isInterrupted()) {
-            openRound(task, round, round.roundSeq + 1);
+        synchronized (round) {
+            TaskState current = task.status() != null ? task.status().state() : null;
+            if (round.roundSeq == 0) {
+                openRound(task, round, 1);
+            } else if (current == TaskState.TASK_STATE_WORKING && round.lastState != null
+                    && round.lastState.isInterrupted()) {
+                openRound(task, round, round.roundSeq + 1);
+            }
+            if (current != null && isTerminal(current)) {
+                closeRound(round, current);
+                if (!current.isInterrupted()) {
+                    rounds.remove(task.id(), round);
+                }
+            }
+            round.lastState = current;
         }
-        if (current != null && isTerminal(current)) {
-            closeRound(task, round, current);
-        }
-        round.lastState = current;
     }
 
     private void observeShadow(Task task) {
@@ -156,12 +164,12 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
         round.roundSeq = seq;
         round.runId = task.id() + "#" + seq;
         round.startedAt = now();
-        round.traceId = carrier.find(task.contextId())
-                .map(TraceContextCarrier.Entry::getTraceId).orElse(null);
-        round.tenantId = carrier.find(task.contextId())
-                .map(TraceContextCarrier.Entry::getTenantId).orElse(null);
+        Optional<TraceContextCarrier.Entry> entry = carrier.find(task.contextId());
+        round.traceId = entry.map(TraceContextCarrier.Entry::getTraceId).orElse(null);
+        round.tenantId = entry.map(TraceContextCarrier.Entry::getTenantId).orElse(null);
+        round.parentRunId = entry.flatMap(TraceContextCarrier.Entry::getParentRunId).orElse(null);
         String nodeJson = RunTreeRecord.nodeOpen(round.runId, "local", round.startedAt,
-                round.traceId, round.tenantId);
+                round.traceId, round.tenantId, round.parentRunId);
         String runId = round.runId;
         String traceId = round.traceId;
         String contextId = task.contextId();
@@ -177,12 +185,12 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
         carrier.updateCurrentRunId(task.contextId(), runId);
     }
 
-    private void closeRound(Task task, RoundState round, TaskState finalState) {
+    private void closeRound(RoundState round, TaskState finalState) {
         if (round.runId == null) {
             return;
         }
         String nodeJson = RunTreeRecord.nodeClose(round.runId, "local", round.startedAt, now(),
-                finalState.name(), round.traceId, round.tenantId);
+                finalState.name(), round.traceId, round.tenantId, round.parentRunId);
         String runId = round.runId;
         writer.submit(() -> store.putRecord(RedisTrajectoryStore.runKey(runId), nodeJson));
     }
@@ -198,10 +206,13 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
         if (!store.exists(RedisTrajectoryStore.runKey(taskId + "#1"))) {
             return recovered;
         }
-        int count = store.scan(RedisTrajectoryStore.runKey(taskId + "#") + "*").size();
+        int count = store.scanRoundKeys(taskId).size();
         recovered.roundSeq = Math.max(count, 1);
         recovered.runId = taskId + "#" + recovered.roundSeq;
         recovered.startedAt = now();
+        // 从最近一轮节点读回 traceId，闭轮覆写时不丢字段
+        store.getRecord(RedisTrajectoryStore.runKey(recovered.runId))
+                .ifPresent(node -> recovered.traceId = RunTreeRecord.readTraceId(node).orElse(null));
         return recovered;
     }
 
@@ -220,11 +231,12 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
 
     /** Per-task round bookkeeping (in-memory; recovered from Redis after restart). */
     private static final class RoundState {
-        private int roundSeq;
-        private String runId;
-        private String startedAt;
-        private String traceId;
-        private String tenantId;
-        private TaskState lastState;
+        private volatile int roundSeq;
+        private volatile String runId;
+        private volatile String startedAt;
+        private volatile String traceId;
+        private volatile String tenantId;
+        private volatile String parentRunId;
+        private volatile TaskState lastState;
     }
 }

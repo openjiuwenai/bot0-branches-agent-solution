@@ -10,6 +10,9 @@ import io.opentelemetry.api.trace.TraceFlags;
 import io.opentelemetry.api.trace.TraceState;
 import io.opentelemetry.context.Context;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Optional;
 
 /**
@@ -21,6 +24,8 @@ import java.util.Optional;
  * @since 2026-08-26
  */
 public final class W3cTraceContextParser {
+    private static final Logger LOGGER = LoggerFactory.getLogger(W3cTraceContextParser.class);
+
     private static final int PART_COUNT = 4;
     private static final int TRACE_ID_LENGTH = 32;
     private static final int SPAN_ID_LENGTH = 16;
@@ -44,6 +49,7 @@ public final class W3cTraceContextParser {
             return Context.root().with(Span.wrap(SpanContext.createFromRemoteParent(
                     parts[1], parts[2], TraceFlags.fromHex(parts[3], 0), TraceState.getDefault())));
         } catch (IllegalArgumentException | IllegalStateException e) {
+            LOGGER.warn("illegal traceparent ignored: {}", e.getClass().getSimpleName());
             return Context.root();
         }
     }

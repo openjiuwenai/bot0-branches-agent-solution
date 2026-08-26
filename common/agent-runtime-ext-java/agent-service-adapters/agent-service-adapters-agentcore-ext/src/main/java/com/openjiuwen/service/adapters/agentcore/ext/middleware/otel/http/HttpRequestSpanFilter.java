@@ -52,7 +52,8 @@ public class HttpRequestSpanFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        CachedBodyRequest wrapped = new CachedBodyRequest(request);
+        CachedBodyRequest wrapped = request instanceof CachedBodyRequest cached
+                ? cached : new CachedBodyRequest(request);
         String body = new String(wrapped.cachedBody(), StandardCharsets.UTF_8);
         Optional<String> parsedConversationId = parseConversationId(body);
         if (parsedConversationId.isEmpty()) {

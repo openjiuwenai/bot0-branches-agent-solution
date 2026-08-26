@@ -6,7 +6,6 @@ package com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.runt
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
@@ -101,8 +100,10 @@ class RunTreeTaskStoreDecoratorTest {
     @Test
     void restartRecoverySeedsRoundSeqFromNodeKeys() {
         when(store.exists(RedisTrajectoryStore.runKey("task-1#1"))).thenReturn(true);
-        when(store.scan(anyString())).thenReturn(
+        when(store.scanRoundKeys("task-1")).thenReturn(
                 List.of(RedisTrajectoryStore.runKey("task-1#1"), RedisTrajectoryStore.runKey("task-1#2")));
+        when(store.getRecord(RedisTrajectoryStore.runKey("task-1#2")))
+                .thenReturn(java.util.Optional.of("{\"traceId\":\"t-1\"}"));
         decorator.save(task("task-1", TaskState.TASK_STATE_INPUT_REQUIRED, null), false);
         decorator.save(task("task-1", TaskState.TASK_STATE_WORKING, null), false);
         flush();

@@ -26,10 +26,21 @@ class RedisTrajectoryStoreTest {
 
     @Test
     void runKeyEncodesClientControlledSegments() {
-        // runId 含 '#':（task#1），必须编码后入 key，不得出现原始分隔符
-        String key = RedisTrajectoryStore.runKey("task*1#1");
+        // 客户端可控段编码入 key；'#' 是结构分隔符可保留；glob 元字符不得出现
+        String key = RedisTrajectoryStore.runKey("task*1?x[0]#1");
         assertThat(key).startsWith("runtime:run:");
-        assertThat(key).doesNotContain("*").doesNotContain("#").doesNotContain("?");
+        assertThat(key).doesNotContain("*").doesNotContain("?").doesNotContain("[");
+        // runKeyPrefix 必须是 runKey 的真前缀（Base64 整体编码不具备前缀保持性，故只编码 task 段）
+        assertThat(RedisTrajectoryStore.runKey("task-1#1"))
+                .startsWith(RedisTrajectoryStore.runKeyPrefix("task-1"));
+    }
+
+    @Test
+    void scanRoundKeysFindsAllRoundsOfTask() {
+        store.putRecord(RedisTrajectoryStore.runKey("task-1#1"), "n1");
+        store.putRecord(RedisTrajectoryStore.runKey("task-1#2"), "n2");
+        store.putRecord(RedisTrajectoryStore.runKey("task-2#1"), "other");
+        assertThat(store.scanRoundKeys("task-1")).hasSize(2);
     }
 
     @Test

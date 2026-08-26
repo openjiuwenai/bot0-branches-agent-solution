@@ -37,6 +37,28 @@ public class CachedBodyRequest extends HttpServletRequestWrapper {
     }
 
     /**
+     * Wraps the request with a replacement body (e.g. the trace identity filter's
+     * contextId injection), reporting the replacement's length to downstream.
+     *
+     * @param request the original request
+     * @param body    replacement body bytes
+     */
+    public CachedBodyRequest(HttpServletRequest request, byte[] body) {
+        super(request);
+        this.body = body;
+    }
+
+    @Override
+    public int getContentLength() {
+        return body.length;
+    }
+
+    @Override
+    public long getContentLengthLong() {
+        return body.length;
+    }
+
+    /**
      * Returns the cached body bytes.
      *
      * @return cached body

@@ -13,11 +13,10 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 import java.time.Instant;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * TraceIdentityFilter 的单元测试：四级提取优先级、降级生成、taskId 恢复、body 透传。
+ * TraceIdentityFilter 的单元测试：四级提取优先级、首跳注入、降级生成、空 body 放行、body 透传。
  */
 class TraceIdentityFilterTest {
     private static final String CONV = "conv-1";
@@ -28,8 +27,7 @@ class TraceIdentityFilterTest {
 
     @Test
     void headerWinsAsSource() throws Exception {
-        MockHttpServletResponse response = runFilter(filter(null),
-                request(body(CONV), "00-" + TRACE_ID + "-" + SPAN_ID + "-01", null));
+        runFilter(filter(null), request(body(CONV), "00-" + TRACE_ID + "-" + SPAN_ID + "-01", null));
         assertThat(carrier.find(CONV)).isPresent();
         assertThat(carrier.find(CONV).get().getTraceId()).isEqualTo(TRACE_ID);
         assertThat(carrier.find(CONV).get().isDegraded()).isFalse();
@@ -62,6 +60,48 @@ class TraceIdentityFilterTest {
     }
 
     @Test
+    void injectsContextIdWhenBothMissing() throws Exception {
+        AtomicReference<String> downstream = new AtomicReference<>();
+        TraceIdentityFilter filter = new TraceIdentityFilter(carrier, null, null);
+        MockHttpServletRequest request = request("{\"jsonrpc\":\"2.0\",\"params\":{\"message\":{}}}", null, null);
+        filter.doFilter(request, new MockHttpServletResponse(), (req, res) ->
+                downstream.set(new String(req.getInputStream().readAllBytes())));
+        // 注入的 contextId 出现在下游 body，且 carrier 以其为键建档（首跳与后续轮共享）
+        assertThat(downstream.get()).contains("\"contextId\":\"");
+        String injected = downstream.get().replaceAll(".*\"contextId\":\"([^\"]+)\".*", "$1");
+        assertThat(injected).hasSize(36);
+        assertThat(carrier.find(injected)).isPresent();
+    }
+
+    @Test
+    void noInjectionWhenTaskIdPresent() throws Exception {
+        AtomicReference<String> downstream = new AtomicReference<>();
+        String body = "{\"jsonrpc\":\"2.0\",\"params\":{\"message\":{\"taskId\":\"task-7\"}}}";
+        // TaskStore 查无此 task（如重启清空）→ 退回 taskId 本身作 carrier key
+        org.a2aproject.sdk.server.tasks.TaskStore taskStore =
+                org.mockito.Mockito.mock(org.a2aproject.sdk.server.tasks.TaskStore.class);
+        org.mockito.Mockito.when(taskStore.get("task-7")).thenReturn(null);
+        TraceIdentityFilter filter = new TraceIdentityFilter(carrier, taskStore, null);
+        MockHttpServletRequest request = request(body, null, null);
+        filter.doFilter(request, new MockHttpServletResponse(), (req, res) ->
+                downstream.set(new String(req.getInputStream().readAllBytes())));
+        // 带 taskId 的续跑请求不注入：body 原样，carrier 以 taskId 为键
+        assertThat(downstream.get()).isEqualTo(body);
+        assertThat(carrier.find("task-7")).isPresent();
+    }
+
+    @Test
+    void blankBodyPassesThroughWithoutError() throws Exception {
+        AtomicReference<String> downstream = new AtomicReference<>();
+        TraceIdentityFilter filter = new TraceIdentityFilter(carrier, null, null);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/v1/health");
+        filter.doFilter(request, new MockHttpServletResponse(), (req, res) ->
+                downstream.set(new String(req.getInputStream().readAllBytes())));
+        assertThat(downstream.get()).isEmpty();
+        assertThat(carrier.find(CONV)).isEmpty();
+    }
+
+    @Test
     void tenantAndRestChannelRecorded() throws Exception {
         MockHttpServletRequest request = request(body(CONV), "00-" + TRACE_ID + "-" + SPAN_ID + "-01", "tenant-7");
         request.setRequestURI("/v1/query");
@@ -79,12 +119,6 @@ class TraceIdentityFilterTest {
         filter.doFilter(request, new MockHttpServletResponse(), (req, res) ->
                 downstream.set(new String(req.getInputStream().readAllBytes())));
         assertThat(downstream.get()).isEqualTo(body);
-    }
-
-    @Test
-    void noContextIdSkipsIdentification() throws Exception {
-        runFilter(filter(null), request("{\"jsonrpc\":\"2.0\",\"params\":{}}", null, null));
-        assertThat(carrier.find(CONV)).isEmpty();
     }
 
     private TraceIdentityFilter filter(RedisTrajectoryStore store) {
@@ -107,10 +141,7 @@ class TraceIdentityFilterTest {
         return request;
     }
 
-    private static MockHttpServletResponse runFilter(TraceIdentityFilter filter,
-                                                     MockHttpServletRequest request) throws Exception {
-        MockHttpServletResponse response = new MockHttpServletResponse();
-        filter.doFilter(request, response, (req, res) -> { });
-        return response;
+    private static void runFilter(TraceIdentityFilter filter, MockHttpServletRequest request) throws Exception {
+        filter.doFilter(request, new MockHttpServletResponse(), (req, res) -> { });
     }
 }

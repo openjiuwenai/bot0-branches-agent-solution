@@ -43,18 +43,26 @@ class AsyncTrajectoryWriterTest {
     }
 
     @Test
-    void taskFailureIsCountedAndWriterRestarts() {
+    void taskFailureIsCountedAndBatchContinues() {
         AtomicInteger executed = new AtomicInteger();
         try (AsyncTrajectoryWriter writer = new AsyncTrajectoryWriter(100, 20)) {
             writer.start();
             writer.submit(() -> {
                 throw new IllegalStateException("redis down");
             });
-            waitUntil(() -> writer.getFailedCount() == 1);
-            // 线程级重启后，后续任务继续刷写
             writer.submit(executed::incrementAndGet);
             waitUntil(() -> executed.get() == 1);
+            waitUntil(() -> writer.getFailedCount() == 1);
         }
+    }
+
+    @Test
+    void closedWriterCannotRestart() {
+        AsyncTrajectoryWriter writer = new AsyncTrajectoryWriter(100, 20);
+        writer.close();
+        writer.start();
+        writer.submit(() -> { });
+        assertThat(writer.getDroppedCount()).isEqualTo(1);
     }
 
     @Test

@@ -43,6 +43,10 @@ class TrajectoryLinkAutoConfigurationTest {
                     instanceof RedisTrajectoryStore).isFalse();
             assertThat(context.getBeanProvider(AsyncTrajectoryWriter.class).getIfAvailable()
                     instanceof AsyncTrajectoryWriter).isFalse();
+            // V-8：入口 filter 同样不注册（整体保持关闭）
+            assertThat(context.getBeanProvider(
+                    org.springframework.boot.web.servlet.FilterRegistrationBean.class).getIfAvailable()
+                    instanceof org.springframework.boot.web.servlet.FilterRegistrationBean).isFalse();
         });
     }
 

@@ -7,10 +7,11 @@ package com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.iden
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.http.CachedBodyRequest;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.http.W3cTraceContextParser;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.runtree.RunTreeRecord;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.store.RedisTrajectoryStore;
-import com.openjiuwen.service.spec.spi.RuntimeRedisClient;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -28,6 +29,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * 第二批标识归一入口 filter：在第一批 http span filter（order=0）之前（更小的负序）
@@ -38,7 +40,12 @@ import java.util.Optional;
  * carrier 既有条目复用其 trace_id（带 taskId 的续跑请求先按 taskId 经 {@link TaskStore} 查回
  * 真实 contextId；miss 时按 taskId 读回首轮节点 {@code runtime:run:{taskId}#1} 的 traceId
  * 重建条目——覆盖进程重启后 carrier 清空的续轮场景）；④ 均无/非法 → 降级生成（W3C 格式
- * 32 位小写 hex）+ degraded=true。任何环节失败只 WARN 放行，不影响请求处理。
+ * 32 位小写 hex）+ degraded=true（putIfAbsent 写入，绝不覆盖并发写入的好条目）。
+ *
+ * <p>首跳注入：taskId 与 contextId 均缺失时，在 body 的 message 中注入生成的 contextId
+ * 再放行（重写 JSON + 更新 Content-Length）——首跳与后续轮共享同一 contextId 与 trace_id；
+ * 带 taskId 的续跑请求不注入（SDK strict 校验关闭时 message 会被静默改写，注入反致错键）；
+ * 注入失败（非 JSON-RPC 形态）降级为本请求不采集 + WARN。空 body / 非 JSON 一律放行不采集。
  *
  * @since 2026-08-26
  */
@@ -68,80 +75,102 @@ public class TraceIdentityFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        CachedBodyRequest wrapped = new CachedBodyRequest(request);
+        CachedBodyRequest wrapped = request instanceof CachedBodyRequest cached
+                ? cached : new CachedBodyRequest(request);
+        Optional<byte[]> replacement = Optional.empty();
         try {
-            identify(request, new String(wrapped.cachedBody(), StandardCharsets.UTF_8));
-        } catch (IllegalStateException | JsonProcessingException e) {
+            replacement = identify(request, new String(wrapped.cachedBody(), StandardCharsets.UTF_8));
+        } catch (JsonProcessingException | IllegalStateException e) {
             LOGGER.warn("trace identity extraction failed, request continues without it: {}",
                     e.getClass().getSimpleName());
         }
-        filterChain.doFilter(wrapped, response);
+        HttpServletRequest toPass = replacement
+                .<HttpServletRequest>map(body -> new CachedBodyRequest(request, body))
+                .orElse(wrapped);
+        filterChain.doFilter(toPass, response);
     }
 
-    private void identify(HttpServletRequest request, String body) throws JsonProcessingException {
-        IngressPayload payload = IngressPayload.parse(body);
-        String contextId = payload.contextId.orElseGet(() -> resolveContextIdByTask(payload.taskId));
-        if (contextId == null) {
+    private Optional<byte[]> identify(HttpServletRequest request, String body) throws JsonProcessingException {
+        if (body.isBlank()) {
+            return Optional.empty();
+        }
+        JsonNode root = MAPPER.readTree(body);
+        if (root == null || !root.isObject()) {
+            return Optional.empty();
+        }
+        IngressPayload payload = IngressPayload.from(root);
+        Optional<String> contextId = payload.contextId();
+        Optional<byte[]> replacement = Optional.empty();
+        if (contextId.isEmpty() && payload.taskId().isEmpty()) {
+            // 首跳双缺失：注入生成的 contextId 再放行（注入失败→本请求不采集）
+            if (!(root.path("params").path("message") instanceof ObjectNode messageNode)) {
+                LOGGER.warn("trace identity: no JSON-RPC message to inject contextId, skip");
+                return Optional.empty();
+            }
+            String generated = UUID.randomUUID().toString();
+            messageNode.put("contextId", generated);
+            contextId = Optional.of(generated);
+            replacement = Optional.of(MAPPER.writeValueAsBytes(root));
+        } else if (contextId.isEmpty()) {
+            contextId = resolveContextIdByTask(payload.taskId());
+        }
+        contextId.ifPresent(id -> writeCarrier(request, id, payload));
+        return replacement;
+    }
+
+    private void writeCarrier(HttpServletRequest request, String contextId, IngressPayload payload) {
+        String key = carrier.resolveKey(contextId).orElse(contextId);
+        Optional<String> inbound = W3cTraceContextParser.parseTraceId(request.getHeader("traceparent"))
+                .or(payload::metadataTraceId);
+        if (inbound.isPresent()) {
+            // 上游传入为唯一源：覆盖式写入，继承既有条目的 currentRunId
+            TraceContextCarrier.Entry entry = new TraceContextCarrier.Entry(inbound.get(), false,
+                    ingressChannel(request), tenantId(request).orElse(null), Instant.now());
+            carrier.find(contextId).flatMap(TraceContextCarrier.Entry::getCurrentRunId)
+                    .ifPresent(entry::setCurrentRunId);
+            payload.parentRunId().ifPresent(entry::setParentRunId);
+            carrier.put(key, entry);
             return;
         }
-        String traceId = W3cTraceContextParser.parseTraceId(request.getHeader("traceparent"))
-                .orElseGet(() -> payload.metadataTraceId.orElseGet(() -> reuseOrRecover(contextId, payload.taskId)));
-        boolean degraded = traceId == null;
-        TraceContextCarrier.Entry entry = carrier.find(contextId)
-                .filter(existing -> !degraded && existing.getTraceId().equals(traceId))
-                .orElseGet(() -> new TraceContextCarrier.Entry(
-                        degraded ? generateTraceId() : traceId, degraded,
-                        ingressChannel(request), tenantId(request), Instant.now()));
-        payload.parentRunId.ifPresent(entry::setParentRunId);
-        carrier.put(contextId, entry);
+        if (carrier.find(contextId).isPresent()) {
+            return;
+        }
+        TraceContextCarrier.Entry entry = recoverFromRoundOneNode(payload.taskId())
+                .map(traceId -> new TraceContextCarrier.Entry(traceId, false,
+                        ingressChannel(request), tenantId(request).orElse(null), Instant.now()))
+                .orElseGet(() -> new TraceContextCarrier.Entry(generateTraceId(), true,
+                        ingressChannel(request), tenantId(request).orElse(null), Instant.now()));
+        payload.parentRunId().ifPresent(entry::setParentRunId);
+        carrier.putIfAbsent(key, entry);
     }
 
-    private String reuseOrRecover(String contextId, Optional<String> taskId) {
-        Optional<TraceContextCarrier.Entry> existing = carrier.find(contextId);
-        if (existing.isPresent()) {
-            return existing.get().getTraceId();
-        }
-        if (taskId.isPresent() && store != null) {
-            Optional<String> recovered = recoverFromRoundOneNode(taskId.get());
-            if (recovered.isPresent()) {
-                return recovered.get();
-            }
-        }
-        return null;
-    }
-
-    private String resolveContextIdByTask(Optional<String> taskId) {
+    private Optional<String> resolveContextIdByTask(Optional<String> taskId) {
         if (taskId.isEmpty() || taskStore == null) {
-            return null;
+            return Optional.empty();
         }
         Task task = taskStore.get(taskId.get());
         if (task != null && task.contextId() != null && !task.contextId().isBlank()) {
-            return task.contextId();
+            return Optional.of(task.contextId());
         }
-        // 重启恢复：TaskStore 无该 task（含 InMemory 重启清空）时退回 taskId 本身作 carrier key
-        return taskId.get();
+        // TaskStore 无该 task（含 InMemory 重启清空）时退回 taskId 本身作 carrier key
+        return taskId;
     }
 
-    private Optional<String> recoverFromRoundOneNode(String taskId) {
-        Optional<String> node = store.getRecord(RedisTrajectoryStore.runKey(taskId + "#1"));
-        if (node.isEmpty()) {
+    private Optional<String> recoverFromRoundOneNode(Optional<String> taskId) {
+        if (taskId.isEmpty() || store == null) {
             return Optional.empty();
         }
-        try {
-            JsonNode traceId = MAPPER.readTree(node.get()).get("traceId");
-            return traceId != null && traceId.isTextual() ? Optional.of(traceId.asText()) : Optional.empty();
-        } catch (JsonProcessingException e) {
-            return Optional.empty();
-        }
+        return store.getRecord(RedisTrajectoryStore.runKey(taskId.get() + "#1"))
+                .flatMap(RunTreeRecord::readTraceId);
     }
 
     private static String ingressChannel(HttpServletRequest request) {
         return request.getRequestURI() != null && request.getRequestURI().startsWith("/a2a") ? "a2a" : "rest";
     }
 
-    private static String tenantId(HttpServletRequest request) {
+    private static Optional<String> tenantId(HttpServletRequest request) {
         String tenant = request.getHeader(TENANT_HEADER);
-        return tenant == null || tenant.isBlank() ? null : tenant;
+        return tenant == null || tenant.isBlank() ? Optional.empty() : Optional.of(tenant);
     }
 
     private static String generateTraceId() {
@@ -157,8 +186,7 @@ public class TraceIdentityFilter extends OncePerRequestFilter {
     /** 入站 JSON-RPC body 的标识字段视图。 */
     private record IngressPayload(Optional<String> contextId, Optional<String> taskId,
                                   Optional<String> metadataTraceId, Optional<String> parentRunId) {
-        static IngressPayload parse(String body) throws JsonProcessingException {
-            JsonNode root = MAPPER.readTree(body);
+        static IngressPayload from(JsonNode root) {
             JsonNode message = root.path("params").path("message");
             JsonNode metadata = root.path("params").path("metadata");
             return new IngressPayload(
