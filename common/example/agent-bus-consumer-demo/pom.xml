@@ -21,8 +21,8 @@
         <java.version>17</java.version>
         <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <spring-boot.version>4.0.6</spring-boot.version>
-        <agent-runtime-java.version>0.1.1.post1</agent-runtime-java.version>
+        <spring-boot.version>4.0.7</spring-boot.version>
+        <agent-runtime-java.version>0.1.2</agent-runtime-java.version>
         <agent-runtime-ext-java.version>0.1.0</agent-runtime-ext-java.version>
     </properties>
 

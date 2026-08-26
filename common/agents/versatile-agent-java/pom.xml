@@ -7,7 +7,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>4.0.6</version>
+    <version>4.0.7</version>
     <relativePath/>
   </parent>
 
@@ -48,17 +48,52 @@
   <properties>
     <java.version>17</java.version>
     <maven.compiler.release>17</maven.compiler.release>
-    <agent-runtime-java.version>0.1.1.post1</agent-runtime-java.version>
+    <agent-runtime-java.version>0.1.2</agent-runtime-java.version>
     <agent-runtime-ext-java.version>0.1.0</agent-runtime-ext-java.version>
-    <!-- 修复 Tomcat 15 个 CVE -->
+    <!-- Tomcat CVE override（高于 Boot 4.0.7 的 11.0.22，保留） -->
     <tomcat.version>11.0.24</tomcat.version>
-    <!-- 修复 jackson-databind 5 个 CVE（Spring Boot 4.0.x 的 jackson-bom.version 控制 Jackson 3.x，不适用此处） -->
+    <!-- A 桶：覆盖 Boot 4.0.7 BOM 属性以对齐 core 830（per-deliverable，属性不跨 reactor 传递） -->
+    <jackson-2-bom.version>2.21.5</jackson-2-bom.version>
+    <opentelemetry.version>1.64.0</opentelemetry.version>
+    <pulsar.version>4.2.3</pulsar.version>
+    <mockito.version>5.14.2</mockito.version>
+    <byte-buddy.version>1.15.11</byte-buddy.version>
+    <snakeyaml.version>2.2</snakeyaml.version>
+    <slf4j.version>2.0.12</slf4j.version>
+    <logback.version>1.5.37</logback.version>
+    <commons-lang3.version>3.18.0</commons-lang3.version>
+    <commons-codec.version>1.20.0</commons-codec.version>
+    <postgresql.version>42.7.12</postgresql.version>
+    <mysql.version>9.7.0</mysql.version>
+    <h2.version>2.2.224</h2.version>
+    <sqlite-jdbc.version>3.53.2.1</sqlite-jdbc.version>
+    <lombok.version>1.18.32</lombok.version>
+    <log4j2.version>2.26.1</log4j2.version>
+    <kotlin.version>2.4.10</kotlin.version>
+    <!-- jackson-databind/core 显式 pin（与 jackson-2-bom 2.21.5 一致，CVE 历史 pin 保留） -->
     <jackson.version>2.21.5</jackson.version>
-    <!-- 修复 Logback 2 个 CVE -->
-    <logback.version>1.5.34</logback.version>
-    <!-- 修复 Log4j 1 个 CVE -->
-    <log4j2.version>2.25.5</log4j2.version>
   </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- C 桶：Boot 不管/管理值非 core，显式 pin 防漂移（同 edp-agent-java） -->
+      <dependency>
+        <groupId>com.google.code.gson</groupId>
+        <artifactId>gson</artifactId>
+        <version>2.11.0</version>
+      </dependency>
+      <dependency>
+        <groupId>com.google.protobuf</groupId>
+        <artifactId>protobuf-java</artifactId>
+        <version>4.33.2</version>
+      </dependency>
+      <dependency>
+        <groupId>com.google.protobuf</groupId>
+        <artifactId>protobuf-java-util</artifactId>
+        <version>4.33.2</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <dependencies>
     <dependency>

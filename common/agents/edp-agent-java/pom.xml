@@ -8,7 +8,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>4.0.6</version>
+    <version>4.0.7</version>
     <relativePath/>
   </parent>
 
@@ -45,7 +45,7 @@
   <properties>
     <java.version>17</java.version>
     <maven.compiler.release>17</maven.compiler.release>
-    <agent-runtime-java.version>0.1.1.post1</agent-runtime-java.version>
+    <agent-runtime-java.version>0.1.2</agent-runtime-java.version>
     <agent-runtime-ext-java.version>0.1.0</agent-runtime-ext-java.version>
     <!--
       必须使用为 JDK 17 发布的 agent-core-java（class 文件 major version 61，含
@@ -53,8 +53,48 @@
       0.1.14 为 JDK17 正式构建。切勿改用旧的裸 0.1.12（部分仓库为缺包的旧构建），
       会导致 agentcore-ext 编译失败。
     -->
-    <agent-core-java.version>0.1.14.post1</agent-core-java.version>
+    <agent-core-java.version>0.1.15</agent-core-java.version>
+    <!-- A 桶：覆盖 Boot 4.0.7 BOM 属性以对齐 core 830（机制同 agent-runtime-java develop；
+         各 deliverable parent 须各自声明，Maven 属性不跨 reactor 传递） -->
+    <jackson-2-bom.version>2.21.5</jackson-2-bom.version>
+    <opentelemetry.version>1.64.0</opentelemetry.version>
+    <pulsar.version>4.2.3</pulsar.version>
+    <mockito.version>5.14.2</mockito.version>
+    <byte-buddy.version>1.15.11</byte-buddy.version>
+    <snakeyaml.version>2.2</snakeyaml.version>
+    <slf4j.version>2.0.12</slf4j.version>
+    <logback.version>1.5.37</logback.version>
+    <commons-lang3.version>3.18.0</commons-lang3.version>
+    <commons-codec.version>1.20.0</commons-codec.version>
+    <postgresql.version>42.7.12</postgresql.version>
+    <mysql.version>9.7.0</mysql.version>
+    <h2.version>2.2.224</h2.version>
+    <sqlite-jdbc.version>3.53.2.1</sqlite-jdbc.version>
+    <lombok.version>1.18.32</lombok.version>
+    <log4j2.version>2.26.1</log4j2.version>
+    <kotlin.version>2.4.10</kotlin.version>
   </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- C 桶：Boot 不管/管理值非 core，显式 pin 防漂移（同 agent-runtime-ext-java） -->
+      <dependency>
+        <groupId>com.google.code.gson</groupId>
+        <artifactId>gson</artifactId>
+        <version>2.11.0</version>
+      </dependency>
+      <dependency>
+        <groupId>com.google.protobuf</groupId>
+        <artifactId>protobuf-java</artifactId>
+        <version>4.33.2</version>
+      </dependency>
+      <dependency>
+        <groupId>com.google.protobuf</groupId>
+        <artifactId>protobuf-java-util</artifactId>
+        <version>4.33.2</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <modules>
     <module>engine</module>
