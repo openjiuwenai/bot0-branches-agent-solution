@@ -43,7 +43,7 @@ class RunTreeTaskStoreDecoratorTest {
 
     @BeforeEach
     void setUp() {
-        decorator = new RunTreeTaskStoreDecorator(delegate, carrier, store, writer);
+        decorator = new RunTreeTaskStoreDecorator(delegate, carrier, store, writer, null);
         carrier.put("conv-1", new TraceContextCarrier.Entry(
                 "1cd0e9b4ebc1bc708de6aae571b089ce", false, "a2a", "tenant-1", Instant.now()));
     }

@@ -4,6 +4,7 @@
 
 package com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.runtree;
 
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.audit.AuditEventCollector;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity.TraceContextCarrier;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.store.AsyncTrajectoryWriter;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.store.RedisTrajectoryStore;
@@ -56,6 +57,7 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
     private final TraceContextCarrier carrier;
     private final RedisTrajectoryStore store;
     private final AsyncTrajectoryWriter writer;
+    private final AuditEventCollector audit;
     private final Map<String, RoundState> rounds = new ConcurrentHashMap<>();
 
     /**
@@ -65,13 +67,16 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
      * @param carrier  trace context carrier
      * @param store    trajectory record store
      * @param writer   async writer
+     * @param audit    audit event collector (may be null; audit events then skipped)
      */
     public RunTreeTaskStoreDecorator(TaskStore delegate, TraceContextCarrier carrier,
-                                     RedisTrajectoryStore store, AsyncTrajectoryWriter writer) {
+                                     RedisTrajectoryStore store, AsyncTrajectoryWriter writer,
+                                     AuditEventCollector audit) {
         this.delegate = delegate;
         this.carrier = carrier;
         this.store = store;
         this.writer = writer;
+        this.audit = audit;
     }
 
     @Override
@@ -128,6 +133,9 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
     }
 
     private void observeShadow(Task task) {
+        if (audit != null) {
+            recordShadowDelegations(task);
+        }
         Object snapshot = task.metadata() != null ? task.metadata().get(REMOTE_BATCH_METADATA) : null;
         if (!(snapshot instanceof Map<?, ?> batch)) {
             return;
@@ -143,6 +151,22 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
                 continue;
             }
             writeEdge(parentRunId, memberMap);
+        }
+    }
+
+    private void recordShadowDelegations(Task task) {
+        Object snapshot = task.metadata() != null ? task.metadata().get(REMOTE_BATCH_METADATA) : null;
+        if (!(snapshot instanceof Map<? , ?> batch) || !(batch.get("members") instanceof List<?> memberList)
+                || !(batch.get("parentTaskId") instanceof String parentId)) {
+            return;
+        }
+        for (Object member : memberList) {
+            if (member instanceof Map<?, ?> memberMap
+                    && memberMap.get("remoteTaskId") instanceof String remote && !remote.isBlank()) {
+                audit.recordDelegation(task.contextId(), parentId,
+                        text(memberMap.get("agentName")).orElse("unknown"), remote,
+                        text(memberMap.get("resultCategory")).orElse(null));
+            }
         }
     }
 
@@ -165,6 +189,8 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
         round.runId = task.id() + "#" + seq;
         round.startedAt = now();
         round.closedFinal = false;
+        round.contextId = task.contextId();
+        round.taskId = task.id();
         Optional<TraceContextCarrier.Entry> entry = carrier.find(task.contextId());
         round.traceId = entry.map(TraceContextCarrier.Entry::getTraceId).orElse(null);
         round.tenantId = entry.map(TraceContextCarrier.Entry::getTenantId).orElse(null);
@@ -184,6 +210,15 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
             }
         });
         carrier.updateCurrentRunId(task.contextId(), runId);
+        if (audit != null && task.contextId() != null) {
+            boolean degraded = entry.map(TraceContextCarrier.Entry::isDegraded).orElse(false);
+            round.auditSeq = audit.openRound(round.tenantId, task.contextId(), task.id(),
+                    round.traceId, degraded, round.runId);
+            if (seq > 1) {
+                audit.recordDecision(round.tenantId, task.contextId(), "approval",
+                        Map.of("action", "resume", "runId", round.runId));
+            }
+        }
     }
 
     private void closeRound(RoundState round, TaskState finalState) {
@@ -196,6 +231,16 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
         String runId = round.runId;
         round.closedFinal = true;
         writer.submit(() -> store.putRecord(RedisTrajectoryStore.runKey(runId), nodeJson));
+        if (audit != null && round.contextId != null) {
+            audit.recordDecision(round.tenantId, round.contextId, "lifecycle",
+                    Map.of("to", finalState.name(), "runId", runId));
+            if (finalState == TaskState.TASK_STATE_INPUT_REQUIRED
+                    || finalState == TaskState.TASK_STATE_AUTH_REQUIRED) {
+                audit.recordDecision(round.tenantId, round.contextId, "approval",
+                        Map.of("action", "raise", "runId", runId));
+            }
+            audit.closeRound(round.contextId, round.taskId, finalState.name());
+        }
     }
 
     // 注意：对未知 parent 的 computeIfAbsent 会播种 roundSeq=0 的 RoundState（该 parent
@@ -263,5 +308,8 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
         private volatile String parentRunId;
         private volatile TaskState lastState;
         private volatile boolean closedFinal;
+        private volatile String contextId;
+        private volatile String taskId;
+        private volatile long auditSeq = -1L;
     }
 }

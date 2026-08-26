@@ -4,6 +4,10 @@
 
 package com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory;
 
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.audit.AuditEventBridge;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.audit.AuditEventCollector;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.audit.AuditSecurityDecisionAspect;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.audit.AuditSnapshotStore;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity.TraceContextCarrier;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity.TraceIdentityFilter;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.runtree.RunTreeRegistrar;
@@ -66,8 +70,9 @@ public class TrajectoryLinkAutoConfiguration {
     @Bean
     static RunTreeRegistrar runTreeRegistrar(ObjectProvider<TraceContextCarrier> carrierProvider,
                                              ObjectProvider<RedisTrajectoryStore> storeProvider,
-                                             ObjectProvider<AsyncTrajectoryWriter> writerProvider) {
-        return new RunTreeRegistrar(carrierProvider, storeProvider, writerProvider);
+                                             ObjectProvider<AsyncTrajectoryWriter> writerProvider,
+                                             ObjectProvider<AuditEventCollector> auditProvider) {
+        return new RunTreeRegistrar(carrierProvider, storeProvider, writerProvider, auditProvider);
     }
 
     /**
@@ -119,6 +124,54 @@ public class TrajectoryLinkAutoConfiguration {
                     props.getFlushIntervalMs());
             writer.start();
             return writer;
+        }
+
+        /**
+         * Provides the audit snapshot store.
+         *
+         * @param store  trajectory store
+         * @param writer async writer
+         * @return snapshot store
+         */
+        @Bean
+        AuditSnapshotStore auditSnapshotStore(RedisTrajectoryStore store, AsyncTrajectoryWriter writer) {
+            return new AuditSnapshotStore(store, writer);
+        }
+
+        /**
+         * Provides the audit event collector.
+         *
+         * @param snapshots snapshot store
+         * @param store     trajectory store
+         * @param writer    async writer
+         * @return event collector
+         */
+        @Bean
+        AuditEventCollector auditEventCollector(AuditSnapshotStore snapshots, RedisTrajectoryStore store,
+                                                AsyncTrajectoryWriter writer) {
+            return new AuditEventCollector(snapshots, store, writer);
+        }
+
+        /**
+         * Provides the security-decision audit aspect.
+         *
+         * @return the aspect
+         */
+        @Bean
+        AuditSecurityDecisionAspect auditSecurityDecisionAspect() {
+            return new AuditSecurityDecisionAspect();
+        }
+
+        /**
+         * Registers the collector into the static audit bridge (rail / aspect access).
+         *
+         * @param collector audit collector
+         * @return registration marker
+         */
+        @Bean
+        Object auditBridgeRegistrar(AuditEventCollector collector) {
+            AuditEventBridge.register(collector);
+            return new Object();
         }
 
         /**

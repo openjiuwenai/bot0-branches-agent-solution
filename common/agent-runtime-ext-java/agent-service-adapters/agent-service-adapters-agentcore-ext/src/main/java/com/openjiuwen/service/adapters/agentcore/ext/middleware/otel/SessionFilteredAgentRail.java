@@ -7,8 +7,10 @@ package com.openjiuwen.service.adapters.agentcore.ext.middleware.otel;
 import com.openjiuwen.core.session.Session;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.AgentRail;
+import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
 import com.openjiuwen.extensions.tracerotel.OtelRail;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.egress.EgressContextStash;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.audit.AuditEventBridge;
 
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Context;
@@ -103,11 +105,27 @@ public class SessionFilteredAgentRail extends AgentRail {
     @Override
     public void afterToolCall(AgentCallbackContext ctx) {
         safe(ctx, () -> delegate.afterToolCall(ctx));
+        auditTool(ctx, "finish");
     }
 
     @Override
     public void onToolException(AgentCallbackContext ctx) {
         safe(ctx, () -> delegate.onToolException(ctx));
+        auditTool(ctx, "error");
+    }
+
+    // 审计工具事件：rail 无耗时来源，elapsedMs 取 0（不虚报）；未启用 trajectory 时桥为 no-op
+    private void auditTool(AgentCallbackContext ctx, String status) {
+        try {
+            Session session = ctx.getSession();
+            if (session == null || session.getSessionId() == null
+                    || !(ctx.getInputs() instanceof ToolCallInputs inputs)) {
+                return;
+            }
+            AuditEventBridge.recordToolCall(session.getSessionId(), inputs.getToolName(), status, 0L);
+        } catch (IllegalStateException | NullPointerException | ClassCastException e) {
+            LOGGER.warn("audit tool event failed: {}", e.getClass().getSimpleName());
+        }
     }
 
     private void safe(AgentCallbackContext ctx, Runnable action) {

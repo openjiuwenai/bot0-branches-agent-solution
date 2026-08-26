@@ -26,7 +26,8 @@ class RunTreeRegistrarTest {
         RunTreeRegistrar registrar = new RunTreeRegistrar(
                 providerOf(TraceContextCarrier.create(86400L)),
                 providerOf(mock(RedisTrajectoryStore.class)),
-                providerOf(mock(AsyncTrajectoryWriter.class)));
+                providerOf(mock(AsyncTrajectoryWriter.class)),
+                providerOf(null));
         Object wrapped = registrar.postProcessAfterInitialization(taskStore, "taskStore");
         assertThat(wrapped).isInstanceOf(RunTreeTaskStoreDecorator.class);
     }
@@ -36,24 +37,25 @@ class RunTreeRegistrarTest {
         RunTreeRegistrar registrar = new RunTreeRegistrar(
                 providerOf(TraceContextCarrier.create(86400L)),
                 providerOf(mock(RedisTrajectoryStore.class)),
-                providerOf(mock(AsyncTrajectoryWriter.class)));
+                providerOf(mock(AsyncTrajectoryWriter.class)),
+                providerOf(null));
         RunTreeTaskStoreDecorator already = new RunTreeTaskStoreDecorator(taskStore,
                 TraceContextCarrier.create(86400L), mock(RedisTrajectoryStore.class),
-                mock(AsyncTrajectoryWriter.class));
+                mock(AsyncTrajectoryWriter.class), null);
         assertThat(registrar.postProcessAfterInitialization(already, "taskStore")).isSameAs(already);
     }
 
     @Test
     void skipsWhenDependenciesMissing() {
         RunTreeRegistrar registrar = new RunTreeRegistrar(
-                providerOf(null), providerOf(null), providerOf(null));
+                providerOf(null), providerOf(null), providerOf(null), providerOf(null));
         assertThat(registrar.postProcessAfterInitialization(taskStore, "taskStore")).isSameAs(taskStore);
     }
 
     @Test
     void ignoresNonTaskStoreBeans() {
         RunTreeRegistrar registrar = new RunTreeRegistrar(
-                providerOf(null), providerOf(null), providerOf(null));
+                providerOf(null), providerOf(null), providerOf(null), providerOf(null));
         Object bean = new Object();
         assertThat(registrar.postProcessAfterInitialization(bean, "other")).isSameAs(bean);
     }

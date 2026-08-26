@@ -4,6 +4,7 @@
 
 package com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.runtree;
 
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.audit.AuditEventCollector;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity.TraceContextCarrier;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.store.AsyncTrajectoryWriter;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.store.RedisTrajectoryStore;
@@ -29,6 +30,7 @@ public class RunTreeRegistrar implements BeanPostProcessor, Ordered {
     private final Supplier<TraceContextCarrier> carrier;
     private final Supplier<RedisTrajectoryStore> store;
     private final Supplier<AsyncTrajectoryWriter> writer;
+    private final Supplier<AuditEventCollector> audit;
 
     /**
      * Creates the registrar.
@@ -39,10 +41,12 @@ public class RunTreeRegistrar implements BeanPostProcessor, Ordered {
      */
     public RunTreeRegistrar(ObjectProvider<TraceContextCarrier> carrierProvider,
                             ObjectProvider<RedisTrajectoryStore> storeProvider,
-                            ObjectProvider<AsyncTrajectoryWriter> writerProvider) {
+                            ObjectProvider<AsyncTrajectoryWriter> writerProvider,
+                            ObjectProvider<AuditEventCollector> auditProvider) {
         this.carrier = carrierProvider::getIfAvailable;
         this.store = storeProvider::getIfAvailable;
         this.writer = writerProvider::getIfAvailable;
+        this.audit = auditProvider::getIfAvailable;
     }
 
     @Override
@@ -56,7 +60,8 @@ public class RunTreeRegistrar implements BeanPostProcessor, Ordered {
         if (resolvedCarrier == null || resolvedStore == null || resolvedWriter == null) {
             return bean;
         }
-        return new RunTreeTaskStoreDecorator(taskStoreBean, resolvedCarrier, resolvedStore, resolvedWriter);
+        return new RunTreeTaskStoreDecorator(taskStoreBean, resolvedCarrier, resolvedStore, resolvedWriter,
+                audit.get());
     }
 
     @Override
