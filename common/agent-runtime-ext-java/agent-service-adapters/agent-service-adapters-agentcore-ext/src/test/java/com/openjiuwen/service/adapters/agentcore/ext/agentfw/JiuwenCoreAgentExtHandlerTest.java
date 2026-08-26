@@ -31,6 +31,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -135,7 +138,7 @@ class JiuwenCoreAgentExtHandlerTest {
     }
 
     @Test
-    void executeAgent_withoutThreadLocalBinding_failsLoud_notSilentSingleton() {
+    void executeAgent_bindingLost_failsLoud() {
         // Issue #154: a lost per-Task binding must fail loudly instead of
         // silently running the shared singleton agent.
         JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityInvokeAgent("singleton"));
@@ -146,7 +149,7 @@ class JiuwenCoreAgentExtHandlerTest {
     }
 
     @Test
-    void executeAgentStreaming_withoutThreadLocalBinding_failsLoud_notSilentSingleton() {
+    void executeAgentStreaming_bindingLost_failsLoud() {
         // Issue #154: same contract for the streaming template method.
         JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityStreamAgent("singleton"));
 
@@ -164,15 +167,21 @@ class JiuwenCoreAgentExtHandlerTest {
         handler.currentTaskAgent.set(new IdentityInvokeAgent("per-task"));
 
         AtomicReference<Throwable> failure = new AtomicReference<>();
-        Thread otherThread = new Thread(() -> {
-            try {
-                handler.executeAgent(Map.of(), "session");
-            } catch (Throwable thrown) {
-                failure.set(thrown);
-            }
-        });
-        otherThread.start();
-        otherThread.join(5000L);
+        // A pooled worker is still a different thread than the entering one,
+        // so the ThreadLocal invisibility reproduction is preserved.
+        ThreadPoolExecutor pool = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
+        try {
+            pool.submit(() -> {
+                try {
+                    handler.executeAgent(Map.of(), "session");
+                } catch (RuntimeException | Error thrown) {
+                    failure.set(thrown);
+                }
+            }).get(5L, TimeUnit.SECONDS);
+        } finally {
+            pool.shutdownNow();
+        }
 
         assertThat(failure.get())
                 .isInstanceOf(IllegalStateException.class)

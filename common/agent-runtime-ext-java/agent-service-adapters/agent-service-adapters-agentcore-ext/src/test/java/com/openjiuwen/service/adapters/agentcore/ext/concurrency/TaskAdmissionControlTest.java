@@ -135,12 +135,15 @@ class TaskAdmissionControlTest {
                 failures.incrementAndGet();
             }
         };
-        Thread a = new Thread(releaseTask, "release-a");
-        Thread b = new Thread(releaseTask, "release-b");
-        a.start();
-        b.start();
-        a.join();
-        b.join();
+        ThreadPoolExecutor pool = new ThreadPoolExecutor(2, 2, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
+        try {
+            pool.execute(releaseTask);
+            pool.execute(releaseTask);
+        } finally {
+            pool.shutdown();
+        }
+        assertThat(pool.awaitTermination(10L, TimeUnit.SECONDS)).isTrue();
         assertThat(failures.get()).isEqualTo(1);
         assertThat(gate.currentCount()).isZero();
     }

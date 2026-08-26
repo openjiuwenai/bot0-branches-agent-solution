@@ -107,7 +107,7 @@ class AgentInstanceManagerTest {
     }
 
     @Test
-    void acquire_createReturnsNull_cleansReservation_conversationReacquirable() {
+    void acquire_createReturnsNull_cleansReservation() {
         // A misbehaving factory returning null must not leave the reservation
         // placeholder behind — the conversation would be permanently busy.
         AgentFactory factory = mock(AgentFactory.class);
@@ -245,7 +245,7 @@ class AgentInstanceManagerTest {
     }
 
     @Test
-    void release_unknownAgentForTrackedConversation_destroySkipped_entryIntact() {
+    void release_unknownAgent_destroySkipped_entryIntact() {
         // A foreign/stale agent reference must neither destroy that agent nor
         // evict the tracked owner: entry removal and destroy are decided by
         // the same atomic remove(key, agent).

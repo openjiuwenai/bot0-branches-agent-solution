@@ -69,7 +69,7 @@ public class AgentInstanceManager {
             }
             activeAgents.put(conversationId, agent);
             return agent;
-        } catch (Throwable failure) {
+        } catch (RuntimeException | Error failure) {
             activeAgents.remove(conversationId, placeholder);
             throw failure;
         }
