@@ -3,3 +3,4 @@ com.openjiuwen.service.adapters.agentcore.ext.autoconfigure.IntentAutoConfigurat
 com.openjiuwen.service.adapters.agentcore.ext.autoconfigure.ConcurrencyAutoConfiguration
 com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub.SkillHubMiddlewareAutoConfiguration
 com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.OtelAutoConfiguration
+com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.TrajectoryLinkAutoConfiguration
