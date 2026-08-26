@@ -1136,12 +1136,6 @@ async def _agent_event_stream(
             if getattr(raw_event, "type", None) == "tool_end":
                 raw_payload = getattr(raw_event, "payload", None) or {}
                 raw_plugin = raw_payload.get("plugin", "") if isinstance(raw_payload, dict) else ""
-                if (
-                    raw_plugin == "lite_todo_write"
-                    and any(evt.__class__.__name__ == "TodoListEndEvent" for evt in events)
-                ):
-                    session.update_state({"lite_todo_stream_ready": True})
-                    logger.info("[DPA] lite_todo_write todolist events yielded, stream_ready=True")
                 for evt in _drain_ui_notices(session, "tool_end", plugin=raw_plugin):
                     _log_stream_payload(evt)
                     yield evt

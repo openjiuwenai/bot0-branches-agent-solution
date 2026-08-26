@@ -146,9 +146,6 @@ class ExecutionLimitRail(AgentRail):
         counts[tool_name] = current + 1
         ctx.session.update_state({state_keys.EXEC_COUNTS: counts})
 
-        if tool_name == "lite_todo_write":
-            ctx.session.update_state({"lite_todo_stream_ready": False})
-
         # 补发 tool_start 事件（含业务话术）
         # 内部工具不暴露给前端：lite_todo_write 派生 todolist_*；read_file 读 SKILL.md
         # 是 LLM 内部机制；ask_user 由 AskUserRail 通过 interrupt_start 呈现。

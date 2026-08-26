@@ -72,11 +72,9 @@ class TestVersatileInterruptRail:
     @pytest.fixture
     def ctx(self):
         ctx = MockContext()
-        # Pre-set lite_todo stream-ready state so the rail's preconditions
-        # (_has_lite_todolist / _is_lite_todo_stream_ready) pass and the
-        # first-intercept path writes pending_delegate as expected.
+        # Pre-set lite_todolist so the rail's precondition (_has_lite_todolist)
+        # passes and the first-intercept path writes pending_delegate as expected.
         ctx.session._state["lite_todolist"] = [{"step_id": 1, "content": "test"}]
-        ctx.session._state["lite_todo_stream_ready"] = True
         return ctx
     
     @pytest.fixture
