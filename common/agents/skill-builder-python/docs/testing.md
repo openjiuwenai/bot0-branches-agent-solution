@@ -97,6 +97,8 @@ print(skill_builder.__file__)"
 - Jiuwenbox `/health` 可用；
 - 非敏感测试材料和全新临时 workspace。
 
+知识型材料 smoke：
+
 ```bash
 .venv/bin/python examples/host_background.py \
   --workspace /tmp/skill-builder-smoke/workspace \
@@ -108,7 +110,20 @@ print(skill_builder.__file__)"
   --output /tmp/skill-builder-smoke/sample-role-skill.zip
 ```
 
-真实 smoke 不进入默认 CI，因为模型输出和外部沙箱存在环境差异。它用于确认宿主进程、Agent Core 子进程、Jiuwenbox、状态持久化、Acceptance 和导出能够连通。
+可执行脚本型材料 smoke：
+
+```bash
+.venv/bin/python examples/host_background.py \
+  --workspace /tmp/skill-builder-script-smoke/workspace \
+  --workspace-id script-smoke-workspace \
+  --materials examples/materials/tabular-validation.md \
+  --skill-name sample-tabular-validator \
+  --display-name "Sample Tabular Validator" \
+  --description "Generate an executable validation Skill" \
+  --output /tmp/skill-builder-script-smoke/sample-tabular-validator.zip
+```
+
+真实 smoke 不进入默认 CI，因为模型输出和外部沙箱存在环境差异。知识型用例验证无 scripts 的文档/reference 交付；可执行型用例验证 Python CLI、fixture 和离线 smoke。两者共同确认宿主进程、Agent Core 子进程、Jiuwenbox、状态持久化、Acceptance 和导出能够连通。
 
 运行后应检查：
 
