@@ -10,12 +10,12 @@ view = client.present(execution)
 
 禁止根据事件文本、目录是否存在、worker 退出码或异常字符串推断生命周期。事件表示进度；持久状态与当前 artifact receipt 决定交付结果。
 
-投影包含四个相关但不同的维度：
+宿主接入主要使用以下事实：
 
 - `workspace_status`：生命周期当前位置；
 - `validation_status`：当前候选的 Acceptance 结果；
-- `delivery_decision`：当前候选是否可交付；
-- `publishable`：Core 对当前 artifact 的本地发布资格判断。
+- `blockers` 和 `failure`：未完成或未通过的结构化原因；
+- `artifact_sha256`、`artifact_files` 和 `acceptance`：当前制品及其验收依据。
 
 ## Workspace 状态
 
@@ -24,9 +24,9 @@ view = client.present(execution)
 | `queued` | 已接收，尚未推进 | 显示排队；拒绝同 workspace 的另一个写任务 |
 | `running` | Core 或 Agent Core 正在执行 | 展示事件；允许宿主取消；禁用编辑和发布 |
 | `waiting_for_user` | 缺少真实业务决策 | 展示 `pending_request.request`，回答后调用 HITL `resume` |
-| `draft_ready` | 已有候选，但没有当前可发布 receipt | 按 `available_actions` 提供检查、编辑、验证和草稿导出 |
-| `needs_review` | 可检查/导出，但人工或外部边界阻断自动发布 | 展示 blocker 和审核范围，禁止自动发布 |
-| `ready` | Acceptance 已绑定当前 artifact | 允许导出；发布仍受宿主审批约束 |
+| `draft_ready` | 已有候选，但没有当前 Acceptance Receipt | 提供检查、编辑、验证；导出由宿主策略决定 |
+| `needs_review` | 可检查/导出，但仍有人工或外部边界 | 展示 blocker 和审核范围，由宿主进入审核流程 |
+| `ready` | Acceptance 已绑定当前 artifact | 允许宿主按自身策略导出、审批或发布 |
 | `failed` | 当前操作未形成可接受结果 | 展示结构化 failure，以及失败后继续/重试入口 |
 
 `waiting_for_user` 不是失败。用户决策期间没有运行中的 Agent Core 子进程。
@@ -44,58 +44,48 @@ warning 不是生命周期状态。当 warning 不影响已验证可用性时，
 
 宿主不能把所有 warning 都升级为 `needs_review`，也不能把阻断 finding 降为普通警告。
 
-## 交付决策（Delivery Decision）
+## 状态与宿主策略
 
-| `delivery_decision` | 含义 | 自动发布 |
-|---|---|---|
-| `draft_ready` | 仅达到草稿边界 | 禁止 |
-| `ready` | 当前候选交付判断有效 | 仅当 `publishable=True` 且宿主审批允许 |
-| `needs_review` | 仍需人工/外部确认 | 禁止 |
-| `blocked` | 交付条件不成立 | 禁止 |
-| `failed` | 运行失败 | 禁止 |
+Core 固定 `ready`、`needs_review` 和 `failed` 的验收含义，宿主不能把一个状态改写成另一个状态。下载、导出、人工审批和外部发布属于宿主策略，可以因产品、租户和组织治理要求而不同。
 
-Core 的 `publishable` 计算为：
-
-```text
-delivery_decision == ready AND 当前 artifact receipt 有效
-```
-
-它不会执行发布，也不会绕过宿主审批、租户规则、恶意软件/许可证扫描或市场审核。
-
-`delivery_decision` 由 Core 根据 Acceptance、blocker 和当前 artifact Receipt 计算，不是宿主配置项。宿主可以采用更严格的策略，例如要求 `ready` 仍需审批；宿主不得把 `needs_review`、`blocked` 或 `failed` 放宽为自动发布。
+Core 不执行外部发布，也不替代宿主的鉴权、恶意软件/许可证扫描、审批或市场规则。
 
 ## 导出与发布
 
-普通导出用于下载、检查或人工审核 Skill 草稿，不要求 `delivery_decision=ready`。宿主应根据 `view.available_actions` 是否包含 `export` 展示入口，并调用：
+普通导出用于下载、检查或人工审核 Skill 草稿。宿主根据最终状态、验收结果、artifact 是否存在和自身权限策略决定是否展示导出入口。
+
+推荐使用 Core 的安全通用打包助手：
 
 ```python
 archive = client.build_export_archive(execution)
 ```
 
-Core 负责归档路径白名单、软链接、`SKILL.md`、PackageRevision 和包结构校验；宿主负责下载响应、对象存储、访问控制和保留期限。
+该助手负责归档路径白名单、软链接、`SKILL.md`、PackageRevision 和包结构校验；宿主负责下载响应、对象存储、访问控制和保留期限。宿主也可以实现自己的归档格式，但必须执行等价的路径和包安全校验。
 
-| 状态 | 普通导出 | 自动发布 |
-|---|---|---|
-| `draft_ready` | `available_actions` 允许时可导出 | 禁止 |
-| `needs_review` | 可导出供人工审核 | 禁止 |
-| `ready` | 可导出 | 还需 `publishable=True` 和宿主审批 |
-| `failed` | 仅在仍有合法候选且 `available_actions` 允许时可导出 | 禁止 |
-| `waiting_for_user` / `running` | 禁止 | 禁止 |
+| 状态 | 通用处理建议 |
+|---|---|
+| `draft_ready` | 可按宿主策略导出草稿，不能展示为已验收 |
+| `needs_review` | 可导出供人工审核，必须保留未确认范围 |
+| `ready` | 可进入宿主的导出、审批或发布流程 |
+| `failed` | 仅在仍有合法候选时允许诊断性导出 |
+| `waiting_for_user` / `running` | 不应导出正在变化的 workspace |
 
-人工审核发现需要补充证据或修改文件时，应更新候选并重新执行 `validate`。宿主治理系统执行的人工特批不会把 Core 状态改成 `ready`，必须单独记录审批人、原因和 artifact hash，且不得作为自动发布路径。
+人工审核发现需要补充证据或修改文件时，应更新候选并重新执行 `validate`。宿主治理系统执行人工特批时，Core 状态仍保持 `needs_review`；宿主应单独记录审批人、原因和 artifact hash。
 
 ## 外部验证未运行
 
 按外部验证在 Skill 承诺中的作用分类：
 
 1. 包结构、核心逻辑和安全降级路径已经验证，API/浏览器真实证据只是额外环境信息：可以保留 `ready + warn`，但必须展示未验证范围。
-2. Skill 核心承诺就是该 API/浏览器操作，且没有可信替代证据：必须是 `needs_review`，允许导出人工检查，但禁止自动发布。
+2. Skill 核心承诺就是该 API/浏览器操作，且没有可信替代证据：必须是 `needs_review`，允许导出人工检查，由宿主执行后续审核和发布策略。
 
 浏览器录屏只是输入证据，不是生成 Skill 的浏览器真实性验收。
 
 ## 可用动作（Available Actions）
 
-只渲染 Core 返回的 `view.available_actions`。当前实现规则：
+`view.available_actions` 是当前 Core 操作的可用性提示，不是宿主的下载、审批或发布策略。宿主可以将其用于按钮状态，也可以结合最终状态和自身权限规则构造界面。
+
+当前实现规则：
 
 | 条件 | 返回动作 |
 |---|---|
@@ -104,7 +94,6 @@ Core 负责归档路径白名单、软链接、`SKILL.md`、PackageRevision 和�
 | 其他状态 | `inspect` |
 | 当前 artifact 存在 | 额外 `edit`、`export`、`validate` |
 | `failed` | 额外 `retry` |
-| `publishable=True` | 额外 `publish` |
 
 `ExecutionAction.REPAIR` 是公共枚举，但当前 `available_actions` 不会自动返回它。诊断页只有确认 finding 属于机械可修复问题后才能提供 Repair，并调用：
 
@@ -174,8 +163,6 @@ payload = {
     "workspaceStatus": view.workspace_status,
     "draftStatus": view.draft_status,
     "validationStatus": view.validation_status,
-    "deliveryDecision": view.delivery_decision.value,
-    "publishable": view.publishable,
     "summary": view.summary,
     "blockers": list(view.blockers),
     "availableActions": [item.value for item in view.available_actions],
@@ -190,4 +177,8 @@ payload = {
 }
 ```
 
-宿主可以重命名 JSON 字段，但不能重新计算业务含义。
+宿主可以重命名 JSON 字段和定义导出/审批/发布策略，但不能重写 Core 返回的生命周期与验收状态。
+
+## 可选兼容字段
+
+当前版本仍可能返回 `delivery_decision`、`publishable` 和 `publish` action，以兼容已有宿主。新宿主不需要存储、展示或依赖这些字段；它们不参与普通导出，也不会执行外部发布。

@@ -128,8 +128,7 @@ execution = await task
 | 显式机械修复 | `client.repair(execution, instruction=...)` | 只处理结构化、机械可修复诊断 |
 | 问答/编辑 | `client.run_turn(workspace_id, SkillBuilderTurnRequest(...))` | Core 负责写入策略和回滚 |
 | 登记宿主手工编辑 | `client.invalidate_receipt(workspace_id)` | 清除旧 Acceptance 身份 |
-| 导出 | `client.build_export_archive(execution)` | 宿主负责写本地/对象存储 |
-| 构造兼容发布包 | `client.build_publish_archive(execution, author=...)` | 要求 `publishable`，但不会外部发布 |
+| 导出 | 可选调用 `client.build_export_archive(execution)` | 宿主决定导出策略、格式和存储 |
 
 ## HITL、继续和重试
 
@@ -277,24 +276,28 @@ execution = await client.run_turn(
 view = client.present(execution)
 ```
 
-直接使用 `workspace_status`、`validation_status`、`delivery_decision`、`summary`、`blockers` 和 `available_actions`。完整映射见[状态与宿主动作](status-and-actions.md)。
+宿主使用 `workspace_status`、`validation_status`、`summary`、`blockers`、`failure` 和 artifact 信息构造页面及操作策略。完整映射见[状态与宿主动作](status-and-actions.md)。
 
 - `ready`：当前 artifact 有有效验收 receipt；
-- `needs_review`：允许检查和宿主导出，禁止自动发布；
+- `needs_review`：允许检查和宿主导出，宿主应展示未确认范围；
 - `failed`：使用结构化 `failure.code/category/retryable/repairable`，不要解析错误文本。
 
-普通导出不要求 `delivery_decision=ready`。宿主应先检查 `view.available_actions` 是否包含 `export`，再调用：
+宿主根据最终状态、验收结果、artifact 是否存在和自身权限策略决定是否提供导出。推荐使用 Core 的安全通用打包助手：
 
 ```python
 archive = client.build_export_archive(execution)
 target.write_bytes(archive.content)
 ```
 
-`build_export_archive()` 负责合法草稿、PackageRevision、路径白名单、软链接和 `SKILL.md` 校验。宿主不应自行遍历整个 workspace 打包，但可以把 Core 返回的字节写入本地、对象存储或下载响应。
+`build_export_archive()` 负责合法草稿、PackageRevision、路径白名单、软链接和 `SKILL.md` 校验，返回的字节可写入本地、对象存储或下载响应。该助手不是强制导出入口。
 
-`draft_ready`、`needs_review` 和 `ready` 都可能允许导出；`failed` 只有在仍存在合法候选且 `available_actions` 明确返回 `export` 时才允许导出。`waiting_for_user` 和 `running` 不开放导出。
+宿主可以实现自己的归档格式，但只能读取 `generated-skill/` 中允许交付的文件，并自行承担路径穿越、软链接、保留目录、文件大小、`SKILL.md` 和包结构校验。不得把 `validation/`、`.skill-builder/`、`workspace/` 或 `playwright/` 放入 Skill 包。
 
-对象存储、用户下载、审批和外部发布均由宿主完成。`build_publish_archive` 只构造兼容发布包，要求 `publishable=True`，不会调用外部市场或发布服务。
+对象存储、用户下载、审批和外部发布均由宿主完成。Core 最终状态不能替代宿主的授权、审核或发布策略。
+
+### 可选兼容 API
+
+当前版本仍保留 `delivery_decision`、`publishable`、`PUBLISH` action 和 `build_publish_archive()`，用于已有宿主的兼容接线。新宿主不需要存储、展示或依赖这些字段，也不需要调用 `build_publish_archive()`。该方法只构造特定插件目录格式，不执行外部发布。
 
 使用 `execution.artifact_sha256` 标识 Skill 内容。ZIP 元数据包含构造时间，因此稍后重建 ZIP 时 archive SHA 可能不同，但 artifact 身份未变。
 

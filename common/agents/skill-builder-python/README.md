@@ -16,7 +16,7 @@ Skill Builder 将工作区材料抽取为经过验收的 Skill 包。它以独�
 
 ```text
 Python 宿主/后台任务
-└── SkillBuilderClient                  生命周期与交付决策
+└── SkillBuilderClient                  生命周期与状态投影
     ├── SubprocessAgentRunner
     │   └── Agent Core 子进程           Scenario / Author / Repair
     │       └── Jiuwenbox workspace     独立沙箱服务
@@ -85,12 +85,12 @@ view = client.present(execution)
 | 能力 | Skill Builder Core | 宿主 |
 |---|---|---|
 | 生成生命周期 | Scenario、HITL 决策、Author、预检、Repair、Acceptance | 后台任务、取消、同 workspace 单写锁 |
-| 状态与动作 | `present()`、blocker、`available_actions`、`publishable` | HTTP/SSE、页面展示、按钮和用户权限 |
+| 状态与动作 | `present()`、最终状态、验收结果和 blocker | HTTP/SSE、页面展示、按钮和用户权限 |
 | 材料 | 读取预算、契约抽取和生成 | 上传、格式/大小限制、二进制转 Markdown、资产登记 |
 | HITL 与失败恢复 | pending request、resume token、恢复语义 | 表单 UI、答案提交、继续/重试入口 |
 | 编辑 | 对话式 `run_turn`、事务回滚、Receipt 失效与重新验收 | 文件浏览器、编辑器 UI、文件读写接口和编辑锁 |
 | 导出 | 安全路径白名单和 `build_export_archive()` | 下载接口、对象存储和保留策略 |
-| 发布 | 发布资格和兼容发布包构造 | 审批、组织策略和外部发布动作 |
+| 发布 | 最终状态、验收结果和 artifact 身份 | 审批、组织策略、打包格式和外部发布动作 |
 | 沙箱 | Jiuwenbox client、workspace/Acceptance adapter | Jiuwenbox 部署、容量、网络策略和健康检查 |
 | 录屏 | 可选 Playwright 采集核心 | 录屏 UI/API、Chromium、网络策略、sticky routing 和资产清理 |
 
@@ -103,12 +103,12 @@ view = client.present(execution)
 | `waiting_for_user` | 缺少真实业务决策 | 展示 Core 表单并调用 HITL `resume` |
 | `draft_ready` | 已有合法候选但没有当前验收 Receipt | 允许检查、编辑、验证和草稿导出 |
 | `ready` | 当前包已通过验收且 Receipt 有效 | 允许导出；发布仍受宿主审批约束 |
-| `needs_review` | 包可检查/导出，但人工或外部边界阻断自动发布 | 展示审核范围，禁止自动发布 |
+| `needs_review` | 包可检查/导出，但仍有人工或外部边界 | 展示审核范围，由宿主进入审核和发布策略 |
 | `failed` | 当前运行未形成可接受结果 | 展示结构化错误以及继续/重试入口 |
 
 warning 不是独立生命周期状态。不影响已验证可用性的提示可以形成 `ready + warn`。
 
-普通导出不要求 `delivery_decision=ready`。宿主应根据 `view.available_actions` 展示导出入口，并调用 `client.build_export_archive(execution)` 构造归档。自动发布必须同时满足 `publishable=True` 和宿主自身审批策略。
+导出、审批和发布策略由宿主根据最终状态、验收结果和自身治理要求定义。`client.build_export_archive(execution)` 是推荐的安全通用打包助手，不是强制导出入口；宿主也可以实现自己的归档格式，但必须承担等价的路径和包安全校验。
 
 ## 示例
 

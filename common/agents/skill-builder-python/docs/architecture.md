@@ -61,7 +61,7 @@ Jiuwenbox 是独立沙箱服务。默认 adapter 分别为 Agent Core workspace 
 | `SkillBuilderWorkspacePort` | 提供 Agent 文件工作区 | Jiuwenbox workspace adapter |
 | `SkillBuilderExecutionPort` | 执行 Acceptance 命令 | Jiuwenbox execution adapter |
 
-生产宿主可以替换 Port，但必须保留请求、状态、Receipt 和交付决策语义。
+生产宿主可以替换 Port，但必须保留请求、最终状态、验收结果和 Receipt 语义。
 
 ## 产品边界
 
