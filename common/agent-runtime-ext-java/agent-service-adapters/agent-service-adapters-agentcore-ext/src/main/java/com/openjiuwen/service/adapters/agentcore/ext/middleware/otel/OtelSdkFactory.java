@@ -5,6 +5,7 @@
 package com.openjiuwen.service.adapters.agentcore.ext.middleware.otel;
 
 import com.openjiuwen.extensions.tracerotel.OtelTracerConfig;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity.TraceContextCarrier;
 
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.common.Attributes;
@@ -15,6 +16,7 @@ import io.opentelemetry.sdk.trace.export.SpanExporter;
 import io.opentelemetry.sdk.trace.samplers.Sampler;
 
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -39,6 +41,22 @@ public final class OtelSdkFactory {
      */
     public static SdkTracerProvider createProvider(OtelTracerConfig config, SpanExporter exporter,
                                                    String instanceId) {
+        return createProvider(config, exporter, instanceId, () -> null);
+    }
+
+    /**
+     * Creates a provider additionally wiring {@link TurnIndexSpanProcessor}（cascade.turn_index）
+     * with a lazy carrier supplier.
+     *
+     * @param config          tracer configuration
+     * @param exporter        downstream exporter
+     * @param instanceId      service.instance.id value
+     * @param carrierSupplier lazy trace-context-carrier supplier (turn index source)
+     * @return configured provider; caller owns shutdown
+     */
+    public static SdkTracerProvider createProvider(OtelTracerConfig config, SpanExporter exporter,
+                                                   String instanceId,
+                                                   Supplier<TraceContextCarrier> carrierSupplier) {
         String resolvedInstanceId = instanceId == null || instanceId.isBlank()
                 ? UUID.randomUUID().toString() : instanceId;
         Resource resource = Resource.getDefault().merge(Resource.create(Attributes.of(
@@ -58,6 +76,7 @@ public final class OtelSdkFactory {
                 .setResource(resource)
                 .setSampler(Sampler.parentBased(Sampler.traceIdRatioBased(config.getSampleRate())))
                 .addSpanProcessor(new SessionIdSpanProcessor())
+                .addSpanProcessor(new TurnIndexSpanProcessor(carrierSupplier))
                 .addSpanProcessor(batchProcessor)
                 .build();
     }

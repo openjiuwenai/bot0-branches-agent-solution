@@ -10,6 +10,7 @@ import com.openjiuwen.service.adapters.agentcore.autoconfigure.AgentCoreAdapters
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.egress.OtelRemoteAgentCallerPostProcessor;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.egress.OtelRemoteClientDecoratorFactory;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.egress.TraceparentResolver;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity.TraceContextCarrier;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.http.HttpRequestSpanFilter;
 import com.openjiuwen.service.adapters.agentcore.external.AgentCoreRemoteClientDecoratorFactory;
 import com.openjiuwen.service.adapters.agentcore.external.ExternalSvcAdapterRegistrar;
@@ -92,10 +93,12 @@ public class OtelAutoConfiguration {
     }
 
     @Bean(destroyMethod = "close")
-    OtelProviderHolder otelProviderHolder(OtelTracerConfig config, OtelEnvProperties properties) {
+    OtelProviderHolder otelProviderHolder(OtelTracerConfig config, OtelEnvProperties properties,
+                                          ObjectProvider<TraceContextCarrier> carrierProvider) {
         String instanceId = properties.getServiceInstanceId().orElse(null);
         SpanExporter otlpExporter = OtelTracerSetup.createOtlpExporter(config);
-        SdkTracerProvider provider = OtelSdkFactory.createProvider(config, otlpExporter, instanceId);
+        SdkTracerProvider provider = OtelSdkFactory.createProvider(config, otlpExporter, instanceId,
+                carrierProvider::getIfAvailable);
         return new OtelProviderHolder(provider);
     }
 

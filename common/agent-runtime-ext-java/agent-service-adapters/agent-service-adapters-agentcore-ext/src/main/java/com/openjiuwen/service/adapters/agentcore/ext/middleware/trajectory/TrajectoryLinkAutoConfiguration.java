@@ -9,6 +9,7 @@ import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.audit
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.audit.AuditSecurityDecisionAspect;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.audit.AuditSnapshotStore;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity.TraceContextCarrier;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.query.TrajectoryQueryController;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity.TraceIdentityFilter;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.runtree.RunTreeRegistrar;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.store.AsyncTrajectoryWriter;
@@ -172,6 +173,19 @@ public class TrajectoryLinkAutoConfiguration {
         Object auditBridgeRegistrar(AuditEventCollector collector) {
             AuditEventBridge.register(collector);
             return new Object();
+        }
+
+        /**
+         * Provides the read-only trajectory query controller.
+         *
+         * @param store     trajectory store
+         * @param snapshots audit snapshot store
+         * @return the controller
+         */
+        @Bean
+        TrajectoryQueryController trajectoryQueryController(RedisTrajectoryStore store,
+                                                            AuditSnapshotStore snapshots) {
+            return new TrajectoryQueryController(store, snapshots);
         }
 
         /**

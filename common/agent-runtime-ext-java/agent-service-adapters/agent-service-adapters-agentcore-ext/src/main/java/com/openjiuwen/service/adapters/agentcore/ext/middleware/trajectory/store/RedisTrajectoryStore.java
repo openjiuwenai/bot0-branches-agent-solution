@@ -174,7 +174,43 @@ public class RedisTrajectoryStore {
      * @return index key
      */
     public static String traceIndexKey(String traceId, String runId) {
-        return IDX_TRACE_PREFIX + encode(traceId) + ":" + encode(runId);
+        return IDX_TRACE_PREFIX + encode(traceId) + ":" + encodeRunId(runId);
+    }
+
+    /**
+     * Builds the scan prefix covering all run index entries of one trace.
+     *
+     * @param traceId trace id
+     * @return glob-ready key prefix
+     */
+    public static String traceIndexPrefix(String traceId) {
+        return IDX_TRACE_PREFIX + encode(traceId) + ":";
+    }
+
+    /**
+     * Builds the scan prefix covering all child index entries of one parent run.
+     *
+     * @param parentRunId parent run id (full form)
+     * @return glob-ready key prefix
+     */
+    public static String parentIndexPrefix(String parentRunId) {
+        return IDX_PARENT_PREFIX + encodeRunId(parentRunId) + ":";
+    }
+
+    /**
+     * Decodes one encoded run-id key segment back to its raw form — the inverse of
+     * the encodeRunId discipline (task segment Base64-url, {@code #seq} literal).
+     *
+     * @param segment encoded run-id segment
+     * @return raw run id
+     */
+    public static String decodeRunId(String segment) {
+        int hash = segment.lastIndexOf('#');
+        if (hash < 0) {
+            return new String(Base64.getUrlDecoder().decode(segment), StandardCharsets.UTF_8);
+        }
+        return new String(Base64.getUrlDecoder().decode(segment.substring(0, hash)),
+                StandardCharsets.UTF_8) + "#" + segment.substring(hash + 1);
     }
 
     /**
