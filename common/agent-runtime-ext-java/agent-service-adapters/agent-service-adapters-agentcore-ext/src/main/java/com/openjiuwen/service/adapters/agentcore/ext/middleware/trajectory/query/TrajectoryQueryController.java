@@ -50,7 +50,7 @@ public class TrajectoryQueryController {
      * @return nodes and edges (record JSON passthrough)
      */
     @GetMapping("/runs")
-    public ResponseEntity<Map<String, Object>> runs(@RequestParam String traceId) {
+    public ResponseEntity<Map<String, Object>> runs(@RequestParam("traceId") String traceId) {
         if (traceId.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "traceId is required"));
         }
@@ -81,8 +81,8 @@ public class TrajectoryQueryController {
      * @return ordered snapshot entries
      */
     @GetMapping("/audit")
-    public ResponseEntity<Map<String, Object>> audit(@RequestParam String tenantId,
-                                                     @RequestParam String conversationId) {
+    public ResponseEntity<Map<String, Object>> audit(@RequestParam("tenantId") String tenantId,
+                                                     @RequestParam("conversationId") String conversationId) {
         if (tenantId.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "tenantId is required"));
         }

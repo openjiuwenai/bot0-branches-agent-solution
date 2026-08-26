@@ -245,7 +245,14 @@ public class RedisTrajectoryStore {
         // 同步读在 filter/save 线程上执行——Redis 故障只 WARN 降级，不拖垮主流程
         try {
             Object value = client.get(key);
-            return value instanceof String str ? Optional.of(str) : Optional.empty();
+            // 实现可能返回 String 或 byte[]（接口 javadoc 明示两种形态）——统一归一到 String
+            if (value instanceof String str) {
+                return Optional.of(str);
+            }
+            if (value instanceof byte[] bytes) {
+                return Optional.of(new String(bytes, StandardCharsets.UTF_8));
+            }
+            return Optional.empty();
         } catch (JedisException | IllegalStateException e) {
             LOGGER.warn("trajectory store read failed ({}), degraded to miss", e.getClass().getSimpleName());
             return Optional.empty();

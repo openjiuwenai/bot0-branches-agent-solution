@@ -64,8 +64,8 @@ class TraceIdentityFilterTest {
         AtomicReference<String> downstream = new AtomicReference<>();
         TraceIdentityFilter filter = new TraceIdentityFilter(carrier, null, null);
         MockHttpServletRequest request = request("{\"jsonrpc\":\"2.0\",\"params\":{\"message\":{}}}", null, null);
-        filter.doFilter(request, new MockHttpServletResponse(), (req, res) ->
-                downstream.set(new String(req.getInputStream().readAllBytes())));
+        filter.doFilter(request, new MockHttpServletResponse(),
+                (req, res) -> downstream.set(new String(req.getInputStream().readAllBytes())));
         // 注入的 contextId 出现在下游 body，且 carrier 以其为键建档（首跳与后续轮共享）
         assertThat(downstream.get()).contains("\"contextId\":\"");
         String injected = downstream.get().replaceAll(".*\"contextId\":\"([^\"]+)\".*", "$1");
@@ -83,8 +83,8 @@ class TraceIdentityFilterTest {
         org.mockito.Mockito.when(taskStore.get("task-7")).thenReturn(null);
         TraceIdentityFilter filter = new TraceIdentityFilter(carrier, taskStore, null);
         MockHttpServletRequest request = request(body, null, null);
-        filter.doFilter(request, new MockHttpServletResponse(), (req, res) ->
-                downstream.set(new String(req.getInputStream().readAllBytes())));
+        filter.doFilter(request, new MockHttpServletResponse(),
+                (req, res) -> downstream.set(new String(req.getInputStream().readAllBytes())));
         // 带 taskId 的续跑请求不注入：body 原样，carrier 以 taskId 为键
         assertThat(downstream.get()).isEqualTo(body);
         assertThat(carrier.find("task-7")).isPresent();
@@ -95,8 +95,8 @@ class TraceIdentityFilterTest {
         AtomicReference<String> downstream = new AtomicReference<>();
         TraceIdentityFilter filter = new TraceIdentityFilter(carrier, null, null);
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/v1/health");
-        filter.doFilter(request, new MockHttpServletResponse(), (req, res) ->
-                downstream.set(new String(req.getInputStream().readAllBytes())));
+        filter.doFilter(request, new MockHttpServletResponse(),
+                (req, res) -> downstream.set(new String(req.getInputStream().readAllBytes())));
         assertThat(downstream.get()).isEmpty();
         assertThat(carrier.find(CONV)).isEmpty();
     }
@@ -116,8 +116,8 @@ class TraceIdentityFilterTest {
         String body = body(CONV);
         TraceIdentityFilter filter = new TraceIdentityFilter(carrier, null, null);
         MockHttpServletRequest request = request(body, null, null);
-        filter.doFilter(request, new MockHttpServletResponse(), (req, res) ->
-                downstream.set(new String(req.getInputStream().readAllBytes())));
+        filter.doFilter(request, new MockHttpServletResponse(),
+                (req, res) -> downstream.set(new String(req.getInputStream().readAllBytes())));
         assertThat(downstream.get()).isEqualTo(body);
     }
 

@@ -48,7 +48,8 @@ class AuditEventCollectorTest {
     void fullRoundLifecycleProducesSnapshotWithEvidence() {
         collector.openRound("tenant-1", "conv-1", "task-1", "trace-1", false, "task-1#1");
         collector.recordToolCall("conv-1", "todo_create", "finish", 12L);
-        collector.recordDelegation("conv-1", "task-1", "versatile-agent", "remote-9", "COMPLETED", "call_1", "task-1#1");
+        collector.recordDelegation("conv-1", "task-1", "versatile-agent", "remote-9", "COMPLETED",
+                "call_1", "task-1#1");
         collector.recordExchange("conv-1", "推荐基金", "建议配置A");
         collector.closeRound("conv-1", "task-1", "TASK_STATE_COMPLETED");
         flush();
