@@ -134,7 +134,7 @@ Skill Builder 没有独立服务启动命令。宿主创建共享的 `Subprocess
 .venv/bin/python examples/host_background.py \
   --workspace /tmp/skill-builder-smoke/workspace \
   --workspace-id smoke-workspace \
-  --materials examples/materials/role-governance.md \
+  --materials examples/materials/knowledge-role-sample.md \
   --skill-name sample-role-skill \
   --display-name "Sample Role Skill" \
   --description "Generate a sample Skill from generic material" \
@@ -222,6 +222,12 @@ jiuwenbox container  沙箱管理服务
 ```bash
 .venv/bin/python -m pip install '.[recording]'
 .venv/bin/python -m playwright install chromium
+```
+
+精简 Linux 或容器镜像还需要 Chromium 系统依赖，可在镜像构建阶段改用：
+
+```bash
+.venv/bin/python -m playwright install --with-deps chromium
 ```
 
 headless/viewer 或 headed/X11 配置见[录屏接入](recording-integration.md)。活动录屏对象保存在进程内；多 worker 宿主必须为同一录屏提供 sticky routing，或部署独立录屏服务。

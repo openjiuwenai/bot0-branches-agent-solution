@@ -10,6 +10,24 @@ Skill Builder 负责完整业务生命周期并返回类型化状态。宿主负
 view = client.present(execution)
 ```
 
+## 宿主实现清单
+
+| 能力 | 接入要求 |
+|---|---|
+| API 与身份 | 提供 HTTP/RPC 接口、鉴权、租户隔离和 workspace 授权 |
+| 后台任务 | 调度 `build/resume/reconcile/run_turn/repair`，支持取消和按 workspace 单写锁 |
+| 持久化 | 实现生产 StateStore、workspace、事件存储和对象存储 |
+| 材料 | 上传、病毒扫描、格式/大小限制、二进制转 Markdown 和材料索引 |
+| HITL | 原样渲染 Core 表单，提交 resume token 和结构化答案 |
+| 失败恢复 | 分别提供继续和重试入口，不重放旧 worker request |
+| 文件编辑 | 提供文件浏览器、编辑器 UI、安全文件 API 和保存锁 |
+| 导出 | 调用 Core 构造安全归档，再实现下载、对象存储和保留策略 |
+| 发布 | 实现审批、组织规则、许可证检查和外部发布动作 |
+| 沙箱 | 部署 Jiuwenbox，配置容量、网络策略、健康检查和清理 |
+| 可选录屏 | 提供录屏 UI/API、Chromium、sticky routing 和敏感资产治理 |
+
+Skill Builder 不提供产品前端、HTTP route、任务队列、数据库模型、对象存储 SDK 或外部发布客户端。
+
 ## 构造客户端
 
 每个宿主进程创建一个共享 `SubprocessAgentRunner`，使并发限制覆盖该进程中的所有 workspace：
@@ -201,12 +219,17 @@ execution = await client.build(
 | `POST /skill-builder/workspaces/{id}/validate` | 加载并调用 `validate` |
 | `POST /skill-builder/workspaces/{id}/repair` | 只处理已确认机械可修复问题 |
 | `POST /skill-builder/workspaces/{id}/turns` | 调用 `run_turn` |
+| `GET /skill-builder/workspaces/{id}/files` | 列出允许检查的生成文件 |
+| `GET /skill-builder/workspaces/{id}/files/{path}` | 读取一个授权的生成文件 |
+| `PUT /skill-builder/workspaces/{id}/files/{path}` | 在单写锁内保存文件并失效旧 Receipt |
 | `GET /skill-builder/workspaces/{id}/export` | 构造归档后由宿主返回/存储 |
 | `DELETE /skill-builder/workspaces/{id}/active-task` | 取消并等待后台 task |
 
 这些只是建议路由，本包不提供 HTTP 服务。
 
-## 验证与对话编辑
+## 验证与编辑
+
+### 重新验收
 
 ```python
 execution = await client.load(workspace_id)
@@ -218,6 +241,10 @@ execution = await client.validate(
     hitl_confirmations=execution.hitl_confirmations,
 )
 ```
+
+### 对话式编辑
+
+对话式编辑由 Core 执行模型驱动的受控写入、事务检查和回滚。宿主负责对话 UI、消息接口、任务锁和进度展示：
 
 ```python
 from skill_builder import SkillBuilderTurnRequest
@@ -231,6 +258,19 @@ execution = await client.run_turn(
 )
 ```
 
+### 文件编辑器
+
+文件浏览器、代码/Markdown 编辑器和文件读写接口由宿主实现。Skill Builder 不绑定 Monaco、CodeMirror 或其他前端编辑器。
+
+宿主文件 API 必须：
+
+- 只允许访问当前 workspace 的 `generated-skill/`；
+- 使用安全相对路径并拒绝路径穿越、保留目录和不可信软链接；
+- 在同 workspace 单写锁内完成读取、保存和 Receipt 失效；
+- 使用原子写入，限制文件类型、单文件大小和总包大小；
+- 不允许编辑 `validation/`、`.skill-builder/`、`workspace/` 或 `playwright/` 伪造验收证据；
+- 保存后重新调用 `present()`，在用户请求验收时调用 `validate()`。
+
 ## 状态与交付
 
 ```python
@@ -243,26 +283,30 @@ view = client.present(execution)
 - `needs_review`：允许检查和宿主导出，禁止自动发布；
 - `failed`：使用结构化 `failure.code/category/retryable/repairable`，不要解析错误文本。
 
-导出：
+普通导出不要求 `delivery_decision=ready`。宿主应先检查 `view.available_actions` 是否包含 `export`，再调用：
 
 ```python
 archive = client.build_export_archive(execution)
 target.write_bytes(archive.content)
 ```
 
-对象存储、用户下载、审批和发布均由宿主完成。`build_publish_archive` 只是兼容归档构造，不会调用市场。
+`build_export_archive()` 负责合法草稿、PackageRevision、路径白名单、软链接和 `SKILL.md` 校验。宿主不应自行遍历整个 workspace 打包，但可以把 Core 返回的字节写入本地、对象存储或下载响应。
+
+`draft_ready`、`needs_review` 和 `ready` 都可能允许导出；`failed` 只有在仍存在合法候选且 `available_actions` 明确返回 `export` 时才允许导出。`waiting_for_user` 和 `running` 不开放导出。
+
+对象存储、用户下载、审批和外部发布均由宿主完成。`build_publish_archive` 只构造兼容发布包，要求 `publishable=True`，不会调用外部市场或发布服务。
 
 使用 `execution.artifact_sha256` 标识 Skill 内容。ZIP 元数据包含构造时间，因此稍后重建 ZIP 时 archive SHA 可能不同，但 artifact 身份未变。
 
-## 宿主手工编辑
+## 文件保存后的 Receipt 处理
 
-宿主绕过 `run_turn` 修改 `generated-skill/` 后，立即调用：
+宿主通过文件编辑器或其他方式绕过 `run_turn` 修改 `generated-skill/` 后，必须在释放 workspace 写锁前调用：
 
 ```python
 execution = await client.invalidate_receipt(workspace_id)
 ```
 
-重新渲染状态并执行 `validate`，不得继续显示旧 `ready` 或开放发布。
+重新渲染状态，并在用户请求验收时执行 `validate`。Receipt 重新建立前不得继续显示旧 `ready` 或开放发布。
 
 ## Sandbox 与录屏
 

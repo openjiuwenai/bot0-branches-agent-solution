@@ -2,7 +2,7 @@
 
 ## 测试目标
 
-目标仓只保留使用者依赖的独立包契约，不复制宿主的 HTTP、ORM、页面、对象存储和发布测试。
+默认测试只覆盖独立包的公共契约，不复制宿主的 HTTP、ORM、页面、对象存储和发布测试。
 
 默认测试使用 Fake Agent Runner、mock Jiuwenbox/录屏对象和临时 workspace，不需要真实模型、外部网络或运行中的 Jiuwenbox，适合本地开发和 CI。
 
@@ -103,7 +103,7 @@ print(skill_builder.__file__)"
 .venv/bin/python examples/host_background.py \
   --workspace /tmp/skill-builder-smoke/workspace \
   --workspace-id smoke-workspace \
-  --materials examples/materials/role-governance.md \
+  --materials examples/materials/knowledge-role-sample.md \
   --skill-name sample-role-skill \
   --display-name "Sample Role Skill" \
   --description "Generate a sample Skill from generic material" \
@@ -144,6 +144,8 @@ print(skill_builder.__file__)"
 .venv/bin/python -m pip install -e '.[recording,test]'
 .venv/bin/python -m playwright install chromium
 ```
+
+精简 Linux 或容器环境可在镜像构建阶段执行 `.venv/bin/python -m playwright install --with-deps chromium`，同时安装浏览器和系统依赖。
 
 只允许访问批准的测试 URL。运行后清理 browser profile、storage state、截图、下载和 trace，避免保存会话敏感信息。
 

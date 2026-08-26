@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from skill_builder import (
+    ExecutionAction,
     SkillBuilderClient,
     SkillBuilderExecution,
     SkillBuilderInput,
@@ -270,7 +271,8 @@ async def run_build(args: argparse.Namespace) -> int:
     execution = await task
     print(json.dumps(public_result(client, execution), ensure_ascii=False, indent=2))
 
-    if execution.publishable and args.output is not None:
+    view = client.present(execution)
+    if ExecutionAction.EXPORT in view.available_actions and args.output is not None:
         archive_sha256 = host.export(execution, args.output)
         print(f"archive={args.output} sha256={archive_sha256}")
     return 0 if execution.status.value != "failed" else 1

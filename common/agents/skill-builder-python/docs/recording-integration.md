@@ -19,6 +19,14 @@ python -m pip install 'openjiuwen-skill-builder[recording]'
 python -m playwright install chromium
 ```
 
+第一条命令安装 Playwright Python 包，第二条命令下载代码实际使用的 Playwright Chromium。Skill Builder 调用 `playwright.chromium`，不要求额外安装 Google Chrome。
+
+精简 Linux 或容器环境还需要浏览器系统依赖，可在镜像构建阶段执行：
+
+```bash
+python -m playwright install --with-deps chromium
+```
+
 执行 `playwright install chromium` 的 Python 环境和 `PLAYWRIGHT_BROWSERS_PATH` 必须与宿主进程一致。
 
 ## 配置
@@ -188,8 +196,9 @@ inputs/external-sources/<recording_id>/
 
 ## 与浏览器验证的关系
 
-录屏回答：“用户展示了什么操作流程？”
+| 能力 | 目的 | 实现状态 |
+|---|---|---|
+| 录屏材料采集 | 记录用户展示的网页操作流程，生成 Scenario 可消费的 Markdown | 已实现 |
+| 浏览器真实性验证 | 验证生成 Skill 能否在获批外部环境中执行声明的浏览器能力 | 预留独立 Acceptance adapter |
 
-浏览器验证回答：“生成 Skill 能否在获批外部环境中正确执行声明的浏览器能力？”
-
-前者已实现，后者属于未来独立 Acceptance adapter。录屏成功不能替代浏览器验证。
+录屏成功只能证明材料采集完成，不能替代生成 Skill 的浏览器真实性验证。

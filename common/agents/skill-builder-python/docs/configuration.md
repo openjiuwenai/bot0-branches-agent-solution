@@ -19,7 +19,9 @@ python -m playwright install chromium
 python -m pip install 'openjiuwen-skill-builder[full]'
 ```
 
-当前锁定经过来源测试验证的 `openjiuwen==0.1.12`。版本升级应作为单独的兼容性变更处理。
+精简 Linux 或容器环境还需要 Chromium 系统依赖，可在镜像构建阶段执行 `python -m playwright install --with-deps chromium`。
+
+OpenJiuwen Python adapter 当前支持并锁定 `openjiuwen==0.1.12`。版本升级应作为单独的兼容性变更处理。
 
 ## 模型必需配置
 
@@ -29,7 +31,7 @@ python -m pip install 'openjiuwen-skill-builder[full]'
 |---|---|---:|---|
 | `SKILL_BUILDER_LLM_API_BASE` | 是 | 无 | OpenAI-compatible 模型地址 |
 | `SKILL_BUILDER_LLM_API_KEY` | 是 | 无 | 模型密钥，只能通过安全环境注入 |
-| `SKILL_BUILDER_LLM_MODEL` | 是 | 无 | 客户配置的模型名称 |
+| `SKILL_BUILDER_LLM_MODEL` | 是 | 无 | 宿主配置的模型名称 |
 | `SKILL_BUILDER_LLM_PROVIDER` | 否 | `OpenAI` | Adapter 使用的 provider 标识 |
 | `SKILL_BUILDER_LLM_TIMEOUT_SECONDS` | 否 | `120` | 单次模型 HTTP 请求超时 |
 | `SKILL_BUILDER_LLM_MAX_TOKENS` | 否 | `16384` | 默认输出 token 预算 |
@@ -50,7 +52,7 @@ python -m pip install 'openjiuwen-skill-builder[full]'
 | `SKILL_BUILDER_LLM_AUTHOR_MAX_TOKENS` | `12288` | Author 输出上限 |
 | `SKILL_BUILDER_LLM_REPAIR_MAX_TOKENS` | `8192` | Repair 输出上限 |
 
-模型参数由客户配置。宿主不能限制为单一模型，但应对模型专用参数做兼容测试。
+模型参数由宿主配置。Skill Builder 不限制为单一模型，但宿主应对模型专用参数做兼容测试。
 
 ## Jiuwenbox
 

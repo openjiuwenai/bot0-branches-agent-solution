@@ -31,7 +31,7 @@ view = client.present(execution)
 
 `waiting_for_user` 不是失败。用户决策期间没有运行中的 Agent Core 子进程。
 
-## Validation 状态
+## 验收状态（Validation Status）
 
 | `validation_status` | 含义 | 建议展示 |
 |---|---|---|
@@ -44,7 +44,7 @@ warning 不是生命周期状态。当 warning 不影响已验证可用性时，
 
 宿主不能把所有 warning 都升级为 `needs_review`，也不能把阻断 finding 降为普通警告。
 
-## Delivery Decision
+## 交付决策（Delivery Decision）
 
 | `delivery_decision` | 含义 | 自动发布 |
 |---|---|---|
@@ -62,6 +62,28 @@ delivery_decision == ready AND 当前 artifact receipt 有效
 
 它不会执行发布，也不会绕过宿主审批、租户规则、恶意软件/许可证扫描或市场审核。
 
+`delivery_decision` 由 Core 根据 Acceptance、blocker 和当前 artifact Receipt 计算，不是宿主配置项。宿主可以采用更严格的策略，例如要求 `ready` 仍需审批；宿主不得把 `needs_review`、`blocked` 或 `failed` 放宽为自动发布。
+
+## 导出与发布
+
+普通导出用于下载、检查或人工审核 Skill 草稿，不要求 `delivery_decision=ready`。宿主应根据 `view.available_actions` 是否包含 `export` 展示入口，并调用：
+
+```python
+archive = client.build_export_archive(execution)
+```
+
+Core 负责归档路径白名单、软链接、`SKILL.md`、PackageRevision 和包结构校验；宿主负责下载响应、对象存储、访问控制和保留期限。
+
+| 状态 | 普通导出 | 自动发布 |
+|---|---|---|
+| `draft_ready` | `available_actions` 允许时可导出 | 禁止 |
+| `needs_review` | 可导出供人工审核 | 禁止 |
+| `ready` | 可导出 | 还需 `publishable=True` 和宿主审批 |
+| `failed` | 仅在仍有合法候选且 `available_actions` 允许时可导出 | 禁止 |
+| `waiting_for_user` / `running` | 禁止 | 禁止 |
+
+人工审核发现需要补充证据或修改文件时，应更新候选并重新执行 `validate`。宿主治理系统执行的人工特批不会把 Core 状态改成 `ready`，必须单独记录审批人、原因和 artifact hash，且不得作为自动发布路径。
+
 ## 外部验证未运行
 
 按外部验证在 Skill 承诺中的作用分类：
@@ -71,7 +93,7 @@ delivery_decision == ready AND 当前 artifact receipt 有效
 
 浏览器录屏只是输入证据，不是生成 Skill 的浏览器真实性验收。
 
-## Available Actions
+## 可用动作（Available Actions）
 
 只渲染 Core 返回的 `view.available_actions`。当前实现规则：
 
