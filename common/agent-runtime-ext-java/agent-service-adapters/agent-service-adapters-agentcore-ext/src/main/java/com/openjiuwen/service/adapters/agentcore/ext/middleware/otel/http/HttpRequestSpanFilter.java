@@ -86,17 +86,17 @@ public class HttpRequestSpanFilter extends OncePerRequestFilter {
             request.getAsyncContext().addListener(new AsyncListener() {
                 @Override
                 public void onComplete(AsyncEvent event) {
-                    endSpan(span, response, conversationId);
+                    endSpan(span, response, conversationId, "complete");
                 }
 
                 @Override
                 public void onTimeout(AsyncEvent event) {
-                    endSpan(span, response, conversationId);
+                    endSpan(span, response, conversationId, "timeout");
                 }
 
                 @Override
                 public void onError(AsyncEvent event) {
-                    endSpan(span, response, conversationId);
+                    endSpan(span, response, conversationId, "error");
                 }
 
                 @Override
@@ -106,12 +106,16 @@ public class HttpRequestSpanFilter extends OncePerRequestFilter {
             });
             return;
         }
-        endSpan(span, response, conversationId);
+        endSpan(span, response, conversationId, "complete");
     }
 
-    private void endSpan(Span span, HttpServletResponse response, String conversationId) {
+    private void endSpan(Span span, HttpServletResponse response, String conversationId, String outcome) {
         try {
-            span.setAttribute("http.response.status_code", (long) response.getStatus());
+            long statusCode = (long) response.getStatus();
+            span.setAttribute("http.response.status_code", statusCode);
+            // 响应摘要（合法 JSON，合同口径：限模式——SSE 响应体流式写出不缓存，摘要含状态码与完成原因）
+            span.setAttribute("openjiuwen.http.response_summary",
+                    "{\"status\":" + statusCode + ",\"outcome\":\"" + outcome + "\"}");
         } catch (IllegalStateException | IllegalArgumentException | NullPointerException e) {
             LOGGER.warn("otel http span status write failed: {}", e.getClass().getSimpleName());
         } finally {

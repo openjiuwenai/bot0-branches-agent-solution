@@ -145,8 +145,10 @@ public class OtelAutoConfiguration {
     @Bean
     static OtelRemoteAgentCallerPostProcessor otelRemoteAgentCallerPostProcessor(
             OtelProviderHolder holder, OtelTracerConfig config,
-            ObjectProvider<A2ARemoteAgentCardRegistry> registry) {
-        return new OtelRemoteAgentCallerPostProcessor(holder.provider().get(config.getTracerName()), registry);
+            ObjectProvider<A2ARemoteAgentCardRegistry> registry,
+            ObjectProvider<TraceContextCarrier> carrierProvider) {
+        return new OtelRemoteAgentCallerPostProcessor(holder.provider().get(config.getTracerName()), registry,
+                carrierProvider);
     }
 
     @Bean

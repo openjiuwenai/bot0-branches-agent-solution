@@ -7,6 +7,7 @@ package com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.egress;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.HttpContextBridge;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity.TraceContextCarrier;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.OtelRuntimeSupport;
 import com.openjiuwen.service.app.a2a.catalog.A2ARemoteAgentCardRegistry;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
@@ -51,21 +52,36 @@ public class OtelRemoteAgentCallerDecorator implements RemoteAgentCaller {
      */
     private static final String VERSATILE_AGENT_NAME = "versatile-agent";
 
+    /** 出站 metadata 约定键：parent_run_id（与 TraceIdentityFilter 的入站解析键一致）。 */
+    static final String PARENT_RUN_ID_METADATA = "parent_run_id";
+
     private final RemoteAgentCaller delegate;
     private final Tracer tracer;
     private final A2ARemoteAgentCardRegistry registry;
+    private final TraceContextCarrier carrier;
 
+    /**
+     * Creates the decorator.
+     *
+     * @param delegate wrapped caller
+     * @param tracer   tracer for dispatch spans
+     * @param registry remote agent card registry
+     * @param carrier  trace context carrier (may be null; parent_run_id then not injected)
+     */
     public OtelRemoteAgentCallerDecorator(RemoteAgentCaller delegate, Tracer tracer,
-                                          A2ARemoteAgentCardRegistry registry) {
+                                          A2ARemoteAgentCardRegistry registry,
+                                          TraceContextCarrier carrier) {
         this.delegate = delegate;
         this.tracer = tracer;
         this.registry = registry;
+        this.carrier = carrier;
     }
 
     @Override
     public CompletableFuture<RemoteCallOutcome> callOutcome(RemoteCall call,
                                                             RemoteAgentCaller.EventObserver eventObserver) {
         boolean versatile = VERSATILE_AGENT_NAME.equals(call.agentName());
+        call = withParentRunId(call);
         Span span = startSpan(call, versatile);
         long startNanos = System.nanoTime();
         // 接口不声明受检异常、实现可抛任意运行时异常——用成功标记 finally 代替 broad catch
@@ -88,6 +104,22 @@ public class OtelRemoteAgentCallerDecorator implements RemoteAgentCaller {
                         new IllegalStateException("delegate invocation failed"));
             }
         }
+    }
+
+    // 重建不可变 RemoteCall，注入本轮 parent_run_id（carrier 无条目/无轮次标记时原样透传）
+    private RemoteCall withParentRunId(RemoteCall call) {
+        if (carrier == null || call.contextId() == null) {
+            return call;
+        }
+        java.util.Optional<String> parentRunId = carrier.find(call.contextId())
+                .flatMap(TraceContextCarrier.Entry::getCurrentRunId);
+        if (parentRunId.isEmpty()) {
+            return call;
+        }
+        Map<String, Object> metadata = new java.util.LinkedHashMap<>(call.metadata());
+        metadata.put(PARENT_RUN_ID_METADATA, parentRunId.get());
+        return new RemoteCall(call.agentName(), call.message(), call.contextId(), call.taskId(),
+                metadata, call.messageMetadata(), call.isCallerStreaming());
     }
 
     private Span startSpan(RemoteCall call, boolean versatile) {

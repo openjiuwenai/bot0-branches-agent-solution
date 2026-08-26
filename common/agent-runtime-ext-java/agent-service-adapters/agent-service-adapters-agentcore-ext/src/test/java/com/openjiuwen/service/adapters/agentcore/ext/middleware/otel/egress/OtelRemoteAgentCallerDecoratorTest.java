@@ -48,13 +48,33 @@ class OtelRemoteAgentCallerDecoratorTest {
     }
 
     private OtelRemoteAgentCallerDecorator decorator(RemoteAgentCaller delegate) {
-        return new OtelRemoteAgentCallerDecorator(delegate, provider.get("test"), registry);
+        return new OtelRemoteAgentCallerDecorator(delegate, provider.get("test"), registry, null);
     }
 
     private RemoteCall versatileCall() {
         return new RemoteCall("versatile-agent",
                 "{\"query_intent\":\"理财推荐\",\"query_description\":\"推荐基金\",\"query\":\"推荐基金\",\"intent\":\"理财推荐\"}",
                 "conv-1", null, Map.of());
+    }
+
+    @Test
+    void parentRunIdIsInjectedIntoOutboundMetadata() {
+        // carrier 有本轮 run 标记时，出站 RemoteCall metadata 注入 parent_run_id
+        com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity.TraceContextCarrier carrier =
+                com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity.TraceContextCarrier.create(86400L);
+        carrier.put("conv-1", new com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity
+                .TraceContextCarrier.Entry("t", false, "a2a", "tenant", java.time.Instant.now()));
+        carrier.updateCurrentRunId("conv-1", "task-1#2");
+        java.util.concurrent.atomic.AtomicReference<RemoteCall> seen = new java.util.concurrent.atomic.AtomicReference<>();
+        OtelRemoteAgentCallerDecorator decorator = new OtelRemoteAgentCallerDecorator(
+                (call, observer) -> {
+                    seen.set(call);
+                    return java.util.concurrent.CompletableFuture.completedFuture(null);
+                },
+                provider.get("test"), registry, carrier);
+        decorator.callOutcome(versatileCall(), null);
+        org.assertj.core.api.Assertions.assertThat(seen.get().metadata())
+                .containsEntry("parent_run_id", "task-1#2");
     }
 
     @Test
