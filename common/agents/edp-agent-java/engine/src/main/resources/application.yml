@@ -88,6 +88,21 @@ openjiuwen:
     # 对应环境变量回退：OTEL_EXPORTER_OTLP_ENDPOINT / _PROTOCOL / _HEADERS / _TIMEOUT（毫秒）、
     # OTEL_SERVICE_NAME / OTEL_SERVICE_VERSION / OTEL_SERVICE_INSTANCE_ID、OTEL_TRACES_SAMPLER_ARG。
 
+    # ==================== 全链路轨迹 trajectory.link（DFX-001 第二批，默认关闭） ====================
+    # 能力由 agentcore-ext 的 middleware/trajectory 提供：trace_id 归一（含重启恢复）、执行树、
+    # 审计快照与五类决策留证（记录写 Redis，需 checkpointer.type=redis 且配 middleware.redis.default）。
+    # 查询端点：GET /manage/trajectory/runs?traceId=... 、GET /manage/trajectory/audit?tenantId=...&conversationId=...
+    # trajectory:
+    #   link:
+    #     enabled: true                     # 总开关，默认 false；关闭时零行为变化
+    #     ttl-seconds: 604800               # 记录 TTL（默认 7 天；须不短于 carrier-ttl-seconds）
+    #     queue-capacity: 10000             # 异步写队列背压上限（满则丢弃并 WARN，不占执行线程）
+    #     flush-interval-ms: 1000           # 单后台线程批量刷写间隔
+    #     carrier-ttl-seconds: 86400        # trace 上下文载体条目滑动 TTL（默认 24h）
+    # 对应环境变量（Spring 宽松绑定）：OPENJIUWEN_SERVICE_TRAJECTORY_LINK_*；
+    # 另需 OPENJIUWEN_SERVICE_MIDDLEWARE_CHECKPOINTER_TYPE=redis 与
+    # OPENJIUWEN_SERVICE_MIDDLEWARE_REDIS_DEFAULT_HOST/PORT（middleware redis 端点）。
+
 deep-agent:
   # 模型配置（backend 定义服务端连接，model 定义模型参数）
   # 与 DeepAgent Starter 标准一致，放在 deep-agent 顶层

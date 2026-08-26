@@ -423,6 +423,57 @@ bash common/agents/edp-agent-java/deploy/start.sh
 - **Collector 收不到 span**：① 确认 `OPENJIUWEN_SERVICE_OTEL_ENABLED=true`；② endpoint 协议与端口匹配（grpc→4317）；③ 请求体需带 conversationId（无会话标识的请求不产轨迹）；④ 容器内代理环境变量会劫持 Java 客户端，内网 Collector 地址需清空代理或配置 no_proxy。
 - **需要更细配置**：除环境变量外也支持 yaml 配置树 `openjiuwen.service.otel.*`（优先级：yaml > 环境变量 > 默认值，逐项回退），各项说明见 `engine/src/main/resources/application.yml` 的 OTel 注释段。
 
+## 5d. 全链路轨迹（trajectory.link）配置
+
+在 5c 的 OTel span 上报之上，DFX-001 第二批提供**全链路标识归一、执行树与审计快照**能力（ext `middleware/trajectory`）：trace_id 跨多轮归一（含重启恢复）、按轮落执行树节点/委托边到 Redis、五类关键决策留证、快照按轮 append-only 存储，并提供只读查询端点。**默认关闭**，与 OTel 可独立启停。
+
+### 启用步骤
+
+#### 步骤 1：确认 Redis 可用
+
+trajectory 记录写 Redis（复用 5/5a 节的同一个 Redis），无需额外存储组件。
+
+#### 步骤 2：编辑 `.env`
+
+```dotenv
+# 全链路轨迹总开关
+OPENJIUWEN_SERVICE_TRAJECTORY_LINK_ENABLED=true
+
+# RuntimeRedisClient 前提（缺则能力保持关闭并 WARN）：
+# checkpointer 类型必须为 redis
+OPENJIUWEN_SERVICE_MIDDLEWARE_CHECKPOINTER_TYPE=redis
+# middleware redis 端点（缺失会启动失败：openjiuwen.service.middleware.redis.default is required）
+OPENJIUWEN_SERVICE_MIDDLEWARE_REDIS_DEFAULT_HOST=edp-redis
+OPENJIUWEN_SERVICE_MIDDLEWARE_REDIS_DEFAULT_PORT=6379
+
+# 可选调优（默认值适用大多数场景）
+# OPENJIUWEN_SERVICE_TRAJECTORY_LINK_TTL_SECONDS=604800
+# OPENJIUWEN_SERVICE_TRAJECTORY_LINK_QUEUE_CAPACITY=10000
+# OPENJIUWEN_SERVICE_TRAJECTORY_LINK_FLUSH_INTERVAL_MS=1000
+# OPENJIUWEN_SERVICE_TRAJECTORY_LINK_CARRIER_TTL_SECONDS=86400
+```
+
+> **注意**：`OPENJIUWEN_SERVICE_MIDDLEWARE_REDIS_DEFAULT_HOST` 不要填 `localhost`/`127.0.0.1`——容器内它指向 EDP 容器自身。`local` 模式用 `edp-redis`，`external` 模式用可路由 DNS/IP。
+
+#### 步骤 3：重启并验证
+
+```bash
+bash common/agents/edp-agent-java/deploy/stop.sh
+bash common/agents/edp-agent-java/deploy/start.sh
+```
+
+发送一条业务请求后，任选其一验证：
+
+- **查询端点**:`GET http://<edp>:8190/manage/trajectory/runs?traceId=<trace_id>` 重建执行树；`GET /manage/trajectory/audit?tenantId=<租户>&conversationId=<会话>` 按轮回放审计快照（缺轮显式标记）;
+- **Redis 直查**:`docker exec edp-redis redis-cli --scan --pattern "runtime:*"` 应见 `runtime:run:*`（执行树节点/边/索引）、`runtime:audit:*`（快照）、`runtime:audit-dec:*`（决策记录）。
+
+### 排错
+
+- **启动报 `openjiuwen.service.middleware.redis.default is required`**：只配了 `CHECKPOINTER_TYPE=redis` 但没配 middleware redis 端点——补 `OPENJIUWEN_SERVICE_MIDDLEWARE_REDIS_DEFAULT_HOST/PORT`。
+- **启动日志 WARN `trajectory.link enabled but RuntimeRedisClient is not available`**:checkpointer.type 不是 redis 或端点不通，能力保持关闭（V-8 口径），不影响业务。
+- **查询端点返回空**：确认请求携带会话标识（contextId）；记录为异步批量刷写（默认 1s 间隔），稍候再查。
+- **配置项细目**：yaml 配置树 `openjiuwen.service.trajectory.link.*`（优先级 yaml > env > 默认），说明见 `engine/src/main/resources/application.yml` 的 trajectory.link 注释段。
+
 ## 6. EDP 与 adapter 的网络契约
 
 ### 同一台 Docker 主机
