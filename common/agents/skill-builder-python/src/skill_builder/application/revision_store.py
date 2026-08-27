@@ -57,7 +57,7 @@ class RevisionStore:
     def load_state(self) -> dict[str, Any]:
         try:
             value = json.loads(self.state_path.read_text(encoding="utf-8", errors="replace"))
-        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        except (OSError, TypeError, ValueError):
             value = {}
         state = dict(value) if isinstance(value, dict) else {}
         return {

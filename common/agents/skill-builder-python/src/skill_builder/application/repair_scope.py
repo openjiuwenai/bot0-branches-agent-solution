@@ -72,7 +72,7 @@ def persist_repair_plan(root: Path, value: dict[str, Any]) -> dict[str, Any]:
 def load_repair_plan(root: Path) -> dict[str, Any] | None:
     try:
         value = json.loads((root / REPAIR_PLAN_PATH).read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, UnicodeError, TypeError, ValueError):
         return None
     return normalize_repair_plan(value)
 

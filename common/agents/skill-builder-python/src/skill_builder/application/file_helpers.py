@@ -36,7 +36,7 @@ def _json_text(value: Any) -> str:
 def _load_json_object(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError):
         return {}
     return value if isinstance(value, dict) else {}
 

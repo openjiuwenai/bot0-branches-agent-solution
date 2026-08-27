@@ -130,7 +130,7 @@ def _recording_digest(content: str, *, path: str) -> dict[str, Any] | None:
     observed_urls: list[str] = []
     for index, match in enumerate(matches):
         end = matches[index + 1].start() if index + 1 < len(matches) else len(content)
-        block = content[match.end() : end]
+        block = content[match.end():end]
         fields = {
             item.group("name"): _bounded_text(item.group("value"), limit=800)
             for item in _RECORDING_FIELD.finditer(block)

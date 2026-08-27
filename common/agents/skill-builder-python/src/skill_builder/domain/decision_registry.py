@@ -128,10 +128,25 @@ DECISION_CONCEPTS: tuple[DecisionConceptDefinition, ...] = (
             "collection_mode",
         }),
         value_aliases=(
-            ("api", frozenset({"api_only", "api_first", "api_primary", "api_with_page_doc", "gitee_api", "http", "http_requests", "http_html"})),
-            ("browser", frozenset({"browser_only", "browser_required", "playwright", "playwright_only", "playwright_page", "playwright_primary", "live_scrape"})),
+            (
+                "api",
+                frozenset({
+                    "api_only", "api_first", "api_primary", "api_with_page_doc",
+                    "gitee_api", "http", "http_requests", "http_html",
+                }),
+            ),
+            (
+                "browser",
+                frozenset({
+                    "browser_only", "browser_required", "playwright", "playwright_only",
+                    "playwright_page", "playwright_primary", "live_scrape",
+                }),
+            ),
             ("hybrid", frozenset({"api_and_browser", "browser_and_api", "combined"})),
-            ("fixture", frozenset({"fixture_offline", "offline", "file", "sample", "cli_arg", "manual", "sop", "no_script"})),
+            (
+                "fixture",
+                frozenset({"fixture_offline", "offline", "file", "sample", "cli_arg", "manual", "sop", "no_script"}),
+            ),
         ),
         minimum_domain_matches=2,
         closed_values=True,
@@ -167,7 +182,13 @@ DECISION_CONCEPTS: tuple[DecisionConceptDefinition, ...] = (
                 "api_only", "api_first", "api_primary", "api_with_page_doc",
                 "api_integration", "gitee_api", "http", "http_requests", "http_parse", "http_html",
             })),
-            ("browser", frozenset({"playwright", "playwright_only", "browser_only", "browser_automation", "playwright_page", "playwright_scrape"})),
+            (
+                "browser",
+                frozenset({
+                    "playwright", "playwright_only", "browser_only", "browser_automation",
+                    "playwright_page", "playwright_scrape",
+                }),
+            ),
             ("browser_with_manual_fallback", frozenset({
                 "browser_manual_fallback",
                 "browser_and_manual",
@@ -281,8 +302,20 @@ DECISION_CONCEPTS: tuple[DecisionConceptDefinition, ...] = (
             "technology_stack",
         }),
         value_aliases=(
-            ("enabled", frozenset({"true", "yes", "required", "api", "api_first", "api_only", "http", "http_requests", "http_html", "python_requests", "python_stdlib", "requests_bs4"})),
-            ("disabled", frozenset({"false", "no", "none", "no_api", "offline", "file", "manual", "browser", "browser_only", "playwright_only", "no_script"})),
+            (
+                "enabled",
+                frozenset({
+                    "true", "yes", "required", "api", "api_first", "api_only", "http", "http_requests",
+                    "http_html", "python_requests", "python_stdlib", "requests_bs4",
+                }),
+            ),
+            (
+                "disabled",
+                frozenset({
+                    "false", "no", "none", "no_api", "offline", "file", "manual", "browser",
+                    "browser_only", "playwright_only", "no_script",
+                }),
+            ),
         ),
         closed_values=True,
     ),
@@ -296,8 +329,20 @@ DECISION_CONCEPTS: tuple[DecisionConceptDefinition, ...] = (
             "runtime_browser_requested",
         }),
         value_aliases=(
-            ("enabled", frozenset({"true", "yes", "required", "browser", "browser_required", "browser_automation", "playwright", "playwright_only", "hybrid", "runtime_browser_automation"})),
-            ("disabled", frozenset({"false", "no", "none", "disabled", "excluded", "no_browser", "not_exported", "api", "api_first", "api_only", "http", "file", "manual", "sop"})),
+            (
+                "enabled",
+                frozenset({
+                    "true", "yes", "required", "browser", "browser_required", "browser_automation",
+                    "playwright", "playwright_only", "hybrid", "runtime_browser_automation",
+                }),
+            ),
+            (
+                "disabled",
+                frozenset({
+                    "false", "no", "none", "disabled", "excluded", "no_browser", "not_exported",
+                    "api", "api_first", "api_only", "http", "file", "manual", "sop",
+                }),
+            ),
         ),
         closed_values=True,
     ),
@@ -367,8 +412,20 @@ DECISION_CONCEPTS: tuple[DecisionConceptDefinition, ...] = (
             "generate_runtime_screenshots",
         }),
         value_aliases=(
-            ("enabled", frozenset({"true", "yes", "required", "include", "included", "export", "runtime_output", "exported_output"})),
-            ("disabled", frozenset({"false", "no", "none", "disabled", "excluded", "optional", "validation_only", "verification_only", "evidence_only", "platform_validation_only", "platform_evidence_only", "no_runtime_output", "no_screenshot_output", "not_exported"})),
+            (
+                "enabled",
+                frozenset({
+                    "true", "yes", "required", "include", "included", "export", "runtime_output", "exported_output",
+                }),
+            ),
+            (
+                "disabled",
+                frozenset({
+                    "false", "no", "none", "disabled", "excluded", "optional", "validation_only",
+                    "verification_only", "evidence_only", "platform_validation_only", "platform_evidence_only",
+                    "no_runtime_output", "no_screenshot_output", "not_exported",
+                }),
+            ),
         ),
         closed_values=True,
     ),
@@ -1057,9 +1114,24 @@ def decision_capabilities(concept: Any, value: Any) -> dict[str, bool]:
                 "external_runtime": False,
                 "collection_script": True,
             },
-            "fixture": {"api_runtime": False, "browser_runtime": False, "external_runtime": False, "collection_script": False},
-            "file": {"api_runtime": False, "browser_runtime": False, "external_runtime": False, "collection_script": False},
-            "manual": {"api_runtime": False, "browser_runtime": False, "external_runtime": False, "collection_script": False},
+            "fixture": {
+                "api_runtime": False,
+                "browser_runtime": False,
+                "external_runtime": False,
+                "collection_script": False,
+            },
+            "file": {
+                "api_runtime": False,
+                "browser_runtime": False,
+                "external_runtime": False,
+                "collection_script": False,
+            },
+            "manual": {
+                "api_runtime": False,
+                "browser_runtime": False,
+                "external_runtime": False,
+                "collection_script": False,
+            },
         }.get(semantic_value or "", {})
     if normalized_concept == "output_format":
         return {

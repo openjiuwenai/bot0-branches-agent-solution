@@ -43,7 +43,7 @@ def _author_evidence_paths(root: Path) -> frozenset[str]:
                 encoding="utf-8"
             )
         )
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError):
         return frozenset()
 
     paths: set[str] = set()
@@ -202,7 +202,10 @@ def create_workspace_read_tools(
 
     @tool(
         name=names["list_workspace_files"],
-        description="List files inside the current Skill Builder workspace. Only .skill-builder/skills is readable under the platform-private .skill-builder root.",
+        description=(
+            "List files inside the current Skill Builder workspace. Only .skill-builder/skills is readable under the "
+            "platform-private .skill-builder root."
+        ),
         input_params={
             "type": "object",
             "properties": {
@@ -212,7 +215,9 @@ def create_workspace_read_tools(
             },
         },
     )
-    async def list_workspace_files(path: str = "inputs", recursive: bool = False, max_depth: int | None = None) -> dict[str, Any]:
+    async def list_workspace_files(
+        path: str = "inputs", recursive: bool = False, max_depth: int | None = None
+    ) -> dict[str, Any]:
         active_responsibility = responsibility_phase or task_mode
         normalized_list_path = str(path or "").replace("\\", "/").strip("/")
         if (
@@ -264,7 +269,8 @@ def create_workspace_read_tools(
                 {"tool": "list_workspace_files", **result},
             )
             return result
-        if blocked := repair_read_scope_block(path, operation="list"):
+        blocked = repair_read_scope_block(path, operation="list")
+        if blocked:
             await _emit(
                 emit_event,
                 "tool.completed",
@@ -272,17 +278,29 @@ def create_workspace_read_tools(
                 {"tool": "list_workspace_files", **blocked},
             )
             return blocked
-        if blocked := repair_inspection_block():
+        blocked = repair_inspection_block()
+        if blocked:
             return {**blocked, "path": path}
-        await _emit(emit_event, "tool.started", f"列出工作区文件：{path}", {"tool": "list_workspace_files", "path": path, "recursive": recursive})
+        await _emit(
+            emit_event,
+            "tool.started",
+            f"列出工作区文件：{path}",
+            {"tool": "list_workspace_files", "path": path, "recursive": recursive},
+        )
         result = accessor.list_workspace_files(path=path, recursive=recursive, max_depth=max_depth)
         await _emit(
             emit_event,
             "tool.completed",
             f"已列出工作区文件：{path}",
-            {"tool": "list_workspace_files", "path": path, "ok": result.get("ok"), "entries": len(result.get("entries") or [])},
+            {
+                "tool": "list_workspace_files",
+                "path": path,
+                "ok": result.get("ok"),
+                "entries": len(result.get("entries") or []),
+            },
         )
         return result
+
     @tool(
         name=names["read_workspace_file"],
         description=(
@@ -381,10 +399,11 @@ def create_workspace_read_tools(
                 {"tool": "read_workspace_file", **result},
             )
             return result
-        if blocked := repair_read_scope_block(
+        blocked = repair_read_scope_block(
             str(normalized_request_path or ""),
             operation="read",
-        ):
+        )
+        if blocked:
             await _emit(
                 emit_event,
                 "tool.completed",
@@ -392,7 +411,8 @@ def create_workspace_read_tools(
                 {"tool": "read_workspace_file", **blocked},
             )
             return blocked
-        if blocked := repair_inspection_block():
+        blocked = repair_inspection_block()
+        if blocked:
             return {**blocked, "path": normalized_request_path}
         normalized_material_path = str(normalized_request_path or "").replace("\\", "/").lstrip("./")
         active_phase = str(active_responsibility or task_mode or "").strip().lower()
@@ -535,7 +555,10 @@ def create_workspace_read_tools(
             },
         )
         effective_length = length
-        if active_phase in {"scenario", "author", "author_build", "repair"} and normalized_material_path in state.material_bundle_followup_paths:
+        if (
+            active_phase in {"scenario", "author", "author_build", "repair"}
+            and normalized_material_path in state.material_bundle_followup_paths
+        ):
             # A long recording may be inspected once, but never inject an
             # entire recording into the ReAct context. The digest remains the
             # default evidence path; this bounded slice is only for a marked
@@ -595,8 +618,9 @@ def create_workspace_read_tools(
     @tool(
         name=names["read_material_bundle"],
         description=(
-            "Read the material digest, recursive inputs index, bounded previews, and deterministic full-flow digests for web recordings. "
-            "Use this first during Scenario extraction or Author drafting. Repair uses the persisted Scenario and findings instead. "
+            "Read the material digest, recursive inputs index, bounded previews, and deterministic full-flow digests "
+            "for web recordings. Use this first during Scenario extraction or Author drafting. Repair uses the "
+            "persisted Scenario and findings instead. "
             "A recording with coverageComplete=true must not be read by offset."
         ),
         input_params={"type": "object", "properties": {}},
@@ -703,7 +727,6 @@ def create_workspace_read_tools(
             },
         )
         return result
-
 
     return WorkspaceReadTools(
         list_files=list_workspace_files,

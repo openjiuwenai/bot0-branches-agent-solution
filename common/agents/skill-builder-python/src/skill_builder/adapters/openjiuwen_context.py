@@ -43,7 +43,7 @@ def _tool_result_object(content: Any) -> dict[str, Any]:
         return {}
     try:
         parsed = json.loads(content)
-    except (TypeError, ValueError, json.JSONDecodeError):
+    except (TypeError, ValueError):
         return {}
     return parsed if isinstance(parsed, dict) else {}
 
@@ -123,7 +123,7 @@ class SkillBuilderToolArgumentCompactor(ContextProcessor):
                     continue
                 try:
                     arguments = json.loads(str(call.arguments or "{}"))
-                except (TypeError, ValueError, json.JSONDecodeError):
+                except (TypeError, ValueError):
                     arguments = {}
                 serialized_arguments = json.dumps(arguments)
                 if not isinstance(arguments, dict) or not any(

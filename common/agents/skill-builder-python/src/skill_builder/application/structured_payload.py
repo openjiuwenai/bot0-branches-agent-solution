@@ -84,7 +84,9 @@ def decode_structured_mapping(
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     """Decode one bounded object without echoing model-authored content."""
 
-    transport = "object" if isinstance(value, dict) else "json_string" if isinstance(value, str) else type(value).__name__
+    transport = (
+        "object" if isinstance(value, dict) else "json_string" if isinstance(value, str) else type(value).__name__
+    )
     parsed: Any = value
     if isinstance(value, str):
         encoded = value.encode("utf-8")

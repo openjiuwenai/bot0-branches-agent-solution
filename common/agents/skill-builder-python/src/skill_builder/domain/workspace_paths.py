@@ -44,6 +44,7 @@ AGENT_READABLE_PRIVATE_PREFIX = ".skill-builder/skills"
 
 SCENARIO_READ_PATHS = frozenset({"workspace/material_digest.md"})
 
+
 def split_generated_skill_path(path: str) -> tuple[str, bool]:
     """Return the package-relative path and whether the package root was explicit."""
 

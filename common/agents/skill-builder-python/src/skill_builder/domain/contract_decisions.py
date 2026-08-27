@@ -130,6 +130,7 @@ def decision_evidence_status(value: Any, label: Any = "", description: Any = "")
     del label, description
     return canonical_evidence_status(value)
 
+
 def _boolean_capability_map(value: Any) -> dict[str, bool]:
     if not isinstance(value, dict):
         return {}
@@ -232,7 +233,7 @@ def capability_condition_conflicts(
             return
         dependency = str(condition["when"]["capability"])
         if dependency in path:
-            cycle = " -> ".join((*path[path.index(dependency) :], dependency))
+            cycle = " -> ".join((*path[path.index(dependency):], dependency))
             conflicts.append(f"能力条件依赖不能形成循环：{cycle}。")
             return
         visit(dependency, (*path, dependency))
@@ -488,7 +489,7 @@ def canonical_workspace_relative_path(value: Any, *, workspace_root: Path | str 
     if raw == SANDBOX_WORKSPACE_ROOT:
         raw = "."
     elif raw.startswith(f"{SANDBOX_WORKSPACE_ROOT}/"):
-        raw = raw[len(SANDBOX_WORKSPACE_ROOT) + 1 :]
+        raw = raw[len(SANDBOX_WORKSPACE_ROOT) + 1:]
     elif raw.startswith("/") or re.match(r"^[A-Za-z]:/", raw):
         # Agent runtimes should normally only see /workspace paths.  If an
         # adapter or diagnostic nevertheless returns the exact host workspace
@@ -524,7 +525,6 @@ def decision_option_is_unknown(option: dict[str, Any]) -> bool:
         value.startswith("not_verified")
         or value in {"unknown", "unspecified", "undecided", "pending"}
     )
-
 
 
 __all__ = [

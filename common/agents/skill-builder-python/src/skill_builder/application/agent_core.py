@@ -71,7 +71,9 @@ PLATFORM_FALLBACK_MARKERS = (
 )
 DETERMINISTIC_REPAIR_MARKER = "<!-- skill-builder:deterministic-repair-placeholder -->"
 KEY_ARTIFACT_PATHS = CANDIDATE_PROGRESS_PATHS
-BROWSER_AUTOMATION_EXPORT_PATTERN = re.compile(r"\b(?:playwright|chromium|firefox|webkit|selenium|puppeteer)\b", re.IGNORECASE)
+BROWSER_AUTOMATION_EXPORT_PATTERN = re.compile(
+    r"\b(?:playwright|chromium|firefox|webkit|selenium|puppeteer)\b", re.IGNORECASE
+)
 BROWSER_RUNTIME_BOUNDARY_PATTERN = re.compile(
     r"(导出|运行时|runtime).{0,40}(浏览器|自动化|Playwright|Selenium|Puppeteer)|"
     r"(浏览器|自动化|Playwright|Selenium|Puppeteer).{0,40}(运行时|runtime|导出|安装|依赖|权限|登录|验证码|未验证|mock|沙箱)",
@@ -291,13 +293,17 @@ def _checkpoint_is_available(root: Path, checkpoint_path: Path) -> bool:
 
 def _has_current_run_checkpoint(accessor: Any, checkpoint_path: Path, *, initial_digest: str | None) -> bool:
     written = _normalized_written_files(accessor)
-    if "generated-skill/SKILL.md" in written and _checkpoint_is_available(checkpoint_path.parent.parent, checkpoint_path):
+    if "generated-skill/SKILL.md" in written and _checkpoint_is_available(
+        checkpoint_path.parent.parent, checkpoint_path
+    ):
         return True
     return _checkpoint_is_substantive(checkpoint_path, initial_digest=initial_digest)
 
 
 def _has_checkpoint_available(root: Path, accessor: Any, checkpoint_path: Path, *, initial_digest: str | None) -> bool:
-    return _has_current_run_checkpoint(accessor, checkpoint_path, initial_digest=initial_digest) or _checkpoint_is_available(root, checkpoint_path)
+    return _has_current_run_checkpoint(
+        accessor, checkpoint_path, initial_digest=initial_digest
+    ) or _checkpoint_is_available(root, checkpoint_path)
 
 
 def _task_mode_for_run_phase(run_phase: str) -> str:
@@ -443,7 +449,9 @@ class SkillBuilderWorkspaceAccessor:
         self.files_listed: list[str] = []
         self.files_written: list[str] = []
 
-    def list_workspace_files(self, *, path: str = "inputs", recursive: bool = False, max_depth: int | None = None) -> dict[str, Any]:
+    def list_workspace_files(
+        self, *, path: str = "inputs", recursive: bool = False, max_depth: int | None = None
+    ) -> dict[str, Any]:
         try:
             rel = _normalize_rel_path(path, root=self.root)
             if rel == ".":
@@ -572,7 +580,7 @@ class SkillBuilderWorkspaceAccessor:
 
         size = target.stat().st_size
         full_text = target.read_text(encoding="utf-8", errors="replace")
-        text = full_text[normalized_offset : normalized_offset + normalized_length]
+        text = full_text[normalized_offset:normalized_offset + normalized_length]
         next_offset = normalized_offset + len(text)
         truncated = next_offset < len(full_text)
         self.files_read.append(rel)
@@ -603,7 +611,8 @@ class SkillBuilderWorkspaceAccessor:
             rel = _normalize_rel_path(path, root=self.root)
             if rel.startswith("generated-skill/"):
                 rel = _normalize_rel_path(rel.removeprefix("generated-skill/"))
-            if forbidden_path := forbidden_skill_package_path(rel):
+            forbidden_path = forbidden_skill_package_path(rel)
+            if forbidden_path:
                 return {
                     "ok": False,
                     "error": "wrong_skill_path_root",
@@ -670,7 +679,10 @@ class SkillBuilderWorkspaceAccessor:
                 return {
                     "ok": False,
                     "error": "path_not_allowed",
-                    "message": "Path must stay inside the target root. Package tools cannot write validation/ or workspace/; those paths are controller-owned.",
+                    "message": (
+                        "Path must stay inside the target root. Package tools cannot write validation/ or workspace/; "
+                        "those paths are controller-owned."
+                    ),
                 }
             if rel == base or rel.startswith(f"{base}/"):
                 rel = _normalize_rel_path(rel[len(base):].lstrip("/"))
@@ -719,6 +731,7 @@ class SkillBuilderWorkspaceAccessor:
             "size_bytes": 0 if path.is_dir() else stat.st_size,
         }
 
+
 def _build_system_prompt(
     *,
     task_mode: str = "author",
@@ -745,7 +758,10 @@ def _build_system_prompt(
                 "只能读取当前工作区并基于真实文件回答；禁止写文件、运行命令、请求 HITL 或声称已修改产物。",
                 "不要启动 Skill 抽取、修复或验收流程。",
                 "最终只输出 JSON：",
-                '{"status":"ready","summary":"中文回复","files":[],"pending_decisions":[],"blockers":[],"unverified_inputs":[],"unverified_capabilities":[],"suggested_next_message":""}',
+                (
+                    '{"status":"ready","summary":"中文回复","files":[],"pending_decisions":[],"blockers":[],'
+                    '"unverified_inputs":[],"unverified_capabilities":[],"suggested_next_message":""}'
+                ),
             ]
         )
 
@@ -776,29 +792,68 @@ def _build_system_prompt(
     if task_mode == "scenario":
         phase = [
             "# 当前阶段：Scenario",
-            "调用一次 read_material_bundle 聚合材料；该工具已为长材料生成摘要，并为录屏生成覆盖完整流程的 recordingDigest。Scenario 不逐文件补读，直接基于 bundle 提交紧凑事实。",
-            "只提交有证据的 facts 和真正需要用户选择的 conflicts；facts 至少覆盖 purpose、trigger、input、output、step。每一条 fact 都必须带 evidenceRefs 字符串数组，例如 inputs/source.md、material:<id> 或 platform:<id>；rule/requirement 还必须带不超过 300 字符的 sourceQuote；不生成机器 ID、能力布尔值或验收 DSL。",
-            "facts 必须是原生 JSON 数组，每条 fact 是独立对象；不得把其他 fact 的 JSON 拼进某条 value 字符串。只使用内置 Skill 列出的 kind；外部系统信息使用 dependency，不使用 external_system。",
-            "材料明确要求 CLI、脚本、命令行入口或离线可执行工具时，必须提交独立的 script_requirement fact 并保留证据；声明 API/browser 等运行机制时还必须提供材料逐句 sourceQuote，否则平台只把机制视为待确认选择，不能编译成硬能力。",
-            "保持 ScenarioDraft 紧凑：不要复制整张 CSV、长段落或完整录屏；每个 fact.value 只保留可复用的业务摘要（优先短字符串或小型对象/数组），同一事实不要在多个 fact 中重复，conflicts 只列真正无法由材料确定的选择。",
-            "录屏摘要中的 playwright/recordings、截图和 trace 路径只是历史引用。使用 recordingDigest 的 evidenceRef、interactions 和 observedStates 提取事实，直接提交 recording-only ScenarioDraft。",
-            "聚合读取完成后不得输出材料分析正文，直接调用 write_scenario_draft 提交完整对象；仅当首次返回 next_action=repair_and_resubmit 时，按 issues 原地修正并最多再提交一次，禁止重新读取材料或第三次提交。",
+            (
+                "调用一次 read_material_bundle 聚合材料；该工具已为长材料生成摘要，并为录屏生成覆盖完整流程的 "
+                "recordingDigest。Scenario 不逐文件补读，直接基于 bundle 提交紧凑事实。"
+            ),
+            (
+                "只提交有证据的 facts 和真正需要用户选择的 conflicts；facts 至少覆盖 purpose、trigger、input、output、step。"
+                "每一条 fact 都必须带 evidenceRefs 字符串数组，例如 inputs/source.md、material:<id> 或 platform:<id>；"
+                "rule/requirement 还必须带不超过 300 字符的 sourceQuote；不生成机器 ID、能力布尔值或验收 DSL。"
+            ),
+            (
+                "facts 必须是原生 JSON 数组，每条 fact 是独立对象；不得把其他 fact 的 JSON 拼进某条 value 字符串。"
+                "只使用内置 Skill 列出的 kind；外部系统信息使用 dependency，不使用 external_system。"
+            ),
+            (
+                "材料明确要求 CLI、脚本、命令行入口或离线可执行工具时，必须提交独立的 script_requirement fact 并保留证据；"
+                "声明 API/browser 等运行机制时还必须提供材料逐句 sourceQuote，否则平台只把机制视为待确认选择，"
+                "不能编译成硬能力。"
+            ),
+            (
+                "保持 ScenarioDraft 紧凑：不要复制整张 CSV、长段落或完整录屏；每个 fact.value 只保留可复用的业务摘要"
+                "（优先短字符串或小型对象/数组），同一事实不要在多个 fact 中重复，conflicts 只列真正无法由材料确定的选择。"
+            ),
+            (
+                "录屏摘要中的 playwright/recordings、截图和 trace 路径只是历史引用。使用 recordingDigest 的 "
+                "evidenceRef、interactions 和 observedStates 提取事实，直接提交 recording-only ScenarioDraft。"
+            ),
+            (
+                "聚合读取完成后不得输出材料分析正文，直接调用 write_scenario_draft 提交完整对象；仅当首次返回 "
+                "next_action=repair_and_resubmit 时，按 issues 原地修正并最多再提交一次，禁止重新读取材料或第三次提交。"
+            ),
             "提交成功立即结束；不要写 generated-skill、运行验证或自行请求 HITL。",
         ]
     elif task_mode == "author_build":
         phase = [
             "# 当前阶段：Author Build",
             "这是默认可执行包的生产文件阶段。scenario_author_handoff 和已确认 HITL 是权威业务方向，不得重新解释或扩展能力。",
-            "如需实现细节，只调用一次 read_material_bundle 获取受控材料摘要；本阶段不逐文件读取 inputs/、平台 fixture 或尚未生成的包文件。使用 handoff 与 bundle 直接写包。",
+            (
+                "如需实现细节，只调用一次 read_material_bundle 获取受控材料摘要；本阶段不逐文件读取 inputs/、平台 fixture "
+                "或尚未生成的包文件。使用 handoff 与 bundle 直接写包。"
+            ),
             "直接生成实际需要的 SKILL.md、生产脚本、references 和业务 fixtures；Core 会从最终文件、能力契约和 requirements.txt 生成 ImplementationPlan。",
             "先写完整 SKILL.md，再写最少的生产脚本与业务 fixture。控制器生成的 sample-input/invalid 只验证 schema，不能作为 happy path；不要覆盖或删除。",
             "生产脚本必须提供 SKILL.md 中记录的可启动 CLI。外部依赖应延迟到真实执行路径初始化，--help 和参数解析不得因未安装 Playwright/网络依赖而失败。",
-            "XLSX 业务 fixture 只能通过 write_tabular_fixture 提交列和行，由控制器生成真实工作簿；禁止用 write_skill_file 写伪 XLSX，也不要生成 fixture 生成器脚本。",
+            (
+                "XLSX 业务 fixture 只能通过 write_tabular_fixture 提交列和行，由控制器生成真实工作簿；禁止用 "
+                "write_skill_file 写伪 XLSX，也不要生成 fixture 生成器脚本。"
+            ),
             "Python 写入工具会立即做语法和标准库命名检查；返回失败时旧文件仍保留，只修正该文件后重试。",
-            "Build 只生成最小成功样例：结构化入口使用一份业务 happy fixture；外部浏览器/API 响应 fixture 只有在生产入口真实支持本地响应注入时才生成，禁止创建未被代码消费的展示样例。不要生成 invalid/error/empty fixture，平台已负责 schema invalid；受控外部重放和更深边界 case 属于 Validate。",
-            "结构化浏览器/API 生产入口必须支持 --validate-only；该模式复用生产输入解析和字段校验，在初始化 Playwright、网络、凭据或外部 SDK 前返回。有效业务 fixture 退出 0，非法输入退出非 0。",
+            (
+                "Build 只生成最小成功样例：结构化入口使用一份业务 happy fixture；外部浏览器/API 响应 fixture 只有在"
+                "生产入口真实支持本地响应注入时才生成，禁止创建未被代码消费的展示样例。不要生成 invalid/error/empty "
+                "fixture，平台已负责 schema invalid；受控外部重放和更深边界 case 属于 Validate。"
+            ),
+            (
+                "结构化浏览器/API 生产入口必须支持 --validate-only；该模式复用生产输入解析和字段校验，在初始化 "
+                "Playwright、网络、凭据或外部 SDK 前返回。有效业务 fixture 退出 0，非法输入退出非 0。"
+            ),
             "多输入关联场景只生成一组成套、可读且 key 可关联的 happy fixtures；不要生成复杂二进制生成器或复制原始业务材料。",
-            "SKILL.md 和长生产脚本各用 write_skill_file 单独写入；2 至 4 个独立的小型 HTML/JSON/text fixture 或 reference 使用一次 write_skill_files 批量写入。XLSX 仍只用 write_tabular_fixture。不要反复重写已通过文件。",
+            (
+                "SKILL.md 和长生产脚本各用 write_skill_file 单独写入；2 至 4 个独立的小型 HTML/JSON/text fixture 或 "
+                "reference 使用一次 write_skill_files 批量写入。XLSX 仍只用 write_tabular_fixture。不要反复重写已通过文件。"
+            ),
             "本阶段禁止生成、修改或运行 self_check。生产包物化完成后调用 finish_authoring；控制器会提交候选并独立执行 CLI 启动与确定性 smoke。",
             "finish_authoring 的 agent_self_check 只报告静态生产包检查；不得声称业务重放或外部能力已经通过。",
         ]
@@ -806,35 +861,103 @@ def _build_system_prompt(
         phase = [
             "# 当前阶段：Author Validate",
             "这是默认可执行包的独立验证计划阶段。生产包已经冻结，本阶段不得修改 SKILL.md、生产脚本、references、fixtures、requirements 或 ImplementationPlan。",
-            "用户消息已注入控制器校验过的 ImplementationPlan 和平台 fixture 路径；不要列目录或再次读取计划文件。只读取 SKILL.md、计划内生产脚本、业务成功 fixture 和 invalid fixture；不要读取 sample-input 或控制器生成的 self_check.py，禁止读取 inputs/ 或重新执行 Scenario。",
-            "根据真实 CLI 和 fixture 调用 write_self_check_plan。必须包含 happy_path；结构化输入包含 invalid_input；外部入口还包含使用 Author 业务响应 fixture 的成功重放和独立 external_offline 边界。",
+            (
+                "用户消息已注入控制器校验过的 ImplementationPlan 和平台 fixture 路径；不要列目录或再次读取计划文件。"
+                "只读取 SKILL.md、计划内生产脚本、业务成功 fixture 和 invalid fixture；不要读取 sample-input 或控制器生成的 "
+                "self_check.py，禁止读取 inputs/ 或重新执行 Scenario。"
+            ),
+            (
+                "根据真实 CLI 和 fixture 调用 write_self_check_plan。必须包含 happy_path；结构化输入包含 invalid_input；"
+                "外部入口还包含使用 Author 业务响应 fixture 的成功重放和独立 external_offline 边界。"
+            ),
             "happy_path 必须调用生产入口并断言非空业务字段、数量或关键文本；不得把 blocked、仅退出码为零或平台 sample-input 当作业务成功。",
-            "write_self_check_plan 通过后立即调用 run_offline_self_check。第一次失败时只根据返回的具体重放 finding 修正自检路径、operator 或命令，并最多复验一次；不得读取 self_check.py、改写生产文件或为了通过而弱化业务断言。",
+            (
+                "write_self_check_plan 通过后立即调用 run_offline_self_check。第一次失败时只根据返回的具体重放 finding "
+                "修正自检路径、operator 或命令，并最多复验一次；不得读取 self_check.py、改写生产文件或为了通过而弱化业务断言。"
+            ),
             "离线自检为 pass/warn 后调用 finish_authoring，准确记录尚未执行的浏览器/API 外部验证。",
         ]
     elif task_mode == "author":
         phase = [
             "# 当前阶段：Author",
-            "默认工作流已在用户消息中注入 scenario_author_handoff；它是 Scenario 到 Author 的权威决策交接。直接按其方向写包；实现页面解析、字段映射或复杂规则时，可用 read_workspace_file 各读取一次 evidenceRefs 明确引用的 inputs 文本，但不得遍历 inputs、读取未引用来源或覆盖 HITL 结论。",
+            (
+                "默认工作流已在用户消息中注入 scenario_author_handoff；它是 Scenario 到 Author 的权威决策交接。"
+                "直接按其方向写包；实现页面解析、字段映射或复杂规则时，可用 read_workspace_file 各读取一次 evidenceRefs "
+                "明确引用的 inputs 文本，但不得遍历 inputs、读取未引用来源或覆盖 HITL 结论。"
+            ),
             "如果用户消息包含“平台生成的有效 Scenario 决策交接”，其中同一 decisionId 的结果已经覆盖 pendingDecisions；最终 Skill 和正文不得再把该项写成待确认。",
             "原材料读取只用于实现细节查证，不得重新发明与 ScenarioContract 或 HITL 冲突的业务口径。",
             "显式 run_phase=author 且不存在 ScenarioContract 时，才直接基于当前材料完成写包。",
-            "长材料（尤其录屏）只能补读一次；同一路径再次读取会被工具阻断，不要改变 offset 重试。已经完整读取且内容未变化的合同或候选文件也不要重复读取；写入导致内容变化后可以复核一次。使用已有材料摘要和上下文继续写包，并尽快完成草稿。",
-            "Core 根据最终包文件、Scenario 能力契约和 requirements.txt 生成 ImplementationPlan；Author 不提交或改写 packageKind/scriptsRequired。控制器要求脚本时必须生成非自检生产脚本，不要求脚本时不生成 scripts。",
+            (
+                "长材料（尤其录屏）只能补读一次；同一路径再次读取会被工具阻断，不要改变 offset 重试。已经完整读取且内容未变化"
+                "的合同或候选文件也不要重复读取；写入导致内容变化后可以复核一次。使用已有材料摘要和上下文继续写包，并尽快完成草稿。"
+            ),
+            (
+                "Core 根据最终包文件、Scenario 能力契约和 requirements.txt 生成 ImplementationPlan；Author 不提交或改写 "
+                "packageKind/scriptsRequired。控制器要求脚本时必须生成非自检生产脚本，不要求脚本时不生成 scripts。"
+            ),
             "生成最小完整包：必须有合法 SKILL.md；references/scripts/assets 按实际需要生成。agents/openai.yaml 完全由宿主适配层管理，禁止生成或修改。",
             "对于尚无候选文件的新包，收到有效 scenario_author_handoff 后，第一轮写入只调用 write_skill_file 生成一份可直接交付且内容完整的 SKILL.md，禁止占位骨架。",
-            "不得让模型编写复杂 xlsx、图片、字体或压缩包生成器、在模型输出中计算二进制载荷，也不要复制原始业务材料。控制器生成的 sample-input/invalid 只验证 schema；不要覆盖或删除。可执行 Skill 必须根据材料另建小型业务 happy fixture，自检的 happy_path/business_rule/file_handoff 不得把平台 schema fixture 当作业务成功证据。",
-            "SKILL.md、较长生产脚本和接近输出上限的文件使用 write_skill_file 单独写入；2 至 4 个独立小型 reference 或文本 fixture 可用 write_skill_files 批量提交。XLSX 只用 write_tabular_fixture。大型实现按职责拆分；用 delete_skill_file 删除真实废弃文件。",
+            (
+                "不得让模型编写复杂 xlsx、图片、字体或压缩包生成器、在模型输出中计算二进制载荷，也不要复制原始业务材料。"
+                "控制器生成的 sample-input/invalid 只验证 schema；不要覆盖或删除。可执行 Skill 必须根据材料另建小型业务 happy "
+                "fixture，自检的 happy_path/business_rule/file_handoff 不得把平台 schema fixture 当作业务成功证据。"
+            ),
+            (
+                "SKILL.md、较长生产脚本和接近输出上限的文件使用 write_skill_file 单独写入；2 至 4 个独立小型 reference "
+                "或文本 fixture 可用 write_skill_files 批量提交。XLSX 只用 write_tabular_fixture。大型实现按职责拆分；"
+                "用 delete_skill_file 删除真实废弃文件。"
+            ),
             "Author 只负责生成并自检草稿；控制器会在本阶段结束后自动执行完整预检和候选提交。本阶段不内联修复预检失败；可修复 finding 会由 workflow 交给具有独立轮次预算的 Repair 阶段。",
             "面向用户的离线脚本入口统一优先支持 --input PATH，产生机器输出时支持 --output PATH；多步脚本必须让前一步真实输出能作为后一步输入。",
-            "Python 脚本或顶层包名不得与标准库模块同名（如 inspect.py、json.py、email/）；使用带业务含义的名称，如 inspect_cli.py、json_report.py，并在 SKILL.md、自检和其他脚本中保持引用一致。",
-            "如果 generated-skill 文档公开了 CLI，在生产脚本和 CLI 文档完成后调用 write_self_check_plan，只提交结构化 checks、命令、输出断言和 covers；控制器即时校验并确定性生成唯一的 scripts/self_check.py。禁止用 write_skill_file、replace_skill_file_text 或 delete_skill_file 直接维护任何自检入口，也不要创建旁路自检。公开 CLI 有 happy_path，结构化输入有 invalid_input，只有一个 CLI 的真实输出被另一个 CLI 消费时才需要 file_handoff，外部入口有 external_offline。happy_path 只接受退出码 0，必须用 Author 创建的业务 fixture 产生至少一条有效业务结果并断言关键字段/数量，不能接受 blocked；平台 sample-input/invalid 不得用于业务成功用例。多输入关联、对账或文件交接场景应使用成套且键值可关联的业务 fixtures。缺少运行依赖的 blocked 降级只放在 external_offline。external_offline 优先断言结构化 blocked 输出；入口在依赖初始化前无法产出文件时，断言稳定的 stdout/stderr 业务错误原因，不能只断言退出码。write_self_check_plan 返回 ok=true 后立即运行自检；覆盖 warnings 只作诊断，不要为消除 warning 重写已通过的生产文件或重复提交计划。计划失败只修正具体 issues。",
-            "非法记录不得进入 count、金额、评分、推荐或其他业务聚合。一个 ruleId 含多个失败条件时，每个条件都要由实际命令和业务断言覆盖，不能用缺列 case 代替重复值、非法枚举或边界数值；可在 ImplementationPlan 中增加小型业务 fixture，但不得替换平台 schema sample-input/invalid。",
-            "材料中的外部系统、审批、浏览器或 API 只是业务依赖，不自动等于本包实现能力。只有 ScenarioContract/已确认决策要求且包内有真实入口时才能声明支持；纯 SOP/知识 Skill 应写为人工或外部系统边界，不得凭空增加浏览器/API 未验证能力。",
-            "外部采集入口必须把实际响应解析为 ScenarioContract 声明的关键业务输出；只导航页面、截取整页文本或把正文片段写入 notes，不算结构化输出实现。关键输出字段不得在所有路径上保持空值后以“待查询/待确定”交付；离线自检至少要用受控 fixture 验证解析器能产出非空关键字段。真实 API 端点未由材料/HITL 提供时，必须通过 CLI 参数、环境变量或配置要求用户提供并标记未验证，禁止把 example.com/example.org/example.net 等保留示例域名写成生产默认端点。",
-            "HITL 已确认的固定或排他选项必须同时落实到 SKILL.md、生产脚本和自检；不能只在边界说明中写固定值，却继续公开其他选项或从用户输入动态读取同一配置。携带数值的枚举（如 first_50 / 前 50 条）同样属于固定值，不能伪装成带默认值的可配置参数。",
-            "写包和自检完成后必须调用 finish_authoring，提交 summary 和 agent_self_check。agent_self_check 记录实际执行结果和未验证能力；没有真实执行证据的脚本或业务结果必须标记为 not_run/partial。implementation_evidence 可选且只作诊断，不影响候选提交。",
-            'finish_authoring 示例片段：{"summary":"已完成写包和离线检查","agent_self_check":{"status":"partial","summary":"已完成文档与脚本一致性复核，未执行外部 API。","checks":[{"id":"package_consistency","title":"文档与脚本一致性","status":"pass","message":"字段、参数和输出路径已逐项核对"}],"unverified":["真实外部 API 可达性"]}}',
+            (
+                "Python 脚本或顶层包名不得与标准库模块同名（如 inspect.py、json.py、email/）；使用带业务含义的名称，"
+                "如 inspect_cli.py、json_report.py，并在 SKILL.md、自检和其他脚本中保持引用一致。"
+            ),
+            (
+                "如果 generated-skill 文档公开了 CLI，在生产脚本和 CLI 文档完成后调用 write_self_check_plan，"
+                "只提交结构化 checks、命令、输出断言和 covers；控制器即时校验并确定性生成唯一的 scripts/self_check.py。"
+                "禁止用 write_skill_file、replace_skill_file_text 或 delete_skill_file 直接维护任何自检入口，也不要创建旁路自检。"
+                "公开 CLI 有 happy_path，结构化输入有 invalid_input，只有一个 CLI 的真实输出被另一个 CLI 消费时才需要 "
+                "file_handoff，外部入口有 external_offline。happy_path 只接受退出码 0，必须用 Author 创建的业务 fixture "
+                "产生至少一条有效业务结果并断言关键字段/数量，不能接受 blocked；平台 sample-input/invalid 不得用于业务成功用例。"
+                "多输入关联、对账或文件交接场景应使用成套且键值可关联的业务 fixtures。缺少运行依赖的 blocked 降级只放在 "
+                "external_offline。external_offline 优先断言结构化 blocked 输出；入口在依赖初始化前无法产出文件时，"
+                "断言稳定的 stdout/stderr 业务错误原因，不能只断言退出码。write_self_check_plan 返回 ok=true 后立即运行自检；"
+                "覆盖 warnings 只作诊断，不要为消除 warning 重写已通过的生产文件或重复提交计划。计划失败只修正具体 issues。"
+            ),
+            (
+                "非法记录不得进入 count、金额、评分、推荐或其他业务聚合。一个 ruleId 含多个失败条件时，每个条件都要由实际命令"
+                "和业务断言覆盖，不能用缺列 case 代替重复值、非法枚举或边界数值；可在 ImplementationPlan 中增加小型业务 "
+                "fixture，但不得替换平台 schema sample-input/invalid。"
+            ),
+            (
+                "材料中的外部系统、审批、浏览器或 API 只是业务依赖，不自动等于本包实现能力。只有 ScenarioContract/已确认决策"
+                "要求且包内有真实入口时才能声明支持；纯 SOP/知识 Skill 应写为人工或外部系统边界，不得凭空增加浏览器/API "
+                "未验证能力。"
+            ),
+            (
+                "外部采集入口必须把实际响应解析为 ScenarioContract 声明的关键业务输出；只导航页面、截取整页文本或把正文片段"
+                "写入 notes，不算结构化输出实现。关键输出字段不得在所有路径上保持空值后以“待查询/待确定”交付；离线自检至少要用"
+                "受控 fixture 验证解析器能产出非空关键字段。真实 API 端点未由材料/HITL 提供时，必须通过 CLI 参数、环境变量"
+                "或配置要求用户提供并标记未验证，禁止把 example.com/example.org/example.net 等保留示例域名写成生产默认端点。"
+            ),
+            (
+                "HITL 已确认的固定或排他选项必须同时落实到 SKILL.md、生产脚本和自检；不能只在边界说明中写固定值，却继续公开"
+                "其他选项或从用户输入动态读取同一配置。携带数值的枚举（如 first_50 / 前 50 条）同样属于固定值，"
+                "不能伪装成带默认值的可配置参数。"
+            ),
+            (
+                "写包和自检完成后必须调用 finish_authoring，提交 summary 和 agent_self_check。agent_self_check 记录实际执行结果"
+                "和未验证能力；没有真实执行证据的脚本或业务结果必须标记为 not_run/partial。implementation_evidence 可选且只作诊断，"
+                "不影响候选提交。"
+            ),
+            (
+                'finish_authoring 示例片段：{"summary":"已完成写包和离线检查","agent_self_check":{"status":"partial",'
+                '"summary":"已完成文档与脚本一致性复核，未执行外部 API。","checks":[{"id":"package_consistency",'
+                '"title":"文档与脚本一致性","status":"pass","message":"字段、参数和输出路径已逐项核对"}],'
+                '"unverified":["真实外部 API 可达性"]}}'
+            ),
         ]
     elif task_mode == "repair":
         phase = [
@@ -843,13 +966,22 @@ def _build_system_prompt(
             "禁止读取 inputs/ 或 read_material_bundle；ScenarioContract、已确认决策、结构化 findings 和现有 generated-skill 是本阶段全部事实来源。",
             "先按 targetPaths 有界检查直接相关候选文件，然后必须实际写入或删除 generated-skill 文件；不得从头重写已通过文件。",
             "始终使用 write_skill_file 一次提交一个完整修复文件；不要在一次工具调用中生成多个文件，也不要重写与 finding 无关的文件。",
-            "修复较大现有文件中的局部逻辑时优先使用 replace_skill_file_text，提供唯一匹配的 old_text 和最小 new_text；只有结构性重写才使用 write_skill_file 输出完整文件。",
-            "若唯一 finding 是缺少业务 fixture，只写 RepairPlan 指定的 fixture；XLSX 使用 write_tabular_fixture，CSV/JSON 使用 write_skill_file，不修改生产脚本或 SKILL.md。",
+            (
+                "修复较大现有文件中的局部逻辑时优先使用 replace_skill_file_text，提供唯一匹配的 old_text 和最小 new_text；"
+                "只有结构性重写才使用 write_skill_file 输出完整文件。"
+            ),
+            (
+                "若唯一 finding 是缺少业务 fixture，只写 RepairPlan 指定的 fixture；XLSX 使用 write_tabular_fixture，"
+                "CSV/JSON 使用 write_skill_file，不修改生产脚本或 SKILL.md。"
+            ),
             "Repair 不得循环尝试生成复杂二进制，不得用文本替代、复制原始业务材料或删除平台生成的静态 fixture。",
             "Repair 必须修改 finding 指向的候选文件。evidence、能力缺失、业务重放和外部环境问题不会进入本阶段；不要用重复读取或重复检查消耗本轮预算。",
             "自检协议、offline replay 和业务输出失败不会自动进入 Repair；若 handoff 中出现这些 finding，立即停止并保留诊断。",
             "Repair 不得为补齐外部能力编造 URL、账号、权限或响应结构；finding 没有提供真实值时保留可配置入口并如实标记 needs_review 边界。",
-            "若 finding 为 python_module_name_conflict，按 replacementPath 重命名冲突模块，并同步更新 finding.referencePaths、SKILL.md、自检命令和包内导入；不要只复制出第二份文件。",
+            (
+                "若 finding 为 python_module_name_conflict，按 replacementPath 重命名冲突模块，并同步更新 "
+                "finding.referencePaths、SKILL.md、自检命令和包内导入；不要只复制出第二份文件。"
+            ),
             "修改后运行必要自检并调用 finish_authoring；控制器会重新执行完整预检，修复结果不会因 Agent 自述而直接通过。",
         ]
     else:  # pragma: no cover - task modes are checked above
@@ -876,6 +1008,8 @@ def _build_system_prompt(
     if preload:
         parts.extend(["", preload])
     return "\n".join(parts)
+
+
 def _build_user_prompt(
     *,
     skill_name: str,
@@ -892,7 +1026,10 @@ def _build_user_prompt(
     payload = {
         "task_mode": task_mode,
         "skill_name": skill_name,
-        "skill_name_rule": "If skill_name starts with skill-extract-, treat it as a temporary fallback and infer a meaningful kebab-case publish name from the uploaded materials.",
+        "skill_name_rule": (
+            "If skill_name starts with skill-extract-, treat it as a temporary fallback and infer a meaningful "
+            "kebab-case publish name from the uploaded materials."
+        ),
         "display_name": display_name,
         "description": description,
         "version": version,

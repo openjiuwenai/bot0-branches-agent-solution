@@ -47,8 +47,6 @@ DEFAULT_SANDBOX_IO_TIMEOUT_SECONDS = 20
 DEFAULT_SANDBOX_WRITE_TIMEOUT_SECONDS = 30
 
 
-
-
 class SkillBuilderSandboxError(RuntimeError):
     """Raised when Skill Builder cannot use its configured sandbox."""
 
@@ -171,9 +169,6 @@ class JiuwenboxExecutionPort:
             session.close()
 
 
-
-
-
 def skill_builder_sandbox_enabled() -> bool:
     value = str(os.getenv("SKILL_BUILDER_SANDBOX_ENABLED") or "").strip().lower()
     return value in {"1", "true", "yes", "on"}
@@ -217,7 +212,7 @@ def _host_write_file(root: Path, *, base: str, path: str, content: str) -> dict[
     try:
         rel = _normalize_rel_path(path, root=root)
         if rel == base or rel.startswith(f"{base}/"):
-            rel = _normalize_rel_path(rel[len(base) :].lstrip("/"))
+            rel = _normalize_rel_path(rel[len(base):].lstrip("/"))
         if base == "generated-skill":
             forbidden_path = forbidden_skill_package_path(rel)
             if forbidden_path:
@@ -233,7 +228,11 @@ def _host_write_file(root: Path, *, base: str, path: str, content: str) -> dict[
         return {"ok": False, "error": "invalid_path", "message": str(exc)}
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
-    return {"ok": True, "path": f"{base}/{target.relative_to(root / base).as_posix()}", "size_bytes": len(content.encode("utf-8"))}
+    return {
+        "ok": True,
+        "path": f"{base}/{target.relative_to(root / base).as_posix()}",
+        "size_bytes": len(content.encode("utf-8")),
+    }
 
 
 def _host_write_bytes(root: Path, *, path: str, content: bytes) -> dict[str, Any]:
@@ -248,7 +247,8 @@ def _host_write_bytes(root: Path, *, path: str, content: bytes) -> dict[str, Any
         rel = _normalize_rel_path(path, root=root)
         if rel.startswith("generated-skill/"):
             rel = _normalize_rel_path(rel.removeprefix("generated-skill/"))
-        if forbidden_path := forbidden_skill_package_path(rel):
+        forbidden_path = forbidden_skill_package_path(rel)
+        if forbidden_path:
             return {
                 "ok": False,
                 "error": "wrong_skill_path_root",
@@ -266,7 +266,6 @@ def _host_write_bytes(root: Path, *, path: str, content: bytes) -> dict[str, Any
         "path": f"generated-skill/{rel}",
         "size_bytes": len(data),
     }
-
 
 
 def _archive_member_allowed(root: Path, path: Path) -> bool:
@@ -380,7 +379,8 @@ class SkillBuilderSandboxSession:
                 workdir=workdir or SANDBOX_WORKSPACE_PATH,
                 env=env,
                 stdin=stdin,
-                timeout_seconds=timeout_seconds or int(os.getenv("SKILL_BUILDER_SANDBOX_COMMAND_TIMEOUT_SECONDS") or 120),
+                timeout_seconds=timeout_seconds
+                or int(os.getenv("SKILL_BUILDER_SANDBOX_COMMAND_TIMEOUT_SECONDS") or 120),
             )
         except JiuwenboxRuntimeError as exc:
             raise SkillBuilderSandboxError(f"Skill Builder 沙箱命令执行失败：{exc}") from exc
@@ -403,10 +403,17 @@ class SkillBuilderSandboxSession:
             env=env,
         )
 
-    def _exec_json(self, command: list[str], *, stdin: str | None = None, timeout_seconds: int | None = None) -> dict[str, Any]:
+    def _exec_json(
+        self, command: list[str], *, stdin: str | None = None, timeout_seconds: int | None = None
+    ) -> dict[str, Any]:
         result = self._exec(command, stdin=stdin, timeout_seconds=timeout_seconds)
         if result.exit_code != 0:
-            return {"ok": False, "error": "sandbox_command_failed", "stderr": result.stderr[-2000:], "stdout": result.stdout[-2000:]}
+            return {
+                "ok": False,
+                "error": "sandbox_command_failed",
+                "stderr": result.stderr[-2000:],
+                "stdout": result.stdout[-2000:],
+            }
         try:
             data = json.loads(result.stdout or "{}")
         except json.JSONDecodeError:
@@ -447,7 +454,9 @@ class SkillBuilderSandboxSession:
             )
             result = self._exec(["python3", "-c", extract_code], timeout_seconds=120)
             if result.exit_code != 0:
-                raise SkillBuilderSandboxError(f"初始化 Skill Builder 沙箱工作区失败：{result.stderr[-1000:] or result.stdout[-1000:]}")
+                raise SkillBuilderSandboxError(
+                    f"初始化 Skill Builder 沙箱工作区失败：{result.stderr[-1000:] or result.stdout[-1000:]}"
+                )
 
     def list_workspace_files(
         self,
@@ -495,13 +504,17 @@ class SkillBuilderSandboxSession:
             "target=(root / rel).resolve()\n"
             "def entry(p):\n"
             "    s=p.stat()\n"
-            "    return {'path': p.relative_to(root).as_posix(), 'type': 'directory' if p.is_dir() else 'file', 'size_bytes': 0 if p.is_dir() else s.st_size}\n"
+            "    return {'path': p.relative_to(root).as_posix(), "
+            "'type': 'directory' if p.is_dir() else 'file', "
+            "'size_bytes': 0 if p.is_dir() else s.st_size}\n"
             "if target != root and root not in target.parents:\n"
             "    print(json.dumps({'ok': False, 'error': 'invalid_path'})); raise SystemExit(0)\n"
             "if not target.exists():\n"
-            "    print(json.dumps({'ok': True, 'path': rel, 'exists': False, 'entries': []}, ensure_ascii=False)); raise SystemExit(0)\n"
+            "    print(json.dumps({'ok': True, 'path': rel, 'exists': False, 'entries': []}, "
+            "ensure_ascii=False)); raise SystemExit(0)\n"
             "if target.is_file():\n"
-            "    print(json.dumps({'ok': True, 'path': rel, 'exists': True, 'entries': [entry(target)]}, ensure_ascii=False)); raise SystemExit(0)\n"
+            "    print(json.dumps({'ok': True, 'path': rel, 'exists': True, 'entries': [entry(target)]}, "
+            "ensure_ascii=False)); raise SystemExit(0)\n"
             "base_depth=len(target.relative_to(root).parts)\n"
             "entries=[]\n"
             "items=target.rglob('*') if recursive else target.iterdir()\n"
@@ -513,12 +526,15 @@ class SkillBuilderSandboxSession:
             "        continue\n"
             "    entries.append(entry(item))\n"
             "    if len(entries) >= 500:\n"
-            "        print(json.dumps({'ok': True, 'path': rel, 'exists': True, 'truncated': True, 'entries': entries}, ensure_ascii=False)); raise SystemExit(0)\n"
+            "        print(json.dumps({'ok': True, 'path': rel, 'exists': True, 'truncated': True, "
+            "'entries': entries}, ensure_ascii=False)); raise SystemExit(0)\n"
             "print(json.dumps({'ok': True, 'path': rel, 'exists': True, 'entries': entries}, ensure_ascii=False))\n"
         )
         result = self._exec_json(
             ["python3", "-c", code, rel, "1" if recursive else "0", str(max_depth) if max_depth is not None else ""],
-            timeout_seconds=int(os.getenv("SKILL_BUILDER_SANDBOX_IO_TIMEOUT_SECONDS") or DEFAULT_SANDBOX_IO_TIMEOUT_SECONDS),
+            timeout_seconds=int(
+                os.getenv("SKILL_BUILDER_SANDBOX_IO_TIMEOUT_SECONDS") or DEFAULT_SANDBOX_IO_TIMEOUT_SECONDS
+            ),
         )
         if (
             not _platform_internal
@@ -588,7 +604,8 @@ class SkillBuilderSandboxSession:
             "if target != root and root not in target.parents:\n"
             "    print(json.dumps({'ok': False, 'error': 'invalid_path'})); raise SystemExit(0)\n"
             "if not target.is_file():\n"
-            "    print(json.dumps({'ok': False, 'error': 'not_found', 'path': rel}, ensure_ascii=False)); raise SystemExit(0)\n"
+            "    print(json.dumps({'ok': False, 'error': 'not_found', 'path': rel}, "
+            "ensure_ascii=False)); raise SystemExit(0)\n"
             f"max_chars={MAX_AGENT_FILE_READ_BYTES}\n"
             "length=max_chars if requested_length is None else min(max_chars, max(1, requested_length))\n"
             "offset=max(0, offset)\n"
@@ -597,7 +614,9 @@ class SkillBuilderSandboxSession:
             "next_offset=offset + len(content)\n"
             "truncated=next_offset < len(full_text)\n"
             "size=target.stat().st_size\n"
-            "print(json.dumps({'ok': True, 'path': rel, 'size_bytes': size, 'size_chars': len(full_text), 'offset': offset, 'length': len(content), 'next_offset': next_offset if truncated else None, 'truncated': truncated, 'content': content}, ensure_ascii=False))\n"
+            "print(json.dumps({'ok': True, 'path': rel, 'size_bytes': size, 'size_chars': len(full_text), "
+            "'offset': offset, 'length': len(content), 'next_offset': next_offset if truncated else None, "
+            "'truncated': truncated, 'content': content}, ensure_ascii=False))\n"
         )
         try:
             normalized_offset = max(0, int(offset))
@@ -621,7 +640,9 @@ class SkillBuilderSandboxSession:
                 str(normalized_offset),
                 "" if normalized_length is None else str(normalized_length),
             ],
-            timeout_seconds=int(os.getenv("SKILL_BUILDER_SANDBOX_IO_TIMEOUT_SECONDS") or DEFAULT_SANDBOX_IO_TIMEOUT_SECONDS),
+            timeout_seconds=int(
+                os.getenv("SKILL_BUILDER_SANDBOX_IO_TIMEOUT_SECONDS") or DEFAULT_SANDBOX_IO_TIMEOUT_SECONDS
+            ),
         )
 
     def write_skill_file(self, *, path: str, content: str) -> dict[str, Any]:
@@ -639,7 +660,8 @@ class SkillBuilderSandboxSession:
             rel = _normalize_rel_path(path, root=self.root)
             if rel.startswith("generated-skill/"):
                 rel = _normalize_rel_path(rel.removeprefix("generated-skill/"))
-            if forbidden_path := forbidden_skill_package_path(rel):
+            forbidden_path = forbidden_skill_package_path(rel)
+            if forbidden_path:
                 return {
                     "ok": False,
                     "error": "wrong_skill_path_root",
@@ -720,7 +742,9 @@ class SkillBuilderSandboxSession:
         )
         result = self._exec_json(
             ["python3", "-c", code, sandbox_rel],
-            timeout_seconds=int(os.getenv("SKILL_BUILDER_SANDBOX_WRITE_TIMEOUT_SECONDS") or DEFAULT_SANDBOX_WRITE_TIMEOUT_SECONDS),
+            timeout_seconds=int(
+                os.getenv("SKILL_BUILDER_SANDBOX_WRITE_TIMEOUT_SECONDS") or DEFAULT_SANDBOX_WRITE_TIMEOUT_SECONDS
+            ),
         )
         if result.get("ok"):
             try:
@@ -749,7 +773,7 @@ class SkillBuilderSandboxSession:
         try:
             rel = _normalize_rel_path(path, root=self.root)
             if rel == base or rel.startswith(f"{base}/"):
-                rel = _normalize_rel_path(rel[len(base) :].lstrip("/"))
+                rel = _normalize_rel_path(rel[len(base):].lstrip("/"))
             if base == "generated-skill":
                 forbidden_path = forbidden_skill_package_path(rel)
                 if forbidden_path:
@@ -779,12 +803,15 @@ class SkillBuilderSandboxSession:
             "target.parent.mkdir(parents=True, exist_ok=True)\n"
             "content=sys.stdin.read()\n"
             "target.write_text(content, encoding='utf-8')\n"
-            "print(json.dumps({'ok': True, 'path': rel, 'size_bytes': len(content.encode('utf-8'))}, ensure_ascii=False))\n"
+            "print(json.dumps({'ok': True, 'path': rel, 'size_bytes': len(content.encode('utf-8'))}, "
+            "ensure_ascii=False))\n"
         )
         result = self._exec_json(
             ["python3", "-c", code, sandbox_rel],
             stdin=content,
-            timeout_seconds=int(os.getenv("SKILL_BUILDER_SANDBOX_WRITE_TIMEOUT_SECONDS") or DEFAULT_SANDBOX_WRITE_TIMEOUT_SECONDS),
+            timeout_seconds=int(
+                os.getenv("SKILL_BUILDER_SANDBOX_WRITE_TIMEOUT_SECONDS") or DEFAULT_SANDBOX_WRITE_TIMEOUT_SECONDS
+            ),
         )
         if result.get("ok"):
             host_result = _host_write_file(self.root, base=base, path=rel, content=content)
@@ -823,7 +850,8 @@ class SkillBuilderSandboxSession:
             "patterns=json.loads(sys.argv[1])\n"
             "removed=[]\n"
             "for pattern in patterns:\n"
-            "    matches=glob.glob(str(root / pattern), recursive=True) if any(ch in pattern for ch in '*?[') else [str(root / pattern)]\n"
+            "    matches=glob.glob(str(root / pattern), recursive=True) "
+            "if any(ch in pattern for ch in '*?[') else [str(root / pattern)]\n"
             "    for raw in sorted(set(matches), reverse=True):\n"
             "        target=pathlib.Path(raw).resolve()\n"
             "        if target != root and root not in target.parents: continue\n"
@@ -833,7 +861,9 @@ class SkillBuilderSandboxSession:
         )
         sandbox_result = self._exec_json(
             ["python3", "-c", code, json.dumps(normalized, ensure_ascii=False)],
-            timeout_seconds=int(os.getenv("SKILL_BUILDER_SANDBOX_WRITE_TIMEOUT_SECONDS") or DEFAULT_SANDBOX_WRITE_TIMEOUT_SECONDS),
+            timeout_seconds=int(
+                os.getenv("SKILL_BUILDER_SANDBOX_WRITE_TIMEOUT_SECONDS") or DEFAULT_SANDBOX_WRITE_TIMEOUT_SECONDS
+            ),
         )
         if not sandbox_result.get("ok"):
             return sandbox_result
@@ -893,14 +923,17 @@ class SkillBuilderSandboxSession:
             "state={}\n"
             "if root.is_dir():\n"
             "    for path in sorted(root.rglob('*')):\n"
-            "        if not path.is_file() or '__pycache__' in path.parts or path.suffix.lower() in {'.pyc','.pyo'}: continue\n"
+            "        if not path.is_file() or '__pycache__' in path.parts "
+            "or path.suffix.lower() in {'.pyc','.pyo'}: continue\n"
             "        try: state[path.relative_to(root).as_posix()]=hashlib.sha256(path.read_bytes()).hexdigest()\n"
             "        except OSError: pass\n"
             "print(json.dumps({'ok': True, 'state': state}, ensure_ascii=False))\n"
         )
         result = self._exec_json(
             ["python3", "-c", code],
-            timeout_seconds=int(os.getenv("SKILL_BUILDER_SANDBOX_IO_TIMEOUT_SECONDS") or DEFAULT_SANDBOX_IO_TIMEOUT_SECONDS),
+            timeout_seconds=int(
+                os.getenv("SKILL_BUILDER_SANDBOX_IO_TIMEOUT_SECONDS") or DEFAULT_SANDBOX_IO_TIMEOUT_SECONDS
+            ),
         )
         if not result.get("ok") or not isinstance(result.get("state"), dict):
             return [{"path": "generated-skill", "change": "inspection_failed"}]
@@ -929,7 +962,9 @@ class SkillBuilderSandboxSession:
                 "message": "The host generated-skill package changed while validation was running.",
             }
 
-        directories = sorted({str(Path(rel).parent.as_posix()) for rel in snapshot if Path(rel).parent.as_posix() != "."})
+        directories = sorted(
+            {str(Path(rel).parent.as_posix()) for rel in snapshot if Path(rel).parent.as_posix() != "."}
+        )
         reset_code = (
             "import json, pathlib, shutil, sys\n"
             f"root=(pathlib.Path({SANDBOX_WORKSPACE_PATH!r}) / 'generated-skill').resolve()\n"
@@ -940,7 +975,9 @@ class SkillBuilderSandboxSession:
         )
         reset_result = self._exec_json(
             ["python3", "-c", reset_code, json.dumps(directories, ensure_ascii=False)],
-            timeout_seconds=int(os.getenv("SKILL_BUILDER_SANDBOX_WRITE_TIMEOUT_SECONDS") or DEFAULT_SANDBOX_WRITE_TIMEOUT_SECONDS),
+            timeout_seconds=int(
+                os.getenv("SKILL_BUILDER_SANDBOX_WRITE_TIMEOUT_SECONDS") or DEFAULT_SANDBOX_WRITE_TIMEOUT_SECONDS
+            ),
         )
         if not reset_result.get("ok"):
             return reset_result
@@ -965,7 +1002,9 @@ class SkillBuilderSandboxSession:
         )
         chmod_result = self._exec_json(
             ["python3", "-c", chmod_code, json.dumps(mode_map, ensure_ascii=False)],
-            timeout_seconds=int(os.getenv("SKILL_BUILDER_SANDBOX_WRITE_TIMEOUT_SECONDS") or DEFAULT_SANDBOX_WRITE_TIMEOUT_SECONDS),
+            timeout_seconds=int(
+                os.getenv("SKILL_BUILDER_SANDBOX_WRITE_TIMEOUT_SECONDS") or DEFAULT_SANDBOX_WRITE_TIMEOUT_SECONDS
+            ),
         )
         if not chmod_result.get("ok"):
             return chmod_result
@@ -1028,7 +1067,12 @@ class SkillBuilderSandboxSession:
         self.closed = True
         keep_sandbox = keep
         if keep_sandbox is None:
-            keep_sandbox = str(os.getenv("SKILL_BUILDER_SANDBOX_KEEP") or "").strip().lower() in {"1", "true", "yes", "on"}
+            keep_sandbox = str(os.getenv("SKILL_BUILDER_SANDBOX_KEEP") or "").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
         sandbox_id = self.sandbox_id
         if sandbox_id and not keep_sandbox:
             try:

@@ -62,7 +62,7 @@ def _normalize_host_path_for_prefix_match(value: str) -> str:
     git_prefix = ":/program files/git"
     git_prefix_index = lower.find(git_prefix)
     if git_prefix_index == 1:
-        normalized = normalized[git_prefix_index + len(git_prefix) :] or "/"
+        normalized = normalized[git_prefix_index + len(git_prefix):] or "/"
     if len(normalized) >= 4 and normalized[0] == "/" and normalized[2] == ":":
         normalized = normalized[1:]
     return normalized.rstrip("/")
@@ -73,7 +73,7 @@ def _wsl_unc_to_linux_path(value: str) -> str | None:
     lower = normalized.lower()
     for prefix in ("//wsl.localhost/", "//wsl$/"):
         if lower.startswith(prefix):
-            parts = normalized[len(prefix) :].split("/", 1)
+            parts = normalized[len(prefix):].split("/", 1)
             if len(parts) == 2 and parts[1].strip("/"):
                 return f"/{parts[1].strip('/')}"
             return "/"
@@ -120,7 +120,7 @@ def host_path_for_jiuwenbox(
     if normalized_host_prefix and normalized_sandbox_prefix and (
         normalized == normalized_host_prefix or normalized.startswith(f"{normalized_host_prefix}/")
     ):
-        suffix = normalized[len(normalized_host_prefix) :].lstrip("/")
+        suffix = normalized[len(normalized_host_prefix):].lstrip("/")
         mapped = f"{normalized_sandbox_prefix}/{suffix}" if suffix else normalized_sandbox_prefix
         return _as_jiuwenbox_absolute_host_path(mapped)
     wsl_path = _wsl_unc_to_linux_path(raw)

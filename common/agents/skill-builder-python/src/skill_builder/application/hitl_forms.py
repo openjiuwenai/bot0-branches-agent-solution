@@ -324,7 +324,9 @@ def _merge_duplicate_decision_fields(fields: list[dict[str, Any]]) -> list[dict[
             and not (isinstance(secondary_default, str) and not secondary_default.strip())
         ):
             next_field["defaultValue"] = secondary["defaultValue"]
-            next_field["defaultLabel"] = secondary.get("defaultLabel") or _decision_value_label(secondary["defaultValue"])
+            next_field["defaultLabel"] = secondary.get("defaultLabel") or _decision_value_label(
+                secondary["defaultValue"]
+            )
         merged[key] = next_field
     return [merged[key] for key in order]
 

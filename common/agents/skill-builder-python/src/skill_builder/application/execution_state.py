@@ -321,6 +321,8 @@ def execution_from_operational_failure(
         blockers=(failure.code,),
         failure=failure,
     )
+
+
 def execution_from_state(state: SkillBuilderState) -> SkillBuilderExecution:
     validation_result = state.validation_result
     current_artifact_sha256 = skill_artifact_sha256(state.input.root / "generated-skill")

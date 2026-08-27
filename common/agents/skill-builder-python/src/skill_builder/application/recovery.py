@@ -66,7 +66,11 @@ def build_recovery_prompt(*, kind: str, context: RecoveryPromptContext) -> str:
             [
                 "",
                 "重试模式：从 inputs/、Scenario 摘要和已确认信息重新生成当前 Skill 草稿。",
-                "写包阶段第一轮只用 write_skill_file 写入完整 SKILL.md；后续可在同一响应中并列调用最多 4 次 write_skill_file 写入不同路径的独立小文件，但不得使用 write_skill_files、不得把多个文件放进单个工具参数，也不得写占位骨架。",
+                (
+                    "写包阶段第一轮只用 write_skill_file 写入完整 SKILL.md；后续可在同一响应中并列调用最多 4 次 "
+                    "write_skill_file 写入不同路径的独立小文件，但不得使用 write_skill_files、不得把多个文件放进单个工具参数，"
+                    "也不得写占位骨架。"
+                ),
                 "完成后调用 finish_authoring 提交结构化自检摘要，由控制器执行完整预检并提交 PackageRevision。",
             ]
         )

@@ -14,7 +14,7 @@ from skill_builder.domain.candidate_contract import export_package_path_allowed
 def _load_json_object(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8", errors="replace"))
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError):
         return {}
     return value if isinstance(value, dict) else {}
 

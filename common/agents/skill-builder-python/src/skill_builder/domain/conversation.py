@@ -100,9 +100,15 @@ _MUTATION_REQUEST_PATTERN = re.compile(
 )
 _REPAIR_PATTERN = re.compile(r"(?:修复|解决|收敛|验收|失败|报错|错误|异常|阻断)", re.IGNORECASE)
 _INSPECT_PATTERN = re.compile(r"(?:查看|检查|分析|解释|告诉我|当前|现在|实际|是否|为什么|如何|怎么|[？?])", re.IGNORECASE)
-_GENERATION_PATTERN = re.compile(r"(?:生成|创建|构建|制作|抽取|提取).{0,24}(?:skill|技能包)|(?:skill|技能包).{0,24}(?:生成|创建|构建|制作|抽取|提取)", re.IGNORECASE)
+_GENERATION_PATTERN = re.compile(
+    r"(?:生成|创建|构建|制作|抽取|提取).{0,24}(?:skill|技能包)|(?:skill|技能包).{0,24}(?:生成|创建|构建|制作|抽取|提取)",
+    re.IGNORECASE,
+)
 _REGENERATION_PATTERN = re.compile(r"(?:重新|从头|全部重做|整体重做).{0,24}(?:生成|抽取|提取|构建|制作|skill|技能包)", re.IGNORECASE)
-_CONTINUE_PATTERN = re.compile(r"(?:继续|接着|恢复|完成|补完).{0,20}(?:抽取|提取|生成|skill|技能包|上次|剩余)|^(?:继续|接着|完成它|继续完成)[。！!\s]*$", re.IGNORECASE)
+_CONTINUE_PATTERN = re.compile(
+    r"(?:继续|接着|恢复|完成|补完).{0,20}(?:抽取|提取|生成|skill|技能包|上次|剩余)|^(?:继续|接着|完成它|继续完成)[。！!\s]*$",
+    re.IGNORECASE,
+)
 _VAGUE_MUTATION_PATTERN = re.compile(r"^\s*(?:(?:请|帮我|麻烦)\s*)?(?:改一下|修改一下|优化一下|调整一下|完善一下)[。！!\s]*$", re.IGNORECASE)
 
 
@@ -176,7 +182,9 @@ def classify_conversation_intent(
         elif _GENERATION_PATTERN.search(text):
             goal = ConversationGoal.EXTRACT
         else:
-            goal = ConversationGoal.INSPECT if has_progress and _INSPECT_PATTERN.search(text) else ConversationGoal.ANSWER
+            goal = (
+                ConversationGoal.INSPECT if has_progress and _INSPECT_PATTERN.search(text) else ConversationGoal.ANSWER
+            )
         mutating = goal in {ConversationGoal.EXTRACT, ConversationGoal.CONTINUE_EXTRACT}
         return ConversationIntent(
             goal=goal,
@@ -212,7 +220,11 @@ def classify_conversation_intent(
         mutation_mentioned and not _INSPECT_PATTERN.search(text)
     )
     if mutation_requested:
-        goal = ConversationGoal.REPAIR if has_validation_failure and _REPAIR_PATTERN.search(text) else ConversationGoal.MUTATE
+        goal = (
+            ConversationGoal.REPAIR
+            if has_validation_failure and _REPAIR_PATTERN.search(text)
+            else ConversationGoal.MUTATE
+        )
         return ConversationIntent(
             goal=goal,
             mutation_policy=MutationPolicy.REQUIRED,

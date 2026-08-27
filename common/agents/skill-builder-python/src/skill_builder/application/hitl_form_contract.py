@@ -199,7 +199,9 @@ def _normalize_decision_form_fields(
                 )
                 if semantic_source:
                     normalized_option["semanticValueSource"] = semantic_source
-                normalized_evidence_status = str(option.get("evidenceStatus") or "").strip() or decision_evidence_status(
+                normalized_evidence_status = str(
+                    option.get("evidenceStatus") or ""
+                ).strip() or decision_evidence_status(
                     transport_value,
                     display_label,
                     normalized_option["description"],
@@ -284,7 +286,9 @@ def _normalize_decision_form_fields(
                     if isinstance(alias, str) and alias.strip() and alias != transport_value:
                         default_aliases[alias.strip()] = transport_value
             else:
-                transport_value, transport_label, transport_description = _decision_option_transport_parts(option, option)
+                transport_value, transport_label, transport_description = _decision_option_transport_parts(
+                    option, option
+                )
                 display_label = _decision_option_display_label(
                     transport_value,
                     transport_label,
@@ -330,7 +334,11 @@ def _normalize_decision_form_fields(
         if field_type == "boolean" and default is None:
             default = False
         if field_type == "select" and len(normalized_options) < 2:
-            if not normalized_options and default is not None and not (isinstance(default, str) and not default.strip()):
+            if (
+                not normalized_options
+                and default is not None
+                and not (isinstance(default, str) and not default.strip())
+            ):
                 semantic_value = decision_semantic_value(semantic_concept, default)
                 default_option = {
                     "value": default,

@@ -167,7 +167,9 @@ def normalize_agent_self_check(
         value.get("generated_files") or value.get("generatedFiles") or value.get("files")
     )
     files = [_text(path, limit=1000) for path in files if _text(path, limit=1000)]
-    unverified = [_text(item, limit=2000) for item in _list(value.get("unverified") or value.get("unverified_capabilities"))]
+    unverified = [
+        _text(item, limit=2000) for item in _list(value.get("unverified") or value.get("unverified_capabilities"))
+    ]
     unverified.extend(
         f"{title}：仅有 Agent 静态/离线证据，未取得平台可信的外部执行证据。"
         for title in downgraded_external_checks
@@ -186,7 +188,9 @@ def normalize_agent_self_check(
     }
 
 
-def persist_agent_self_check(root: Path, value: Any, *, generated_files: list[str] | None = None) -> dict[str, Any] | None:
+def persist_agent_self_check(
+    root: Path, value: Any, *, generated_files: list[str] | None = None
+) -> dict[str, Any] | None:
     """Persist one normalized Agent report for hosts that need a durable view."""
 
     payload = normalize_agent_self_check(value, generated_files=generated_files)

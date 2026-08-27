@@ -135,7 +135,7 @@ def merge_implementation_evidence(root: Path, value: Any) -> list[dict[str, Any]
 def load_implementation_evidence(root: Path) -> list[dict[str, Any]]:
     try:
         payload = json.loads((root / IMPLEMENTATION_EVIDENCE_PATH).read_text(encoding="utf-8"))
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError):
         return []
     return normalize_implementation_evidence(
         payload.get("entries") if isinstance(payload, dict) else payload
@@ -184,7 +184,7 @@ def infer_knowledge_documentation_evidence(
                 encoding="utf-8"
             )
         )
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError):
         return entries
     if not isinstance(plan, dict) or plan.get("scriptsRequired") is not False:
         return entries
@@ -325,7 +325,7 @@ def _contract_obligations(root: Path) -> dict[str, str]:
         scenario = json.loads(
             (root / "validation" / "scenario_contract.json").read_text(encoding="utf-8")
         )
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError):
         return {}
     obligations: dict[str, str] = {}
     for item in scenario.get("resolvedRequirements") or []:

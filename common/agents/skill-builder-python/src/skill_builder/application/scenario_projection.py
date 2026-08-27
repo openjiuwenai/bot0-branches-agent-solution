@@ -318,7 +318,7 @@ def load_persisted_scenario_contract(root: Path) -> tuple[dict[str, Any], list[s
 
     try:
         raw = json.loads((root / SCENARIO_CONTRACT_PATH).read_text(encoding="utf-8"))
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError):
         return {}, ["validation/scenario_contract.json 不存在或不是有效 JSON"]
     if not isinstance(raw, dict):
         return {}, ["validation/scenario_contract.json 根节点必须是对象"]
@@ -538,7 +538,11 @@ def scenario_contract_artifacts(
     ]
     confirmed_lines = [
         f"- `{item['decisionId']}` {item.get('title') or item['decisionId']}："
-        f"已确认为「{confirmed_values[item['decisionId']].get('displayValue') or confirmed_values[item['decisionId']].get('value') or '已选择'}」"
+        "已确认为「{}」".format(
+            confirmed_values[item["decisionId"]].get("displayValue")
+            or confirmed_values[item["decisionId"]].get("value")
+            or "已选择"
+        )
         for item in pending
         if str(item.get("decisionId") or "") in confirmed_values
     ]
@@ -738,7 +742,7 @@ def scenario_projection_matches(root: Path, contract: Any) -> bool:
             return False
     try:
         manifest = json.loads((root / "validation" / "artifact_manifest.json").read_text(encoding="utf-8"))
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError):
         return False
     if str((manifest.get("scenarioContract") or {}).get("semanticHash") or "") != semantic_hash:
         return False
@@ -746,7 +750,7 @@ def scenario_projection_matches(root: Path, contract: Any) -> bool:
     try:
         handoff_bytes = handoff_path.read_bytes()
         handoff = json.loads(handoff_bytes.decode("utf-8"))
-    except (OSError, UnicodeError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, UnicodeError, TypeError, ValueError):
         return False
     return bool(
         len(handoff_bytes) <= AUTHOR_HANDOFF_MAX_BYTES

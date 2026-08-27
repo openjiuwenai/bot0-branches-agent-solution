@@ -481,7 +481,9 @@ class SkillBuilderRunTiming:
             }
         self.event_count = max(self.event_count, persisted_max_seq or persisted_event_count)
         if rows:
-            self.last_activity_ms = max(self.last_activity_ms, max(int(getattr(row, "create_time", 0) or 0) for row in rows))
+            self.last_activity_ms = max(
+                self.last_activity_ms, max(int(getattr(row, "create_time", 0) or 0) for row in rows)
+            )
 
     def complete(self, status: str) -> None:
         now = self._clock()
@@ -515,8 +517,12 @@ class SkillBuilderRunTiming:
             for key, value in record.items()
             if key not in {"startedAtMs", "finishedAtMs"}
         }
-        result["startedAt"] = _iso_from_ms(int(record.get("startedAtMs"))) if record.get("startedAtMs") is not None else None
-        result["finishedAt"] = _iso_from_ms(int(record.get("finishedAtMs"))) if record.get("finishedAtMs") is not None else None
+        result["startedAt"] = (
+            _iso_from_ms(int(record.get("startedAtMs"))) if record.get("startedAtMs") is not None else None
+        )
+        result["finishedAt"] = (
+            _iso_from_ms(int(record.get("finishedAtMs"))) if record.get("finishedAtMs") is not None else None
+        )
         return result
 
     def _performance_snapshot(self, phases: list[dict[str, Any]]) -> dict[str, Any]:
@@ -926,11 +932,15 @@ def refresh_running_run_timing(
                             set_first("firstScriptWriteAt", created_ms)
                 if event_type in {"hitl.waiting", "hitl.requested"}:
                     set_first("firstHitlRequestedAt", created_ms)
-                    request_id = str(payload.get("request_id") or payload.get("requestId") or "unknown").strip() or "unknown"
+                    request_id = (
+                        str(payload.get("request_id") or payload.get("requestId") or "unknown").strip() or "unknown"
+                    )
                     hitl_started[request_id] = min(hitl_started.get(request_id, created_ms), created_ms)
                 elif event_type in {"hitl.answer.submitted", "hitl.answered", "hitl.timeout", "hitl.expired"}:
                     set_last("lastHitlFinishedAt", created_ms)
-                    request_id = str(payload.get("request_id") or payload.get("requestId") or "unknown").strip() or "unknown"
+                    request_id = (
+                        str(payload.get("request_id") or payload.get("requestId") or "unknown").strip() or "unknown"
+                    )
                     hitl_finished[request_id] = max(hitl_finished.get(request_id, created_ms), created_ms)
             snapshot["milestones"] = milestones
             hitl_intervals = sorted(
@@ -988,7 +998,9 @@ def refresh_running_run_timing(
         snapshot["wallDurationMs"] = wall_duration_ms
         user_wait_ms = int(snapshot.get("userWaitMs") or 0)
         pause_started_ms = _iso_to_ms(snapshot.get("hitlPauseStartedAt"))
-        effective_user_wait_ms = user_wait_ms + (max(0, now_ms - pause_started_ms) if pause_started_ms is not None else 0)
+        effective_user_wait_ms = user_wait_ms + (
+            max(0, now_ms - pause_started_ms) if pause_started_ms is not None else 0
+        )
         snapshot["activeDurationMs"] = max(0, wall_duration_ms - effective_user_wait_ms)
     if last_activity_ms is not None:
         snapshot["stalledForMs"] = (

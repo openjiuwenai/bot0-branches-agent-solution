@@ -43,13 +43,15 @@ _PLACEHOLDER_PATTERNS = (
             re.IGNORECASE,
         ),
     ),
-    ("simulated_execution", re.compile(r"模拟(?:采集|查询|抓取|执行)|mock(?:ed)?\s+(?:collection|query|execution)", re.IGNORECASE)),
+    (
+        "simulated_execution",
+        re.compile(r"模拟(?:采集|查询|抓取|执行)|mock(?:ed)?\s+(?:collection|query|execution)", re.IGNORECASE),
+    ),
     ("disabled_branch", re.compile(r"\bif\s+False\s*:")),
     (
         "commented_external_call",
         re.compile(
-            r"^\s*#\s*(?:await\s+)?(?:page|client|session)\."
-            r"(?:goto|get|post|request|fill|click)\b",
+            r"^\s*#\s*(?:await\s+)?(?:page|client|session)\." r"(?:goto|get|post|request|fill|click)\b",
             re.IGNORECASE | re.MULTILINE,
         ),
     ),
@@ -172,7 +174,7 @@ def _placeholder_text_signals(source: str) -> list[dict[str, Any]]:
             # Only free-form placeholder language needs negation handling.
             # Structural signals remain deterministic blockers.
             if index == 0:
-                prefix = source[max(0, match.start() - 24) : match.start()]
+                prefix = source[max(0, match.start() - 24):match.start()]
                 if _NEGATED_PLACEHOLDER_PREFIX_RE.search(prefix):
                     continue
             result.append(
@@ -197,7 +199,12 @@ def _empty_python_body_signals(source: str) -> list[dict[str, Any]]:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         body = list(node.body)
-        if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant) and isinstance(body[0].value.value, str):
+        if (
+            body
+            and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)
+        ):
             body = body[1:]
         kind = ""
         if len(body) == 1 and isinstance(body[0], ast.Pass):
@@ -854,7 +861,10 @@ def _offline_self_check_noop_signal(
                 "popen",
             }:
                 observations.append(name)
-                if any(keyword.arg == "check" and isinstance(keyword.value, ast.Constant) and keyword.value.value is True for keyword in node.keywords):
+                if any(
+                    keyword.arg == "check" and isinstance(keyword.value, ast.Constant) and keyword.value.value is True
+                    for keyword in node.keywords
+                ):
                     decisions.append("subprocess_check")
             if leaf.startswith("assert") or name in {
                 "pytest.fail",

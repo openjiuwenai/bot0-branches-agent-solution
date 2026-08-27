@@ -69,7 +69,7 @@ _NEGATED_EXECUTABLE_DELIVERY_RE = re.compile(
 def _read_object(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError):
         return {}
     return dict(value) if isinstance(value, dict) else {}
 
@@ -608,7 +608,10 @@ def synthesize_implementation_plan(root: Path) -> dict[str, Any]:
     required = resolved.get("requiredCapabilities") or {}
     entrypoints: dict[str, str] = {}
     for capability in sorted(RUNTIME_CAPABILITIES):
-        if required.get(capability) is True and (path := choose(capability)):
+        if required.get(capability) is not True:
+            continue
+        path = choose(capability)
+        if path:
             entrypoints[capability] = path
     requirements = resolved.get("capabilityRequirements") or {}
     for group in requirements.get("anyOf") or []:

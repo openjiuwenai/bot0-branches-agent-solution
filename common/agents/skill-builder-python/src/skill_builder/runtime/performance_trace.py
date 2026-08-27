@@ -86,13 +86,26 @@ class SkillBuilderPerformanceTrace:
     def _phase_summary(value: dict[str, Any]) -> list[dict[str, Any]]:
         requests = [item for item in value.get("modelRequests") or [] if isinstance(item, dict)]
         tools = [item for item in value.get("toolCalls") or [] if isinstance(item, dict)]
-        phases = sorted({*(str(item.get("phase") or "unknown") for item in requests), *(str(item.get("phase") or "unknown") for item in tools)})
+        phases = sorted(
+            {
+                *(str(item.get("phase") or "unknown") for item in requests),
+                *(str(item.get("phase") or "unknown") for item in tools),
+            }
+        )
         summaries: list[dict[str, Any]] = []
         for phase in phases:
             phase_requests = [item for item in requests if str(item.get("phase") or "unknown") == phase]
             phase_tools = [item for item in tools if str(item.get("phase") or "unknown") == phase]
             model_ms = round(sum(float(item.get("durationMs") or 0) for item in phase_requests), 3)
-            first_output_ms = round(sum(float(item.get("firstOutputMs")) if item.get("firstOutputMs") is not None else float(item.get("durationMs") or 0) for item in phase_requests), 3)
+            first_output_ms = round(
+                sum(
+                    float(item.get("firstOutputMs"))
+                    if item.get("firstOutputMs") is not None
+                    else float(item.get("durationMs") or 0)
+                    for item in phase_requests
+                ),
+                3,
+            )
             summaries.append({
                 "phase": phase,
                 "modelRequestCount": len({(item.get("sourceId"), item.get("requestIndex")) for item in phase_requests}),
@@ -139,14 +152,35 @@ class SkillBuilderPerformanceTrace:
                 record["reductions"] = [str(item)[:120] for item in reductions[:20]]
             roles = payload.get("roles")
             if isinstance(roles, dict):
-                record["roles"] = {str(key)[:40]: int(item) for key, item in roles.items() if isinstance(item, int) and not isinstance(item, bool)}
+                record["roles"] = {
+                    str(key)[:40]: int(item)
+                    for key, item in roles.items()
+                    if isinstance(item, int) and not isinstance(item, bool)
+                }
             requests.append(record)
         elif event_type == "internal.performance.llm_request_completed":
             request_index = int(payload.get("requestIndex") or 0)
             transport_attempt = int(payload.get("transportAttempt") or 1)
-            record = next((item for item in reversed(requests) if item.get("sourceId") == self.source_id and item.get("requestIndex") == request_index and item.get("transportAttempt") == transport_attempt and item.get("finishedAt") is None), None)
+            record = next(
+                (
+                    item
+                    for item in reversed(requests)
+                    if item.get("sourceId") == self.source_id
+                    and item.get("requestIndex") == request_index
+                    and item.get("transportAttempt") == transport_attempt
+                    and item.get("finishedAt") is None
+                ),
+                None,
+            )
             if record is None:
-                record = {"sourceId": self.source_id, "phase": phase, "requestIndex": request_index, "transportAttempt": transport_attempt, "startedAt": _iso(now), "startEventMissing": True}
+                record = {
+                    "sourceId": self.source_id,
+                    "phase": phase,
+                    "requestIndex": request_index,
+                    "transportAttempt": transport_attempt,
+                    "startedAt": _iso(now),
+                    "startEventMissing": True,
+                }
                 requests.append(record)
             record["finishedAt"] = _iso(now)
             record["outcome"] = str(payload.get("outcome") or "unknown")[:80]
@@ -159,7 +193,13 @@ class SkillBuilderPerformanceTrace:
             if payload.get("errorCategory") not in (None, ""):
                 record["errorCategory"] = str(payload.get("errorCategory"))[:80]
         elif event_type == "tool.started":
-            record = {"sourceId": self.source_id, "phase": phase, "tool": str(payload.get("tool") or "unknown")[:160], "startedAt": _iso(now), "startedAtMs": now}
+            record = {
+                "sourceId": self.source_id,
+                "phase": phase,
+                "tool": str(payload.get("tool") or "unknown")[:160],
+                "startedAt": _iso(now),
+                "startedAtMs": now,
+            }
             for source, target in (("size_bytes", "reportedInputBytes"), ("file_count", "fileCount")):
                 number = _number(payload.get(source))
                 if number is not None:
@@ -167,9 +207,25 @@ class SkillBuilderPerformanceTrace:
             tools.append(record)
         elif event_type == "tool.completed":
             tool_name = str(payload.get("tool") or "unknown")[:160]
-            record = next((item for item in reversed(tools) if item.get("sourceId") == self.source_id and item.get("tool") == tool_name and item.get("finishedAt") is None), None)
+            record = next(
+                (
+                    item
+                    for item in reversed(tools)
+                    if item.get("sourceId") == self.source_id
+                    and item.get("tool") == tool_name
+                    and item.get("finishedAt") is None
+                ),
+                None,
+            )
             if record is None:
-                record = {"sourceId": self.source_id, "phase": phase, "tool": tool_name, "startedAt": _iso(now), "startedAtMs": now, "startEventMissing": True}
+                record = {
+                    "sourceId": self.source_id,
+                    "phase": phase,
+                    "tool": tool_name,
+                    "startedAt": _iso(now),
+                    "startedAtMs": now,
+                    "startEventMissing": True,
+                }
                 tools.append(record)
             record["finishedAt"] = _iso(now)
             record["durationMs"] = max(0, now - int(record.pop("startedAtMs", now)))
@@ -179,14 +235,37 @@ class SkillBuilderPerformanceTrace:
                 record["reportedOutputBytes"] = size_bytes
             if payload.get("error") not in (None, ""):
                 record["errorCode"] = str(payload.get("error"))[:120]
-            if value.get("firstArtifactWrite") is None and payload.get("ok") is not False and tool_name in {"write_skill_file", "write_skill_files"}:
-                value["firstArtifactWrite"] = {"phase": phase, "tool": tool_name, "at": _iso(now), "fileCount": int(payload.get("file_count") or 1), "sizeBytes": int(payload.get("size_bytes") or 0)}
+            if (
+                value.get("firstArtifactWrite") is None
+                and payload.get("ok") is not False
+                and tool_name in {"write_skill_file", "write_skill_files"}
+            ):
+                value["firstArtifactWrite"] = {
+                    "phase": phase,
+                    "tool": tool_name,
+                    "at": _iso(now),
+                    "fileCount": int(payload.get("file_count") or 1),
+                    "sizeBytes": int(payload.get("size_bytes") or 0),
+                }
         elif event_type == "sandbox.created":
             sandboxes.append({"sourceId": self.source_id, "phase": phase, "startedAt": _iso(now), "startedAtMs": now})
         elif event_type == "sandbox.closed":
-            record = next((item for item in reversed(sandboxes) if item.get("sourceId") == self.source_id and item.get("finishedAt") is None), None)
+            record = next(
+                (
+                    item
+                    for item in reversed(sandboxes)
+                    if item.get("sourceId") == self.source_id and item.get("finishedAt") is None
+                ),
+                None,
+            )
             if record is None:
-                record = {"sourceId": self.source_id, "phase": phase, "startedAt": _iso(now), "startedAtMs": now, "startEventMissing": True}
+                record = {
+                    "sourceId": self.source_id,
+                    "phase": phase,
+                    "startedAt": _iso(now),
+                    "startedAtMs": now,
+                    "startEventMissing": True,
+                }
                 sandboxes.append(record)
             record["finishedAt"] = _iso(now)
             record["durationMs"] = max(0, now - int(record.pop("startedAtMs", now)))

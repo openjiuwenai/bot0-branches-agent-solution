@@ -75,7 +75,7 @@ def _regex_sample(pattern: str) -> str | None:
             close = body.find("]", index + 1)
             if close < 0:
                 return None
-            choice = body[index + 1 : close]
+            choice = body[index + 1:close]
             if not choice or choice.startswith("^"):
                 return None
             if "\\d" in choice or "0-9" in choice:
@@ -103,7 +103,7 @@ def _regex_sample(pattern: str) -> str | None:
             close = body.find("}", index + 1)
             if close < 0:
                 return None
-            count = body[index + 1 : close].split(",", 1)[0].strip()
+            count = body[index + 1:close].split(",", 1)[0].strip()
             if not count.isdigit():
                 return None
             repeat = int(count)
@@ -246,10 +246,13 @@ def _field_value(field: dict[str, Any], *, platform_values: tuple[str, ...] = ()
         if str(field.get(key) or "").strip():
             return str(field[key]).strip()
     pattern = str(field.get("pattern") or field.get("regex") or "").strip()
-    if pattern and (sample := _regex_sample(pattern)) is not None:
-        return sample
+    if pattern:
+        sample = _regex_sample(pattern)
+        if sample is not None:
+            return sample
     constraints = _descriptive_constraint_text(field)
-    if described := _described_value(constraints):
+    described = _described_value(constraints)
+    if described:
         return described
     minimum_length, _maximum_length = _length_bounds(field)
     if minimum_length is not None and minimum_length > len("示例值"):
@@ -440,21 +443,27 @@ def build_tabular_xlsx_bytes(
         '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
         '<Default Extension="xml" ContentType="application/xml"/>'
-        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
-        '</Types>'
+        '<Override PartName="/xl/workbook.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        '<Override PartName="/xl/worksheets/sheet1.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        "</Types>"
     )
     rels = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
-        '</Relationships>'
+        '<Relationship Id="rId1" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+        'Target="xl/workbook.xml"/>'
+        "</Relationships>"
     )
     workbook_rels = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
-        '</Relationships>'
+        '<Relationship Id="rId1" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" '
+        'Target="worksheets/sheet1.xml"/>'
+        "</Relationships>"
     )
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -510,7 +519,7 @@ def ensure_synthetic_input_fixtures(root: Path, generated: Path) -> dict[str, An
     """Create deterministic schema/invalid fixtures without source data."""
     try:
         scenario = json.loads((root / "validation" / "scenario_contract.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+    except (OSError, ValueError, TypeError):
         return {"created": False, "reason": "scenario_contract_unavailable"}
     if not isinstance(scenario, dict):
         return {"created": False, "reason": "scenario_contract_unavailable"}
@@ -528,7 +537,7 @@ def ensure_synthetic_input_fixtures(root: Path, generated: Path) -> dict[str, An
     marker = root / ".skill-builder" / _SYNTHETIC_FIXTURE_MARKER
     try:
         previous = json.loads(marker.read_text(encoding="utf-8"))
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError):
         previous = {}
     previous_paths = previous.get("paths") if isinstance(previous, dict) else None
     previous_paths = previous_paths if isinstance(previous_paths, dict) else {}
@@ -628,7 +637,7 @@ def platform_owned_fixture_paths(root: Path, generated: Path) -> set[str]:
     marker = root / ".skill-builder" / _SYNTHETIC_FIXTURE_MARKER
     try:
         value = json.loads(marker.read_text(encoding="utf-8"))
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError):
         return set()
     paths = value.get("paths") if isinstance(value, dict) else None
     if not isinstance(paths, dict):

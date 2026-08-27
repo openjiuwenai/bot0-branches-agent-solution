@@ -441,7 +441,8 @@ def create_author_tools(
                     "allowedPaths": plan.get("files") or [],
                     "message": "该文件不在已确认的 ImplementationPlan 中。",
                 }
-        if repair_scope_error := _repair_scope_error(normalized):
+        repair_scope_error = _repair_scope_error(normalized)
+        if repair_scope_error:
             return None, repair_scope_error
         if (
             normalized in _CONTROLLER_SELF_CHECK_PATHS
@@ -468,7 +469,8 @@ def create_author_tools(
                     "choose a package-specific name."
                 ),
             }
-        if forbidden := forbidden_skill_package_path(normalized):
+        forbidden = forbidden_skill_package_path(normalized)
+        if forbidden:
             return None, {
                 "ok": False,
                 "error": "wrong_skill_path_root",
@@ -641,7 +643,8 @@ def create_author_tools(
         )
         if path_error is not None:
             return path_error
-        assert normalized is not None
+        if normalized is None:
+            raise AssertionError
 
         if emit_tool_events:
             await _emit(
@@ -650,7 +653,8 @@ def create_author_tools(
                 f"写入 Skill 文件：{path}",
                 {"tool": "write_skill_file", "path": path},
             )
-        if content_error := _content_validation_error(normalized, content):
+        content_error = _content_validation_error(normalized, content)
+        if content_error:
             if emit_tool_events:
                 await _emit(
                     emit_event,
@@ -758,7 +762,8 @@ def create_author_tools(
         normalized, path_error = _validated_path(path)
         if path_error is not None:
             return path_error
-        assert normalized is not None
+        if normalized is None:
+            raise AssertionError
         if not normalized.startswith("fixtures/") or not normalized.endswith(".xlsx"):
             return {
                 "ok": False,
@@ -1082,7 +1087,8 @@ def create_author_tools(
         normalized, path_error = _validated_path(path)
         if path_error is not None:
             return path_error
-        assert normalized is not None
+        if normalized is None:
+            raise AssertionError
         if normalized in platform_owned_fixture_paths(root, root / "generated-skill"):
             return {
                 "ok": False,
@@ -1201,8 +1207,10 @@ def create_author_tools(
             if path_error is not None:
                 entry_errors[index] = path_error
                 continue
-            assert _normalized is not None
-            if content_error := _content_validation_error(_normalized, content):
+            if _normalized is None:
+                raise AssertionError
+            content_error = _content_validation_error(_normalized, content)
+            if content_error:
                 entry_errors[index] = content_error
                 continue
             normalized_files.append((path, content))
@@ -1249,7 +1257,7 @@ def create_author_tools(
         results: list[dict[str, Any]] = []
         batches: list[dict[str, Any]] = []
         for batch_start in range(0, len(normalized_files), MAX_BATCH_WRITE_FILES):
-            batch = normalized_files[batch_start : batch_start + MAX_BATCH_WRITE_FILES]
+            batch = normalized_files[batch_start:batch_start + MAX_BATCH_WRITE_FILES]
             batch_results = [
                 await _write_one(path, content, emit_tool_events=False)
                 for path, content in batch
@@ -1317,7 +1325,8 @@ def create_author_tools(
                 "error": "wrong_skill_path_root",
                 "message": "删除工具只管理导出包文件。",
             }
-        if repair_scope_error := _repair_scope_error(normalized):
+        repair_scope_error = _repair_scope_error(normalized)
+        if repair_scope_error:
             return {**repair_scope_error, "deleted": False}
         if normalized in _CONTROLLER_SELF_CHECK_PATHS:
             return {

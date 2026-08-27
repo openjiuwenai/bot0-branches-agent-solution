@@ -22,6 +22,7 @@ DEFAULT_SKILL_DESCRIPTION = "基于上传材料生成的业务 Skill 草稿，�
 DEFAULT_SKILL_VERSION = "0.1.0"
 DEFAULT_SKILL_TAGS = ("skill-extract",)
 
+
 EXPORT_REQUIRED_ENTRY = "SKILL.md"
 EXPORT_UI_METADATA_ENTRY = "agents/openai.yaml"
 @dataclass(frozen=True, slots=True)
@@ -87,7 +88,7 @@ def upsert_skill_frontmatter(raw: str, *, skill_name: str, description: str) -> 
         lines = raw.splitlines()
         end = next((idx for idx in range(1, len(lines)) if lines[idx].strip() == "---"), -1)
         if end >= 0:
-            body = "\n".join(lines[end + 1 :]).lstrip("\n")
+            body = "\n".join(lines[end + 1:]).lstrip("\n")
     return f"---\nname: {skill_name}\ndescription: {description}\n---\n\n{body}"
 
 

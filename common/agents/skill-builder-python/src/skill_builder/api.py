@@ -38,7 +38,7 @@ def _recovery_failure_context(root: Path) -> str:
     failure_path = root / "validation" / "diagnostics" / "candidate_lifecycle_failure.json"
     try:
         failure = json.loads(failure_path.read_text(encoding="utf-8"))
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError):
         return ""
     if not isinstance(failure, dict):
         return ""
@@ -51,7 +51,7 @@ def _recovery_failure_context(root: Path) -> str:
         draft_path = root / ".skill-builder" / "drafts" / "scenario" / "current.json"
         try:
             draft = json.loads(draft_path.read_text(encoding="utf-8"))
-        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        except (OSError, TypeError, ValueError):
             draft = None
         if isinstance(draft, dict):
             payload["rejectedScenarioDraft"] = draft

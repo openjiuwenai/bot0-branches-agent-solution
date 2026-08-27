@@ -82,7 +82,7 @@ def verified_candidate_receipt_status(root: Path) -> dict[str, Any]:
         value = dict(loaded) if isinstance(loaded, dict) else {}
     except FileNotFoundError:
         pass
-    except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+    except (OSError, TypeError, ValueError) as exc:
         return {
             "ok": False,
             "error": "candidate_receipt_unreadable",

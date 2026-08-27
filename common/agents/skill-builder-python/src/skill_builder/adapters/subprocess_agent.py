@@ -141,15 +141,14 @@ class SubprocessAgentRunner:
                 loaded = json.loads(result_path.read_text(encoding="utf-8"))
                 if isinstance(loaded, dict):
                     payload = loaded
-            except (OSError, ValueError, json.JSONDecodeError):
+            except (OSError, ValueError):
                 payload = {}
+        result = payload.get("result")
         if (
             payload.get("schema_version") == PROTOCOL_VERSION
             and payload.get("ok") is True
-            and isinstance(payload.get("result"), dict)
+            and isinstance(result, dict)
         ):
-            result = payload["result"]
-            assert isinstance(result, dict)
             return SkillBuilderAgentCoreResult(
                 raw_output_text=str(result.get("raw_output_text") or ""),
                 session_id=str(result.get("session_id") or ""),

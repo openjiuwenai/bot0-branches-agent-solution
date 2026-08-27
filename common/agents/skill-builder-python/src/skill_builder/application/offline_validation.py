@@ -251,7 +251,7 @@ def _normalized_assertion(value: Any) -> dict[str, Any] | None:
         # assertions are resolved relative to that same directory.  Accepting
         # the equivalent placeholder-prefixed spelling keeps the protocol
         # deterministic without allowing a second path root.
-        source = source[len(_OUTPUT_PLACEHOLDER) + 1 :]
+        source = source[len(_OUTPUT_PLACEHOLDER) + 1:]
     elif _OUTPUT_PLACEHOLDER in source:
         return None
     path = str(value.get("path") or "$").strip()
@@ -958,7 +958,7 @@ def _load_assertion_source(path: Path) -> tuple[bool, Any, str | None]:
                 value = json.loads(path.read_text(encoding="utf-8"))
             return True, value, None
         return True, path.read_text(encoding="utf-8", errors="replace"), None
-    except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+    except (OSError, TypeError, ValueError) as exc:
         return True, None, str(exc)[:500]
 
 
@@ -1118,7 +1118,9 @@ async def replay_self_check_cases(
                     exists, actual, source_error = False, None, "output path escaped replay directory"
                 else:
                     source_exists, source_value, source_error = _load_assertion_source(target)
-                    exists, actual = _json_path(source_value, path) if source_exists and source_error is None else (False, None)
+                    exists, actual = (
+                        _json_path(source_value, path) if source_exists and source_error is None else (False, None)
+                    )
             passed = source_error is None and _assertion_passes(
                 exists=exists,
                 actual=actual,
@@ -1173,7 +1175,7 @@ async def replay_self_check_cases(
 def _scenario(root: Path) -> dict[str, Any]:
     try:
         value = json.loads((root / "validation" / "scenario_contract.json").read_text(encoding="utf-8"))
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError):
         return {}
     return value if isinstance(value, dict) else {}
 
@@ -1444,7 +1446,10 @@ def _xlsx_records(path: Path) -> tuple[list[str], list[dict[str, Any]], list[dic
     if not rows:
         return [], [], [_issue("input_fixture_empty", "Excel fixture 为空。", path=path.as_posix())]
     headers = rows[0]
-    records = [dict(zip(headers, [*row, *([""] * max(0, len(headers) - len(row)))][: len(headers)], strict=True)) for row in rows[1:]]
+    records = [
+        dict(zip(headers, [*row, *([""] * max(0, len(headers) - len(row)))][: len(headers)], strict=True))
+        for row in rows[1:]
+    ]
     return headers, records, []
 
 
@@ -1560,7 +1565,13 @@ def scenario_input_fixture_issues(root: Path, generated: Path) -> list[dict[str,
     for path in fixtures:
         try:
             parsed[path] = _fixture_records(path)
-        except (OSError, TypeError, ValueError, json.JSONDecodeError, zipfile.BadZipFile, ElementTree.ParseError) as exc:
+        except (
+            OSError,
+            TypeError,
+            ValueError,
+            zipfile.BadZipFile,
+            ElementTree.ParseError,
+        ) as exc:
             issues.append(
                 _issue(
                     "input_fixture_unreadable",

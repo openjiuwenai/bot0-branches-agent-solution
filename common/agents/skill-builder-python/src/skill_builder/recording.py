@@ -13,6 +13,7 @@ import asyncio
 import json
 import os
 import re
+import shutil
 import subprocess
 import time
 import uuid
@@ -201,9 +202,12 @@ def _headed_recording_capability() -> dict[str, Any]:
         timeout = max(1.0, min(float(os.getenv("WEB_RECORDING_DISPLAY_PROBE_TIMEOUT_SECONDS") or 3), 10.0))
     except ValueError:
         timeout = 3.0
+    probe_command = shutil.which("xdpyinfo")
+    if not probe_command:
+        return {"available": True, "reason": "probe_unavailable", "display": display}
     try:
         result = subprocess.run(
-            ["xdpyinfo", "-display", display],
+            [probe_command, "-display", display],
             env=env,
             capture_output=True,
             text=True,
@@ -459,7 +463,9 @@ def _persist_recording_files(root: Path, recording: ActiveWebRecording) -> None:
     target.write_text(_render_recording_markdown(recording, as_input_material=False), encoding="utf-8")
 
 
-async def _capture_recording_step(root: Path, recording: ActiveWebRecording, page: Any, payload: dict[str, Any]) -> None:
+async def _capture_recording_step(
+    root: Path, recording: ActiveWebRecording, page: Any, payload: dict[str, Any]
+) -> None:
     if recording.status != "recording":
         return
     async with recording.lock:
@@ -611,7 +617,21 @@ async def perform_recording_action(
                 await page.keyboard.insert_text(action.text)
             elif action.action == "press":
                 key = str(action.key or "").strip()
-                allowed = {"Enter", "Tab", "Escape", "Backspace", "Delete", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "PageUp", "PageDown", "Home", "End"}
+                allowed = {
+                    "Enter",
+                    "Tab",
+                    "Escape",
+                    "Backspace",
+                    "Delete",
+                    "ArrowUp",
+                    "ArrowDown",
+                    "ArrowLeft",
+                    "ArrowRight",
+                    "PageUp",
+                    "PageDown",
+                    "Home",
+                    "End",
+                }
                 if key not in allowed:
                     raise RecordingError("不支持的按键", status_code=422)
                 await page.keyboard.press(key)

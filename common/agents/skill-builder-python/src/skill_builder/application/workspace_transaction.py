@@ -92,7 +92,8 @@ def preserve_rejected_workspace_artifacts(
         raw_transaction_id = backup_root.name.strip()
         transaction_id = (
             raw_transaction_id
-            if raw_transaction_id and all(character.isalnum() or character in {"-", "_"} for character in raw_transaction_id)
+            if raw_transaction_id
+            and all(character.isalnum() or character in {"-", "_"} for character in raw_transaction_id)
             else hashlib.sha256(str(backup_root).encode("utf-8")).hexdigest()[:32]
         )
         archive_parent = resolved_root / REJECTED_REPAIR_ROOT

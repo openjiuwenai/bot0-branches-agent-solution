@@ -218,8 +218,14 @@ def _repair_agent_display_token_seams(text: str) -> str:
     repaired = re.sub(r"\b([A-Za-z][A-Za-z0-9]*)\s+_([A-Za-z0-9_]+(?:\.[A-Za-z0-9]+)?)\b", r"\1_\2", repaired)
     repaired = re.sub(r"\b([A-Za-z][A-Za-z0-9]*)\s+-([A-Za-z0-9_]+(?:\.[A-Za-z0-9]+)?)\b", r"\1-\2", repaired)
     repaired = re.sub(r"\b([A-Za-z0-9_]+)\s+\.(py|js|mjs|ts|json|yaml|yml|md|csv|txt)\b", r"\1.\2", repaired)
-    repaired = re.sub(r"\b([A-Za-z0-9_.-]+)\s+/(generated-skill|scripts|fixtures|references|validation|workspace|playwright)\b", r"\1/\2", repaired)
-    repaired = re.sub(r"\b(generated-skill|scripts|fixtures|references|validation|workspace|playwright)\s+/", r"\1/", repaired)
+    repaired = re.sub(
+        r"\b([A-Za-z0-9_.-]+)\s+/(generated-skill|scripts|fixtures|references|validation|workspace|playwright)\b",
+        r"\1/\2",
+        repaired,
+    )
+    repaired = re.sub(
+        r"\b(generated-skill|scripts|fixtures|references|validation|workspace|playwright)\s+/", r"\1/", repaired
+    )
     return repaired
 
 
@@ -301,7 +307,7 @@ def _parse_agent_json(text: str) -> dict[str, Any] | None:
         try_parse(match.group(1))
     for match in re.finditer(r"\{", text):
         try:
-            parsed, _end = decoder.raw_decode(text[match.start() :])
+            parsed, _end = decoder.raw_decode(text[match.start():])
         except json.JSONDecodeError:
             continue
         if isinstance(parsed, dict):
@@ -583,7 +589,7 @@ def _compact_tool_payload_value(value: Any, *, parent_key: str = "") -> Any:
         if key == "content" and isinstance(item, str) and item.lstrip().startswith(("{", "[")):
             try:
                 decoded_content = json.loads(item)
-            except (TypeError, ValueError, json.JSONDecodeError):
+            except (TypeError, ValueError):
                 pass
             else:
                 compacted[key] = _compact_tool_payload_value(
@@ -594,7 +600,7 @@ def _compact_tool_payload_value(value: Any, *, parent_key: str = "") -> Any:
         if key in {"arguments", "args", "input", "tool_input"} and isinstance(item, str):
             try:
                 decoded = json.loads(item)
-            except (TypeError, ValueError, json.JSONDecodeError):
+            except (TypeError, ValueError):
                 compacted[key] = item
             else:
                 compacted[key] = _compact_tool_payload_value(decoded, parent_key=key)
@@ -620,7 +626,13 @@ def _stream_chunk_events(
             text = text_projector.project(text)
             if not text:
                 return []
-        return [{"event_type": "assistant.delta", "summary": text[:200], "payload": {"content": text, "chunk_type": chunk_type}}]
+        return [
+            {
+                "event_type": "assistant.delta",
+                "summary": text[:200],
+                "payload": {"content": text, "chunk_type": chunk_type},
+            }
+        ]
     if text_projector is not None:
         text_projector.reset()
     compact_payload = json_safe(
@@ -637,8 +649,16 @@ def _stream_chunk_events(
             # publish a terminal error before that controller check runs.
             if "max iterations reached without completion" in final_text.lower():
                 return []
-            user_message = _agent_runtime_failure_message(final_text) or (f"Agent 执行失败：{final_text[:500]}" if final_text else "Agent 执行失败。")
-            return [{"event_type": "agent.error", "summary": user_message[:500], "payload": {"message": user_message, "raw_message": final_text[:4000]}}]
+            user_message = _agent_runtime_failure_message(final_text) or (
+                f"Agent 执行失败：{final_text[:500]}" if final_text else "Agent 执行失败。"
+            )
+            return [
+                {
+                    "event_type": "agent.error",
+                    "summary": user_message[:500],
+                    "payload": {"message": user_message, "raw_message": final_text[:4000]},
+                }
+            ]
         return []
     if chunk_type == "tool_call":
         tool_name = payload.get("tool_name") or payload.get("name") or "tool"
@@ -656,9 +676,21 @@ def _stream_chunk_events(
         status_value = str(payload.get("status") or "").strip().lower()
         tool_name = payload.get("name") or "tool"
         if status_value == "start":
-            return [{"event_type": "tool.call.stream", "summary": f"Agent 调用工具：{tool_name}", "payload": compact_payload}]
+            return [
+                {
+                    "event_type": "tool.call.stream",
+                    "summary": f"Agent 调用工具：{tool_name}",
+                    "payload": compact_payload,
+                }
+            ]
         if status_value in {"end", "finish"}:
-            return [{"event_type": "tool.result.stream", "summary": f"Agent 工具完成：{tool_name}", "payload": compact_payload}]
+            return [
+                {
+                    "event_type": "tool.result.stream",
+                    "summary": f"Agent 工具完成：{tool_name}",
+                    "payload": compact_payload,
+                }
+            ]
         if status_value in {"error", "failed", "failure"}:
             return [{
                 "event_type": "tool.error.stream",

@@ -161,14 +161,16 @@ def workspace_title_candidates_from_text(text: str) -> list[str]:
         if match:
             candidates.append(match.group("title").strip())
         match = re.search(
-            rf"(?:Skill\s*目标|Skill\s*名称|展示名称|显示名称|目标|名称|标题)[：:]\s*(?P<title>[^，。；\n]{{2,80}}?{title_suffix}){title_boundary}",
+            rf"(?:Skill\s*目标|Skill\s*名称|展示名称|显示名称|目标|名称|标题)[：:]\s*"
+            rf"(?P<title>[^，。；\n]{{2,80}}?{title_suffix}){title_boundary}",
             line,
             flags=re.IGNORECASE,
         )
         if match:
             candidates.append(match.group("title").strip())
         match = re.search(
-            rf"(?:生成|提供|完成|输出|构建|沉淀|支持|执行|进行|抽取)(?P<title>[\u3400-\u9fffA-Za-z0-9/、 +_-]{{3,60}}?{title_suffix}){title_boundary}",
+            rf"(?:生成|提供|完成|输出|构建|沉淀|支持|执行|进行|抽取)"
+            rf"(?P<title>[\u3400-\u9fffA-Za-z0-9/、 +_-]{{3,60}}?{title_suffix}){title_boundary}",
             line,
             flags=re.IGNORECASE,
         )
@@ -263,7 +265,12 @@ def fallback_material_metadata(
     entries: list[dict[str, str]],
 ) -> tuple[str, str, str]:
     material_text = "\n".join(
-        [workspace_title, workspace_goal, *[item.get("title", "") for item in entries], *[item.get("preview", "") for item in entries]]
+        [
+            workspace_title,
+            workspace_goal,
+            *[item.get("title", "") for item in entries],
+            *[item.get("preview", "") for item in entries],
+        ]
     )
     inferred_display = ""
     for candidate in workspace_title_candidates_from_text(material_text):
@@ -369,14 +376,14 @@ def adopt_generated_metadata(
     if not tags:
         tags = list(default_tags)
     changed = {
-        key: {"from": original[key], "to": value}
+        key: {"from": original.get(key), "to": value}
         for key, value in {
             "skill_name": skill_name,
             "display_name": display_name,
             "description": description,
             "tags": tags,
         }.items()
-        if value != original[key]
+        if value != original.get(key)
     }
     return skill_name, display_name, description, tags, changed
 

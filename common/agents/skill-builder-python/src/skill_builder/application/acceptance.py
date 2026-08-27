@@ -289,7 +289,11 @@ def render_acceptance_summary(
         f"- 验证时间：{payload.get('generatedAt') or '未知'}",
         f"- 验证耗时：{summary.get('elapsedSeconds', '未知')} 秒",
         f"- 交付状态：{payload.get('deliveryStatus') or '未知'}",
-        f"- 生成文件数：{package_check.get('fileCount', len(package_files)) if isinstance(package_check, dict) else len(package_files)}",
+        "- 生成文件数：{}".format(
+            package_check.get("fileCount", len(package_files))
+            if isinstance(package_check, dict)
+            else len(package_files)
+        ),
         "",
     ]
     if isinstance(agent_self_check, dict):
@@ -523,7 +527,7 @@ def _resolved_capability_contract_issues(root: Path) -> list[dict[str, Any]]:
         manifest = json.loads(
             (root / "validation" / "artifact_manifest.json").read_text(encoding="utf-8")
         )
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError):
         return []
     resolved = manifest.get("resolvedCapabilityContract") if isinstance(manifest, dict) else None
     if not isinstance(resolved, dict):
@@ -1194,7 +1198,7 @@ def _business_output_invariant_issues(path: Path) -> list[dict[str, Any]]:
             path.read_text(encoding="utf-8"),
             parse_constant=reject_non_finite,
         )
-    except (OSError, UnicodeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, TypeError, ValueError) as exc:
         return [
             {
                 "id": "business_output_json_invalid",
@@ -1279,7 +1283,7 @@ def _materialize_csv_edge_fixture(
                 encoding="utf-8"
             )
         )
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError):
         return None
     contracts = scenario_structured_input_contracts(scenario)
     required = [
@@ -1793,7 +1797,7 @@ def _dead_structured_output_fields(
 def _load_json_object(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8", errors="replace"))
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError):
         return {}
     return value if isinstance(value, dict) else {}
 
@@ -2942,7 +2946,7 @@ async def accept_skill_package(
                     protocol_issues: list[dict[str, Any]] = []
                     try:
                         summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
-                    except (OSError, UnicodeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                    except (OSError, UnicodeError, TypeError, ValueError) as exc:
                         protocol = None
                         findings.append(
                             _finding(
@@ -3341,7 +3345,11 @@ async def accept_skill_package(
             source = script.read_text(encoding="utf-8", errors="replace")
             command = [sys.executable, script.relative_to(generated).as_posix()]
             input_mode = _script_input_mode(source)
-            command.extend(["--input", fixture.relative_to(generated).as_posix()] if input_mode == "flag" else [fixture.relative_to(generated).as_posix()])
+            command.extend(
+                ["--input", fixture.relative_to(generated).as_posix()]
+                if input_mode == "flag"
+                else [fixture.relative_to(generated).as_posix()]
+            )
             output_path: Path | None = None
             output_mode = _script_output_mode(source)
             if output_mode == "directory":
@@ -3432,7 +3440,7 @@ async def accept_skill_package(
                     legacy_payload = json.loads(
                         legacy_json_path.read_text(encoding="utf-8")
                     )
-                except (OSError, UnicodeError, TypeError, ValueError, json.JSONDecodeError):
+                except (OSError, UnicodeError, TypeError, ValueError):
                     legacy_payload = None
                 legacy_status = (
                     str(legacy_payload.get("status") or "").strip().lower()

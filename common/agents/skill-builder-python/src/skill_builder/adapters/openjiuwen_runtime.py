@@ -175,7 +175,7 @@ def _load_persisted_agent_self_check(root: Path) -> dict[str, Any] | None:
 
     try:
         value = json.loads((root / AGENT_SELF_CHECK_PATH).read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, UnicodeError, TypeError, ValueError):
         return None
     return normalize_agent_self_check(value)
 
@@ -213,7 +213,7 @@ def _load_valid_author_handoff(
     try:
         raw = (root / "validation" / "author_handoff.json").read_bytes()
         loaded = json.loads(raw.decode("utf-8"))
-    except (OSError, UnicodeError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, UnicodeError, TypeError, ValueError):
         return None
     if (
         len(raw) > AUTHOR_HANDOFF_MAX_BYTES
@@ -440,7 +440,12 @@ async def run_skill_builder_agent_runtime(
         from openjiuwen.core.foundation.llm import Model, ModelClientConfig, ModelRequestConfig  # type: ignore
         from openjiuwen.core.foundation.tool import tool  # type: ignore
         from openjiuwen.core.runner import Runner  # type: ignore
-        from openjiuwen.core.single_agent import AgentCard, ReActAgent, ReActAgentConfig, create_agent_session  # type: ignore
+        from openjiuwen.core.single_agent import (  # type: ignore
+            AgentCard,
+            ReActAgent,
+            ReActAgentConfig,
+            create_agent_session,
+        )
         from openjiuwen.core.sys_operation import LocalWorkConfig, OperationMode, SysOperationCard  # type: ignore
         from skill_builder.adapters.openjiuwen_context import skill_builder_context_processors
         from skill_builder.adapters.openjiuwen_request_budget import SkillBuilderBudgetedModel
@@ -489,7 +494,11 @@ async def run_skill_builder_agent_runtime(
     internal_skill_context = (
         ""
         if interactive_mode
-        else build_internal_skill_context(task_mode) if preload_internal_skills else build_internal_skill_routing_context(task_mode)
+        else (
+            build_internal_skill_context(task_mode)
+            if preload_internal_skills
+            else build_internal_skill_routing_context(task_mode)
+        )
     )
     preloaded_context_paths = (
         internal_skill_context_paths(task_mode)
@@ -1105,9 +1114,16 @@ async def run_skill_builder_agent_runtime(
         return max(0.0, time.monotonic() - started)
 
     no_write_chunk_limit = _positive_int_env("SKILL_BUILDER_AGENT_NO_WRITE_CHUNK_LIMIT", DEFAULT_NO_WRITE_CHUNK_LIMIT)
-    no_write_seconds_limit = _positive_int_env("SKILL_BUILDER_AGENT_NO_WRITE_SECONDS_LIMIT", DEFAULT_NO_WRITE_SECONDS_LIMIT)
-    no_checkpoint_chunk_limit = _positive_int_env("SKILL_BUILDER_AGENT_NO_CHECKPOINT_CHUNK_LIMIT", DEFAULT_NO_CHECKPOINT_CHUNK_LIMIT)
-    no_checkpoint_seconds_limit = _positive_int_env("SKILL_BUILDER_AGENT_NO_CHECKPOINT_SECONDS_LIMIT", DEFAULT_NO_CHECKPOINT_SECONDS_LIMIT)
+    no_write_seconds_limit = _positive_int_env(
+        "SKILL_BUILDER_AGENT_NO_WRITE_SECONDS_LIMIT", DEFAULT_NO_WRITE_SECONDS_LIMIT
+    )
+    no_checkpoint_chunk_limit = _positive_int_env(
+        "SKILL_BUILDER_AGENT_NO_CHECKPOINT_CHUNK_LIMIT", DEFAULT_NO_CHECKPOINT_CHUNK_LIMIT
+    )
+    no_checkpoint_seconds_limit = _positive_int_env(
+        "SKILL_BUILDER_AGENT_NO_CHECKPOINT_SECONDS_LIMIT", DEFAULT_NO_CHECKPOINT_SECONDS_LIMIT
+    )
+
     scenario_no_submit_text_limit = _positive_int_env(
         "SKILL_BUILDER_AGENT_SCENARIO_NO_SUBMIT_TEXT_LIMIT",
         12_000,
@@ -1168,8 +1184,12 @@ async def run_skill_builder_agent_runtime(
             return total_timeout_seconds + repair_reserve_timeout_seconds
         return total_timeout_seconds
 
-    idle_timeout_seconds = _positive_int_env("SKILL_BUILDER_AGENT_IDLE_TIMEOUT_SECONDS", DEFAULT_IDLE_TIMEOUT_SECONDS, minimum=30)
-    max_stream_chunks = _positive_int_env("SKILL_BUILDER_AGENT_MAX_STREAM_CHUNKS", DEFAULT_MAX_STREAM_CHUNKS, minimum=100)
+    idle_timeout_seconds = _positive_int_env(
+        "SKILL_BUILDER_AGENT_IDLE_TIMEOUT_SECONDS", DEFAULT_IDLE_TIMEOUT_SECONDS, minimum=30
+    )
+    max_stream_chunks = _positive_int_env(
+        "SKILL_BUILDER_AGENT_MAX_STREAM_CHUNKS", DEFAULT_MAX_STREAM_CHUNKS, minimum=100
+    )
     await _emit(
         emit_event,
         "agent.started",
@@ -1343,7 +1363,9 @@ async def run_skill_builder_agent_runtime(
                     chunk = stream_event_value
                 except asyncio.TimeoutError:
                     continue
-                except Exception as exc:  # noqa: BLE001 - classify model/runtime failures surfaced by agent-core streaming
+                except (
+                    Exception
+                ) as exc:  # noqa: BLE001 - classify model/runtime failures surfaced by agent-core streaming
                     elapsed = elapsed_for_timeout()
                     raw_message = str(exc)
                     if (
@@ -1491,7 +1513,11 @@ async def run_skill_builder_agent_runtime(
                     initial_digests=initial_artifact_digests,
                     task_mode=task_mode,
                 )
-                if task_mode != "chat" and not has_artifact_progress and (chunk_count > no_write_chunk_limit or elapsed > no_write_seconds_limit):
+                if (
+                    task_mode != "chat"
+                    and not has_artifact_progress
+                    and (chunk_count > no_write_chunk_limit or elapsed > no_write_seconds_limit)
+                ):
                     if not no_write_warning_emitted:
                         no_write_warning_emitted = True
                         await _emit(
@@ -1508,7 +1534,9 @@ async def run_skill_builder_agent_runtime(
                                 "checkpoint_exists": checkpoint_path.is_file(),
                             },
                         )
-                if task_mode != "chat" and not _has_checkpoint_available(root, accessor, checkpoint_path, initial_digest=initial_checkpoint_digest):
+                if task_mode != "chat" and not _has_checkpoint_available(
+                    root, accessor, checkpoint_path, initial_digest=initial_checkpoint_digest
+                ):
                     if chunk_count > no_checkpoint_chunk_limit or elapsed > no_checkpoint_seconds_limit:
                         if not no_checkpoint_warning_emitted:
                             no_checkpoint_warning_emitted = True
@@ -1775,15 +1803,15 @@ async def run_skill_builder_agent_runtime(
                             "pending_decisions": [],
                             "blockers": [
                                 f"{root_code}: "
-                                f"{str(active_submission_failure.get('message') or 'candidate submission rejected')[:500]}"
+                                + str(
+                                    active_submission_failure.get("message") or "candidate submission rejected"
+                                )[:500]
                             ],
                             "unverified_inputs": [],
                             "unverified_capabilities": [],
                             "suggested_next_message": "",
                             "completion_source": (
-                                "scenario_contract_rejected"
-                                if scenario_submission
-                                else "candidate_submission_rejected"
+                                "scenario_contract_rejected" if scenario_submission else "candidate_submission_rejected"
                             ),
                             "lifecycle_failure": {
                                 "code": root_code,
@@ -1865,7 +1893,9 @@ async def run_skill_builder_agent_runtime(
                                 code=_agent_runtime_failure_code(error_text),
                             )
                         else:
-                            pending_error = SkillBuilderAgentCoreError(f"agent-core 执行失败：{error_text[:1000]}" if error_text else "agent-core 执行失败。")
+                            pending_error = SkillBuilderAgentCoreError(
+                                f"agent-core 执行失败：{error_text[:1000]}" if error_text else "agent-core 执行失败。"
+                            )
                     break
                 if (
                     candidate_tool_state.completion_payload is not None
@@ -1880,7 +1910,12 @@ async def run_skill_builder_agent_runtime(
                     break
         finally:
             await stream_owner.close()
-        await _emit(emit_event, "agent.stream_completed", "Agent 实时流已结束。", {"session_id": session_id, "chunk_count": chunk_count})
+        await _emit(
+            emit_event,
+            "agent.stream_completed",
+            "Agent 实时流已结束。",
+            {"session_id": session_id, "chunk_count": chunk_count},
+        )
         if pending_error is not None:
             await close_accessor_once(session_id)
             raise pending_error
@@ -2034,7 +2069,12 @@ async def run_skill_builder_agent_runtime(
                         emit_event,
                         "agent.error",
                         message,
-                        {"session_id": session_id, "phase": run_phase, "elapsed_seconds": round(elapsed_for_timeout(), 2), "raw_message": raw_message[:4000]},
+                        {
+                            "session_id": session_id,
+                            "phase": run_phase,
+                            "elapsed_seconds": round(elapsed_for_timeout(), 2),
+                            "raw_message": raw_message[:4000],
+                        },
                     )
                     runtime_failure_message = _agent_runtime_failure_message(raw_message)
                     runtime_failure = (
@@ -2267,11 +2307,14 @@ async def run_skill_builder_agent_runtime(
         completion_payload=candidate_tool_state.completion_payload,
         submission_failure=current_submission_failure(),
     ):
-        assert deferred_agent_failure is not None
+        if deferred_agent_failure is None:
+            raise AssertionError
         await close_accessor_once(session_id)
         raise deferred_agent_failure
 
-    runtime_message = None if candidate_tool_state.completion_payload is not None else _agent_runtime_failure_message(output_text)
+    runtime_message = (
+        None if candidate_tool_state.completion_payload is not None else _agent_runtime_failure_message(output_text)
+    )
     if runtime_message:
         await _emit(
             emit_event,

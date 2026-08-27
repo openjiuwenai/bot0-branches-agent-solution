@@ -305,7 +305,7 @@ def _parse_json_object(value: Any) -> dict[str, Any]:
         return {}
     try:
         parsed = json.loads(value)
-    except (TypeError, ValueError, json.JSONDecodeError):
+    except (TypeError, ValueError):
         return {}
     return dict(parsed) if isinstance(parsed, dict) else {}
 

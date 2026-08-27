@@ -1619,7 +1619,8 @@ def normalize_scenario_contract(value: Any) -> tuple[dict[str, Any], list[str]]:
         and not has_rule_decision
     ):
         issues.append(
-            "executable numeric/classification semantics require either lossless businessRules with evidenceRefs/sourceQuote or a behavior-level conflict"
+            "executable numeric/classification semantics require either lossless businessRules with "
+            "evidenceRefs/sourceQuote or a behavior-level conflict"
         )
     semantic = json.dumps(
         _scenario_semantic_payload(result),
@@ -1700,7 +1701,8 @@ def scenario_draft_shape_issues(value: Any) -> list[str]:
                 and ('"facts"' in description or '"evidenceRefs"' in description)
             ):
                 precise_issues.append(
-                    f"ScenarioDraft.conflicts[{index}].description appears to contain serialized ScenarioDraft objects; "
+                    f"ScenarioDraft.conflicts[{index}].description appears to contain serialized "
+                    "ScenarioDraft objects; "
                     "keep each conflict as its own conflicts[] JSON object"
                 )
 

@@ -585,7 +585,10 @@ def _candidate_repair_message(
             "平台生成预检未通过，请在当前持久化 Draft 上做一次有界修复。",
             "只修复下列 repairable=true 的阻断项；保留已通过文件和业务规则，不重跑 Scenario/HITL，不从头生成。",
             "不得读取 inputs/ 或重新加载材料包；先检查 targetPaths 指向的候选文件，并只处理 rootCauseFamily 对应的机械问题。",
-            "若为 runtime_fixture_mismatch，必须保留 details.fixture 的原 fixture 路径并使用 details.command 的原验证命令复验；不得通过删除或替换 fixture、移除校验参数或改用其他运行模式绕过失败。",
+            (
+                "若为 runtime_fixture_mismatch，必须保留 details.fixture 的原 fixture 路径并使用 details.command "
+                "的原验证命令复验；不得通过删除或替换 fixture、移除校验参数或改用其他运行模式绕过失败。"
+            ),
             "修复后返回结构化自检摘要；控制器会自动重跑全部预检并决定是否提交候选。",
             "",
             json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2),
@@ -978,7 +981,7 @@ def _projected_scripts_required(root: Path) -> bool | None:
                 encoding="utf-8"
             )
         )
-    except (OSError, UnicodeError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, UnicodeError, TypeError, ValueError):
         return None
     signature = value.get("behaviorSignature") if isinstance(value, dict) else None
     scripts_required = (

@@ -77,7 +77,7 @@ def decode_scenario_transport_value(value: Any, expected_type: type) -> Any:
         return value
     try:
         decoded = json.loads(value)
-    except (TypeError, ValueError, json.JSONDecodeError):
+    except (TypeError, ValueError):
         return value
     return decoded if isinstance(decoded, expected_type) else value
 
@@ -429,8 +429,7 @@ def create_scenario_tools(
                     max_text_length=2000,
                 )
                 result = previous_rejection
-            result.setdefault("repair", {})
-            result["repair"].update(
+            result.setdefault("repair", {}).update(
                 {
                     "allowed": False,
                     "noProgress": not progress,
