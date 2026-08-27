@@ -46,10 +46,6 @@ import java.util.concurrent.CompletableFuture;
 public class OtelRemoteAgentCallerDecorator implements RemoteAgentCaller {
     private static final Logger LOGGER = LoggerFactory.getLogger(OtelRemoteAgentCallerDecorator.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
-
-    /**
-     * Remote-agent name identifying the versatile service (EDPAgent remote-agents config).
-     */
     private static final String VERSATILE_AGENT_NAME = "versatile-agent";
 
     /** 出站 metadata 约定键：parent_run_id（与 TraceIdentityFilter 的入站解析键一致）。 */

@@ -114,7 +114,7 @@ public class TraceIdentityFilter extends OncePerRequestFilter {
         } else if (contextId.isEmpty()) {
             contextId = resolveContextIdByTask(payload.taskId());
         } else {
-            // contextId 已存在，直接使用
+            LOGGER.debug("trace identity: contextId present, used as-is");
         }
         contextId.ifPresent(id -> writeCarrier(request, id, payload));
         return replacement;

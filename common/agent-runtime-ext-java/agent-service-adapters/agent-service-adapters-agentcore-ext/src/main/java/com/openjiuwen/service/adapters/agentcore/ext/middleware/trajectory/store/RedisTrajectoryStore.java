@@ -6,9 +6,10 @@ package com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.stor
 
 import com.openjiuwen.service.spec.spi.RuntimeRedisClient;
 
+import redis.clients.jedis.exceptions.JedisException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import redis.clients.jedis.exceptions.JedisException;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;

@@ -7,9 +7,10 @@ package com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.audi
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.store.AsyncTrajectoryWriter;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.store.RedisTrajectoryStore;
 
+import redis.clients.jedis.exceptions.JedisException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import redis.clients.jedis.exceptions.JedisException;
 
 import java.util.ArrayList;
 import java.util.List;

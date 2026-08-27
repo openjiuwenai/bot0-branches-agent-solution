@@ -122,7 +122,7 @@ public class RunTreeTaskStoreDecorator implements TaskStore {
                     && round.lastState.isInterrupted()) {
                 openRound(task, round, round.roundSeq + 1);
             } else {
-                // 其余状态不变更轮次
+                LOGGER.debug("run-tree: no round transition for task {} state {}", task.id(), current);
             }
             if (current != null && isTerminal(current)) {
                 closeRound(round, current);
