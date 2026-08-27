@@ -24,7 +24,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import redis.clients.jedis.exceptions.JedisException;
 
 /**
  * AuditSnapshotStore 的单元测试：seq 预占有界重试、闭轮写快照+推进 latest、回放排序与缺洞标记、
@@ -43,14 +42,14 @@ class AuditSnapshotStoreTest {
 
         when(store.getRecord(RedisTrajectoryStore.auditLatestKey("t", "c"))).thenReturn(Optional.of("00000001"));
         assertThat(snapshots.occupy("t", "c")).isEqualTo(2L);
-        assertThat(snapshots.currentSeq("t", "c")).contains(2L);
+        assertThat(snapshots.currentSeq("t", "c")).hasValue(2L);
     }
 
     @Test
     void occupyDegradesToMinusOneOnRedisFailure() {
         when(store.getRecord(anyString())).thenReturn(Optional.empty());
         when(store.allocateSeq(anyString(), anyString(), anyLong()))
-                .thenThrow(new JedisException("down"));
+                .thenThrow(new redis.clients.jedis.exceptions.JedisException("down"));
         assertThat(snapshots.occupy("t", "c")).isEqualTo(-1L);
     }
 

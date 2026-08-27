@@ -147,7 +147,8 @@ public class OtelRemoteAgentCallerDecorator implements RemoteAgentCaller {
             span.setAttribute("openjiuwen.subagent.query", nullToEmpty(call.message()));
             span.setAttribute("openjiuwen.subagent.sub_agent_url", resolveUrl(call.agentName()));
             span.setAttribute("openjiuwen.subagent.context_id", nullToEmpty(call.contextId()));
-            parent.map(EgressParent::conversationId).ifPresent(id -> span.setAttribute("openjiuwen.subagent.sub_task_path",
+            parent.map(EgressParent::conversationId).ifPresent(id -> span.setAttribute(
+                    "openjiuwen.subagent.sub_task_path",
                     "[\"" + id + "\",\"" + nullToEmpty(call.agentName()) + "\"]"));
         }
         return span;

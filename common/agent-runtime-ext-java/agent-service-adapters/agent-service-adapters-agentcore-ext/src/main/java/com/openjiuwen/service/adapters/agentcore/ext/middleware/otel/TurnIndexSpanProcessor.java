@@ -51,19 +51,23 @@ public final class TurnIndexSpanProcessor implements SpanProcessor {
         }
         Optional<String> runId = carrier.find(session.getSessionId())
                 .flatMap(TraceContextCarrier.Entry::getCurrentRunId);
-        runId.flatMap(TurnIndexSpanProcessor::roundSeqOf)
-                .ifPresent(seq -> span.setAttribute("cascade.turn_index", seq.longValue()));
+        runId.ifPresent(id -> {
+            java.util.OptionalLong seq = roundSeqOf(id);
+            if (seq.isPresent()) {
+                span.setAttribute("cascade.turn_index", seq.getAsLong());
+            }
+        });
     }
 
-    private static Optional<Long> roundSeqOf(String runId) {
+    private static java.util.OptionalLong roundSeqOf(String runId) {
         int hash = runId.lastIndexOf('#');
         if (hash < 0) {
-            return Optional.empty();
+            return java.util.OptionalLong.empty();
         }
         try {
-            return Optional.of(Long.parseLong(runId.substring(hash + 1)));
+            return java.util.OptionalLong.of(Long.parseLong(runId.substring(hash + 1)));
         } catch (NumberFormatException e) {
-            return Optional.empty();
+            return java.util.OptionalLong.empty();
         }
     }
 

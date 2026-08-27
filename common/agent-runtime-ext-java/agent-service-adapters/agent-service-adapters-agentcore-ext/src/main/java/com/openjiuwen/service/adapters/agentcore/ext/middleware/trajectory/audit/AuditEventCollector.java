@@ -181,8 +181,11 @@ public class AuditEventCollector {
         String tenant = tenantId != null ? tenantId : buffer.map(b -> b.tenantId).orElse("unknown");
         // 无 open round（轮外决策，如安全切面）时按 latest 已提交 seq 落盘，不丢弃
         long seq = buffer.map(b -> b.seq)
-                .orElseGet(() -> snapshots.currentSeq(tenant, conversationId)
-                        .orElseGet(() -> snapshots.latestSeq(tenant, conversationId)));
+                .orElseGet(() -> {
+                    java.util.OptionalLong open = snapshots.currentSeq(tenant, conversationId);
+                    return open.isPresent() ? open.getAsLong()
+                            : snapshots.latestSeq(tenant, conversationId);
+                });
         if (seq < 0) {
             return;
         }

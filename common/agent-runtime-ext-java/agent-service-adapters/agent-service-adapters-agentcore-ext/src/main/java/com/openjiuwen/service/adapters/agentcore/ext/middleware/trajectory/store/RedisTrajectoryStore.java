@@ -6,8 +6,6 @@ package com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.stor
 
 import com.openjiuwen.service.spec.spi.RuntimeRedisClient;
 
-import redis.clients.jedis.exceptions.JedisException;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -253,7 +251,7 @@ public class RedisTrajectoryStore {
                 return Optional.of(new String(bytes, StandardCharsets.UTF_8));
             }
             return Optional.empty();
-        } catch (JedisException | IllegalStateException e) {
+        } catch (redis.clients.jedis.exceptions.JedisException | IllegalStateException e) {
             LOGGER.warn("trajectory store read failed ({}), degraded to miss", e.getClass().getSimpleName());
             return Optional.empty();
         }
@@ -268,7 +266,7 @@ public class RedisTrajectoryStore {
     public boolean exists(String key) {
         try {
             return client.exists(key);
-        } catch (JedisException | IllegalStateException e) {
+        } catch (redis.clients.jedis.exceptions.JedisException | IllegalStateException e) {
             LOGGER.warn("trajectory store exists failed ({}), degraded to false", e.getClass().getSimpleName());
             return false;
         }
@@ -313,7 +311,7 @@ public class RedisTrajectoryStore {
     public List<String> scan(String pattern) {
         try {
             return client.scanIter(pattern);
-        } catch (JedisException | IllegalStateException e) {
+        } catch (redis.clients.jedis.exceptions.JedisException | IllegalStateException e) {
             LOGGER.warn("trajectory store scan failed ({}), degraded to empty", e.getClass().getSimpleName());
             return List.of();
         }

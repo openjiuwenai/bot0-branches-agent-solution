@@ -96,28 +96,41 @@ public class CachedBodyRequest extends HttpServletRequestWrapper {
 
     @Override
     public ServletInputStream getInputStream() {
-        ByteArrayInputStream in = new ByteArrayInputStream(body);
-        return new ServletInputStream() {
-            @Override
-            public boolean isFinished() {
-                return in.available() == 0;
-            }
+        return new ReplayServletInputStream(body);
+    }
 
-            @Override
-            public boolean isReady() {
-                return true;
-            }
+    /** Replays the cached body as a synchronous {@link ServletInputStream}. */
+    private static final class ReplayServletInputStream extends ServletInputStream {
+        private final ByteArrayInputStream source;
 
-            @Override
-            public void setReadListener(ReadListener readListener) {
-                // synchronous replay; listener not needed
-            }
+        ReplayServletInputStream(byte[] content) {
+            this.source = new ByteArrayInputStream(content);
+        }
 
-            @Override
-            public int read() {
-                return in.read();
-            }
-        };
+        @Override
+        public int read() {
+            return source.read();
+        }
+
+        @Override
+        public int read(byte[] target, int offset, int length) {
+            return source.read(target, offset, length);
+        }
+
+        @Override
+        public boolean isFinished() {
+            return source.available() <= 0;
+        }
+
+        @Override
+        public boolean isReady() {
+            return true;
+        }
+
+        @Override
+        public void setReadListener(ReadListener listener) {
+            // Synchronous replay only; async read listeners are not supported.
+        }
     }
 
     @Override

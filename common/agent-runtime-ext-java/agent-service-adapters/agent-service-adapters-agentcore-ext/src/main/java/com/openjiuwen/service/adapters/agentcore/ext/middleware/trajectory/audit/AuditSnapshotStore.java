@@ -7,8 +7,6 @@ package com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.audi
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.store.AsyncTrajectoryWriter;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.store.RedisTrajectoryStore;
 
-import redis.clients.jedis.exceptions.JedisException;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,7 +74,7 @@ public class AuditSnapshotStore {
                     openRounds.put(roundKey, new OccupiedRound(candidate));
                     return candidate;
                 }
-            } catch (JedisException | IllegalStateException e) {
+            } catch (redis.clients.jedis.exceptions.JedisException | IllegalStateException e) {
                 LOGGER.warn("audit seq occupy failed ({}), round dropped", e.getClass().getSimpleName());
                 return -1L;
             }
@@ -103,9 +101,11 @@ public class AuditSnapshotStore {
      * @param conversationId conversation id
      * @return open round seq, or empty when no round is open
      */
-    public Optional<Long> currentSeq(String tenantId, String conversationId) {
+    public java.util.OptionalLong currentSeq(String tenantId, String conversationId) {
         evictStale();
-        return Optional.ofNullable(openRounds.get(key(tenantId, conversationId))).map(OccupiedRound::seq);
+        OccupiedRound occupied = openRounds.get(key(tenantId, conversationId));
+        return occupied == null ? java.util.OptionalLong.empty()
+                : java.util.OptionalLong.of(occupied.seq);
     }
 
     /**

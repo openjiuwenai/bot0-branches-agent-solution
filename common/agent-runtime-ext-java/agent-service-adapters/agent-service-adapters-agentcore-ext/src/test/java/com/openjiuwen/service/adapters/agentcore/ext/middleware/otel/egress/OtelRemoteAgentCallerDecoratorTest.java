@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * OtelRemoteAgentCallerDecorator 出站委托 span 的单元测试。
@@ -100,7 +101,7 @@ class OtelRemoteAgentCallerDecoratorTest {
         carrier.put("conv-1", new TraceContextCarrier.Entry("t", false, "a2a", "tenant",
                 java.time.Instant.now()));
         carrier.updateCurrentRunId("conv-1", "task-1#2");
-        java.util.concurrent.atomic.AtomicReference<RemoteCall> seen = new java.util.concurrent.atomic.AtomicReference<>();
+        AtomicReference<RemoteCall> seen = new AtomicReference<>();
         OtelRemoteAgentCallerDecorator decorator = new OtelRemoteAgentCallerDecorator(
                 (call, observer) -> {
                     seen.set(call);
