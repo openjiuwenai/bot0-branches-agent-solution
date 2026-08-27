@@ -145,6 +145,14 @@ class RuntimeVerificationAppTest {
     }
 
     @Test
+    void oneConversationSupportsMultipleInvocationsOnOneClient() throws Exception {
+        JsonNode run = execute("multi-invocation", "STREAMING");
+        assertEquals("COMPLETED", run.path("status").asText(), run.toString());
+        assertTrue(run.path("diagnostics").toString().contains("same conversation created invocationRef="));
+        assertTrue(run.path("diagnostics").toString().contains("both invocations completed independently"));
+    }
+
+    @Test
     void rootOutputReplaceScenarioMaterializesOnlyLatestArtifactValue() throws Exception {
         JsonNode run = execute("root-output-replace", "STREAMING");
 

@@ -37,6 +37,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @since 2026-07-27
  */
 public final class AgentClients {
+    /** 单个 Client 生命周期内准入的不同 conversationId 默认上限。 */
+    public static final int DEFAULT_MAX_DISTINCT_CONVERSATIONS = 5;
+
     private AgentClients() {
         throw new AssertionError("utility class, no instances");
     }
@@ -71,6 +74,7 @@ public final class AgentClients {
         private EndpointType endpointType = EndpointType.GATEWAY;
         private String endpointUrl;
         private RetryPolicy retryPolicy = RetryPolicy.defaults();
+        private int maxDistinctConversations = DEFAULT_MAX_DISTINCT_CONVERSATIONS;
 
         /**
          * 设置外部传输提供者（与 endpointUrl 二选一）。目标所有权契约为默认不转移所有权，
@@ -120,6 +124,24 @@ public final class AgentClients {
          */
         public Builder retryPolicy(RetryPolicy v) {
             this.retryPolicy = Objects.requireNonNull(v, "retryPolicy");
+            return this;
+        }
+
+        /**
+         * 设置单个 AgentClient 生命周期内可准入的不同 conversationId 累计上限。
+         *
+         * <p>默认值为 {@value AgentClients#DEFAULT_MAX_DISTINCT_CONVERSATIONS}。同一 conversationId
+         * 的多次 invoke 只占一个名额；continueInput 复用原会话，不新增名额。名额在 Client 生命周期内
+         * 不回收，因此该配置同时约束累计会话数和任一时刻的活跃会话数。超限调用在发网前同步失败。
+         *
+         * @param v 正整数上限
+         * @return Builder
+         */
+        public Builder maxDistinctConversations(int v) {
+            if (v < 1) {
+                throw new IllegalArgumentException("maxDistinctConversations must be positive");
+            }
+            this.maxDistinctConversations = v;
             return this;
         }
 
@@ -304,7 +326,7 @@ public final class AgentClients {
             ExecutorService exec = (toolExecutor != null) ? toolExecutor : defaultExecutor();
             ObjectMapper mapper = new ObjectMapper();
             return new DefaultAgentClient(resolvedTransport, reg, store, guard, approval, exec, mapper,
-                    credentialProvider);
+                    credentialProvider, maxDistinctConversations);
         }
 
         private static ExecutorService defaultExecutor() {

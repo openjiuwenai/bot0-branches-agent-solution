@@ -23,6 +23,10 @@ public interface AgentClient extends AutoCloseable {
     /**
      * 发起一次调用，立即返回句柄；网络交互在后台进行。
      *
+     * <p>单个 Client 生命周期内准入的不同 conversationId 数受
+     * {@link AgentClients.Builder#maxDistinctConversations(int)} 约束，默认最多 5 个。
+     * 超限时在发出任何网络请求前同步抛出 {@link ConversationLimitExceededException}。
+     *
      * <p>三种调用模式共用同一句柄，差异只在传输承载与调用方的消费方式：
      * <ul>
      * <li>{@link InvocationMode#STREAMING} —— 订阅 {@link InvocationCall#events()} 增量消费。</li>

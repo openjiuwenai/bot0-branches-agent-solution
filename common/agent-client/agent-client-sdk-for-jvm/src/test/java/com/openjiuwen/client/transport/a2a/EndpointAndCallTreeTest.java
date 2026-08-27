@@ -15,11 +15,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.client.api.AgentClient;
 import com.openjiuwen.client.api.AgentClients;
+import com.openjiuwen.client.api.ConversationLimitExceededException;
 import com.openjiuwen.client.api.EndpointType;
 import com.openjiuwen.client.api.InvocationCall;
 import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.api.InvocationRequest;
 import com.openjiuwen.client.api.InvocationSnapshot;
+import com.openjiuwen.client.api.ConversationLimitExceededException;
 import com.openjiuwen.client.api.RetryPolicy;
 import com.openjiuwen.client.api.calltree.Completeness;
 import com.openjiuwen.client.api.calltree.SpeakingPhase;
@@ -38,6 +40,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Flow;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
@@ -194,6 +197,29 @@ class EndpointAndCallTreeTest {
                 .endpointUrl("http://localhost:1")
                 .transport(new RuntimeTransportProvider("http://localhost:2"))
                 .build());
+    }
+
+    @Test
+    void clientEnforcesDistinctConversationLimitBeforeNetworkAndAllowsReuse() {
+        TransportProvider transport = new TransportProvider() {
+            @Override public Flow.Publisher<com.openjiuwen.client.api.InvocationEvent> createAndStream(CreateCommand c) {
+                return subscriber -> subscriber.onSubscribe(new Flow.Subscription() {
+                    @Override public void request(long n) { }
+                    @Override public void cancel() { }
+                });
+            }
+            @Override public java.util.concurrent.CompletionStage<InvocationSnapshot> getTask(String t, String c) { return null; }
+            @Override public java.util.concurrent.CompletionStage<InvocationSnapshot> resumeToolResult(ResumeCommand c) { return null; }
+            @Override public void close() { }
+        };
+        try (AgentClient client = AgentClients.builder().transport(transport)
+                .maxDistinctConversations(2).build()) {
+            client.invoke(InvocationRequest.builder().conversationId("c1").mode(InvocationMode.ASYNC).input("x").build());
+            client.invoke(InvocationRequest.builder().conversationId("c1").mode(InvocationMode.ASYNC).input("x2").build());
+            client.invoke(InvocationRequest.builder().conversationId("c2").mode(InvocationMode.ASYNC).input("y").build());
+            assertThrows(ConversationLimitExceededException.class, () -> client.invoke(InvocationRequest.builder()
+                    .conversationId("c3").mode(InvocationMode.ASYNC).input("z").build()));
+        }
     }
 
     @Test

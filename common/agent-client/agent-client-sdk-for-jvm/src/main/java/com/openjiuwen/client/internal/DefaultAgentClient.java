@@ -5,8 +5,10 @@
 package com.openjiuwen.client.internal;
 
 import com.openjiuwen.client.api.AgentClient;
+import com.openjiuwen.client.api.AgentClients;
 import com.openjiuwen.client.api.ClassifiedError;
 import com.openjiuwen.client.api.ContinueInputRequest;
+import com.openjiuwen.client.api.ConversationLimitExceededException;
 import com.openjiuwen.client.api.ErrorCodes;
 import com.openjiuwen.client.api.Handle;
 import com.openjiuwen.client.api.InvocationCall;
@@ -71,6 +73,9 @@ public final class DefaultAgentClient implements AgentClient {
     private final ObservationTextRenderer renderer;
     private final ExecutorService toolExecutor;
     private final CredentialProvider credentials;
+    private final int maxDistinctConversations;
+    private final Object conversationAdmissionLock = new Object();
+    private final java.util.Set<String> admittedConversations = new java.util.HashSet<>();
 
     private final ConcurrentMap<String, ToolExposurePolicy> conversationExposure = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, InvocationState> invocations = new ConcurrentHashMap<>();
@@ -90,6 +95,41 @@ public final class DefaultAgentClient implements AgentClient {
      * @param toolExecutor 工具执行线程池
      * @param mapper JSON 编解码器
      * @param credentials 凭证提供者
+     * @param maxDistinctConversations Client 生命周期内不同 conversationId 累计上限
+     */
+    public DefaultAgentClient(TransportProvider transport,
+                              LocalToolRegistry registry,
+                              ClientStateStore store,
+                              Governance.PolicyGuard policyGuard,
+                              Governance.ApprovalProvider approvalProvider,
+                              ExecutorService toolExecutor,
+                              ObjectMapper mapper,
+                              CredentialProvider credentials,
+                              int maxDistinctConversations) {
+        if (maxDistinctConversations < 1) {
+            throw new IllegalArgumentException("maxDistinctConversations must be positive");
+        }
+        this.transport = transport;
+        this.registry = registry;
+        this.store = store;
+        this.toolExecutor = toolExecutor;
+        this.credentials = credentials;
+        this.maxDistinctConversations = maxDistinctConversations;
+        this.renderer = new ObservationTextRenderer(mapper);
+        this.dispatcher = new ToolDispatcher(registry, store, policyGuard, approvalProvider, toolExecutor);
+    }
+
+    /**
+     * 兼容旧版直接构造方式，使用默认不同 conversationId 上限。
+     *
+     * @param transport 传输提供者
+     * @param registry 本地工具注册表
+     * @param store 客户端状态存储
+     * @param policyGuard 策略门禁
+     * @param approvalProvider 审批提供者
+     * @param toolExecutor 工具执行线程池
+     * @param mapper JSON 编解码器
+     * @param credentials 凭证提供者
      */
     public DefaultAgentClient(TransportProvider transport,
                               LocalToolRegistry registry,
@@ -99,13 +139,8 @@ public final class DefaultAgentClient implements AgentClient {
                               ExecutorService toolExecutor,
                               ObjectMapper mapper,
                               CredentialProvider credentials) {
-        this.transport = transport;
-        this.registry = registry;
-        this.store = store;
-        this.toolExecutor = toolExecutor;
-        this.credentials = credentials;
-        this.renderer = new ObservationTextRenderer(mapper);
-        this.dispatcher = new ToolDispatcher(registry, store, policyGuard, approvalProvider, toolExecutor);
+        this(transport, registry, store, policyGuard, approvalProvider, toolExecutor, mapper, credentials,
+                AgentClients.DEFAULT_MAX_DISTINCT_CONVERSATIONS);
     }
 
     @Override
@@ -120,6 +155,7 @@ public final class DefaultAgentClient implements AgentClient {
 
     @Override
     public InvocationCall invoke(InvocationRequest request) {
+        admitConversation(request.conversationId());
         ToolExposurePolicy effective = effectivePolicy(request.conversationId(), request.exposure().orElse(null));
         // 暴露窗口在创建时就已关闭 → ToolView 为空：不宣告自己不会执行的能力，
         // 免得服务端白跑一轮工具请求再被拒。窗口在创建之后才关闭的情形由 driveClientTool 兜底拒绝。
@@ -145,6 +181,21 @@ public final class DefaultAgentClient implements AgentClient {
         calls.put(invocationRef, call);
         upstream.subscribe(call);
         return call;
+    }
+
+    /**
+     * 原子准入不同 conversationId；校验位于所有 Transport 调用之前。
+     */
+    private void admitConversation(String conversationId) {
+        synchronized (conversationAdmissionLock) {
+            if (admittedConversations.contains(conversationId)) {
+                return;
+            }
+            if (admittedConversations.size() >= maxDistinctConversations) {
+                throw new ConversationLimitExceededException(conversationId, maxDistinctConversations);
+            }
+            admittedConversations.add(conversationId);
+        }
     }
 
     @Override

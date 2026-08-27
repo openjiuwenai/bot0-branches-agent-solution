@@ -17,6 +17,7 @@ import com.openjiuwen.client.api.InvocationEvent;
 import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.api.InvocationRequest;
 import com.openjiuwen.client.api.InvocationSnapshot;
+import com.openjiuwen.client.api.Handle;
 import com.openjiuwen.client.api.TaskState;
 import com.openjiuwen.client.api.calltree.CallTreeSnapshot;
 import com.openjiuwen.client.api.calltree.Completeness;
@@ -62,6 +63,8 @@ public final class RuntimeVerificationApp {
     private static final ObjectMapper JSON = createMapper();
     private static final List<Map<String, String>> SCENARIOS = List.of(
             scenario("single", "Single agent", "Root Agent streaming output"),
+            scenario("multi-invocation", "One conversation, multiple invocations",
+                    "Same AgentClient and conversationId create independent invocations"),
             scenario("nested-5", "Five-level tree", "A -> B -> C -> D -> E -> F"),
             scenario("parallel-interleave", "Parallel interleave", "B1/B2 outputs interleave"),
             scenario("multi-artifact", "Multiple artifacts", "Independent child artifacts"),
@@ -222,7 +225,9 @@ public final class RuntimeVerificationApp {
         try {
             run.wireStartSequence = currentMockWireSequence(run.request.runtimeUrl());
             client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
-                    .endpointUrl(run.request.runtimeUrl()).build();
+                    .endpointUrl(run.request.runtimeUrl())
+                    .maxDistinctConversations(5)
+                    .build();
             AtomicInteger toolExecutions = new AtomicInteger();
             client.tools().register(LocalToolDescriptor.builder("local.echo")
                     .displayName("Local echo").description("Returns the supplied text")
@@ -234,12 +239,17 @@ public final class RuntimeVerificationApp {
                                 "executedAt", Instant.now().toString()));
                     });
             String conversationId = "runtime-ui-" + run.id;
-            if (configureMockScenario(run.request.runtimeUrl(), conversationId, run.request.scenario())) {
+            String mockScenario = "multi-invocation".equals(run.request.scenario()) ? "single" : run.request.scenario();
+            if (configureMockScenario(run.request.runtimeUrl(), conversationId, mockScenario)) {
                 run.addDiagnostic("Mock Runtime scenario bound through control plane: " + run.request.scenario());
             } else {
                 run.addDiagnostic("Runtime has no Mock scenario control plane; executing plain A2A request");
             }
             client.exposeInConversation(conversationId, ToolExposurePolicy.allow("local.echo"));
+            if ("multi-invocation".equals(run.request.scenario())) {
+                executeMultiInvocation(run, client, conversationId);
+                return;
+            }
             InvocationRequest request = InvocationRequest.builder()
                     .conversationId(conversationId).mode(run.request.mode()).input(run.request.input())
                     .traceId(run.id).correlationId("runtime-verification-" + run.id)
@@ -264,6 +274,37 @@ public final class RuntimeVerificationApp {
                 client.close();
             }
         }
+    }
+
+    /** 验证同一 Client、同一 conversationId 下多个独立 invocation/task。 */
+    private void executeMultiInvocation(RunRecord run, AgentClient client, String conversationId)
+            throws InterruptedException, java.util.concurrent.ExecutionException,
+            java.util.concurrent.TimeoutException {
+        InvocationCall first = client.invoke(InvocationRequest.builder()
+                .conversationId(conversationId).mode(InvocationMode.STREAMING).input("first").build());
+        InvocationCall second = client.invoke(InvocationRequest.builder()
+                .conversationId(conversationId).mode(InvocationMode.STREAMING).input("second").build());
+        subscribeEvents(run, first);
+        subscribeEvents(run, second);
+        Handle firstHandle = first.accepted().toCompletableFuture().get(10, TimeUnit.SECONDS);
+        Handle secondHandle = second.accepted().toCompletableFuture().get(10, TimeUnit.SECONDS);
+        InvocationSnapshot firstSnapshot = first.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
+        InvocationSnapshot secondSnapshot = second.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
+        if (first.invocationRef().equals(second.invocationRef())
+                || firstHandle.diagnosticTaskRef().equals(secondHandle.diagnosticTaskRef())) {
+            throw new IllegalStateException("multi-invocation refs/tasks were not independent");
+        }
+        run.invocationRef = first.invocationRef();
+        run.snapshot = JSON.convertValue(secondSnapshot, Object.class);
+        run.addDiagnostic("same conversation created invocationRef=" + first.invocationRef()
+                + " taskRef=" + firstHandle.diagnosticTaskRef());
+        run.addDiagnostic("same conversation created invocationRef=" + second.invocationRef()
+                + " taskRef=" + secondHandle.diagnosticTaskRef());
+        run.addDiagnostic("both invocations completed independently: " + firstSnapshot.state()
+                + ", " + secondSnapshot.state());
+        run.status = "COMPLETED";
+        first.close();
+        second.close();
     }
 
     private static InvocationSnapshot queryAsyncUntilSettled(AgentClient client, InvocationCall call,

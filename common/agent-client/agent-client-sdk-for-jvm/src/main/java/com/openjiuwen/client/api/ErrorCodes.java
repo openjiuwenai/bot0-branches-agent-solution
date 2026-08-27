@@ -40,6 +40,12 @@ public final class ErrorCodes {
     public static final String VALIDATION_FAILED = "VALIDATION_FAILED";
 
     /**
+     * 单个 AgentClient 生命周期内准入的不同 conversationId 已达到配置上限。不可重试；
+     * 调用方应复用已有 conversation，或创建新的 AgentClient 实例承载新的会话窗口。
+     */
+    public static final String CONVERSATION_LIMIT_EXCEEDED = "CONVERSATION_LIMIT_EXCEEDED";
+
+    /**
      * 路由失败：网关找不到目标 Agent / 路由。不可重试。
      *
      * <p>与 {@link #TASK_NOT_FOUND} 区分：前者是「不知道往哪送」，后者是「Task 不存在」。

@@ -140,21 +140,22 @@ public final class CloudClientVerification {
         }
         progress.onEvent(VerificationProgress.Event.runStart(url + " (external)"));
 
-        DemoTools tools = new DemoTools();
-        this.demoTools = tools;
-        AgentClient client = buildClient(url);
-        tools.registerInto(client);
-
-        try {
-            Map<ScenarioSpec, Body> bodies = registry(client, tools, url);
-            for (ScenarioSpec spec : ScenarioSpec.values()) {
-                if (!selectedIds.isEmpty() && !selectedIds.contains(spec.id())) {
-                    continue;
-                }
-                runScenario(spec, bodies.get(spec));
+        for (ScenarioSpec spec : ScenarioSpec.values()) {
+            if (!selectedIds.isEmpty() && !selectedIds.contains(spec.id())) {
+                continue;
             }
-        } finally {
-            client.close();
+            // 每个验证场景使用独立 Client，避免整套验证累计占用超过默认 5 个 conversation 名额。
+            // S4 在其场景内部复用同一个 Client 验证同 conversation 多 invocation。
+            DemoTools tools = new DemoTools();
+            this.demoTools = tools;
+            AgentClient client = buildClient(url);
+            tools.registerInto(client);
+            try {
+                Map<ScenarioSpec, Body> bodies = registry(client, tools, url);
+                runScenario(spec, bodies.get(spec));
+            } finally {
+                client.close();
+            }
         }
 
         boolean ok = failures.isEmpty();
@@ -314,6 +315,7 @@ public final class CloudClientVerification {
                             null, "approval granted for ACTION tool: " + d.toolId()));
                     return CompletableFuture.completedFuture(Governance.ApprovalDecision.approve());
                 })
+                .maxDistinctConversations(5)
                 .build();
     }
 
