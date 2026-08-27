@@ -81,10 +81,11 @@
 | 轮⑧ | 终审 NO-GO：**2 MAJOR**（MR body 数字半对齐 + 报告口头数字'5355 记录于 javadoc'）+ 4 MINOR → 归零 #4；勘误批 a4f32329 + MR body v3-v5 |
 | 轮⑨ | 勘误验证：**1 MAJOR**（MR body 轮次台账少计轮⑧ MAJOR 数）+ 1 MINOR → 归零 #5；报告补行 39a411d3+aaf18bcf + MR PATCH |
 | 轮⑩ | 声称面终闸：**3 MAJOR**（§4 行落点错位 / MR body 再少计轮⑨ / MR title'五层'零锚）+ 4 MINOR → 归零 #6；单一真源化处置（本 commit） |
-| 轮⑪ | 冻结验证+移交：**1 MAJOR**（R10 commit 声称'§6 基准改口径'不在 diff——R5-1 物种复发）+ 2 MINOR → 归零 #7；§6 三处真修 + 头部注记（本 commit）；移交清单 3057af1e |
-| 轮⑪ | R11-移交终镜：移交清单落库（§5.1 表 A 六 MINOR 锚点+验收判据、表 B R10 三移交项）+ 终检脚本（§5.2）；§4 冻结态核验通过（10 个被引 commit 锚全存在、变更面 133 文件/0 删除实测复认、归零 #1-#6 计数一致）；遗留"轮次角色"行改 §4 指针收尾单一真源化。零新文件（133 保持，MR body 零 PATCH 需求） | （本 commit） | 重计 1/3（自评零 MAJOR/BLOCKER，轮⑫复核） |
+| 轮⑪ | 冻结验证+移交：**1 MAJOR**（R10 commit 声称'§6 基准改口径'不在 diff——R5-1 物种复发）+ 2 MINOR | §6 三处真修+头部注记+移交清单（bb48bd79/3057af1e） | **归零 #7**：streak=0，轮⑫起重计 |
+| 轮⑫ | 增量终验：**4 MAJOR**（§5.2 B2 被处置 commit 打红 / 教训 7-6 失配 / 轮⑪双行 streak 矛盾 / commit message 14≠13 假计数）+ 1 MINOR | B2 锚去数字化+教训补 7/8+双行 reconcile+口径注记（本 commit） | **归零 #8**：streak=0，轮⑬起重计 |
+| 轮⑪ | R11-移交终镜：移交清单落库（§5.1 表 A 六 MINOR 锚点+验收判据、表 B R10 三移交项）+ 终检脚本（§5.2）；§4 冻结态核验通过（10 个被引 commit 锚全存在、变更面 133 文件/0 删除实测复认、归零 #1-#6 计数一致）；遗留"轮次角色"行改 §4 指针收尾单一真源化。零新文件（133 保持，MR body 零 PATCH 需求） | （本 commit） | （自评已被同轮轮⑪ MAJOR 归零 #7 取代，streak=0——R12-F3 处置注记） |
 
-**七次归零教训（轮②③⑤各 1 MAJOR、轮⑧ 2、轮⑨ 1、轮⑩ 3、轮⑪ 1，同一物种）——"字面/声称层面的干净 ≠ 事实干净"**：
+**八次归零教训（轮②③⑤各 1 MAJOR、轮⑧ 2、轮⑨ 1、轮⑩ 3、轮⑪ 1、轮⑫ 4，同一物种）——"字面/声称层面的干净 ≠ 事实干净"**：
 
 1. **R2-F2（轮②）· 对外声称面**：MR 描述与代码事实三处失真（"零改动抽取"实为抽取+处置批、文件数滞后、"Validated by"缺 mock 级限定）。教训：对外叙述必须与 diff 对齐。
 2. **R3-F1（轮③）· 测试声称面**：自产防回退测试恒真（mutation 剥掉被守护词元后全套件仍绿）。教训：防回归测试必须 mutation-RED 实证非恒真，"有测试"不等于"有保护"。
@@ -92,8 +93,10 @@
 4. 轮⑧：MR body 半对齐 + 报告引用不存在的锚——对外描述须逐条对照 git diff
 5. 轮⑨：轮次台账转写少计——多份台账手抄同步必滞后，须单一真源化
 6. 轮⑩：title'五层'零锚 + §4 行落点错位——最外层声称面（title/落点）同样要审
+7. 轮⑪：处置 commit 的 message bullet 也是声称面——'§6 基准改口径'不在 diff 中；commit 声称与 diff 逐条对照
+8. 轮⑫：commit message 的断言计数（14 项/14-14 PASS）生而不真（实体 13 项，D6 重复计）——数字以脚本实体自数为准，不转抄声称
 
-七者共同范式：**声称必须可证伪**——MR 文本对 diff、测试对 mutation、处置对 assert 双验。R5-1 之后，"anchor 匹配 + 替换生效"双断言成为处置批惯例。
+八者共同范式：**声称必须可证伪**——MR 文本对 diff、测试对 mutation、处置对 assert 双验。R5-1 之后，"anchor 匹配 + 替换生效"双断言成为处置批惯例。
 
 ## §5 诚实边界与 deferred 清单
 
@@ -140,12 +143,14 @@
    - 133 文件全部位于 common/agents/loop-forest/，纯新增、零修改既有模块（行数以 squash 时 git diff --shortstat 70ffe929..squash 点实测为准）
    - 测试 105 run / 0 failures / 0 errors / 5 skipped（5 = env-gated 真 LLM e2e，诚实边界非缺陷）；冒烟 A 档零 env 可复跑：bash common/agents/loop-forest/smoke.sh --a-only
    - prompts 模块自有（src/main/resources/prompts/，prompts_source=module_owned 断言入库防寄生）
-   - 对抗收口 11 轮、六次归零教训与轮次台账见 docs/loopforest-4lens-closing.md §4（单一真源）
+   - 对抗收口 11 轮、八次归零教训与轮次台账见 docs/loopforest-4lens-closing.md §4（单一真源）
    ```
 2. **ci-failed 沟通口径**：CI 红先分诊再发言——(a) 缺 env 的 e2e：本地形态是 **skip 不是 fail**，CI 若因缺 `DEEPSEEK_API_KEY`/`BASE_URL` 等报 fail 即 runner 配置问题，非代码缺陷；(b) 编译 / 单测真红：以 surefire 汇总行为准贴回 MR。对外一句话口径："A 档零 env 可复跑（`bash common/agents/loop-forest/smoke.sh --a-only`，rc=0）；B 档需 DEEPSEEK_API_KEY/BASE_URL；5 个 skip 是诚实边界设计，不是没跑到。"
 3. **治理第二批 MR 建议**：6 MINOR 不在本 MR 强行清零（§6 收口动作 2 既有承诺），合入后开第二批——批 1 纯治理文档（项 1/2/4：双源边界、快照策略、corpus 去留，零承重代码）；批 2 小接线（项 3 recordTokens：改 BudgetRail 承重路径，走 mock 单测 + mutation-RED gate + javadoc 同批）；批 3 单列最大项（项 5 并发派发：TraceForest 结构改动 + 并发压测，独立成 MR）。每批独立可回退，验收判据照表 A 逐项。
 
 ### §5.2 轮⑫⑬ 终检脚本（逐项断言；未来 CI 种子）
+
+> **口径注记（R12-F4 处置）**：断言项=**13**（A1-A3/B1-B2/C1-C2/D1-D6）；commit 3057af1e/bb48bd79 message 中"14 项/14-14"为口径笔误（D6 重复计）——以本脚本实体自数为准。
 
 提取运行（仓库根）：`sed -n '/^```bash/,/^```$/p' common/agents/loop-forest/docs/loopforest-4lens-closing.md | sed '1d;$d' | bash`——默认零 env 零网络；`STRICT=1` 时 D6 fork 检查由 WARN 升 FAIL（收口终态用）。任一 FAIL 即非零退出。数字口径 = 轮⑪ 落库时 HEAD；第二批 MR 落地时同批更新断言（表 A 项 2 快照策略）。
 
@@ -170,8 +175,8 @@ n=$(git diff --name-only $BASE..HEAD | wc -l | tr -d ' ')
 rows=0; for r in ① ② ③ ④ ⑤ ⑥ ⑦ ⑧ ⑨ ⑩ ⑪; do grep -qE "^\| (轮)?$r \|" $REP && rows=$((rows+1)); done
 [ $rows -eq 11 ] && pass "B1 §4 轮①-⑪行齐（$rows/11）" || fail "B1 §4 行=$rows/11（少计=轮⑨⑩物种）"
 z=$(grep -oE '归零 #[0-9]+' $REP | sort -u | wc -l | tr -d ' ')
-l=$(sed -n '/^\*\*六次归零教训/,/^七者共同范式/p' $REP | grep -cE '^[0-9]+\. ')
-[ "$z" = 6 ] && [ "$l" = 6 ] && pass "B2 归零事件=6 且教训列表=6" || fail "B2 归零=${z} 教训=${l}（不一致）"
+l=$(sed -n '/^\*\*.*归零教训/,/^.*共同范式/p' $REP | grep -cE '^[0-9]+\. ')
+[ "$z" = "$l" ] && [ "$z" -ge 8 ] && pass "B2 归零事件=6 且教训列表=6" || fail "B2 归零=${z} 教训=${l}（不一致）"
 
 # C 测试与冒烟（A 档零 env）
 if mvn -f $MOD/pom.xml test >/dev/null 2>&1; then
