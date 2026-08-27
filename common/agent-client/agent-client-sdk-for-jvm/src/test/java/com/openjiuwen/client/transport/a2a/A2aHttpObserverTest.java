@@ -52,7 +52,7 @@ class A2aHttpObserverTest {
                         .rawResponseExecutor(executor)
                         .rawResponseFlushTimeout(Duration.ofSeconds(2))
                         .build()) {
-                    InvocationCall call = client.invoke(InvocationRequest.builder()
+                    InvocationCall call = client.invoke(InvocationRequest.runtimeBuilder()
                             .conversationId("observed")
                             .mode(InvocationMode.ASYNC)
                             .input("observe")

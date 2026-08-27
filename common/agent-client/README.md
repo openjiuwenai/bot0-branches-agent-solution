@@ -180,7 +180,7 @@ public class QuickStart {
                 .credentialProvider(CredentialProvider.staticToken("my-bearer-token"))
                 .build()) {
 
-            InvocationCall call = client.invoke(InvocationRequest.builder()
+            InvocationCall call = client.invoke(InvocationRequest.gatewayBuilder("target-agent")
                     .conversationId("conv-1")
                     .mode(InvocationMode.STREAMING)
                     .input("hello, agent")
@@ -313,7 +313,7 @@ client.exposeInConversation("conv-1",
         ToolExposurePolicy.allow("readPage", "submitOrder"));
 
 // 或调用级覆盖（只能收紧、不能放大会话级授权）
-InvocationRequest req = InvocationRequest.builder()
+InvocationRequest req = InvocationRequest.gatewayBuilder("target-agent")
         .conversationId("conv-1")
         .mode(InvocationMode.STREAMING)
         .input("please read the page")
@@ -620,7 +620,7 @@ snap.maybeRecovery().ifPresent(r -> {
             client.getInvocation(call.invocationRef());
         case RETRY_CREATE_SAME_KEY ->
             // 创建未被确认：以同一幂等键与逐字节相同的正文重发创建
-            client.invoke(InvocationRequest.builder()
+            client.invoke(InvocationRequest.gatewayBuilder(原 agentId)
                     .conversationId(r.conversationId())
                     .idempotencyKey(r.idempotencyKey())
                     .input(原 input)   // 必须逐字节相同

@@ -40,6 +40,11 @@ public final class ErrorCodes {
     public static final String VALIDATION_FAILED = "VALIDATION_FAILED";
 
     /**
+     * Gateway 创建类请求缺少目标 Agent 标识。不可重试。
+     */
+    public static final String VALIDATION_AGENT_ID = "VALIDATION_AGENT_ID";
+
+    /**
      * 单个 AgentClient 生命周期内准入的不同 conversationId 已达到配置上限。不可重试；
      * 调用方应复用已有 conversation，或创建新的 AgentClient 实例承载新的会话窗口。
      */

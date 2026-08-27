@@ -265,8 +265,8 @@ public final class CloudClientVerification {
                 "trace / correlation 穿过 Gateway 和 BUS 到达目标 Runtime"),
         S12("s12", "Scenario 12: an expired exposure window advertises no tools", "工具治理",
                 "暴露窗口已关闭则不宣告工具，自然不会被驱动执行"),
-        S13("s13", "Scenario 13: agentId reaches the target runtime and a blank one is omitted", "上下文传递",
-                "显式 agentId 到达目标 Runtime；空白串在客户端归一化为未指定");
+        S13("s13", "Scenario 13: Gateway agentId is required and reaches the target runtime", "上下文传递",
+                "Gateway 工厂要求 agentId；合法值到达目标 Runtime，空白值在发网前拒绝");
 
         private final String id;
         private final String title;
@@ -324,8 +324,7 @@ public final class CloudClientVerification {
         String conversationId = "conv-stream-1";
         client.exposeInConversation(conversationId,
                 ToolExposurePolicy.allow(DemoTools.READ_PAGE, DemoTools.SUBMIT_ORDER));
-        InvocationRequest request = InvocationRequest.builder()
-                .agentId("demo-a2a-agent-a")
+        InvocationRequest request = InvocationRequest.gatewayBuilder("demo-a2a-agent-a")
                 .conversationId(conversationId)
                 .mode(InvocationMode.STREAMING)
                 .input("please read the page then submit the order")
@@ -353,8 +352,7 @@ public final class CloudClientVerification {
         client.exposeInConversation(conversationId, ToolExposurePolicy.allow(DemoTools.PING));
 
         // BLOCKING 不订阅 events()，直接等 completion：验证它走网关同步接口，而不是本地聚合流式结果。
-        InvocationCall blocking = client.invoke(InvocationRequest.builder()
-                .agentId("demo-a2a-agent-a")
+        InvocationCall blocking = client.invoke(InvocationRequest.gatewayBuilder("demo-a2a-agent-a")
                 .conversationId(conversationId)
                 .mode(InvocationMode.BLOCKING)
                 .input("blocking hello")
@@ -369,8 +367,7 @@ public final class CloudClientVerification {
         blocking.close();
 
         // STREAMING 下同一个调用应能正常跑通。
-        InvocationRequest request = InvocationRequest.builder()
-                .agentId("demo-a2a-agent-a")
+        InvocationRequest request = InvocationRequest.gatewayBuilder("demo-a2a-agent-a")
                 .conversationId(conversationId)
                 .mode(InvocationMode.STREAMING)
                 .input("run ping")
@@ -391,10 +388,10 @@ public final class CloudClientVerification {
     private void scenarioContinueInput(String id, AgentClient client)
             throws InterruptedException, ExecutionException, TimeoutException {
         String conversationId = "conv-ui-1";
-        // 不指定 agentId：验证 agentId 可选，由网关路由到默认 Agent（Feat-Func-011 §4.9 AC-4）。
+        // Gateway 创建请求要求显式指定已注册的 agentId；续轮通过 taskId 关联既有任务。
         // 输入文本走 a2a demo 的 calc 路径：Agent A 委派给 Agent B，Agent B 的 calc 工具会中断等待确认，
         // 产生真实的 INPUT_REQUIRED，验证 continueInput 续轮在真栈上能跑通。
-        InvocationCall call = client.invoke(InvocationRequest.builder()
+        InvocationCall call = client.invoke(InvocationRequest.gatewayBuilder("demo-a2a-agent-a")
                 .conversationId(conversationId)
                 .mode(InvocationMode.STREAMING)
                 .input("Please calculate 1+1 through Agent B.")
@@ -479,7 +476,7 @@ public final class CloudClientVerification {
      */
     private void scenarioAsyncThenQuery(String id, AgentClient client)
             throws InterruptedException, ExecutionException, TimeoutException {
-        InvocationCall call = client.invoke(InvocationRequest.builder()
+        InvocationCall call = client.invoke(InvocationRequest.gatewayBuilder("demo-a2a-agent-a")
                 .conversationId("conv-async-1")
                 .mode(InvocationMode.ASYNC)
                 .input("async hello")
@@ -519,7 +516,7 @@ public final class CloudClientVerification {
     private void scenarioDropRecoveredByQuery(String id, AgentClient client)
             throws InterruptedException, ExecutionException, TimeoutException {
         List<InvocationEvent> seen = new ArrayList<>();
-        InvocationCall call = client.invoke(InvocationRequest.builder()
+        InvocationCall call = client.invoke(InvocationRequest.gatewayBuilder("demo-a2a-agent-a")
                 .conversationId("conv-drop-recover")
                 .mode(InvocationMode.STREAMING)
                 .input("stream hello")
@@ -553,7 +550,7 @@ public final class CloudClientVerification {
     private void scenarioDropStaysUncertain(String id, AgentClient client)
             throws InterruptedException, ExecutionException, TimeoutException {
         List<InvocationEvent> seen = new ArrayList<>();
-        InvocationCall call = client.invoke(InvocationRequest.builder()
+        InvocationCall call = client.invoke(InvocationRequest.gatewayBuilder("demo-a2a-agent-a")
                 .conversationId("conv-drop-uncertain")
                 .mode(InvocationMode.STREAMING)
                 .input("stream hello again")
@@ -587,7 +584,7 @@ public final class CloudClientVerification {
     private void scenarioNotResumable(String id, AgentClient client)
             throws InterruptedException, ExecutionException, TimeoutException {
         // 先跑一个直接 COMPLETED 的调用，它已终态，不可续接。
-        InvocationCall done = client.invoke(InvocationRequest.builder()
+        InvocationCall done = client.invoke(InvocationRequest.gatewayBuilder("demo-a2a-agent-a")
                 .conversationId("conv-not-resumable")
                 .mode(InvocationMode.STREAMING)
                 .input("plain hello")
@@ -640,7 +637,7 @@ public final class CloudClientVerification {
     private void scenarioAttributesReachTargetRuntime(String id, AgentClient client)
             throws InterruptedException, ExecutionException, TimeoutException {
         String traceId = "trace-" + UUID.randomUUID();
-        InvocationCall call = client.invoke(InvocationRequest.builder()
+        InvocationCall call = client.invoke(InvocationRequest.gatewayBuilder("demo-a2a-agent-a")
                 .conversationId("conv-attributes")
                 .mode(InvocationMode.STREAMING)
                 .input("carry my trace")
@@ -657,11 +654,11 @@ public final class CloudClientVerification {
     }
 
     /**
-     * Scenario 13: agentId 经 SDK 透传到达网关，空白串在客户端即被归一化。
+     * Scenario 13: Gateway agentId 经 SDK 透传到达网关，空白串在发网前被拒绝。
      *
-     * <p>网关侧（真网关 + mock）已支持 {@code params.metadata.agentId}（FEAT-011 §4.9 / FEAT-006 §3）：
+     * <p>网关侧（真网关 + mock）要求创建类请求携带 {@code params.metadata.agentId}：
      * <ul>
-     * <li>缺省 → 交由 {@code DefaultAgentResolver} 路由到默认 Agent；</li>
+     * <li>标准 API 把 agentId 作为 {@code gatewayBuilder(agentId)} 必需参数；</li>
      * <li>显式非空 → 路由到指定 Agent；</li>
      * <li>显式空白串 → 400 {@code VALIDATION_AGENT_ID}。</li>
      * </ul>
@@ -669,8 +666,8 @@ public final class CloudClientVerification {
      * 写 {@code metadata.agentId}）本就存在，本场景做端到端确认并锁定空白串归一化语义。
      *
      * <p>Demo Runtime 会把收到的 {@code metadata.agentId} 写入最终 artifact 文本，
-     * 因此显式 agentId 的断言同时覆盖网关路由与 Runtime 透传；空白 agentId 则验证
-     * SDK 将其归一化为未指定，并由 Gateway 选择默认 Agent。
+     * 因此显式 agentId 的断言同时覆盖网关路由与 Runtime 透传；空白 agentId 由 SDK
+     * 归一化为未指定后被 Gateway 以 {@code VALIDATION_AGENT_ID} 拒绝。
      *
      * @param id 场景标识
      * @param client AgentClient 实例
@@ -680,16 +677,12 @@ public final class CloudClientVerification {
      */
     private void scenarioAgentIdRouting(String id, AgentClient client)
             throws InterruptedException, ExecutionException, TimeoutException {
-        progress.onEvent(VerificationProgress.Event.scenarioStart(id,
-                "Scenario 13: agentId reaches the target runtime and a blank one is omitted"));
-
         // 1) 显式 agentId → 网关按它路由到对应 runtime 实例。
         //    真栈下 agentId 必须是 RDC 中已注册的 agentId（agent-x 指向 a2a Agent A），否则 ROUTE_NO_CANDIDATES。
         String agentId = "demo-a2a-agent-a";
-        InvocationCall call = client.invoke(InvocationRequest.builder()
+        InvocationCall call = client.invoke(InvocationRequest.gatewayBuilder(agentId)
                 .conversationId("conv-agentid")
                 .mode(InvocationMode.STREAMING)
-                .agentId(agentId)
                 .input("route me to a specific agent")
                 .exposure(ToolExposurePolicy.none())
                 .build());
@@ -700,22 +693,13 @@ public final class CloudClientVerification {
                 "runtime output confirms the explicit agentId reached the target Agent");
         call.close();
 
-        // 2) 空白串 → SDK 归一化为 null（不传），落到网关默认 Agent 路由，不被 400 拒。
-        //    这与网关「显式空串 → 400」对齐：SDK 不把一个无意义的空串当成"显式指定"。
-        InvocationCall blank = client.invoke(InvocationRequest.builder()
-                .conversationId("conv-agentid")
-                .mode(InvocationMode.STREAMING)
-                .agentId("   ")
-                .input("blank agentId should be normalized away")
-                .exposure(ToolExposurePolicy.none())
-                .build());
-        InvocationSnapshot blankSnap = blank.completion().toCompletableFuture().get(60, TimeUnit.SECONDS);
-        check(id, blankSnap.state() == TaskState.COMPLETED,
-                "a blank agentId is normalized (not sent) and the call still completes, state="
-                        + blankSnap.state());
-        check(id, blankSnap.outputText() != null && !blankSnap.outputText().contains("[agent="),
-                "a blank agentId is omitted from the runtime request metadata");
-        blank.close();
+        // 2) 标准 Gateway 工厂把 agentId 置于方法签名中；null/空白值还会在构建请求前拒绝。
+        try {
+            InvocationRequest.gatewayBuilder("   ");
+            check(id, false, "a blank Gateway agentId must be rejected before request construction");
+        } catch (IllegalArgumentException expected) {
+            check(id, true, "a blank Gateway agentId is rejected locally before any network request");
+        }
     }
 
     /**
@@ -740,7 +724,7 @@ public final class CloudClientVerification {
         int submitBefore = tools.submitOrderCount.get();
 
         // 窗口在过去就已关闭：授权本身允许这两个工具，但已过期。
-        InvocationCall call = client.invoke(InvocationRequest.builder()
+        InvocationCall call = client.invoke(InvocationRequest.gatewayBuilder("demo-a2a-agent-a")
                 .conversationId("conv-expired-exposure")
                 .mode(InvocationMode.STREAMING)
                 .input("please read the page then submit the order")
@@ -846,7 +830,7 @@ public final class CloudClientVerification {
      * @return 调用句柄
      */
     private InvocationCall invokePlain(AgentClient client, String conversationId, String input) {
-        InvocationRequest r = InvocationRequest.builder()
+        InvocationRequest r = InvocationRequest.gatewayBuilder("demo-a2a-agent-a")
                 .conversationId(conversationId)
                 .mode(InvocationMode.STREAMING)
                 .input(input)
@@ -871,8 +855,7 @@ public final class CloudClientVerification {
         int readBefore = tools.readPageCount.get();
         int submitBefore = tools.submitOrderCount.get();
         int pingBefore = tools.pingCount.get();
-        InvocationRequest request = InvocationRequest.builder()
-                .agentId("demo-a2a-agent-a")
+        InvocationRequest request = InvocationRequest.gatewayBuilder("demo-a2a-agent-a")
                 .conversationId(conversationId)
                 .mode(InvocationMode.STREAMING)
                 .input("please read the page and submit the order")
@@ -907,7 +890,7 @@ public final class CloudClientVerification {
                 .approvalProvider(Governance.ApprovalProvider.autoApprove())
                 .build();
         try {
-            InvocationRequest request = InvocationRequest.builder()
+            InvocationRequest request = InvocationRequest.gatewayBuilder("demo-a2a-agent-a")
                     .conversationId("conv-noauth-1")
                     .mode(InvocationMode.STREAMING)
                     .input("should be rejected by gateway")

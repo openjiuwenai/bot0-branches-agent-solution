@@ -68,7 +68,7 @@ class A2aHttpStreamingTest {
                     .transport(new A2aHttpTransportProvider(server.baseUrl(), A2aHttpTestSupport.MAPPER,
                             Duration.ofSeconds(5)))
                     .build()) {
-                InvocationCall initial = client.invoke(InvocationRequest.builder()
+                InvocationCall initial = client.invoke(InvocationRequest.gatewayBuilder("agent-test")
                         .conversationId("inherit-streaming")
                         .mode(InvocationMode.STREAMING)
                         .input("need user input")
@@ -120,7 +120,7 @@ class A2aHttpStreamingTest {
                             received.countDown();
                         }, executor, 100, Duration.ofSeconds(2));
                 try (AgentClient client = AgentClients.builder().transport(transport).build()) {
-                    InvocationCall initial = client.invoke(InvocationRequest.builder()
+                    InvocationCall initial = client.invoke(InvocationRequest.runtimeBuilder()
                             .conversationId("observe-stream")
                             .mode(InvocationMode.STREAMING)
                             .input("need user input")
@@ -158,7 +158,7 @@ class A2aHttpStreamingTest {
                             return ToolExecutionRecord.ok(invocation.toolCallId(), java.util.Map.of());
                         });
                 client.exposeInConversation("incomplete-tool", ToolExposurePolicy.allow("local.echo"));
-                InvocationCall call = client.invoke(InvocationRequest.builder()
+                InvocationCall call = client.invoke(InvocationRequest.runtimeBuilder()
                         .conversationId("incomplete-tool")
                         .mode(InvocationMode.BLOCKING)
                         .input("hello")

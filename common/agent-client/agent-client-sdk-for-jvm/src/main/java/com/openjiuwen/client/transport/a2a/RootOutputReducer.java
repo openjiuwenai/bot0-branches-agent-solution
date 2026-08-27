@@ -31,7 +31,11 @@ final class RootOutputReducer {
 
     synchronized void replaceWithTaskSnapshot(List<ProtocolArtifact> snapshot) {
         artifacts.clear();
-        observed = true;
+        // An empty snapshot (or one containing only call-tree/controller artifacts)
+        // carries no root business output. Keep the reducer unobserved so callers
+        // can fall back to Task.status.message.parts when that is the server's
+        // output representation.
+        observed = false;
         if (snapshot == null) {
             return;
         }

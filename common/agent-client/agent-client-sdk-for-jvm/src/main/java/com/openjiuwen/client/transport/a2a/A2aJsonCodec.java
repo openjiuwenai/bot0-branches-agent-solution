@@ -28,7 +28,7 @@ import java.util.UUID;
  * wire method 由首轮 mode 决定并沿续跑继承。unary 返回时机由 {@code params.configuration.returnImmediately} 表达。
  * 业务标识到 wire 字段的映射：{@code conversationId → message.contextId}、
  * {@code invocationId/idempotencyKey → message.messageId}、ToolView → {@code params.metadata.clientTools}、
- * 可选 {@code agentId → params.metadata.agentId}。
+ * 非空 {@code agentId → params.metadata.agentId}；是否必填由 EndpointPolicy/目标端点契约决定。
  *
  * <p>响应侧：把 Task / TaskStatusUpdateEvent / TaskArtifactUpdateEvent 解析为中立 {@link Frame}，
  * 其中 client 工具调用意图来自 {@code metadata._interrupt}（对齐 runtime Feat-Func-009）。
@@ -156,7 +156,7 @@ final class A2aJsonCodec {
     private void fillMetadata(ObjectNode params, String agentId, List<ToolWireSpec> clientTools,
                              Map<String, String> attributes) {
         ObjectNode metadata = params.putObject("metadata");
-        // agentId 可选：为空则省略，交由网关按默认 Agent 路由（不写空串）。
+        // 仅编码非空 agentId。生产 Gateway 创建请求要求该字段；RuntimeEndpointPolicy 会剥离它。
         if (agentId != null && !agentId.isBlank()) {
             metadata.put("agentId", agentId);
         }

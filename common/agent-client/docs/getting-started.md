@@ -212,8 +212,7 @@ public final class EdgeAgentApplication {
             String recoverId = System.getenv("RECOVER_INVOCATION_ID");
 
             if (recoverId == null || recoverId.isBlank()) {
-                InvocationRequest request = InvocationRequest.builder()
-                        .agentId("service-desk-agent")
+                InvocationRequest request = InvocationRequest.gatewayBuilder("service-desk-agent")
                         .text("""
                                 读取客户 C-100 的基本资料；
                                 如发现网络故障，请在审批后创建工单。

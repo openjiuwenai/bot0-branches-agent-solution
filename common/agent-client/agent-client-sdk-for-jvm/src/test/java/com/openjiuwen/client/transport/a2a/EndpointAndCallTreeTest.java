@@ -86,7 +86,7 @@ class EndpointAndCallTreeTest {
                 .endpointUrl(url(server))
                 .credentialProvider(CredentialProvider.staticToken("secret"))
                 .build()) {
-            InvocationSnapshot snapshot = client.invoke(InvocationRequest.builder()
+            InvocationSnapshot snapshot = client.invoke(InvocationRequest.runtimeBuilder()
                     .agentId("must-not-leak")
                     .conversationId("runtime-policy")
                     .mode(InvocationMode.BLOCKING)
@@ -113,7 +113,7 @@ class EndpointAndCallTreeTest {
     }
 
     @Test
-    void gatewayBuilderPreservesBearerAndOptionalAgentId() throws Exception {
+    void gatewayBuilderPreservesBearerAndRequiredCreateAgentId() throws Exception {
         AtomicReference<JsonNode> request = new AtomicReference<>();
         AtomicReference<String> authorization = new AtomicReference<>();
         HttpServer server = server(exchange -> {
@@ -125,7 +125,7 @@ class EndpointAndCallTreeTest {
                 .endpointUrl(url(server))
                 .credentialProvider(CredentialProvider.staticToken("secret"))
                 .build()) {
-            client.invoke(InvocationRequest.builder().agentId("agent-a").conversationId("gateway-policy")
+            client.invoke(InvocationRequest.gatewayBuilder("agent-a").conversationId("gateway-policy")
                     .mode(InvocationMode.BLOCKING).traceId("trace-gateway")
                     .correlationId("correlation-gateway").input("hello").build())
                     .completion().toCompletableFuture().get(3, TimeUnit.SECONDS);
@@ -141,6 +141,12 @@ class EndpointAndCallTreeTest {
     }
 
     @Test
+    void gatewayRequestFactoryRequiresNonBlankAgentIdBeforeTransport() {
+        assertThrows(IllegalArgumentException.class, () -> InvocationRequest.gatewayBuilder(null));
+        assertThrows(IllegalArgumentException.class, () -> InvocationRequest.gatewayBuilder("   "));
+    }
+
+    @Test
     void streamingBuildsInterleavedTreeAndFiltersRootOutput() throws Exception {
         HttpServer server = server(exchange -> sse(exchange,
                 frame("1", delegation("root-task", "agent-a", "root-task", "agent-b1", "task-b1")),
@@ -151,7 +157,7 @@ class EndpointAndCallTreeTest {
                 frame("6", completed("root-task"))));
         try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
                 .endpointUrl(url(server)).build()) {
-            InvocationCall call = client.invoke(InvocationRequest.builder().conversationId("tree")
+            InvocationCall call = client.invoke(InvocationRequest.runtimeBuilder().conversationId("tree")
                     .mode(InvocationMode.STREAMING).input("hello").build());
             InvocationSnapshot snapshot = call.completion().toCompletableFuture().get(3, TimeUnit.SECONDS);
 
@@ -180,7 +186,7 @@ class EndpointAndCallTreeTest {
                 frame("5", completed("root-output"))));
         try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
                 .endpointUrl(url(server)).build()) {
-            InvocationSnapshot snapshot = client.invoke(InvocationRequest.builder()
+            InvocationSnapshot snapshot = client.invoke(InvocationRequest.runtimeBuilder()
                     .conversationId("root-replace").mode(InvocationMode.STREAMING).input("hello").build())
                     .completion().toCompletableFuture().get(3, TimeUnit.SECONDS);
 
@@ -203,14 +209,14 @@ class EndpointAndCallTreeTest {
         TransportProvider transport = new NoopTransportProvider();
         try (AgentClient client = AgentClients.builder().transport(transport)
                 .maxDistinctConversations(2).build()) {
-            client.invoke(InvocationRequest.builder()
+            client.invoke(InvocationRequest.runtimeBuilder()
                     .conversationId("c1").mode(InvocationMode.ASYNC).input("x").build());
-            client.invoke(InvocationRequest.builder()
+            client.invoke(InvocationRequest.runtimeBuilder()
                     .conversationId("c1").mode(InvocationMode.ASYNC).input("x2").build());
-            client.invoke(InvocationRequest.builder()
+            client.invoke(InvocationRequest.runtimeBuilder()
                     .conversationId("c2").mode(InvocationMode.ASYNC).input("y").build());
             assertThrows(ConversationLimitExceededException.class, () -> client.invoke(
-                    InvocationRequest.builder()
+                    InvocationRequest.runtimeBuilder()
                             .conversationId("c3").mode(InvocationMode.ASYNC).input("z").build()));
         }
     }
@@ -297,7 +303,7 @@ class EndpointAndCallTreeTest {
         });
         try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
                 .endpointUrl(url(server)).build()) {
-            InvocationSnapshot snapshot = client.invoke(InvocationRequest.builder().conversationId("replay")
+            InvocationSnapshot snapshot = client.invoke(InvocationRequest.runtimeBuilder().conversationId("replay")
                     .mode(InvocationMode.STREAMING).input("hello").build())
                     .completion().toCompletableFuture().get(5, TimeUnit.SECONDS);
 
@@ -332,7 +338,7 @@ class EndpointAndCallTreeTest {
         });
         try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
                 .endpointUrl(url(server)).build()) {
-            InvocationSnapshot snapshot = client.invoke(InvocationRequest.builder().conversationId("expired")
+            InvocationSnapshot snapshot = client.invoke(InvocationRequest.runtimeBuilder().conversationId("expired")
                     .mode(InvocationMode.STREAMING).input("hello").build())
                     .completion().toCompletableFuture().get(5, TimeUnit.SECONDS);
 
@@ -361,7 +367,7 @@ class EndpointAndCallTreeTest {
         });
         try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
                 .endpointUrl(url(server)).build()) {
-            InvocationCall call = client.invoke(InvocationRequest.builder().conversationId("invalid-subscribe")
+            InvocationCall call = client.invoke(InvocationRequest.runtimeBuilder().conversationId("invalid-subscribe")
                     .mode(InvocationMode.STREAMING).input("hello").build());
             ExecutionException failure = assertThrows(ExecutionException.class,
                     () -> call.completion().toCompletableFuture().get(5, TimeUnit.SECONDS));
@@ -407,7 +413,7 @@ class EndpointAndCallTreeTest {
         });
         try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
                 .endpointUrl(url(server)).build()) {
-            InvocationSnapshot snapshot = client.invoke(InvocationRequest.builder().conversationId("malformed")
+            InvocationSnapshot snapshot = client.invoke(InvocationRequest.runtimeBuilder().conversationId("malformed")
                     .mode(InvocationMode.STREAMING).input("hello").build())
                     .completion().toCompletableFuture().get(5, TimeUnit.SECONDS);
 
@@ -429,7 +435,7 @@ class EndpointAndCallTreeTest {
         });
         try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
                 .endpointUrl(url(server)).build()) {
-            InvocationSnapshot snapshot = client.invoke(InvocationRequest.builder().conversationId("unknown")
+            InvocationSnapshot snapshot = client.invoke(InvocationRequest.runtimeBuilder().conversationId("unknown")
                     .mode(InvocationMode.STREAMING).input("hello").build())
                     .completion().toCompletableFuture().get(5, TimeUnit.SECONDS);
 
@@ -461,7 +467,7 @@ class EndpointAndCallTreeTest {
         });
         try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
                 .endpointUrl(url(server)).build()) {
-            InvocationCall call = client.invoke(InvocationRequest.builder().conversationId("circuit")
+            InvocationCall call = client.invoke(InvocationRequest.runtimeBuilder().conversationId("circuit")
                     .mode(InvocationMode.STREAMING).input("hello").build());
             ExecutionException failure = assertThrows(ExecutionException.class,
                     () -> call.completion().toCompletableFuture().get(5, TimeUnit.SECONDS));
@@ -496,7 +502,7 @@ class EndpointAndCallTreeTest {
                 .build();
         try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
                 .endpointUrl(url(server)).retryPolicy(retryPolicy).build()) {
-            InvocationCall call = client.invoke(InvocationRequest.builder().conversationId("configured")
+            InvocationCall call = client.invoke(InvocationRequest.runtimeBuilder().conversationId("configured")
                     .mode(InvocationMode.STREAMING).input("hello").build());
             ExecutionException failure = assertThrows(ExecutionException.class,
                     () -> call.completion().toCompletableFuture().get(5, TimeUnit.SECONDS));
@@ -542,7 +548,7 @@ class EndpointAndCallTreeTest {
                 .build();
         try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
                 .endpointUrl(url(server)).retryPolicy(retryPolicy).build()) {
-            InvocationSnapshot snapshot = client.invoke(InvocationRequest.builder().conversationId("interval")
+            InvocationSnapshot snapshot = client.invoke(InvocationRequest.runtimeBuilder().conversationId("interval")
                     .mode(InvocationMode.STREAMING).input("hello").build())
                     .completion().toCompletableFuture().get(5, TimeUnit.SECONDS);
 
@@ -578,13 +584,54 @@ class EndpointAndCallTreeTest {
         });
         try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
                 .endpointUrl(url(server)).build()) {
-            InvocationSnapshot snapshot = client.invoke(InvocationRequest.builder().conversationId("reset")
+            InvocationSnapshot snapshot = client.invoke(InvocationRequest.runtimeBuilder().conversationId("reset")
                     .mode(InvocationMode.STREAMING).input("hello").build())
                     .completion().toCompletableFuture().get(5, TimeUnit.SECONDS);
 
             assertEquals("done", snapshot.outputText());
             assertEquals(java.util.List.of("SendStreamingMessage", "SubscribeToTask", "GetTask",
                     "SubscribeToTask", "GetTask", "SubscribeToTask", "GetTask"), methods);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void successfulWorkingSnapshotsDoNotResetKnownTaskRecoveryBudget() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        HttpServer server = server(exchange -> {
+            JsonNode request = MAPPER.readTree(exchange.getRequestBody().readAllBytes());
+            String method = request.path("method").asText();
+            int call = calls.getAndIncrement();
+            if (call == 0) {
+                sse(exchange, frame("1", delegation("root-working", "agent-a", "root-working",
+                        "agent-b", "task-b")));
+            } else if ("SubscribeToTask".equals(method)) {
+                byte[] body = "{\"code\":\"VALIDATION_METHOD\",\"message\":\"not exposed\"}"
+                        .getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(400, body.length);
+                exchange.getResponseBody().write(body);
+                exchange.close();
+            } else {
+                json(exchange, directTaskResponse("root-working", "TASK_STATE_WORKING", "working"));
+            }
+        });
+        RetryPolicy policy = RetryPolicy.builder()
+                .initialDelay(java.time.Duration.ofMillis(5))
+                .maxDelay(java.time.Duration.ofMillis(10))
+                .maxKnownTaskRecoveryAttempts(3)
+                .build();
+        try (AgentClient client = AgentClients.builder()
+                .endpointUrl(url(server)).retryPolicy(policy).build()) {
+            InvocationSnapshot snapshot = client.invoke(InvocationRequest.gatewayBuilder("agent-a")
+                    .conversationId("working-budget")
+                    .mode(InvocationMode.STREAMING).input("hello").build())
+                    .completion().toCompletableFuture().get(3, TimeUnit.SECONDS);
+
+            assertEquals(com.openjiuwen.client.api.TaskState.WORKING, snapshot.state());
+            assertNotNull(snapshot.recovery());
+            assertEquals(7, calls.get(), "create + three bounded Subscribe/GetTask cycles");
         } finally {
             server.stop(0);
         }

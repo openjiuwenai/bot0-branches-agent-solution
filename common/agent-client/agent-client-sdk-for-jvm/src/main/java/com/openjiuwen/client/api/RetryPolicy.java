@@ -17,7 +17,8 @@ import java.util.concurrent.ThreadLocalRandom;
  * 从第 1 次失败开始计数；未达到失败上限时，等待一段退避时间再重试。退避时间
  * 从初始值起步，逐次放大，但不会超过上限。可选地引入随机抖动以分散
  * 重试风暴。当连续失败次数达到设定的上限时立即停止本地观察，不再等待或发起下一次请求；服务端
- * Task 不受影响。
+ * Task 不受影响。已知 taskId 的断流恢复另有 {@link #maxKnownTaskRecoveryAttempts()} 总预算，
+ * 避免服务端持续返回 WORKING 时仅因“单次查询成功”而无限重试。
  *
  * @since 2026-08-19
  */
@@ -26,8 +27,10 @@ public final class RetryPolicy {
     private static final Duration DEFAULT_MAX_DELAY = Duration.ofMillis(800);
     private static final double DEFAULT_MULTIPLIER = 2.0d;
     private static final int DEFAULT_MAX_CONSECUTIVE_FAILURES = 3;
+    private static final int DEFAULT_MAX_KNOWN_TASK_RECOVERY_ATTEMPTS = 6;
 
     private final int maxConsecutiveFailures;
+    private final int maxKnownTaskRecoveryAttempts;
     private final Duration initialDelay;
     private final Duration maxDelay;
     private final double multiplier;
@@ -35,6 +38,7 @@ public final class RetryPolicy {
 
     private RetryPolicy(Builder builder) {
         this.maxConsecutiveFailures = builder.maxConsecutiveFailures;
+        this.maxKnownTaskRecoveryAttempts = builder.maxKnownTaskRecoveryAttempts;
         this.initialDelay = builder.initialDelay;
         this.maxDelay = builder.maxDelay;
         this.multiplier = builder.multiplier;
@@ -68,6 +72,18 @@ public final class RetryPolicy {
      */
     public int maxConsecutiveFailures() {
         return maxConsecutiveFailures;
+    }
+
+    /**
+     * 返回已知 taskId 的 STREAMING 断连恢复总尝试上限。
+     *
+     * <p>该预算与连续基础设施失败计数相互独立：一次成功但仍为 WORKING/SUBMITTED 的
+     * GetTask 会清零连续失败计数，但不会清零本预算，避免 Subscribe/GetTask 永久循环。
+     *
+     * @return 单次 invocation 的恢复总尝试上限
+     */
+    public int maxKnownTaskRecoveryAttempts() {
+        return maxKnownTaskRecoveryAttempts;
     }
 
     /**
@@ -167,6 +183,7 @@ public final class RetryPolicy {
      */
     public static final class Builder {
         private int maxConsecutiveFailures = DEFAULT_MAX_CONSECUTIVE_FAILURES;
+        private int maxKnownTaskRecoveryAttempts = DEFAULT_MAX_KNOWN_TASK_RECOVERY_ATTEMPTS;
         private Duration initialDelay = DEFAULT_INITIAL_DELAY;
         private Duration maxDelay = DEFAULT_MAX_DELAY;
         private double multiplier = DEFAULT_MULTIPLIER;
@@ -183,6 +200,20 @@ public final class RetryPolicy {
                 throw new IllegalArgumentException("maxConsecutiveFailures must be at least 1");
             }
             this.maxConsecutiveFailures = value;
+            return this;
+        }
+
+        /**
+         * 设置已知 taskId 的 STREAMING 断连恢复总尝试上限。
+         *
+         * @param value 正整数上限
+         * @return 当前构造器
+         */
+        public Builder maxKnownTaskRecoveryAttempts(int value) {
+            if (value < 1) {
+                throw new IllegalArgumentException("maxKnownTaskRecoveryAttempts must be at least 1");
+            }
+            this.maxKnownTaskRecoveryAttempts = value;
             return this;
         }
 

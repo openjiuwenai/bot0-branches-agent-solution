@@ -289,9 +289,9 @@ public final class RuntimeVerificationApp {
     private void executeMultiInvocation(RunRecord run, AgentClient client, String conversationId)
             throws InterruptedException, java.util.concurrent.ExecutionException,
             java.util.concurrent.TimeoutException {
-        InvocationCall first = client.invoke(InvocationRequest.builder()
+        InvocationCall first = client.invoke(InvocationRequest.runtimeBuilder()
                 .conversationId(conversationId).mode(InvocationMode.STREAMING).input("first").build());
-        InvocationCall second = client.invoke(InvocationRequest.builder()
+        InvocationCall second = client.invoke(InvocationRequest.runtimeBuilder()
                 .conversationId(conversationId).mode(InvocationMode.STREAMING).input("second").build());
         subscribeEvents(run, first);
         subscribeEvents(run, second);
@@ -317,7 +317,7 @@ public final class RuntimeVerificationApp {
     }
 
     private InvocationRequest buildInvocationRequest(RunRecord run, String conversationId) {
-        return InvocationRequest.builder()
+        return InvocationRequest.runtimeBuilder()
                 .conversationId(conversationId).mode(run.request.mode()).input(run.request.input())
                 .traceId(run.id).correlationId("runtime-verification-" + run.id)
                 .attribute("tenantId", "must-not-reach-runtime")

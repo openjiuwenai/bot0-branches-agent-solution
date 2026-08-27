@@ -46,7 +46,12 @@ public final class InvocationRequest {
     private final String credentialToken;
 
     private InvocationRequest(Builder b) {
-        // agentId 可选（Feat-Func-011 §4.9 AC-4）：缺省时由网关路由到默认 Agent；空白串归一化为 null，避免上 wire 空值。
+        if (b.gatewayAgentRequired && (b.agentId == null || b.agentId.isBlank())) {
+            throw new IllegalArgumentException(ErrorCodes.VALIDATION_AGENT_ID
+                    + ": agentId must be non-blank for a Gateway invocation");
+        }
+        // 公共模型保持端点中立：空白串归一化为 null，避免上 wire 空值。生产 Gateway 的创建类
+        // 请求要求非空 agentId；RuntimeEndpointPolicy 则会剥离 agentId。
         this.agentId = (b.agentId != null && !b.agentId.isBlank()) ? b.agentId : null;
         this.conversationId = Objects.requireNonNull(b.conversationId, "conversationId");
         this.mode = Objects.requireNonNull(b.mode, "mode");
@@ -60,9 +65,9 @@ public final class InvocationRequest {
     }
 
     /**
-     * 目标 Agent 标识；为空表示不指定，交由网关按默认 Agent 路由（Feat-Func-011 §4.9 AC-4）。
+     * 目标 Agent 标识。生产 Gateway 创建类请求要求非空值；Runtime 直连不会发送该字段。
      *
-     * @return 目标 Agent 标识；为空表示不指定，交由网关按默认 Agent 路由（Feat-Func-011 §4.9 AC-4）。
+     * @return 目标 Agent 标识
      */
     public Optional<String> agentId() {
         return Optional.ofNullable(agentId);
@@ -153,12 +158,31 @@ public final class InvocationRequest {
     }
 
     /**
-     * 创建构造器。
+     * 创建 Gateway 调用构造器。
      *
-     * @return 构造器实例
+     * <p>{@code agentId} 是工厂方法的必需参数，因此采用此标准入口的 Gateway 代码不能漏写该参数；
+     * {@code null} 或空白值还会在构造请求时立即拒绝，不会发出网络请求。
+     *
+     * @param agentId Gateway 路由所需的目标 Agent 标识
+     * @return Gateway 调用构造器
      */
-    public static Builder builder() {
-        return new Builder();
+    public static Builder gatewayBuilder(String agentId) {
+        if (agentId == null || agentId.isBlank()) {
+            throw new IllegalArgumentException(ErrorCodes.VALIDATION_AGENT_ID
+                    + ": agentId must be non-blank for a Gateway invocation");
+        }
+        Builder builder = new Builder(true);
+        builder.agentId = agentId;
+        return builder;
+    }
+
+    /**
+     * 创建 Runtime 直连调用构造器。Runtime 请求不会发送 Gateway 路由用的 {@code agentId}。
+     *
+     * @return Runtime 直连调用构造器
+     */
+    public static Builder runtimeBuilder() {
+        return new Builder(false);
     }
 
     /**
@@ -167,6 +191,7 @@ public final class InvocationRequest {
      * @since 2026-07-27
      */
     public static final class Builder {
+        private final boolean gatewayAgentRequired;
         private String agentId;
         private String conversationId;
         private InvocationMode mode = InvocationMode.STREAMING;
@@ -178,8 +203,12 @@ public final class InvocationRequest {
         private final Map<String, String> attributes = new LinkedHashMap<>();
         private String credentialToken;
 
+        private Builder(boolean gatewayAgentRequired) {
+            this.gatewayAgentRequired = gatewayAgentRequired;
+        }
+
         /**
-         * 设置目标 Agent 标识（可选）。
+         * 设置目标 Agent 标识。Gateway 创建类请求必须设置为非空值；Runtime 直连会忽略该值。
          *
          * @param v 目标 Agent 标识
          * @return 本构造器

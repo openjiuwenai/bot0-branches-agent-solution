@@ -101,7 +101,7 @@ verification-app 启动的那个终端会实时打印调用过程，包括：
 | 方法白名单 | 建议只放行上面三个；其余（如 `CancelTask` / `SubscribeToTask`）返回 `400 {"code":"VALIDATION_METHOD"}`。**客户端 v0730 不会调用这两个方法** |
 | unary 返回时机 | client 在 `SendMessage` 的 `params.configuration.returnImmediately` 写布尔值：ASYNC=`true`，BLOCKING=`false`；字段缺省按 `false` 兼容。不要从 method 推断二者，也不要新增私有 mode 字段 |
 | 状态查询 | `GetTask`，参数是标准 A2A **`params.id`**。返回该 Task 当前权威快照。SDK 在 BLOCKING 收到非终态响应及流中断对账时自动调用；ASYNC 只在业务显式调用 `getInvocation` 时查询 |
-| 创建调用 | `params.message.taskId` 为空；按 `message.messageId` 幂等去重；读 `params.metadata.clientTools` 获取客户端工具清单 |
+| 创建调用 | `params.message.taskId` 为空；`params.metadata.agentId` 必须为非空且是已注册 Agent，缺失/空白返回 HTTP 400 + `VALIDATION_AGENT_ID`，无默认 Agent 回退；verification-app 使用 `InvocationRequest.gatewayBuilder(agentId)` 在 SDK API 入口提供该必填值；按 `message.messageId` 幂等去重；读 `params.metadata.clientTools` 获取客户端工具清单 |
 | 请求工具 | `INPUT_REQUIRED` 状态，工具调用意图放在 `result.status.message.metadata._interrupt`（`_interrupt_kind=client_tool`，含 `toolCallId`/`toolName`/`arguments`） |
 | 续传 | 客户端对既有 `taskId` 再发 unary `SendMessage`，正文为一个 text part（工具结果或用户输入文本），稳定携带 `contextId`，并按当前 mode 写 `returnImmediately`。**v0730 不在 wire 上回传 `toolCallId`**：同一时刻只有单个 pending，由 runtime 按该 pending 自动关联即可。`toolCallId` 只在客户端本地用于去重 |
 | 中断即关流 | 投递 `INPUT_REQUIRED` 后关闭当前 SSE 流，等客户端续传后再开下一段。这是**约定行为**，客户端不会把它当作异常中断 |

@@ -73,8 +73,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * <li>已到终态 —— 正常结束。</li>
  * <li>处于 {@code INPUT_REQUIRED} —— 服务端按约定关流，保持通道开放等待续跑，不做任何处置。</li>
  * <li>其余非终态 —— 视为非预期中断，先用 {@code GetTask} 主动查询确认真实状态；
- * 查询能给出确定状态就据此投影（多数断连由此完全恢复），否则投递
- * {@link InvocationEvent.ProgressUncertain} 并正常结算，<b>既不伪造终态也不悬挂</b>。</li>
+ * 查询能给出确定状态就据此投影（多数断连由此完全恢复），对持续 WORKING/SUBMITTED
+ * 的任务受 invocation 级恢复预算约束，耗尽后投递 {@link InvocationEvent.ProgressUncertain}
+ * 并结束本地观察，<b>既不伪造终态也不悬挂</b>。</li>
  * <li>尚未取得 {@code taskRef}（创建未确认）—— 走 UNKNOWN 恢复：以同幂等键、同正文重发创建，
  * 由网关幂等回放取回原 Task，不产生重复 Task。</li>
  * </ul>
@@ -1162,6 +1163,13 @@ public class A2aHttpTransportProvider
     }
 
     private void recoverKnownTask(Channel ch, String reason) {
+        int attempt = ++ch.knownTaskRecoveryAttempts;
+        if (attempt > retryPolicy.maxKnownTaskRecoveryAttempts()) {
+            publishUncertain(ch, reason + "; known-task recovery exhausted after "
+                    + retryPolicy.maxKnownTaskRecoveryAttempts() + " attempts",
+                    ErrorCodes.RECOVERY_RETRY_EXHAUSTED);
+            return;
+        }
         if (endpointPolicy.useSubscriptionForRecovery(ch.mode)) {
             openSubscription(ch, reason);
         } else {
@@ -1801,6 +1809,7 @@ public class A2aHttpTransportProvider
         volatile TaskState lastState;
         volatile long lastActivityNanos = System.nanoTime();
         volatile int recoveryAttempt;
+        volatile int knownTaskRecoveryAttempts;
         volatile int observationFailures;
         volatile long blockingObservationStartedNanos;
         volatile String replayCursor;

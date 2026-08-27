@@ -64,7 +64,7 @@ class A2aHttpBlockingAsyncTest {
                             Duration.ofSeconds(5), RuntimeEndpointPolicy.INSTANCE,
                             Duration.ofSeconds(5), Duration.ofMillis(20)))
                     .build()) {
-                InvocationSnapshot snapshot = client.invoke(InvocationRequest.builder()
+                InvocationSnapshot snapshot = client.invoke(InvocationRequest.gatewayBuilder("agent-test")
                                 .conversationId("strict-blocking")
                                 .mode(InvocationMode.BLOCKING)
                                 .input("return a working task")
@@ -107,7 +107,7 @@ class A2aHttpBlockingAsyncTest {
                             Duration.ofSeconds(5), GatewayEndpointPolicy.INSTANCE,
                             Duration.ofSeconds(5), Duration.ofMillis(20)))
                     .build()) {
-                InvocationSnapshot snapshot = client.invoke(InvocationRequest.builder()
+                InvocationSnapshot snapshot = client.invoke(InvocationRequest.gatewayBuilder("agent-test")
                                 .conversationId("gateway-blocking")
                                 .mode(InvocationMode.BLOCKING)
                                 .input("return a working task")
@@ -118,6 +118,31 @@ class A2aHttpBlockingAsyncTest {
                 assertEquals(1, sendCalls.get());
                 assertEquals(1, getCalls.get());
                 assertEquals(List.of("false"), returnImmediately);
+            }
+        }
+    }
+
+    @Test
+    void completedTaskFallsBackToStatusMessageWhenArtifactsAreEmpty() throws Exception {
+        try (A2aHttpTestSupport.TestServer server = A2aHttpTestSupport.start((request, exchange) ->
+                A2aHttpTestSupport.json(exchange, A2aHttpTestSupport.taskBody(
+                        "task-status-output", "status-output", "TASK_STATE_COMPLETED",
+                        ",\"status\":{\"state\":\"TASK_STATE_COMPLETED\","
+                                + "\"message\":{\"parts\":[{\"text\":\"from-status-message\"}]}},"
+                                + "\"artifacts\":[]")))) {
+            try (AgentClient client = AgentClients.builder()
+                    .transport(new A2aHttpTransportProvider(server.baseUrl(), A2aHttpTestSupport.MAPPER,
+                            Duration.ofSeconds(5), GatewayEndpointPolicy.INSTANCE,
+                            Duration.ofSeconds(5), Duration.ofMillis(20)))
+                    .build()) {
+                InvocationSnapshot snapshot = client.invoke(InvocationRequest.gatewayBuilder("agent-test")
+                                .conversationId("status-output")
+                                .mode(InvocationMode.BLOCKING)
+                                .input("hello")
+                                .build())
+                        .completion().toCompletableFuture().get(3, TimeUnit.SECONDS);
+                assertEquals(TaskState.COMPLETED, snapshot.state());
+                assertEquals("from-status-message", snapshot.outputText());
             }
         }
     }
@@ -152,7 +177,7 @@ class A2aHttpBlockingAsyncTest {
                     .transport(new A2aHttpTransportProvider(server.baseUrl(), A2aHttpTestSupport.MAPPER,
                             Duration.ofSeconds(5)))
                     .build()) {
-                InvocationCall initial = client.invoke(InvocationRequest.builder()
+                InvocationCall initial = client.invoke(InvocationRequest.gatewayBuilder("agent-test")
                         .conversationId("strict-blocking-input")
                         .mode(InvocationMode.BLOCKING)
                         .input("need user input")
@@ -205,7 +230,7 @@ class A2aHttpBlockingAsyncTest {
                             Duration.ofSeconds(5), RuntimeEndpointPolicy.INSTANCE,
                             Duration.ofSeconds(5), Duration.ofMillis(20)))
                     .build()) {
-                InvocationCall call = client.invoke(InvocationRequest.builder()
+                InvocationCall call = client.invoke(InvocationRequest.runtimeBuilder()
                         .conversationId("async-create")
                         .mode(InvocationMode.ASYNC)
                         .input("return a working task")
@@ -252,7 +277,7 @@ class A2aHttpBlockingAsyncTest {
                             Duration.ofSeconds(5), RuntimeEndpointPolicy.INSTANCE,
                             Duration.ofMillis(120), Duration.ofMillis(20)))
                     .build()) {
-                InvocationCall call = client.invoke(InvocationRequest.builder()
+                InvocationCall call = client.invoke(InvocationRequest.runtimeBuilder()
                         .conversationId("runtime-timeout")
                         .mode(InvocationMode.BLOCKING)
                         .input("keep working")
