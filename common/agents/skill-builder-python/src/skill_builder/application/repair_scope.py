@@ -40,13 +40,12 @@ def normalize_repair_plan(value: Any) -> dict[str, Any] | None:
     raw_paths = value.get("targetPaths")
     if not isinstance(raw_paths, list):
         return None
-    target_paths = sorted(
-        {
-            path
-            for item in raw_paths
-            if (path := _normalized_target_path(item)) is not None
-        }
-    )
+    normalized_paths: set[str] = set()
+    for item in raw_paths:
+        path = _normalized_target_path(item)
+        if path is not None:
+            normalized_paths.add(path)
+    target_paths = sorted(normalized_paths)
     return {
         **value,
         "schemaVersion": REPAIR_PLAN_SCHEMA_VERSION,
@@ -72,7 +71,7 @@ def persist_repair_plan(root: Path, value: dict[str, Any]) -> dict[str, Any]:
 def load_repair_plan(root: Path) -> dict[str, Any] | None:
     try:
         value = json.loads((root / REPAIR_PLAN_PATH).read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, TypeError, ValueError):
+    except (OSError, TypeError, ValueError):
         return None
     return normalize_repair_plan(value)
 

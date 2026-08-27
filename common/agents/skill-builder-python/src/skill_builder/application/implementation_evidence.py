@@ -259,13 +259,12 @@ def infer_knowledge_documentation_evidence(
         if not contract_id or contract_id in mapped_ids:
             continue
         aliases = list(dict.fromkeys(alias for alias in raw_aliases if alias))
-        exact_texts = list(
-            dict.fromkeys(
-                canonical
-                for text in raw_texts
-                if len(canonical := _canonical_obligation_text(text)) >= 12
-            )
-        )
+        canonical_texts: list[str] = []
+        for text in raw_texts:
+            canonical = _canonical_obligation_text(text)
+            if len(canonical) >= 12:
+                canonical_texts.append(canonical)
+        exact_texts = list(dict.fromkeys(canonical_texts))
         label_match = next(
             (
                 (path, alias)

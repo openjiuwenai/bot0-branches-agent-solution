@@ -722,12 +722,12 @@ def validate_self_check_summary(
                 "外部采集 CLI 缺少基于本地响应 fixture 的 external_offline 用例。",
             )
         )
-    covered_entrypoints = {
-        script
-        for case in normalized_cases
-        for command in case.get("commands") or []
-        if (script := _command_script(command.get("command") or []))
-    }
+    covered_entrypoints: set[str] = set()
+    for case in normalized_cases:
+        for command in case.get("commands") or []:
+            script = _command_script(command.get("command") or [])
+            if script:
+                covered_entrypoints.add(script)
     missing_entrypoints = sorted(documented_entrypoints - covered_entrypoints)
     if missing_entrypoints:
         issues.append(
@@ -1038,16 +1038,13 @@ async def replay_self_check_cases(
     issues: list[dict[str, Any]] = []
     for case in cases:
         case_id = str(case.get("id") or "case")
-        producer_paths = {
-                script
-                for command_spec in case.get("commands") or []
-                if (
-                    script := _command_script(
-                        [str(part) for part in command_spec.get("command") or []]
-                    )
-                )
-                is not None
-            }
+        producer_paths: set[str] = set()
+        for command_spec in case.get("commands") or []:
+            script = _command_script(
+                [str(part) for part in command_spec.get("command") or []]
+            )
+            if script is not None:
+                producer_paths.add(script)
         command_results: list[dict[str, Any]] = []
         case_failed = False
         for command_index, command_spec in enumerate(case.get("commands") or []):

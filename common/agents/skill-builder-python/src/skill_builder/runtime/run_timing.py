@@ -418,6 +418,15 @@ class SkillBuilderRunTiming:
             if queued_candidates:
                 self.queued_ms = max(queued_candidates)
                 self.queue_wait_ms = max(0, queue_started - self.queued_ms)
+
+        def set_first(name: str, created_ms: int) -> None:
+            if name not in self.milestones or created_ms < self.milestones[name]:
+                self.milestones[name] = created_ms
+
+        def set_last(name: str, created_ms: int) -> None:
+            if name not in self.milestones or created_ms > self.milestones[name]:
+                self.milestones[name] = created_ms
+
         for row in rows:
             created_ms = int(getattr(row, "create_time", 0) or 0)
             if created_ms < self.started_ms:
@@ -438,35 +447,27 @@ class SkillBuilderRunTiming:
             elif event_type == "sandbox.closed" and phase_name and persisted_agent_phase == phase_name:
                 persisted_agent_phase = ""
 
-            def set_first(name: str) -> None:
-                if name not in self.milestones or created_ms < self.milestones[name]:
-                    self.milestones[name] = created_ms
-
-            def set_last(name: str) -> None:
-                if name not in self.milestones or created_ms > self.milestones[name]:
-                    self.milestones[name] = created_ms
-
             if event_type == "tool.completed" and payload.get("ok") is not False:
                 if tool_name == "read_workspace_file" and path_value.startswith("inputs/"):
-                    set_first("firstMaterialReadAt")
+                    set_first("firstMaterialReadAt", created_ms)
                 write_paths = [path_value] if path_value else []
                 if tool_name in {"write_skill_file", "write_skill_files"}:
-                    set_first("firstArtifactWriteAt")
-                    set_last("lastArtifactWriteAt")
+                    set_first("firstArtifactWriteAt", created_ms)
+                    set_last("lastArtifactWriteAt", created_ms)
                     if any(value.endswith("SKILL.md") for value in write_paths):
-                        set_first("firstSkillHeadingWriteAt")
+                        set_first("firstSkillHeadingWriteAt", created_ms)
                     if any(
                         "/scripts/" in f"/{value}" or value.startswith("scripts/")
                         for value in write_paths
                     ):
-                        set_first("firstScriptWriteAt")
+                        set_first("firstScriptWriteAt", created_ms)
             request_id = str(payload.get("request_id") or "").strip()
             if event_type == "hitl.waiting" and request_id:
                 hitl_started[request_id] = min(hitl_started.get(request_id, created_ms), created_ms)
-                set_first("firstHitlRequestedAt")
+                set_first("firstHitlRequestedAt", created_ms)
             elif event_type in {"hitl.answer.submitted", "hitl.timeout", "hitl.expired"} and request_id:
                 hitl_finished[request_id] = max(hitl_finished.get(request_id, created_ms), created_ms)
-                set_last("lastHitlFinishedAt")
+                set_last("lastHitlFinishedAt", created_ms)
 
         for request_id, started_ms in hitl_started.items():
             key = self._phase_key("hitl_wait", request_id[:12])

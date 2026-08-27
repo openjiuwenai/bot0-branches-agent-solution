@@ -25,6 +25,8 @@ DEFAULT_SKILL_TAGS = ("skill-extract",)
 
 EXPORT_REQUIRED_ENTRY = "SKILL.md"
 EXPORT_UI_METADATA_ENTRY = "agents/openai.yaml"
+
+
 @dataclass(frozen=True, slots=True)
 class SkillPackageMetadata:
     skill_name: str

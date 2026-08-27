@@ -16,7 +16,7 @@ import os
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from skill_builder.application.agent_core import (
     DEFAULT_IDLE_TIMEOUT_SECONDS,
@@ -110,6 +110,15 @@ from skill_builder.resources import (
     internal_skill_context_paths,
 )
 from skill_builder.runtime.serialization import json_safe
+
+
+class _AuthorProgressSignature(NamedTuple):
+    artifact_sha256: str
+    files_read: tuple[str, ...]
+    files_listed: tuple[str, ...]
+    implementation_plan_sha256: str
+    offline_self_check_runs: int
+    offline_self_check_status: str
 from skill_builder.adapters.author_tools import (
     AuthorCompletionState,
     create_author_completion_tool,
@@ -175,7 +184,7 @@ def _load_persisted_agent_self_check(root: Path) -> dict[str, Any] | None:
 
     try:
         value = json.loads((root / AGENT_SELF_CHECK_PATH).read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, TypeError, ValueError):
+    except (OSError, TypeError, ValueError):
         return None
     return normalize_agent_self_check(value)
 
@@ -213,7 +222,7 @@ def _load_valid_author_handoff(
     try:
         raw = (root / "validation" / "author_handoff.json").read_bytes()
         loaded = json.loads(raw.decode("utf-8"))
-    except (OSError, UnicodeError, TypeError, ValueError):
+    except (OSError, TypeError, ValueError):
         return None
     if (
         len(raw) > AUTHOR_HANDOFF_MAX_BYTES
@@ -741,6 +750,7 @@ async def run_skill_builder_agent_runtime(
     write_self_check_plan = author_tools.write_self_check_plan
     replace_skill_file_text = author_tools.replace
     delete_skill_file = author_tools.delete
+
     async def run_author_build_preflight() -> Any:
         return await _accept_with_execution_accessor(
             root=root,
@@ -828,6 +838,7 @@ async def run_skill_builder_agent_runtime(
             **model_request_options,
         ),
     )
+
     def resolve_author_tool_choice() -> str | None:
         plan = load_implementation_plan(root)
         self_check_runs = candidate_tool_state.offline_self_check_runs
@@ -1018,7 +1029,7 @@ async def run_skill_builder_agent_runtime(
                 try:
                     Runner.resource_mgr.remove_sys_operation(sys_op_id)
                 except Exception:
-                    pass
+                    logger.debug("Failed to remove partially registered system operation %s.", sys_op_id, exc_info=True)
             registered_sys_operation_ids.clear()
             config.sys_operation_id = None
             sys_operation_id = None
@@ -1139,6 +1150,7 @@ async def run_skill_builder_agent_runtime(
         6,
         minimum=3,
     )
+
     def optional_timeout_env(name: str) -> int | None:
         raw = os.getenv(name)
         if raw in {None, ""}:
@@ -1223,8 +1235,8 @@ async def run_skill_builder_agent_runtime(
         author_unchanged_tool_results = 0
         author_seen_tool_result_ids: set[str] = set()
 
-        def author_progress_signature() -> tuple[Any, ...]:
-            return (
+        def author_progress_signature() -> _AuthorProgressSignature:
+            return _AuthorProgressSignature(
                 skill_artifact_sha256(root / "generated-skill"),
                 tuple(accessor.files_read),
                 tuple(accessor.files_listed),

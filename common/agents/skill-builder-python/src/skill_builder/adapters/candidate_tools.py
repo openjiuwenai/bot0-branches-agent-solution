@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import inspect
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -36,6 +37,9 @@ from skill_builder.application.agent_submission import (
     candidate_completion_tool_schema,
     commit_candidate_completion,
 )
+
+
+_LOGGER = logging.getLogger(__name__)
 from skill_builder.application.artifact_digest import skill_artifact_sha256
 from skill_builder.application.candidate_projection import candidate_completion_from_draft
 from skill_builder.application.candidate_submission import (
@@ -230,7 +234,7 @@ def _persist_agent_self_check_artifact(
             if result and result.get("ok"):
                 return payload
         except Exception:
-            pass
+            _LOGGER.debug("Failed to persist Agent self-check through the active accessor.", exc_info=True)
     return persist_agent_self_check(root, payload)
 
 
@@ -383,7 +387,7 @@ async def _accept_with_execution_accessor(
             try:
                 cleanup(["workspace/verify/*"])
             except Exception:
-                pass
+                _LOGGER.debug("Failed to remove temporary validation files.", exc_info=True)
         if owns_execution_accessor:
             close = getattr(execution_accessor, "close", None)
             if callable(close):
@@ -392,7 +396,7 @@ async def _accept_with_execution_accessor(
                     if inspect.isawaitable(result):
                         await result
                 except Exception:
-                    pass
+                    _LOGGER.debug("Failed to close the temporary execution accessor.", exc_info=True)
 
 
 def create_offline_self_check_tool(

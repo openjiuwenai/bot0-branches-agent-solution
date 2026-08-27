@@ -981,7 +981,7 @@ def _projected_scripts_required(root: Path) -> bool | None:
                 encoding="utf-8"
             )
         )
-    except (OSError, UnicodeError, TypeError, ValueError):
+    except (OSError, TypeError, ValueError):
         return None
     signature = value.get("behaviorSignature") if isinstance(value, dict) else None
     scripts_required = (

@@ -909,17 +909,16 @@ def infer_decision_concept_from_options(options: Any) -> str | None:
         if definition.minimum_domain_matches <= 0:
             continue
         machine_matches = definition.option_domain_matches(safe_options)
-        label_matches = {
-            canonical
-            for option in safe_options
-            if isinstance(option, dict)
-            if (
-                canonical := canonical_value_from_presented_label(
-                    definition.name,
-                    option.get("label"),
-                )
+        label_matches: set[str] = set()
+        for option in safe_options:
+            if not isinstance(option, dict):
+                continue
+            canonical = canonical_value_from_presented_label(
+                definition.name,
+                option.get("label"),
             )
-        }
+            if canonical:
+                label_matches.add(canonical)
         if len(machine_matches | label_matches) < definition.minimum_domain_matches:
             continue
         concept = (

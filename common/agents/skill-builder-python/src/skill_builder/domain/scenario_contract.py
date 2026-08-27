@@ -411,17 +411,15 @@ def _normalize_item(
     if depth >= 4:
         return None
     if isinstance(value, list):
-        normalized_list = [
-            normalized
-            for part in value[:16]
-            if (
-                normalized := _normalize_item(
-                    part,
-                    text_limit=text_limit,
-                    depth=depth + 1,
-                )
-            ) not in (None, "", {}, [])
-        ]
+        normalized_list = []
+        for part in value[:16]:
+            normalized = _normalize_item(
+                part,
+                text_limit=text_limit,
+                depth=depth + 1,
+            )
+            if normalized not in (None, "", {}, []):
+                normalized_list.append(normalized)
         return normalized_list or None
     if not isinstance(value, dict):
         return None
@@ -435,17 +433,16 @@ def _normalize_item(
         elif isinstance(item, str):
             result[normalized_key] = _text(item, limit=text_limit)
         elif isinstance(item, list):
-            result[normalized_key] = [
-                normalized
-                for part in item[:16]
-                if (
-                    normalized := _normalize_item(
-                        part,
-                        text_limit=text_limit,
-                        depth=depth + 1,
-                    )
-                ) not in (None, "", {}, [])
-            ]
+            normalized_list = []
+            for part in item[:16]:
+                normalized = _normalize_item(
+                    part,
+                    text_limit=text_limit,
+                    depth=depth + 1,
+                )
+                if normalized not in (None, "", {}, []):
+                    normalized_list.append(normalized)
+            result[normalized_key] = normalized_list
         elif isinstance(item, dict):
             normalized = _normalize_item(
                 item,
@@ -467,12 +464,12 @@ def _normalize_semantic_payload(value: Any, *, depth: int = 0) -> Any:
     if isinstance(value, str):
         return _text(value, limit=4000)
     if isinstance(value, list):
-        return [
-            normalized
-            for item in value[:100]
-            if (normalized := _normalize_semantic_payload(item, depth=depth + 1))
-            not in (None, "", [], {})
-        ]
+        normalized_items = []
+        for item in value[:100]:
+            normalized = _normalize_semantic_payload(item, depth=depth + 1)
+            if normalized not in (None, "", [], {}):
+                normalized_items.append(normalized)
+        return normalized_items
     if isinstance(value, dict):
         result: dict[str, Any] = {}
         for raw_key, item in list(value.items())[:100]:
@@ -1074,11 +1071,11 @@ def _compile_decision_need(
     )
     decision_id = declared_decision_id or _decision_id(title)
     raw_options = value.get("options") if isinstance(value.get("options"), list) else []
-    options = [
-        option
-        for raw in raw_options[:SCENARIO_DECISION_OPTION_MAX_ITEMS]
-        if (option := _normalize_decision_option(raw)) is not None
-    ]
+    options = []
+    for raw in raw_options[:SCENARIO_DECISION_OPTION_MAX_ITEMS]:
+        option = _normalize_decision_option(raw)
+        if option is not None:
+            options.append(option)
     field_type = _text(value.get("type"), limit=32).lower()
     if field_type not in _DECISION_TYPES:
         field_type = "select" if len(options) >= 2 else "text"
@@ -1168,13 +1165,11 @@ def _compile_decision_need(
     )
     if concept:
         if concept in {"acquisition_mode", "external_system_access_mode"}:
-            canonical_domain = {
-                canonical
-                for option in options
-                if (
-                    canonical := canonical_decision_option_value(concept, option)[0]
-                )
-            }
+            canonical_domain: set[str] = set()
+            for option in options:
+                canonical = canonical_decision_option_value(concept, option)[0]
+                if canonical:
+                    canonical_domain.add(canonical)
             if (
                 {"browser", "manual", "hybrid"}.issubset(canonical_domain)
                 and "api" not in canonical_domain
@@ -1403,16 +1398,12 @@ def normalize_scenario_contract(value: Any) -> tuple[dict[str, Any], list[str]]:
         max_items, text_limit = SCENARIO_LIST_LIMITS[field]
         if isinstance(values, list) and len(values) > max_items:
             issues.append(f"{field} exceeds {max_items} items")
-        normalized = [
-            item
-            for raw in values[:max_items] if isinstance(values, list)
-            if (
-                item := _normalize_item(
-                    raw,
-                    text_limit=text_limit,
-                )
-            ) not in (None, "", {}, [])
-        ] if isinstance(values, list) else []
+        normalized = []
+        if isinstance(values, list):
+            for raw in values[:max_items]:
+                item = _normalize_item(raw, text_limit=text_limit)
+                if item not in (None, "", {}, []):
+                    normalized.append(item)
         result[field] = normalized
     capability_source = {
         **source,

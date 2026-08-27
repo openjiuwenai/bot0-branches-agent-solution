@@ -158,8 +158,8 @@ class SkillBuilderEngine:
     def __init__(self, *, adapters: SkillBuilderAdapters | None = None) -> None:
         self.adapters = adapters or SkillBuilderAdapters()
 
+    @staticmethod
     def plan_turn(
-        self,
         execution: SkillBuilderExecution | SkillBuilderInput,
         request: SkillBuilderTurnRequest,
     ) -> ConversationIntent:
@@ -999,11 +999,12 @@ class SkillBuilderEngine:
             ask_user=ask_user,
         )
 
-    def build_export_archive(self, execution: SkillBuilderExecution) -> tuple[bytes, str, str]:
+    @staticmethod
+    def build_export_archive(execution: SkillBuilderExecution) -> tuple[bytes, str, str]:
         return build_execution_export_archive(execution)
 
+    @staticmethod
     def build_publish_archive(
-        self,
         execution: SkillBuilderExecution,
         *,
         author: str,

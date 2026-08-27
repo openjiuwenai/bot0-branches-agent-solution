@@ -334,24 +334,17 @@ def _record(
 ) -> tuple[list[str], dict[str, str]]:
     fields = [item for item in contract.get("fields") or [] if isinstance(item, dict)]
     parent_description = str(contract.get("description") or "").strip()
-    by_name = {
-        name: {
-            **item,
-            **(
-                {"description": constraint}
-                if not str(item.get("description") or "").strip()
-                and (
-                    constraint := _field_constraint_from_parent_description(
-                        name,
-                        parent_description,
-                    )
-                )
-                else {}
-            ),
-        }
-        for item in fields
-        if (name := str(item.get("name") or "").strip())
-    }
+    by_name: dict[str, dict[str, Any]] = {}
+    for item in fields:
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        normalized_item = dict(item)
+        if not str(item.get("description") or "").strip():
+            constraint = _field_constraint_from_parent_description(name, parent_description)
+            if constraint:
+                normalized_item["description"] = constraint
+        by_name[name] = normalized_item
     names = list(by_name)
     values = {
         name: _field_value(by_name[name], platform_values=platform_values)

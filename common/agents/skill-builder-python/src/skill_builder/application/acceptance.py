@@ -1198,7 +1198,7 @@ def _business_output_invariant_issues(path: Path) -> list[dict[str, Any]]:
             path.read_text(encoding="utf-8"),
             parse_constant=reject_non_finite,
         )
-    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+    except (OSError, TypeError, ValueError) as exc:
         return [
             {
                 "id": "business_output_json_invalid",
@@ -1307,10 +1307,40 @@ def _materialize_csv_edge_fixture(
             writer = csv.DictWriter(stream, fieldnames=headers)
             writer.writeheader()
             writer.writerows(rows)
-    except (OSError, UnicodeError, ValueError, csv.Error):
+    except (OSError, ValueError, csv.Error):
         target.unlink(missing_ok=True)
         return None
     return target
+
+
+def _append_runtime_fixture_validation_rule(
+    validation_rules: list[dict[str, Any]],
+    fields: list[dict[str, Any]],
+    rule: Any,
+    *,
+    field_name: str = "",
+    requirement_id: str = "",
+) -> None:
+    if rule in (None, "", [], {}):
+        return
+    rule_text = rule if isinstance(rule, str) else json.dumps(rule, ensure_ascii=False, sort_keys=True)
+    matching_fields = (
+        [field_name]
+        if field_name
+        else [
+            str(field["name"]).strip()
+            for field in fields
+            if str(field["name"]).strip() in rule_text
+        ]
+    )
+    for matching_field in matching_fields or [""]:
+        projected_rule: dict[str, Any] = {"rule": rule}
+        if matching_field:
+            projected_rule["field"] = matching_field
+        if requirement_id:
+            projected_rule["requirementId"] = requirement_id
+        if projected_rule not in validation_rules:
+            validation_rules.append(projected_rule)
 
 
 def _runtime_fixture_input_contracts(
@@ -1343,37 +1373,6 @@ def _runtime_fixture_input_contracts(
         ]
         validation_rules: list[dict[str, Any]] = []
 
-        def append_rule(
-            rule: Any,
-            *,
-            field_name: str = "",
-            requirement_id: str = "",
-        ) -> None:
-            if rule in (None, "", [], {}):
-                return
-            rule_text = (
-                rule
-                if isinstance(rule, str)
-                else json.dumps(rule, ensure_ascii=False, sort_keys=True)
-            )
-            matching_fields = (
-                [field_name]
-                if field_name
-                else [
-                    str(field["name"]).strip()
-                    for field in fields
-                    if str(field["name"]).strip() in rule_text
-                ]
-            )
-            for matching_field in matching_fields or [""]:
-                projected_rule: dict[str, Any] = {"rule": rule}
-                if matching_field:
-                    projected_rule["field"] = matching_field
-                if requirement_id:
-                    projected_rule["requirementId"] = requirement_id
-                if projected_rule not in validation_rules:
-                    validation_rules.append(projected_rule)
-
         for field in fields:
             rule = next(
                 (
@@ -1389,7 +1388,12 @@ def _runtime_fixture_input_contracts(
                 ),
                 None,
             )
-            append_rule(rule, field_name=str(field["name"]).strip())
+            _append_runtime_fixture_validation_rule(
+                validation_rules,
+                fields,
+                rule,
+                field_name=str(field["name"]).strip(),
+            )
         contract_rules = next(
             (
                 contract.get(key)
@@ -1404,12 +1408,14 @@ def _runtime_fixture_input_contracts(
             [],
         )
         for rule in contract_rules if isinstance(contract_rules, list) else [contract_rules]:
-            append_rule(rule)
+            _append_runtime_fixture_validation_rule(validation_rules, fields, rule)
         for requirement in scenario.get("resolvedRequirements") or []:
             if not isinstance(requirement, dict):
                 continue
             rule = requirement.get("value") or requirement.get("sourceQuote")
-            append_rule(
+            _append_runtime_fixture_validation_rule(
+                validation_rules,
+                fields,
                 rule,
                 requirement_id=str(
                     requirement.get("requirementId") or ""
@@ -1608,7 +1614,7 @@ def _fixture_business_literals(generated: Path) -> dict[str, list[str]]:
                         continue
                     for cell in line.strip().strip("|").split("|"):
                         add(cell, fixture)
-        except (OSError, UnicodeError, TypeError, ValueError, csv.Error):
+        except (OSError, TypeError, ValueError, csv.Error):
             continue
     return values
 
@@ -2946,7 +2952,7 @@ async def accept_skill_package(
                     protocol_issues: list[dict[str, Any]] = []
                     try:
                         summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
-                    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+                    except (OSError, TypeError, ValueError) as exc:
                         protocol = None
                         findings.append(
                             _finding(
@@ -3440,7 +3446,7 @@ async def accept_skill_package(
                     legacy_payload = json.loads(
                         legacy_json_path.read_text(encoding="utf-8")
                     )
-                except (OSError, UnicodeError, TypeError, ValueError):
+                except (OSError, TypeError, ValueError):
                     legacy_payload = None
                 legacy_status = (
                     str(legacy_payload.get("status") or "").strip().lower()

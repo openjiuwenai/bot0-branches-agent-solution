@@ -14,12 +14,15 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Awaitable, Callable
 
 
 RequestEventEmitter = Callable[[str, str, dict[str, Any] | None], Awaitable[None]]
+
+_LOGGER = logging.getLogger(__name__)
 
 _TRANSIENT_MESSAGE_FIELDS = frozenset(
     {
@@ -697,7 +700,7 @@ class SkillBuilderBudgetedModel:
                 payload,
             )
         except Exception:
-            return
+            _LOGGER.debug("Failed to emit private Skill Builder performance telemetry.", exc_info=True)
 
     def _next_request_index(self) -> int:
         self._request_index += 1

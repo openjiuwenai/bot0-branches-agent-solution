@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import sys
 import uuid
@@ -21,6 +22,9 @@ from skill_builder.application.agent_core import (
     SkillBuilderAgentRuntimeUnavailableError,
 )
 from skill_builder.ports.runtime import SkillBuilderAgentRequest
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -237,7 +241,7 @@ class SubprocessAgentRunner:
                 dict(payload) if isinstance(payload, dict) else {},
             )
         except Exception:
-            return
+            _LOGGER.debug("Failed to forward an Agent worker event line.", exc_info=True)
 
     async def _stop_process(
         self,

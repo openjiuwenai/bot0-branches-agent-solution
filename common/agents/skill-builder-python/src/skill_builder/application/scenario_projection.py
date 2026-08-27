@@ -750,7 +750,7 @@ def scenario_projection_matches(root: Path, contract: Any) -> bool:
     try:
         handoff_bytes = handoff_path.read_bytes()
         handoff = json.loads(handoff_bytes.decode("utf-8"))
-    except (OSError, UnicodeError, TypeError, ValueError):
+    except (OSError, TypeError, ValueError):
         return False
     return bool(
         len(handoff_bytes) <= AUTHOR_HANDOFF_MAX_BYTES

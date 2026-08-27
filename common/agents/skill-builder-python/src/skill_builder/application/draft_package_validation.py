@@ -266,7 +266,7 @@ def validate_draft_package(root: Path) -> DraftPackageValidation:
         )
         try:
             build_skill_export_archive(generated, package_metadata)
-        except (OSError, SkillPackageBuildError, UnicodeError, ValueError) as exc:
+        except (OSError, SkillPackageBuildError, ValueError) as exc:
             errors.append(
                 _finding(
                     "package_archive_unbuildable",

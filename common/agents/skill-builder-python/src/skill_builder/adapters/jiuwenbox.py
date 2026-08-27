@@ -6,6 +6,7 @@ import asyncio
 import base64
 import json
 import hashlib
+import logging
 import os
 import posixpath
 import shutil
@@ -35,6 +36,9 @@ from skill_builder.host_support import (
 from skill_builder.ports import ExecutionRequest, ExecutionResult
 
 
+_LOGGER = logging.getLogger(__name__)
+
+
 SANDBOX_WORKSPACE_PATH = "/workspace"
 MAX_AGENT_FILE_READ_BYTES = 256 * 1024
 MAX_AGENT_FILE_WRITE_BYTES = 1024 * 1024
@@ -61,8 +65,8 @@ class SkillBuilderSandboxCommandResult:
 class JiuwenboxWorkspacePort:
     """Create Jiuwenbox-backed workspaces for Scenario, Author and Repair."""
 
+    @staticmethod
     def create_accessor(
-        self,
         *,
         root: Path,
         workspace_id: str,
@@ -329,11 +333,11 @@ class SkillBuilderSandboxSession:
             try:
                 client.delete_sandbox(sandbox_id)
             except Exception:
-                pass
+                _LOGGER.debug("Failed to delete finalized Jiuwenbox sandbox %s.", sandbox_id, exc_info=True)
         try:
             client.close()
         except Exception:
-            pass
+            _LOGGER.debug("Failed to close finalized Jiuwenbox client.", exc_info=True)
 
     @property
     def sandbox_ref(self) -> dict[str, Any]:
@@ -1058,7 +1062,7 @@ class SkillBuilderSandboxSession:
                     local_path.write_bytes(data)
                     synced.append(rel)
                 except Exception:
-                    continue
+                    _LOGGER.debug("Failed to download Jiuwenbox workspace file %s.", rel, exc_info=True)
         return synced
 
     def close(self, *, keep: bool | None = None) -> None:
@@ -1078,14 +1082,14 @@ class SkillBuilderSandboxSession:
             try:
                 self.sync_back()
             except Exception:
-                pass
+                _LOGGER.debug("Failed to sync Jiuwenbox workspace before close.", exc_info=True)
         self.sandbox_id = None
         self._sandbox_id_ref["value"] = None
         if sandbox_id and not keep_sandbox:
             try:
                 self.client.delete_sandbox(sandbox_id)
             except Exception:
-                pass
+                _LOGGER.debug("Failed to delete Jiuwenbox sandbox %s during close.", sandbox_id, exc_info=True)
         self.client.close()
         self._finalizer.detach()
 
@@ -1110,7 +1114,7 @@ def cleanup_skill_builder_workspace_sandboxes(*, workspace_id: str) -> list[str]
                 client.delete_sandbox(sandbox.sandbox_id)
                 deleted.append(sandbox.sandbox_id)
             except Exception:
-                continue
+                _LOGGER.debug("Failed to delete stale Jiuwenbox sandbox %s.", sandbox.sandbox_id, exc_info=True)
     finally:
         client.close()
     return deleted

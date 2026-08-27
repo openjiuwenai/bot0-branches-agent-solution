@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import shutil
 import time
 from pathlib import Path
@@ -21,6 +22,8 @@ DEFAULT_ARTIFACT_SCOPES = (
 
 REJECTED_REPAIR_ROOT = Path(".skill-builder/rejected-repairs")
 REJECTED_REPAIR_RETENTION = 5
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _scope_file_digests(base: Path, scope: str) -> dict[str, str]:
@@ -148,7 +151,7 @@ def preserve_rejected_workspace_artifacts(
             try:
                 shutil.rmtree(temporary_root, ignore_errors=True)
             except Exception:
-                pass
+                _LOGGER.debug("Failed to remove temporary rejected-repair artifacts.", exc_info=True)
         return {
             "ok": False,
             "preserved": False,

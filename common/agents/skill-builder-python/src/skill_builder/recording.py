@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 import shutil
@@ -24,6 +25,9 @@ from typing import Any, Callable
 from urllib.parse import urlparse
 
 from skill_builder.runtime.serialization import json_safe
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class RecordingError(RuntimeError):
@@ -481,7 +485,7 @@ async def _capture_recording_step(
             recording.screenshot_count += 1
             saved = screenshot_path
         except Exception:
-            pass
+            _LOGGER.debug("Failed to capture a recording screenshot.", exc_info=True)
         try:
             page_text = await page.locator("body").inner_text(timeout=1000)
             page_text = _truncate_text(re.sub(r"\s+", " ", page_text).strip(), 1800)
@@ -493,7 +497,7 @@ async def _capture_recording_step(
             try:
                 title = await page.title()
             except Exception:
-                pass
+                _LOGGER.debug("Failed to read the current recording page title.", exc_info=True)
         step = {
             **json_safe(payload, max_text_length=4000),
             "step": number,
@@ -755,7 +759,7 @@ async def start_recording(
                     if frame.parent_frame:
                         return
                 except Exception:
-                    pass
+                    _LOGGER.debug("Failed to inspect the recording frame hierarchy.", exc_info=True)
                 asyncio.create_task(_capture_recording_step(
                     root, recording, page,
                     {"type": "navigate", "url": getattr(page, "url", "")},
@@ -782,6 +786,7 @@ async def start_recording(
         try:
             page_title = await page.title()
         except Exception:
+            _LOGGER.debug("Failed to read the initial recording page title.", exc_info=True)
             page_title = ""
         await _capture_recording_step(root, recording, page, {
             "type": "open" if recording.navigation_status == "loaded" else "initial_navigation_timeout",
@@ -795,7 +800,7 @@ async def start_recording(
             try:
                 await context.close()
             except Exception:
-                pass
+                _LOGGER.debug("Failed to close recording context after a recording error.", exc_info=True)
         try:
             await playwright.stop()
         finally:
@@ -806,7 +811,7 @@ async def start_recording(
             try:
                 await context.close()
             except Exception:
-                pass
+                _LOGGER.debug("Failed to close recording context after startup failure.", exc_info=True)
         await playwright.stop()
         _ACTIVE_WEB_RECORDINGS.pop(workspace_id, None)
         if _display_runtime_failure(exc):
@@ -841,13 +846,13 @@ async def stop_recording(
     try:
         await recording.context.storage_state(path=str(_resolve_safe(root, "playwright/storage-state.json")))
     except Exception:
-        pass
+        _LOGGER.debug("Failed to persist recording browser storage state.", exc_info=True)
     try:
         trace_path = f"{_recording_dir(recording.id)}/trace.zip"
         await recording.context.tracing.stop(path=str(_resolve_safe(root, trace_path)))
         recording.trace_path = trace_path
     except Exception:
-        pass
+        _LOGGER.debug("Failed to persist the recording trace.", exc_info=True)
     cleanup_error: str | None = None
     try:
         await recording.context.close()

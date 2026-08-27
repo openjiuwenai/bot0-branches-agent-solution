@@ -171,11 +171,12 @@ class SkillBuilderClient:
     async def invalidate_receipt(self, execution_id: str) -> SkillBuilderExecution:
         return await self._engine.invalidate_receipt(execution_id)
 
-    def present(self, execution: SkillBuilderExecution) -> PresentationProjection:
+    @staticmethod
+    def present(execution: SkillBuilderExecution) -> PresentationProjection:
         return project_execution_presentation(execution)
 
+    @staticmethod
     def build_recovery_message(
-        self,
         execution: SkillBuilderExecution,
         *,
         kind: str,
@@ -204,8 +205,8 @@ class SkillBuilderClient:
             ),
         )
 
+    @staticmethod
     def normalize_hitl_answer(
-        self,
         *,
         answer: dict[str, Any],
         fields: list[dict[str, Any]],
