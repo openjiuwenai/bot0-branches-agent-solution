@@ -18,6 +18,7 @@ import com.openjiuwen.client.api.InvocationRequest;
 import com.openjiuwen.client.api.InvocationSnapshot;
 import com.openjiuwen.client.api.TaskState;
 import com.openjiuwen.client.api.ErrorCodes;
+import com.openjiuwen.client.api.calltree.DataPartSnapshot;
 import com.openjiuwen.client.tool.spi.LocalToolDescriptor;
 import com.openjiuwen.client.tool.spi.ToolExecutionRecord;
 import com.openjiuwen.client.tool.spi.ToolExposurePolicy;
@@ -55,7 +56,9 @@ class A2aHttpStreamingTest {
                 streamingResumeCalls.incrementAndGet();
                 A2aHttpTestSupport.sse(exchange, A2aHttpTestSupport.taskFrame("task-streaming",
                         "inherit-streaming", "TASK_STATE_COMPLETED",
-                        ",\"message\":{\"parts\":[{\"text\":\"done\"}]}"));
+                        ",\"message\":{\"parts\":[{\"text\":\"done\"}]},"
+                                + "\"artifacts\":[{\"artifactId\":\"final-result\",\"parts\":[{"
+                                + "\"data\":{\"result\":\"approved\"}}]}]"));
                 return;
             }
             A2aHttpTestSupport.json(exchange, A2aHttpTestSupport.streamingBody("inherit-streaming",
@@ -77,6 +80,11 @@ class A2aHttpStreamingTest {
                 InvocationSnapshot completed = continuation.get().completion().toCompletableFuture()
                         .get(5, TimeUnit.SECONDS);
                 assertEquals(TaskState.COMPLETED, completed.state());
+                assertEquals("approved", findDataResult(completed));
+                InvocationSnapshot queried = client.getInvocation(initial.invocationRef())
+                        .toCompletableFuture().get(5, TimeUnit.SECONDS);
+                assertEquals(TaskState.COMPLETED, queried.state());
+                assertEquals("approved", findDataResult(queried));
                 assertEquals(1, streamingResumeCalls.get());
             }
         }
@@ -167,6 +175,19 @@ class A2aHttpStreamingTest {
                                 && ErrorCodes.INPUT_RESUME_TARGET_MISSING.equals(diagnostic.code())));
             }
         }
+    }
+
+    private static String findDataResult(InvocationSnapshot snapshot) {
+        assertNotNull(snapshot.callTree(), "STREAMING terminal snapshot must retain its call tree");
+        return snapshot.callTree().root().artifacts().stream()
+                .flatMap(artifact -> artifact.parts().stream())
+                .filter(DataPartSnapshot.class::isInstance)
+                .map(DataPartSnapshot.class::cast)
+                .map(DataPartSnapshot::data)
+                .map(data -> ((java.util.Map<?, ?>) data).get("result"))
+                .map(String::valueOf)
+                .findFirst()
+                .orElse(null);
     }
 
     private static Flow.Subscriber<InvocationEvent> streamingPromptSubscriber(

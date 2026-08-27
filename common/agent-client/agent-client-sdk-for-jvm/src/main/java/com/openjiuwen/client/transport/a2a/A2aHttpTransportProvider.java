@@ -655,6 +655,7 @@ public class A2aHttpTransportProvider
             emit(request.sink(), f);
         } else {
             applyRootOutput(request.ch(), f);
+            applyFrameToCallTree(request.ch(), f);
         }
         return Optional.ofNullable(f);
     }
@@ -761,6 +762,7 @@ public class A2aHttpTransportProvider
                             emit(sink, f);
                         } else {
                             applyRootOutput(ch, f);
+                            applyFrameToCallTree(ch, f);
                         }
                         // 快照驱动的续跑（无 sink）走到终态：通道再无用处，及时释放，避免 taskRef 映射堆积；
                         // 未到终态则保留通道，等待后续续跑推进。
@@ -1555,12 +1557,7 @@ public class A2aHttpTransportProvider
                     if (channel != null && frame != null) {
                         bindTaskRef(channel, frame);
                         applyRootOutput(channel, frame);
-                        if (channel.callTree != null) {
-                            for (ProtocolArtifact artifact : frame.taskArtifacts()) {
-                                channel.callTree.accept(artifact);
-                            }
-                            channel.callTree.updateRootState(frame.state());
-                        }
+                        applyFrameToCallTree(channel, frame);
                     }
                     return snapshotFromFrame(invocationRef, frame);
                 });
@@ -1612,7 +1609,7 @@ public class A2aHttpTransportProvider
             return;
         }
         applyRootOutput(ch, f);
-        emitCallTreeUpdate(ch, f);
+        applyFrameToCallTree(ch, f);
         if (f.state() == null) {
             if (f.text() != null) {
                 submit(ch, new InvocationEvent.ContentDelta(ch.invocationRef, f.text()));
@@ -1640,7 +1637,15 @@ public class A2aHttpTransportProvider
         }
     }
 
-    private void emitCallTreeUpdate(Channel ch, A2aJsonCodec.Frame f) {
+    /**
+     * Applies all artifact-bearing content from a normalized frame to the
+     * invocation's single call-tree reducer. The same path is used by live
+     * SSE, continuation snapshots and GetTask reconciliation.
+     *
+     * @param ch invocation channel
+     * @param f normalized protocol frame
+     */
+    private void applyFrameToCallTree(Channel ch, A2aJsonCodec.Frame f) {
         if (ch.callTree == null) {
             return;
         }
