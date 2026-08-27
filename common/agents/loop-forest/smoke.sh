@@ -42,16 +42,17 @@ grep -q 'prompts_source=module_owned' "$LOG" \
   || { echo "[smoke.sh] FAIL：prompt 真源不在本模块（寄生依赖 jar）"; exit 1; }
 
 # ── B 档：真 LLM 统一入口冒烟（env-gated 自动）──
-if [ "${1:-}" != "--a-only" ] && [ -n "${DEEPSEEK_API_KEY:-}" ] \
-    && [ -n "${DEEPSEEK_BASE_URL:-}" ]; then
+if [ "${1:-}" = "--a-only" ]; then
+  echo "[smoke.sh] B 档跳过（--a-only 指定——env 存在与否不判）" | tee -a "$LOG"
+elif [ -z "${DEEPSEEK_API_KEY:-}" ] || [ -z "${DEEPSEEK_BASE_URL:-}" ]; then
+  echo "[smoke.sh] B 档跳过（无 DEEPSEEK env——A 档数值已承重）" | tee -a "$LOG"
+else
   echo "== B 档：LoopForestAgent 真 LLM 冒烟 ==" | tee -a "$LOG"
   mvn -q test -Dtest='LoopForestAgentSmokeE2eTest' >> "$LOG" 2>&1
   RC2=$?
   echo "[smoke.sh] B 档 rc=$RC2" | tee -a "$LOG"
   grep -E 'FOREST-OK|LOOP_FOREST' "$LOG" | tail -2 | tee -a "$LOG"
   [ $RC2 -ne 0 ] && { echo "[smoke.sh] FAIL：B 档真 LLM 冒烟失败"; exit 1; }
-else
-  echo "[smoke.sh] B 档跳过（无 DEEPSEEK env——A 档数值已承重）" | tee -a "$LOG"
 fi
 
 echo "[smoke.sh] ALL_PASS log=$LOG" | tee -a "$LOG"

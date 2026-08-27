@@ -100,8 +100,7 @@ public final class LoopForestAgent {
         // R1-F9：fallback 从本模块 prompts 真源加载（原硬编码 "write rejected"
         // 绕过零提及纪律的外置治理）
         String rejection = b.rejectionMessage != null ? b.rejectionMessage
-                : loadResourceOrDefault("/prompts/veto-rejection.txt",
-                        "write rejected: artifact fields outside the task signature");
+                : loadResourceOrFail("/prompts/veto-rejection.txt");
         this.graph = GraphLoopRails.registerOnto(host, new GraphLoopConfig(
                 contract, rejection, b.evaluator, executor,
                 "Fork a sub-task to explore a different direction"));
@@ -199,12 +198,17 @@ public final class LoopForestAgent {
         }
     }
 
-    private static String loadResourceOrDefault(String path, String fallback) {
+    private static String loadResourceOrFail(String path) {
         try (var in = LoopForestAgent.class.getResourceAsStream(path)) {
-            return in == null ? fallback
-                    : new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim();
-        } catch (Exception e) {
-            return fallback;
+            if (in == null) {
+                // R2-F3：拒绝文案是治理承重面——缺失 fail-loud（与
+                // PromptTemplates/RejectionResource 纪律对齐），不静默降级
+                throw new IllegalStateException(
+                        "prompt resource missing: " + path + "（真源不可缺）");
+            }
+            return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim();
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("prompt resource 读失败: " + path, e);
         }
     }
 }

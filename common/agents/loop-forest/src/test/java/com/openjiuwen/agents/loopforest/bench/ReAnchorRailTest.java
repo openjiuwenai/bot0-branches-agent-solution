@@ -318,4 +318,36 @@ class ReAnchorRailTest {
         assertThat(lastMsgText(live)).contains("were satisfied before but are now missing")
                 .contains("margin_days");
     }
+
+
+    @Test
+    void driftGuardIsAliveNotDeadCode() {
+        // R2(fresh-eyes)-F1 防回退：needle 小写化是活守卫——剥成混合大小写
+        // （宿主当前版本）drift 计数会结构性归零且套件全绿（回退不可见）。
+        // 本用例锁死活语义：自产信号消息不得自触发 drift。
+        Path dir = null;
+        try {
+            dir = Files.createTempDirectory("rail_guard");
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+        ReAnchorRail rail = new ReAnchorRail(dir, "v2A5",
+                List.of("baseline.file"), List.of("certified"), COMBOS, false);
+        CapturingQueue queue = new CapturingQueue();
+        // 轮1：干净——signal 进队（drain 后下轮进窗口）
+        rail.beforeModelCall(ctxWith(msgs("start"), queue));
+        // 轮2：窗口含 signal 回显（[GOAL SIGNAL] 大写原文）+ 无注入新文本
+        // → 守卫应跳过 signal 段（活守卫）→ drift=0
+        rail.beforeModelCall(ctxWith(msgs("start", "[GOAL SIGNAL] 0 of 1 missing"),
+                queue));
+        assertThat(rail.driftEvents())
+                .as("活守卫：自产 signal 回显不自触发（宿主死守卫版此断言会失败"
+                        + "——drift 被回显误计）")
+                .isZero();
+        // 对照：真注入文本（含词元）仍触发——消息窗须含前史使新文本落在增量区
+        rail.beforeModelCall(ctxWith(msgs("start", "[GOAL SIGNAL] 0 of 1 missing",
+                "权威 certified 组合"), queue));
+        assertThat(rail.driftEvents()).as("注入文本仍触发 drift（守卫只跳自产段）")
+                .isEqualTo(1);
+    }
 }

@@ -134,16 +134,13 @@ public final class ForkOrchestrator {
         return forest;
     }
 
-    /**
-     * 查找森林中的根分支 ID。
-     *
-     * @return 第一个根分支的 ID；无根返回 null
-     */
-    /** 根分支 ID（addRoot 时记账——R1-F6：替代两臂皆 null 的死守卫）。 */
+    /** 根分支 ID（addRoot 时记账——R1-F6：替代两臂皆 null 的死守卫；
+     * 只跟踪本 orchestrator 创建的根，森林全量根用 TraceForest.roots()）。 */
     private String rootBranchId;
 
+    /** 返回本 orchestrator 记账的根 ID；null=尚未建根（首次调用时建）。 */
     private String findRootId() {
-        return rootBranchId; // null=尚未建根（首次调用 forkingFromRoot 时建）
+        return rootBranchId;
     }
 
     /**

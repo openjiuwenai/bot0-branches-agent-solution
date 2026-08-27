@@ -31,6 +31,12 @@ class LoopForestAgentAssemblyTest {
                 .budget(2, 3, 0)
                 .build();
         assertThat(agent).as("全层参数装配成功（零 LLM 调用）").isNotNull();
+        // R2-1 断言强化：Builder→装配层 config 流向（isNotNull 抓不到参数被吞）
+        assertThat(agent.graph().vetoRail())
+                .as("非空 contract 必须挂 VetoRail（铁律⑰延伸到 Builder 层）")
+                .isNotNull();
+        assertThat(agent.budget())
+                .as("budgetWidth>0 必须挂 BudgetRail").isNotNull();
     }
 
     @Test
@@ -40,6 +46,10 @@ class LoopForestAgentAssemblyTest {
                 .model("dummy-model")
                 .build();
         assertThat(agent).as("骨架档装配（Veto/Budget 未激活——诚实边界）").isNotNull();
+        assertThat(agent.graph().vetoRail())
+                .as("未配 contract 不挂 VetoRail（双向 false 侧）").isNull();
+        assertThat(agent.budget())
+                .as("未设 budget 不挂 BudgetRail（双向 false 侧）").isNull();
     }
 
     @Test
