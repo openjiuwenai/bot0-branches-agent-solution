@@ -49,6 +49,13 @@ public final class FlowApiEngine {
     public static final String PLUGIN_PARAM_MISS = "plugin_param_miss";
     public static final String PLUGIN_CALL_CONFIRM = "plugin_call_confirm";
 
+    /**
+     * Python {@code flow_api.get_auth_token} parity placeholder when IR requires USER-scope
+     * {@code X-Auth-Token}. Production hosts must inject a real token via session workflow param
+     * {@code runtime_auth_headers} before invoke (see README).
+     */
+    public static final String PYTHON_PARITY_AUTH_TOKEN_PLACEHOLDER = "defaultUser|0";
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
@@ -156,7 +163,7 @@ public final class FlowApiEngine {
                     enableConfirm && !confirmed);
 
             Map<String, String> headers = formatApiHeader(session);
-            Map<String, String> auth = getAuthToken();
+            Map<String, String> auth = getAuthToken(headers);
             if (auth != null) {
                 headers = new LinkedHashMap<>(headers);
                 headers.putAll(auth);
@@ -195,7 +202,7 @@ public final class FlowApiEngine {
             Map<String, Object> inputsData = userFieldsOf(in);
             Map<String, Object> apiInputs = formatApiInputs(inputsData, session, false, false);
             Map<String, String> headers = formatApiHeader(session);
-            Map<String, String> auth = getAuthToken();
+            Map<String, String> auth = getAuthToken(headers);
             if (auth != null) {
                 headers = new LinkedHashMap<>(headers);
                 headers.putAll(auth);
@@ -343,8 +350,17 @@ public final class FlowApiEngine {
         return out;
     }
 
-    /** Python {@code get_auth_token}. */
+    /** Python {@code get_auth_token} — dev placeholder unless host already set {@code X-Auth-Token}. */
     public Map<String, String> getAuthToken() {
+        return getAuthToken(Map.of());
+    }
+
+    /**
+     * Python {@code get_auth_token}. When {@code existingHeaders} already contains a non-blank
+     * {@code X-Auth-Token} (from session {@code runtime_auth_headers}), returns {@code null} so the
+     * host value is preserved.
+     */
+    public Map<String, String> getAuthToken(Map<String, String> existingHeaders) {
         Object authObj = conf.get("auth");
         if (!(authObj instanceof Map<?, ?> auth) || auth.isEmpty()) {
             return null;
@@ -373,7 +389,13 @@ public final class FlowApiEngine {
         if (!has) {
             return null;
         }
-        return Map.of("X-Auth-Token", "defaultUser|0");
+        if (existingHeaders != null) {
+            String existing = existingHeaders.get("X-Auth-Token");
+            if (existing != null && !existing.isBlank()) {
+                return null;
+            }
+        }
+        return Map.of("X-Auth-Token", PYTHON_PARITY_AUTH_TOKEN_PLACEHOLDER);
     }
 
     private void waitForRequiredParams(Map<String, Object> inputs, List<FlowApiParam> required, NodeSessionApi session) {

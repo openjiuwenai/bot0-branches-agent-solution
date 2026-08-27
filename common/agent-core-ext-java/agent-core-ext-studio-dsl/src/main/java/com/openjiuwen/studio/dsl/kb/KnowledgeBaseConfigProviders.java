@@ -11,6 +11,15 @@ import com.openjiuwen.studio.dsl.contract.SecretDecryptor;
 /**
  * Global KB config provider + storage wiring (Python {@code FlowKnowledgeRetrieval.set_kb_provider}).
  *
+ * <p><b>Multi-tenant note:</b> wiring is JVM-wide static state — not per {@code StudioDslModule}
+ * instance. Multi-tenant hosts should either (a) implement {@link KnowledgeBaseConfigProvider}
+ * with tenant routing (e.g. ThreadLocal / request context), (b) pass inline {@code kbConfig} on
+ * nodes, or (c) run isolated class loaders per tenant.
+ *
+ * <p>{@link #setProvider(null)} resets to {@link ObsKnowledgeBaseConfigProvider}; {@link
+ * #setStorageProvider(null)} clears storage (unconfigured until set again). Use {@link
+ * #resetToDefaults()} in tests.
+ *
  * @since 2026-08-26
  */
 public final class KnowledgeBaseConfigProviders {
@@ -28,6 +37,18 @@ public final class KnowledgeBaseConfigProviders {
         provider = p == null ? new ObsKnowledgeBaseConfigProvider() : p;
     }
 
+    /** Clears optional storage wiring; {@link #storage()} throws until configured again. */
+    public static void setStorageProvider(KnowledgeStorageProvider storage) {
+        storageProvider = storage;
+    }
+
+    /** Resets provider to OBS default and clears storage + decryptor (tests / dev only). */
+    public static void resetToDefaults() {
+        provider = new ObsKnowledgeBaseConfigProvider();
+        storageProvider = null;
+        secretDecryptor = null;
+    }
+
     public static KnowledgeStorageProvider storage() {
         KnowledgeStorageProvider s = storageProvider;
         if (s != null) {
@@ -38,10 +59,6 @@ public final class KnowledgeBaseConfigProviders {
                     "KnowledgeStorageProvider not configured; call KnowledgeBaseConfigProviders.setStorageProvider"
                             + " or provide inline kbConfig");
         };
-    }
-
-    public static void setStorageProvider(KnowledgeStorageProvider storage) {
-        storageProvider = storage;
     }
 
     public static void setSecretDecryptor(SecretDecryptor decryptor) {

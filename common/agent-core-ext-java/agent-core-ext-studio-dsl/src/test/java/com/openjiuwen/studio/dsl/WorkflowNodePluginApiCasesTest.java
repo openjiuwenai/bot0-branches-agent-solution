@@ -230,7 +230,8 @@ class WorkflowNodePluginApiCasesTest {
                         "USER",
                         "target",
                         Map.of("domain", "headers", "auth_keys", List.of("X-Auth-Token")))));
-        assertThat(engine.getAuthToken()).containsEntry("X-Auth-Token", "defaultUser|0");
+        assertThat(engine.getAuthToken()).containsEntry("X-Auth-Token", FlowApiEngine.PYTHON_PARITY_AUTH_TOKEN_PLACEHOLDER);
+        assertThat(engine.getAuthToken(Map.of("X-Auth-Token", "tenant|42"))).isNull();
     }
 
     @Test

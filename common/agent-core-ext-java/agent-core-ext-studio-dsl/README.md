@@ -46,10 +46,44 @@ StudioDslModule module = StudioDslModule.create(props)
         .withToolRegistry(realTools)
         .withSubWorkflowResolver(configs -> loadChildWorkflow(configs));
 
-// 知识检索（全局 wiring，不经 NodeBuildContext）
+// 知识检索（全局 wiring，不经 NodeBuildContext；见下方「生产注意事项」）
 KnowledgeBaseConfigProviders.setStorageProvider(obsStorage);
 KnowledgeBaseConfigProviders.setSecretDecryptor(crypt);
 ```
+
+### 生产注意事项
+
+**Python 代码节点 — 勿用 `inprocess`**
+
+默认 `StudioDslNodeProperties.localExecMode` 与 Python `LOCAL_CODE_EXEC_MODE` 对齐为 **`inprocess`**（共享系统临时目录、无租户/工作流隔离目录）。L2 D4 明确：**生产环境必须使用 `subprocess`**（或 `exec_env=sandbox` + 宿主注入 `PythonCodeRunners.setSandboxExecutor`）。
+
+```java
+StudioDslNodeProperties props = new StudioDslNodeProperties();
+props.setLocalExecMode("subprocess"); // 生产必设
+props.setPythonWorkdirRoot("/var/studio/python-workdirs"); // 建议按 tenant/workflow 隔离
+StudioDslModule module = StudioDslModule.create(props);
+```
+
+**FlowApi / Plugin — `X-Auth-Token`**
+
+当 IR `auth.scope=USER` 且要求 `X-Auth-Token` 时，Java 与 Python 均会回落到占位值 `defaultUser|0`（常量 `FlowApiEngine.PYTHON_PARITY_AUTH_TOKEN_PLACEHOLDER`），**仅供开发/单测**。生产必须在 invoke 前通过 session 工作流参数注入真实令牌：
+
+```java
+// session 侧设置 runtime_auth_headers → apiId 或 "default" → header map
+session.updateState(Map.of(
+    "runtime_auth_headers",
+    Map.of("default", Map.of("X-Auth-Token", realUserId + "|" + realTenantId))));
+```
+
+已注入的 `X-Auth-Token` 不会被占位值覆盖。
+
+**知识检索 — 全局 Provider 与多租户**
+
+`KnowledgeBaseConfigProviders` 为 **JVM 级静态** wiring（与 Python `set_kb_provider` 一致），**不能**按 `StudioDslModule` 实例隔离。多租户宿主应：(1) 在 `KnowledgeBaseConfigProvider` 内按请求上下文路由；(2) 或节点 inline `kbConfig`；(3) 或进程/ClassLoader 隔离。
+
+- `setProvider(null)` → 重置为 `ObsKnowledgeBaseConfigProvider`
+- `setStorageProvider(null)` → 清除 storage（未配置时 `storage()` 抛错）
+- 单测重置：`KnowledgeBaseConfigProviders.resetToDefaults()`
 
 ## 内置节点（24）
 
@@ -69,8 +103,8 @@ FEAT-031 正式 MUST 为 21 种 `jiuwen.*`；3 种 `EI.*` 为 L2 扩展验收范
 | `PythonCodeExecutor` | 代码节点 Python 执行 | `StudioDslModule` / `NodeBuildContext` | `SubprocessPythonCodeExecutor` |
 | `ToolRegistry` | Plugin `apiId` 查 Tool | `withToolRegistry` → `NodeBuildContext` | `EmptyToolRegistry`（查不到） |
 | `SubWorkflowResolver` | 嵌套子流 IR → `AssembledWorkflow` | `withSubWorkflowResolver` → `NodeBuildContext` | 未配置则 `SUBWORKFLOW_REF_INVALID` |
-| `KnowledgeBaseConfigProvider` | KB 连接/库配置 | `KnowledgeBaseConfigProviders.setProvider` | `ObsKnowledgeBaseConfigProvider` |
-| `KnowledgeStorageProvider` | OBS/存储读 KB JSON | `KnowledgeBaseConfigProviders.setStorageProvider` | 未配置则失败（除非节点 inline `kbConfig`） |
+| `KnowledgeBaseConfigProvider` | KB 连接/库配置 | `KnowledgeBaseConfigProviders.setProvider`（JVM 全局） | `ObsKnowledgeBaseConfigProvider` |
+| `KnowledgeStorageProvider` | OBS/存储读 KB JSON | `KnowledgeBaseConfigProviders.setStorageProvider`（JVM 全局） | 未配置则失败（除非节点 inline `kbConfig`） |
 | `SecretDecryptor` | 解密 OBS 中 SECRET 参数 | `KnowledgeBaseConfigProviders.setSecretDecryptor` | 不解密，原样使用 |
 
 `NodeHandlerFactory` 为模块内部契约（24 内置 Handler），**不是**宿主扩展 SPI。

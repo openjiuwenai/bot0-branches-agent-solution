@@ -46,8 +46,7 @@ class KnowledgeRetrievalParityTest {
         KBAdapterFactory.register("FakeKB", () -> (q, c, k, p) -> List.of());
         KnowledgeRetrievalCacheStore.clearMemory();
         KnowledgeRetrievalCacheStore.setJedis(null);
-        KnowledgeBaseConfigProviders.setStorageProvider(null);
-        KnowledgeBaseConfigProviders.setProvider(new ObsKnowledgeBaseConfigProvider());
+        KnowledgeBaseConfigProviders.resetToDefaults();
         KerberosAuth.clearCache();
     }
 
