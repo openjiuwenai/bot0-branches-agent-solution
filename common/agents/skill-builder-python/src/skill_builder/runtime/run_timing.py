@@ -213,16 +213,15 @@ class SkillBuilderRunTiming:
                 }
             self.performance_model_requests.append(record)
         elif event_type == "internal.performance.llm_request_completed":
-            record = next(
-                (
-                    item
-                    for item in reversed(self.performance_model_requests)
-                    if item.get("requestIndex") == request_index
-                    and item.get("transportAttempt") == transport_attempt
-                    and item.get("finishedAtMs") is None
-                ),
-                None,
-            )
+            record = None
+            for item in reversed(self.performance_model_requests):
+                if item.get("requestIndex") != request_index:
+                    continue
+                if item.get("transportAttempt") != transport_attempt:
+                    continue
+                if item.get("finishedAtMs") is None:
+                    record = item
+                    break
             if record is None:
                 record = {
                     "phase": phase,
@@ -401,20 +400,18 @@ class SkillBuilderRunTiming:
         persisted_event_count = 0
         persisted_max_seq = 0
         persisted_agent_phase = ""
-        queue_started_candidates = [
-            int(getattr(row, "create_time", 0) or 0)
-            for row in rows
-            if getattr(row, "event_type", None) == "agent.queue_started"
-            and int(getattr(row, "create_time", 0) or 0) <= self.started_ms + 60_000
-        ]
+        queue_started_candidates = []
+        for row in rows:
+            created_ms = int(getattr(row, "create_time", 0) or 0)
+            if getattr(row, "event_type", None) == "agent.queue_started" and created_ms <= self.started_ms + 60_000:
+                queue_started_candidates.append(created_ms)
         if queue_started_candidates:
             queue_started = max(queue_started_candidates)
-            queued_candidates = [
-                int(getattr(row, "create_time", 0) or 0)
-                for row in rows
-                if getattr(row, "event_type", None) == "agent.queued"
-                and int(getattr(row, "create_time", 0) or 0) <= queue_started
-            ]
+            queued_candidates = []
+            for row in rows:
+                created_ms = int(getattr(row, "create_time", 0) or 0)
+                if getattr(row, "event_type", None) == "agent.queued" and created_ms <= queue_started:
+                    queued_candidates.append(created_ms)
             if queued_candidates:
                 self.queued_ms = max(queued_candidates)
                 self.queue_wait_ms = max(0, queue_started - self.queued_ms)
@@ -879,11 +876,12 @@ def refresh_running_run_timing(
     now_ms = now_ms()
     started_ms = _iso_to_ms(snapshot.get("startedAt"))
     if persisted_events and started_ms is not None:
-        relevant_events = [
-            row for row in persisted_events
-            if int(getattr(row, "create_time", 0) or 0) >= started_ms
-            and str(getattr(row, "event_type", "") or "") not in HIGH_FREQUENCY_STREAM_EVENT_TYPES
-        ]
+        relevant_events = []
+        for row in persisted_events:
+            created_ms = int(getattr(row, "create_time", 0) or 0)
+            event_type = str(getattr(row, "event_type", "") or "")
+            if created_ms >= started_ms and event_type not in HIGH_FREQUENCY_STREAM_EVENT_TYPES:
+                relevant_events.append(row)
         if relevant_events:
             hitl_started: dict[str, int] = {}
             hitl_finished: dict[str, int] = {}

@@ -210,17 +210,17 @@ class SkillBuilderTransientAssistantCompactor(ContextProcessor):
 
     @staticmethod
     def _has_transient_fields(message: BaseMessage) -> bool:
-        return isinstance(message, AssistantMessage) and any(
-            value is not None
-            for value in (
-                message.reasoning_content,
-                message.parser_content,
-                message.prompt_token_ids,
-                message.completion_token_ids,
-                message.logprobs,
-                message.usage_metadata,
-            )
+        if not isinstance(message, AssistantMessage):
+            return False
+        transient_values = (
+            message.reasoning_content,
+            message.parser_content,
+            message.prompt_token_ids,
+            message.completion_token_ids,
+            message.logprobs,
+            message.usage_metadata,
         )
+        return any(value is not None for value in transient_values)
 
     async def trigger_get_context_window(
         self,

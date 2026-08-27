@@ -190,18 +190,15 @@ def infer_knowledge_documentation_evidence(
         return entries
     generated = root / "generated-skill"
     documents: list[tuple[str, str, str]] = []
-    for path in sorted(
-        item
-        for item in generated.rglob("*")
-        if item.is_file()
-        and (
-            item.name == "SKILL.md"
-            or (
-                item.relative_to(generated).as_posix().startswith("references/")
-                and item.suffix.lower() in {".md", ".markdown", ".txt"}
-            )
-        )
-    ):
+    document_paths = []
+    for item in generated.rglob("*"):
+        if not item.is_file():
+            continue
+        relative = item.relative_to(generated).as_posix()
+        is_reference = relative.startswith("references/") and item.suffix.lower() in {".md", ".markdown", ".txt"}
+        if item.name == "SKILL.md" or is_reference:
+            document_paths.append(item)
+    for path in sorted(document_paths):
         try:
             content = path.read_text(encoding="utf-8", errors="replace")
             documents.append(
@@ -265,24 +262,22 @@ def infer_knowledge_documentation_evidence(
             if len(canonical) >= 12:
                 canonical_texts.append(canonical)
         exact_texts = list(dict.fromkeys(canonical_texts))
-        label_match = next(
-            (
-                (path, alias)
-                for path, content, _canonical in documents
-                for alias in aliases
-                if _exact_document_label(content, alias)
-            ),
-            None,
-        )
-        text_match = next(
-            (
-                (path, contract_id)
-                for path, _content, canonical_content in documents
-                for exact_text in exact_texts
-                if exact_text in canonical_content
-            ),
-            None,
-        )
+        label_match = None
+        for path, content, _canonical in documents:
+            for alias in aliases:
+                if _exact_document_label(content, alias):
+                    label_match = (path, alias)
+                    break
+            if label_match is not None:
+                break
+        text_match = None
+        for path, _content, canonical_content in documents:
+            for exact_text in exact_texts:
+                if exact_text in canonical_content:
+                    text_match = (path, contract_id)
+                    break
+            if text_match is not None:
+                break
         match = label_match or text_match
         if match is None:
             continue

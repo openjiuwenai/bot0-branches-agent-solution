@@ -545,11 +545,12 @@ async def _capture_recording_download(
 
 def active_recording(workspace_id: str, recording_id: str | None = None) -> ActiveWebRecording:
     recording = _ACTIVE_WEB_RECORDINGS.get(workspace_id)
-    if (
+    recording_unavailable = (
         recording is None
         or (recording_id is not None and recording.id != recording_id)
         or recording.status != "recording"
-    ):
+    )
+    if recording_unavailable:
         raise RecordingError("当前录屏任务不存在或已经结束", status_code=404)
     return recording
 
@@ -612,7 +613,8 @@ async def perform_recording_action(
             raise RecordingError("录屏页面已经关闭", status_code=409)
         try:
             if action.action == "click":
-                if action.x is None or action.y is None or action.x < 0 or action.y < 0:
+                invalid_coordinates = action.x is None or action.y is None or action.x < 0 or action.y < 0
+                if invalid_coordinates:
                     raise RecordingError("点击操作需要有效坐标", status_code=422)
                 await page.mouse.click(float(action.x), float(action.y))
             elif action.action == "type":

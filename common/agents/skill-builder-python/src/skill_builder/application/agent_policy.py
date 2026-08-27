@@ -317,17 +317,15 @@ def author_observation_tool_is_progress(
 
     normalized_mode = str(task_mode or "").strip().lower()
     normalized_name = str(tool_name or "").strip()
+    observation_markers = (
+        "read_workspace_file",
+        "list_workspace_files",
+        "read_material_bundle",
+    )
     return bool(
         normalized_mode in {"author", "author_build", "author_validate"}
         and ok
-        and any(
-            marker in normalized_name
-            for marker in (
-                "read_workspace_file",
-                "list_workspace_files",
-                "read_material_bundle",
-            )
-        )
+        and any(marker in normalized_name for marker in observation_markers)
     )
 
 

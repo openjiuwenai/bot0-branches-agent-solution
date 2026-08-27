@@ -98,7 +98,7 @@ def merge_split_fact_evidence(value: Any) -> Any:
     while index < len(facts):
         current = facts[index]
         following = facts[index + 1] if index + 1 < len(facts) else None
-        if (
+        complementary_evidence = (
             isinstance(current, dict)
             and current.get("kind")
             and "value" in current
@@ -108,7 +108,8 @@ def merge_split_fact_evidence(value: Any) -> Any:
             and not following.get("kind")
             and "value" not in following
             and set(following).issubset({"evidenceRefs", "sourceQuote"})
-        ):
+        )
+        if complementary_evidence:
             combined = {**current, "evidenceRefs": following["evidenceRefs"]}
             if not combined.get("sourceQuote") and following.get("sourceQuote"):
                 combined["sourceQuote"] = following["sourceQuote"]

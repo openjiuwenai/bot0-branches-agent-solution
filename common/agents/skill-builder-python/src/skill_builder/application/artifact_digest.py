@@ -23,13 +23,13 @@ def _candidate_generated_files(
 ) -> list[Path]:
     if not generated_root.is_dir():
         return []
-    return [
-        path
-        for path in generated_root.rglob("*")
-        if path.is_file()
-        and not path.is_symlink()
-        and path_allowed(path.relative_to(generated_root).as_posix())
-    ]
+    result = []
+    for path in generated_root.rglob("*"):
+        if not path.is_file() or path.is_symlink():
+            continue
+        if path_allowed(path.relative_to(generated_root).as_posix()):
+            result.append(path)
+    return result
 
 
 def skill_artifact_sha256(generated_root: Path) -> str | None:
@@ -114,12 +114,13 @@ def verify_candidate_commit(root: Path, value: Any) -> dict[str, Any]:
         while path.startswith("./"):
             path = path[2:]
         candidate = PurePosixPath(path)
-        if (
+        invalid_path = (
             not path
             or path.startswith("/")
             or ".." in candidate.parts
             or not path.startswith("generated-skill/")
-        ):
+        )
+        if invalid_path:
             return {"ok": False, "error": "candidate_commit_path_invalid", "path": path}
         paths.append(candidate.as_posix())
     if len(paths) != len(set(paths)) or int(value.get("artifactCount") or -1) != len(paths):

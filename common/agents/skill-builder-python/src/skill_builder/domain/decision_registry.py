@@ -597,9 +597,9 @@ def canonical_value_from_presented_label(concept: Any, label: Any) -> str | None
     return matches[0] if len(matches) == 1 else None
 
 
-_DECISION_CONCEPT_TITLE_ALIASES = {
-    _label_token(title): concept
-    for concept, titles in {
+def _decision_concept_title_aliases() -> dict[str, str]:
+    aliases = {}
+    concept_titles = {
         "external_system_integration": {
             "外部系统集成范围",
             "外部系统集成方式",
@@ -620,9 +620,14 @@ _DECISION_CONCEPT_TITLE_ALIASES = {
             "Data acquisition mode",
             "Data collection mode",
         },
-    }.items()
-    for title in titles
-}
+    }
+    for concept, titles in concept_titles.items():
+        for title in titles:
+            aliases[_label_token(title)] = concept
+    return aliases
+
+
+_DECISION_CONCEPT_TITLE_ALIASES = _decision_concept_title_aliases()
 
 
 def infer_decision_concept_from_title(title: Any) -> str | None:

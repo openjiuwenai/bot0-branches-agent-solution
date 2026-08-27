@@ -130,16 +130,13 @@ def resolved_capability_contract(
                         "collection_script",
                     }
                 )
-                acquisition_capabilities.update(
-                    {
-                        str(key): bool(value)
-                        for key, value in decision_capabilities(
-                            concept,
-                            decision.get("semanticValue", decision.get("value")),
-                        ).items()
-                        if isinstance(value, bool)
-                    }
+                capability_values = decision_capabilities(
+                    concept,
+                    decision.get("semanticValue", decision.get("value")),
                 )
+                for key, value in capability_values.items():
+                    if isinstance(value, bool):
+                        acquisition_capabilities[str(key)] = bool(value)
             if concept == "skill_delivery_mode":
                 semantic_value = str(
                     decision.get("semanticValue", decision.get("value")) or ""
@@ -155,16 +152,10 @@ def resolved_capability_contract(
                         "collection_script",
                     }
                 )
-                delivery_capabilities.update(
-                    {
-                        str(key): bool(value)
-                        for key, value in decision_capabilities(
-                            concept,
-                            semantic_value,
-                        ).items()
-                        if isinstance(value, bool)
-                    }
-                )
+                capability_values = decision_capabilities(concept, semantic_value)
+                for key, value in capability_values.items():
+                    if isinstance(value, bool):
+                        delivery_capabilities[str(key)] = bool(value)
         for key, value in (contract.get("capabilities") or {}).items():
             if not isinstance(value, bool):
                 continue
@@ -248,6 +239,42 @@ def author_handoff_contract(
         scenario_contract,
         confirmations=confirmations,
     )
+    resolved_requirements = []
+    for item in scenario_contract.get("resolvedRequirements") or []:
+        if not isinstance(item, dict):
+            continue
+        projected = {}
+        for key in ("requirementId", "concept", "value", "evidenceRefs"):
+            if item.get(key) not in (None, "", [], {}):
+                projected[key] = item.get(key)
+        resolved_requirements.append(projected)
+
+    business_rules = []
+    for item in scenario_contract.get("businessRules") or []:
+        if not isinstance(item, dict):
+            continue
+        projected = {}
+        for key in ("ruleId", "kind", "definition", "evidenceRefs"):
+            if item.get(key) not in (None, "", [], {}):
+                projected[key] = item.get(key)
+        business_rules.append(projected)
+
+    confirmed_decisions = []
+    for item in pending:
+        decision_id = str(item.get("decisionId"))
+        if decision_id not in confirmed:
+            continue
+        confirmed_value = confirmed[decision_id]
+        confirmed_decisions.append(
+            {
+                "decisionId": item.get("decisionId"),
+                "title": item.get("title"),
+                "value": confirmed_value.get("value"),
+                "displayValue": confirmed_value.get("displayValue"),
+                "semanticConcept": confirmed_value.get("semanticConcept"),
+                "semanticValue": confirmed_value.get("semanticValue"),
+            }
+        )
     return {
         "schemaVersion": AUTHOR_HANDOFF_SCHEMA_VERSION,
         "scenarioContractHash": scenario_hash,
@@ -262,52 +289,14 @@ def author_handoff_contract(
         "dependencies": scenario_contract.get("dependencies") or [],
         "scriptRequirements": scenario_contract.get("scriptRequirements") or [],
         "acceptanceCriteria": scenario_contract.get("acceptanceCriteria") or [],
-        "resolvedRequirements": [
-            {
-                key: item.get(key)
-                for key in (
-                    "requirementId",
-                    "concept",
-                    "value",
-                    "evidenceRefs",
-                )
-                if item.get(key) not in (None, "", [], {})
-            }
-            for item in scenario_contract.get("resolvedRequirements") or []
-            if isinstance(item, dict)
-        ],
-        "businessRules": [
-            {
-                key: item.get(key)
-                for key in ("ruleId", "kind", "definition", "evidenceRefs")
-                if item.get(key) not in (None, "", [], {})
-            }
-            for item in scenario_contract.get("businessRules") or []
-            if isinstance(item, dict)
-        ],
+        "resolvedRequirements": resolved_requirements,
+        "businessRules": business_rules,
         "resolvedCapabilityContract": resolved_capabilities,
         "behaviorSignature": behavior_signature(
             scenario_contract,
             resolved_capabilities,
         ),
-        "confirmedDecisions": [
-            {
-                "decisionId": item.get("decisionId"),
-                "title": item.get("title"),
-                "value": confirmed[str(item.get("decisionId"))].get("value"),
-                "displayValue": confirmed[str(item.get("decisionId"))].get(
-                    "displayValue"
-                ),
-                "semanticConcept": confirmed[str(item.get("decisionId"))].get(
-                    "semanticConcept"
-                ),
-                "semanticValue": confirmed[str(item.get("decisionId"))].get(
-                    "semanticValue"
-                ),
-            }
-            for item in pending
-            if str(item.get("decisionId") or "") in confirmed
-        ],
+        "confirmedDecisions": confirmed_decisions,
         "evidenceRefs": scenario_contract.get("evidenceRefs") or [],
         "fullContractPath": "validation/scenario_contract.json",
     }
@@ -343,12 +332,11 @@ def _item_text(value: Any) -> str:
         ),
         "",
     )
-    details = [
-        f"{key}={item}"
-        for key, item in value.items()
-        if key not in {"title", "name", "label", "description", "id"}
-        and item not in (None, "", [], {})
-    ]
+    details = []
+    title_keys = {"title", "name", "label", "description", "id"}
+    for key, item in value.items():
+        if key not in title_keys and item not in (None, "", [], {}):
+            details.append(f"{key}={item}")
     if title and details:
         return f"{title}（{'；'.join(details)}）"
     return title or json.dumps(value, ensure_ascii=False, sort_keys=True)
@@ -395,29 +383,27 @@ def _scenario_decision_form_contract(
     default_value = json.dumps(declared_defaults, ensure_ascii=False) if declared_defaults else None
     fields = _normalize_decision_form_fields(declared_fields, default_value)
     defaults = _decision_form_default_object(fields, default_value)
-    explicit_decision_ids = _decision_form_conflicting_default_ids(fields, defaults) | {
-        str(field.get("id") or "")
-        for field in fields
-        if field.get("requiresExplicitSelection") is True
-        and str(field.get("id") or "").strip()
-    }
+    explicit_decision_ids = _decision_form_conflicting_default_ids(fields, defaults)
+    for field in fields:
+        field_id = str(field.get("id") or "")
+        if field.get("requiresExplicitSelection") is True and field_id.strip():
+            explicit_decision_ids.add(field_id)
     if explicit_decision_ids:
         defaults = {
             field_id: value
             for field_id, value in defaults.items()
             if field_id not in explicit_decision_ids
         }
-        fields = [
-            {
-                key: value
-                for key, value in field.items()
-                if not (
-                    str(field.get("id") or "") in explicit_decision_ids
-                    and key in {"defaultValue", "defaultLabel"}
-                )
-            }
-            for field in fields
-        ]
+        normalized_fields = []
+        for field in fields:
+            normalized_field = {}
+            field_id = str(field.get("id") or "")
+            for key, value in field.items():
+                if field_id in explicit_decision_ids and key in {"defaultValue", "defaultLabel"}:
+                    continue
+                normalized_field[key] = value
+            normalized_fields.append(normalized_field)
+        fields = normalized_fields
     issues = [
         *_decision_form_field_errors(
             fields,

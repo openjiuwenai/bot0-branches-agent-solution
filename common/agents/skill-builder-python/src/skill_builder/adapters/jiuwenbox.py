@@ -545,17 +545,18 @@ class SkillBuilderSandboxSession:
             and result.get("ok")
             and isinstance(result.get("entries"), list)
         ):
-            result["entries"] = [
-                item
-                for item in result["entries"]
-                if isinstance(item, dict)
-                and phase_workspace_list_entry_allowed(
+            allowed_entries = []
+            for item in result["entries"]:
+                if not isinstance(item, dict):
+                    continue
+                if phase_workspace_list_entry_allowed(
                     getattr(self, "purpose", ""),
                     str(item.get("path") or ""),
                     is_dir=item.get("type") == "directory",
                     workspace_root=self.root,
-                )
-            ]
+                ):
+                    allowed_entries.append(item)
+            result["entries"] = allowed_entries
         return result
 
     def read_workspace_file(

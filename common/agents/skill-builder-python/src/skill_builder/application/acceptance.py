@@ -679,16 +679,16 @@ def _apply_offline_protocol_gate(
     normalized_mode = str(mode or "shadow").strip().lower()
     if normalized_mode != "shadow":
         return
-    blocking_protocol_findings = {
-        id(finding)
-        for finding in findings
-        if str(finding.get("id") or "") == "self_check_protocol_invalid"
-        and any(
-            str(issue.get("id") or "") in _BLOCKING_OFFLINE_PROTOCOL_ISSUE_IDS
-            for issue in finding.get("details") or []
-            if isinstance(issue, dict)
-        )
-    }
+    blocking_protocol_findings = set()
+    for finding in findings:
+        if str(finding.get("id") or "") != "self_check_protocol_invalid":
+            continue
+        for issue in finding.get("details") or []:
+            if not isinstance(issue, dict):
+                continue
+            if str(issue.get("id") or "") in _BLOCKING_OFFLINE_PROTOCOL_ISSUE_IDS:
+                blocking_protocol_findings.add(id(finding))
+                break
     for finding in findings:
         finding_id = str(finding.get("id") or "")
         root_cause_id = str(finding.get("rootCauseId") or "")
@@ -724,11 +724,12 @@ def _apply_offline_protocol_gate(
     )
     for check in checks:
         check_id = str(check.get("id") or "")
-        if (
+        downgrade_check = (
             check_id in _OFFLINE_PROTOCOL_CHECK_IDS
             and check.get("status") == "fail"
             and (check_id != "offline_replay" or downgraded_replay)
-        ):
+        )
+        if downgrade_check:
             check["status"] = "warn"
             check["gateMode"] = "shadow"
             check["wouldBlock"] = True
@@ -813,24 +814,22 @@ def _replay_python_runtime_failures(replay: Any) -> list[dict[str, Any]]:
             and _PYTHON_RUNTIME_EXCEPTION_RE.search(diagnostics)
         ):
             explained.add(case_id)
-            details.append(
-                {
-                    key: issue.get(key)
-                    for key in (
-                        "id",
-                        "caseId",
-                        "message",
-                        "stderr",
-                        "actual",
-                        "assertion",
-                        "command",
-                        "actualExitCode",
-                        "expectedExitCodes",
-                        "producerPaths",
-                    )
-                    if issue.get(key) not in (None, "", [])
-                }
-            )
+            projected = {}
+            for key in (
+                "id",
+                "caseId",
+                "message",
+                "stderr",
+                "actual",
+                "assertion",
+                "command",
+                "actualExitCode",
+                "expectedExitCodes",
+                "producerPaths",
+            ):
+                if issue.get(key) not in (None, "", []):
+                    projected[key] = issue.get(key)
+            details.append(projected)
     return details if explained == set(failed_cases) else []
 
 
@@ -858,7 +857,7 @@ def _replay_missing_output_failures(replay: Any) -> list[dict[str, Any]]:
             if isinstance(command, dict)
         ]
         case_issues = issues_by_case.get(case_id, [])
-        if (
+        invalid_missing_output_case = (
             not commands
             or any(
                 command.get("timedOut") is True
@@ -872,23 +871,15 @@ def _replay_missing_output_failures(replay: Any) -> list[dict[str, Any]]:
                 or str(issue.get("sourceError") or "") != "missing"
                 for issue in case_issues
             )
-        ):
-            return []
-        details.extend(
-            {
-                key: issue.get(key)
-                for key in (
-                    "id",
-                    "caseId",
-                    "message",
-                    "assertion",
-                    "sourceError",
-                    "producerPaths",
-                )
-                if issue.get(key) not in (None, "", [])
-            }
-            for issue in case_issues
         )
+        if invalid_missing_output_case:
+            return []
+        for issue in case_issues:
+            projected = {}
+            for key in ("id", "caseId", "message", "assertion", "sourceError", "producerPaths"):
+                if issue.get(key) not in (None, "", []):
+                    projected[key] = issue.get(key)
+            details.append(projected)
     return details
 
 
@@ -970,19 +961,15 @@ def _external_success_evidence(
             command_tokens = command.get("command") or []
             if _command_script(command_tokens) not in external:
                 continue
-            fixture_paths = {
-                str(token).removeprefix("generated-skill/")
-                for token in command_tokens
-                if str(token).startswith(
-                    ("fixtures/", "generated-skill/fixtures/")
-                )
-            }
-            response_fixtures = {
-                path
-                for path in fixture_paths - owned_inputs
-                if Path(path).suffix.lower()
-                in {".json", ".jsonl", ".html", ".htm"}
-            }
+            fixture_paths = set()
+            for token in command_tokens:
+                normalized_token = str(token)
+                if normalized_token.startswith(("fixtures/", "generated-skill/fixtures/")):
+                    fixture_paths.add(normalized_token.removeprefix("generated-skill/"))
+            response_fixtures = set()
+            for path in fixture_paths - owned_inputs:
+                if Path(path).suffix.lower() in {".json", ".jsonl", ".html", ".htm"}:
+                    response_fixtures.add(path)
             if response_fixtures:
                 return True
     return False
@@ -1002,14 +989,17 @@ def _choose_smoke_target(
     except OSError:
         skill_text = ""
     excluded = set(excluded_fixture_paths or set())
-    fixtures = sorted(
-        path
-        for path in (generated / "fixtures").rglob("*")
-        if path.is_file()
-        and path.relative_to(generated).as_posix() not in excluded
-        and path.suffix.lower()
-        in {".csv", ".json", ".jsonl", ".xlsx", ".md", ".txt"}
-    ) if (generated / "fixtures").is_dir() else []
+    fixtures = []
+    fixtures_root = generated / "fixtures"
+    if fixtures_root.is_dir():
+        supported_suffixes = {".csv", ".json", ".jsonl", ".xlsx", ".md", ".txt"}
+        for path in fixtures_root.rglob("*"):
+            if not path.is_file():
+                continue
+            relative = path.relative_to(generated).as_posix()
+            if relative not in excluded and path.suffix.lower() in supported_suffixes:
+                fixtures.append(path)
+        fixtures.sort()
     candidates: list[tuple[int, Path, Path]] = []
     for script in scripts:
         try:
@@ -1117,13 +1107,12 @@ def _script_output_mode(source: str) -> str | None:
         return None
     if _OUTPUT_DIRECTORY_DIRECT_RE.search(source):
         return "directory"
-    aliases = {
-        match.group(1)
-        for match in re.finditer(
-            r"\b([A-Za-z_]\w*)\s*=\s*(?:Path\s*\(\s*)?args\.output\s*\)?",
-            source,
-        )
-    }
+    aliases = set()
+    for match in re.finditer(
+        r"\b([A-Za-z_]\w*)\s*=\s*(?:Path\s*\(\s*)?args\.output\s*\)?",
+        source,
+    ):
+        aliases.add(match.group(1))
     if any(
         re.search(
             rf"(?:os\.makedirs|os\.mkdir)\s*\(\s*{re.escape(alias)}\b"
@@ -1163,16 +1152,13 @@ def _script_output_suffix(source: str, *, documentation: str = "") -> str:
         first = node.args[0]
         if not isinstance(first, ast.Constant) or first.value != "--output":
             continue
-        default = next(
-            (
-                keyword.value.value
-                for keyword in node.keywords
-                if keyword.arg == "default"
-                and isinstance(keyword.value, ast.Constant)
-                and isinstance(keyword.value.value, str)
-            ),
-            "",
-        )
+        default = ""
+        for keyword in node.keywords:
+            if keyword.arg != "default" or not isinstance(keyword.value, ast.Constant):
+                continue
+            if isinstance(keyword.value.value, str):
+                default = keyword.value.value
+                break
         suffix = Path(default).suffix.lower()
         if suffix in _BUSINESS_OUTPUT_SUFFIXES:
             return suffix
@@ -1286,13 +1272,14 @@ def _materialize_csv_edge_fixture(
     except (OSError, TypeError, ValueError):
         return None
     contracts = scenario_structured_input_contracts(scenario)
-    required = [
-        str(name).strip()
-        for contract in contracts
-        if "csv" in str(contract.get("format") or "").lower()
-        for name in contract.get("required_columns") or []
-        if str(name).strip()
-    ]
+    required = []
+    for contract in contracts:
+        if "csv" not in str(contract.get("format") or "").lower():
+            continue
+        for name in contract.get("required_columns") or []:
+            normalized_name = str(name).strip()
+            if normalized_name:
+                required.append(normalized_name)
     field = next((name for name in required if name in headers), headers[0])
     rows[0][field] = ""
     target = (
@@ -1374,39 +1361,22 @@ def _runtime_fixture_input_contracts(
         validation_rules: list[dict[str, Any]] = []
 
         for field in fields:
-            rule = next(
-                (
-                    field.get(key)
-                    for key in (
-                        "validation",
-                        "validationRule",
-                        "validation_rule",
-                        "校验规则",
-                        "校验",
-                    )
-                    if field.get(key) not in (None, "", [], {})
-                ),
-                None,
-            )
+            rule = None
+            for key in ("validation", "validationRule", "validation_rule", "校验规则", "校验"):
+                if field.get(key) not in (None, "", [], {}):
+                    rule = field.get(key)
+                    break
             _append_runtime_fixture_validation_rule(
                 validation_rules,
                 fields,
                 rule,
                 field_name=str(field["name"]).strip(),
             )
-        contract_rules = next(
-            (
-                contract.get(key)
-                for key in (
-                    "validationRules",
-                    "validation_rules",
-                    "validation",
-                    "校验规则",
-                )
-                if contract.get(key) not in (None, "", [], {})
-            ),
-            [],
-        )
+        contract_rules = []
+        for key in ("validationRules", "validation_rules", "validation", "校验规则"):
+            if contract.get(key) not in (None, "", [], {}):
+                contract_rules = contract.get(key)
+                break
         for rule in contract_rules if isinstance(contract_rules, list) else [contract_rules]:
             _append_runtime_fixture_validation_rule(validation_rules, fields, rule)
         for requirement in scenario.get("resolvedRequirements") or []:
@@ -1937,17 +1907,15 @@ def _confirmed_decision_conflicts(root: Path, generated: Path) -> list[dict[str,
         )
         if _CONFIGURABLE_OPTION_RE.search(selected_semantics):
             continue
-        selected_tokens = list(
-            dict.fromkeys(
-                token
-                for token in (
-                    _decision_token(selected.get("value")),
-                    _decision_token(selected.get("label")),
-                    selected_display,
-                )
-                if token
-            )
+        selected_tokens = []
+        selected_token_candidates = (
+            _decision_token(selected.get("value")),
+            _decision_token(selected.get("label")),
+            selected_display,
         )
+        for token in selected_token_candidates:
+            if token and token not in selected_tokens:
+                selected_tokens.append(token)
         selected_numbers = _decision_number_tokens(
             selected.get("value"),
             selected.get("label"),
@@ -1964,17 +1932,15 @@ def _confirmed_decision_conflicts(root: Path, generated: Path) -> list[dict[str,
             for option in options
             if isinstance(option, dict) and option is not selected
         ]
-        alternative_tokens = list(
-            dict.fromkeys(
-                token
-                for option in alternatives
-                for token in (
-                    _decision_token(option.get("value")),
-                    _decision_token(option.get("label")),
-                )
-                if token
+        alternative_tokens = []
+        for option in alternatives:
+            option_tokens = (
+                _decision_token(option.get("value")),
+                _decision_token(option.get("label")),
             )
-        )
+            for token in option_tokens:
+                if token and token not in alternative_tokens:
+                    alternative_tokens.append(token)
         conflicting_lines: list[dict[str, Any]] = []
         config_keys: set[str] = set()
         for line_number, line in enumerate(skill_lines, start=1):
@@ -1985,7 +1951,7 @@ def _confirmed_decision_conflicts(root: Path, generated: Path) -> list[dict[str,
                 and _RUNTIME_CONFIG_CONTEXT_RE.search(line)
             ):
                 config_keys.update(_CONFIG_KEY_RE.findall(line))
-            if (
+            documents_alternative = (
                 has_selected
                 and _line_contains_distinct_options(
                     line,
@@ -1994,7 +1960,8 @@ def _confirmed_decision_conflicts(root: Path, generated: Path) -> list[dict[str,
                 )
                 and _OPTION_LIST_RE.search(line)
                 and not _NEGATED_OPTION_RE.search(line)
-            ):
+            )
+            if documents_alternative:
                 conflicting_lines.append(
                     {"path": "SKILL.md", "line": line_number, "text": line[:300]}
                 )
@@ -2668,12 +2635,12 @@ async def accept_skill_package(
     input_contract_issues = scenario_input_fixture_issues(root, generated)
     if input_contract_issues:
         owned_fixtures = platform_owned_fixture_paths(root, generated)
-        structured_fixtures = {
-            path.relative_to(generated).as_posix()
-            for path in (generated / "fixtures").rglob("*")
-            if path.is_file()
-            and path.suffix.lower() in {".csv", ".json", ".jsonl", ".xlsx"}
-        } if (generated / "fixtures").is_dir() else set()
+        structured_fixtures = set()
+        fixtures_root = generated / "fixtures"
+        if fixtures_root.is_dir():
+            for path in fixtures_root.rglob("*"):
+                if path.is_file() and path.suffix.lower() in {".csv", ".json", ".jsonl", ".xlsx"}:
+                    structured_fixtures.add(path.relative_to(generated).as_posix())
         controller_owned = bool(
             structured_fixtures
             and structured_fixtures.issubset(owned_fixtures)
@@ -3066,12 +3033,11 @@ async def accept_skill_package(
                                 if runtime_failures:
                                     finding["wouldBlock"] = True
                                     finding["reviewRequired"] = False
-                                    producer_paths = [
-                                        str(path)
-                                        for item in runtime_failures
-                                        for path in item.get("producerPaths") or []
-                                        if str(path).strip()
-                                    ]
+                                    producer_paths = []
+                                    for item in runtime_failures:
+                                        for path in item.get("producerPaths") or []:
+                                            if str(path).strip():
+                                                producer_paths.append(str(path))
                                     runtime_finding = _finding(
                                         "python_runtime_exception",
                                         "生产脚本在离线重放中触发明确的 Python 运行时异常。",
@@ -3087,12 +3053,11 @@ async def accept_skill_package(
                                     findings.append(runtime_finding)
                                 elif missing_outputs:
                                     finding["wouldBlock"] = True
-                                    producer_paths = [
-                                        str(path)
-                                        for item in missing_outputs
-                                        for path in item.get("producerPaths") or []
-                                        if str(path).strip()
-                                    ]
+                                    producer_paths = []
+                                    for item in missing_outputs:
+                                        for path in item.get("producerPaths") or []:
+                                            if str(path).strip():
+                                                producer_paths.append(str(path))
                                     output_finding = _finding(
                                         "expected_output_missing",
                                         "生产 CLI 成功退出，但没有在声明路径生成必需输出。",
@@ -3233,12 +3198,10 @@ async def accept_skill_package(
                                 category="execution",
                             )
                         )
-                    invariant_issues = [
-                        issue
-                        for path in output_files
-                        if path.suffix.lower() == ".json"
-                        for issue in _business_output_invariant_issues(path)
-                    ]
+                    invariant_issues = []
+                    for path in output_files:
+                        if path.suffix.lower() == ".json":
+                            invariant_issues.extend(_business_output_invariant_issues(path))
                     if invariant_issues:
                         finding = _finding(
                             "business_output_invariant_failed",
@@ -3453,13 +3416,14 @@ async def accept_skill_package(
                     if isinstance(legacy_payload, dict)
                     else ""
                 )
-                if legacy_payload is None or legacy_status in {
+                legacy_business_failed = legacy_payload is None or legacy_status in {
                     "fail", "failed", "error", "has_errors"
                 } or (
                     isinstance(legacy_payload, dict)
                     and isinstance(legacy_payload.get("errors"), list)
                     and bool(legacy_payload.get("errors"))
-                ):
+                )
+                if legacy_business_failed:
                     findings.append(
                         _finding(
                             "offline_smoke_business_failed",
@@ -3569,17 +3533,13 @@ async def accept_skill_package(
                 _remove_materialized_output(edge_output)
             _remove_materialized_output(output_path)
 
-    required_runtime = {
-        str(key)
-        for key, enabled in (
-            capability_diagnostics.get("scenarioRequiredCapabilities") or {}
-        ).items()
-        if enabled is True and str(key) in {
-            "api_runtime",
-            "browser_runtime",
-            "external_runtime",
-        }
-    }
+    required_runtime = set()
+    runtime_capabilities = {"api_runtime", "browser_runtime", "external_runtime"}
+    scenario_capabilities = capability_diagnostics.get("scenarioRequiredCapabilities") or {}
+    for key, enabled in scenario_capabilities.items():
+        normalized_key = str(key)
+        if enabled is True and normalized_key in runtime_capabilities:
+            required_runtime.add(normalized_key)
     if required_runtime and not _external_success_evidence(
         root,
         replayed_cases,

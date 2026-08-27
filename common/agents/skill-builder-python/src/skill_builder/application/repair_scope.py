@@ -22,12 +22,13 @@ def _normalized_target_path(value: Any) -> str | None:
     if normalized.startswith("generated-skill/"):
         normalized = normalized.removeprefix("generated-skill/")
     candidate = PurePosixPath(normalized)
-    if (
+    invalid_target = (
         not normalized
         or candidate.is_absolute()
         or ".." in candidate.parts
         or not export_package_path_allowed(normalized)
-    ):
+    )
+    if invalid_target:
         return None
     return candidate.as_posix()
 

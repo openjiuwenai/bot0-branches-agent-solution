@@ -81,12 +81,13 @@ def _package_path(value: Any) -> str:
     if raw.startswith("generated-skill/"):
         raw = raw.removeprefix("generated-skill/")
     path = PurePosixPath(raw)
-    if (
+    invalid_path = (
         not raw
         or path.is_absolute()
         or ".." in path.parts
         or not export_package_path_allowed(raw)
-    ):
+    )
+    if invalid_path:
         return ""
     return path.as_posix()
 
@@ -112,36 +113,29 @@ def _requires_offline_record_processing(
 ) -> bool:
     """Keep deterministic record transformations executable across retries."""
 
-    typed_fields = {
-        str(field.get("type") or "").strip().lower()
-        for contract in structured_inputs
-        for field in contract.get("fields") or []
-        if isinstance(field, dict)
-    }
+    typed_fields = set()
+    for contract in structured_inputs:
+        for field in contract.get("fields") or []:
+            if isinstance(field, dict):
+                typed_fields.add(str(field.get("type") or "").strip().lower())
     machine_types = {
         "bool", "boolean", "date", "datetime", "decimal", "float", "int",
         "integer", "number", "time", "timestamp", "布尔", "日期", "时间",
         "整数", "数字", "数值", "金额",
     }
-    explicit_record_inputs = sum(
-        1
-        for contract in structured_inputs
-        if len(
-            [
-                field
-                for field in contract.get("fields") or []
-                if isinstance(field, dict) and str(field.get("name") or "").strip()
-            ]
-        ) >= 2
-        and re.search(
+    explicit_record_inputs = 0
+    for contract in structured_inputs:
+        named_fields = []
+        for field in contract.get("fields") or []:
+            if isinstance(field, dict) and str(field.get("name") or "").strip():
+                named_fields.append(field)
+        contract_text = " ".join(str(contract.get(key) or "") for key in ("format", "name", "description"))
+        if len(named_fields) >= 2 and re.search(
             r"(?:csv|xlsx?|excel|表格|信息表|数据表|流水表|清单|数据源)",
-            " ".join(
-                str(contract.get(key) or "")
-                for key in ("format", "name", "description")
-            ),
+            contract_text,
             re.IGNORECASE,
-        )
-    )
+        ):
+            explicit_record_inputs += 1
     typed_processing = len(typed_fields & machine_types) >= 2
     multi_source_processing = explicit_record_inputs >= 2
     if not typed_processing and not multi_source_processing:
@@ -216,17 +210,10 @@ def _declares_executable_delivery(scenario: dict[str, Any]) -> bool:
         ):
             return True
 
-    statements = [
-        statement
-        for field in (
-            "scriptRequirements",
-            "resolvedRequirements",
-            "triggers",
-            "inputs",
-            "steps",
-        )
-        for statement in _text_statements(scenario.get(field) or [])
-    ]
+    statements = []
+    statement_fields = ("scriptRequirements", "resolvedRequirements", "triggers", "inputs", "steps")
+    for field in statement_fields:
+        statements.extend(_text_statements(scenario.get(field) or []))
     return any(
         _EXECUTABLE_DELIVERY_RE.search(statement)
         and not _NEGATED_EXECUTABLE_DELIVERY_RE.search(statement)
@@ -307,22 +294,23 @@ def behavior_signature(
     structured_inputs = scenario_structured_input_contracts(scenario)
     inputs: list[dict[str, Any]] = []
     for contract in structured_inputs:
+        fields = []
+        for field in contract.get("fields") or []:
+            if not isinstance(field, dict):
+                continue
+            name = str(field.get("name") or "").strip()
+            if name:
+                fields.append(
+                    {
+                        "name": name,
+                        "type": str(field.get("type") or "").strip().lower(),
+                        "required": field.get("required") is True,
+                    }
+                )
         inputs.append(
             {
                 "format": str(contract.get("format") or "").strip().lower(),
-                "fields": sorted(
-                    [
-                        {
-                            "name": str(field.get("name") or "").strip(),
-                            "type": str(field.get("type") or "").strip().lower(),
-                            "required": field.get("required") is True,
-                        }
-                        for field in contract.get("fields") or []
-                        if isinstance(field, dict)
-                        and str(field.get("name") or "").strip()
-                    ],
-                    key=lambda item: item["name"],
-                ),
+                "fields": sorted(fields, key=lambda item: item["name"]),
             }
         )
     if not inputs:
@@ -341,12 +329,14 @@ def behavior_signature(
     for output in scenario.get("outputs") or []:
         if isinstance(output, dict):
             output_format = str(output.get("format") or "").strip().lower()
-            fields = sorted(
-                str(field.get("name") or "").strip()
-                for field in output.get("fields") or []
-                if isinstance(field, dict)
-                and str(field.get("name") or "").strip()
-            )
+            fields = []
+            for field in output.get("fields") or []:
+                if not isinstance(field, dict):
+                    continue
+                name = str(field.get("name") or "").strip()
+                if name:
+                    fields.append(name)
+            fields.sort()
             outputs.append(
                 {"format": output_format, "fields": fields}
                 if output_format or fields
@@ -564,13 +554,15 @@ def synthesize_implementation_plan(root: Path) -> dict[str, Any]:
     """Project the final plan from controller direction and actual package files."""
 
     generated = root / "generated-skill"
-    files = sorted(
-        path.relative_to(generated).as_posix()
-        for path in generated.rglob("*")
-        if path.is_file()
-        and export_package_path_allowed(path.relative_to(generated).as_posix())
-        and path.name not in _DIAGNOSTIC_SCRIPT_NAMES
-    ) if generated.is_dir() else []
+    files = []
+    if generated.is_dir():
+        for path in generated.rglob("*"):
+            if not path.is_file():
+                continue
+            relative = path.relative_to(generated).as_posix()
+            if export_package_path_allowed(relative) and path.name not in _DIAGNOSTIC_SCRIPT_NAMES:
+                files.append(relative)
+        files.sort()
     production_scripts = [path for path in files if _is_production_script_path(path)]
     documented = [
         path
@@ -633,14 +625,12 @@ def synthesize_implementation_plan(root: Path) -> dict[str, Any]:
     requirements_path = generated / "requirements.txt"
     if requirements_path.is_file():
         try:
-            dependencies = [
-                line.strip()
-                for line in requirements_path.read_text(
-                    encoding="utf-8",
-                    errors="replace",
-                ).splitlines()
-                if line.strip() and not line.lstrip().startswith("#")
-            ][:40]
+            dependencies = []
+            requirement_lines = requirements_path.read_text(encoding="utf-8", errors="replace").splitlines()
+            for line in requirement_lines:
+                if line.strip() and not line.lstrip().startswith("#"):
+                    dependencies.append(line.strip())
+            dependencies = dependencies[:40]
         except OSError:
             dependencies = []
     return persist_implementation_plan(
@@ -698,15 +688,15 @@ def missing_required_plan_paths(
         ):
             required.add(production_scripts[0])
         if _requires_business_fixture(plan):
-            business_fixtures = [
-                str(path)
-                for path in plan.get("files") or []
+            business_fixtures = []
+            for path in plan.get("files") or []:
+                normalized_path = str(path)
                 if _is_business_fixture_path(
-                    str(path),
+                    normalized_path,
                     platform_owned_paths=platform_fixtures,
                     expected_suffixes=expected_fixture_suffixes,
-                )
-            ]
+                ):
+                    business_fixtures.append(normalized_path)
             if business_fixtures and not any(
                 (generated / path).is_file() for path in business_fixtures
             ):

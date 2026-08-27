@@ -199,36 +199,40 @@ def _empty_python_body_signals(source: str) -> list[dict[str, Any]]:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         body = list(node.body)
-        if (
+        starts_with_docstring = (
             body
             and isinstance(body[0], ast.Expr)
             and isinstance(body[0].value, ast.Constant)
             and isinstance(body[0].value.value, str)
-        ):
+        )
+        if starts_with_docstring:
             body = body[1:]
         kind = ""
         if len(body) == 1 and isinstance(body[0], ast.Pass):
             kind = "pass_only_function"
-        elif (
-            len(body) == 1
-            and isinstance(body[0], ast.Expr)
-            and isinstance(body[0].value, ast.Constant)
-            and body[0].value.value is Ellipsis
-        ):
-            kind = "ellipsis_only_function"
-        elif (
-            len(body) == 1
-            and isinstance(body[0], ast.Raise)
-            and isinstance(body[0].exc, (ast.Call, ast.Name))
-            and (
-                isinstance(body[0].exc, ast.Name)
-                and body[0].exc.id == "NotImplementedError"
-                or isinstance(body[0].exc, ast.Call)
-                and isinstance(body[0].exc.func, ast.Name)
-                and body[0].exc.func.id == "NotImplementedError"
+        else:
+            ellipsis_only = (
+                len(body) == 1
+                and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and body[0].value.value is Ellipsis
             )
-        ):
-            kind = "not_implemented_function"
+            raises_not_implemented = (
+                len(body) == 1
+                and isinstance(body[0], ast.Raise)
+                and isinstance(body[0].exc, (ast.Call, ast.Name))
+                and (
+                    isinstance(body[0].exc, ast.Name)
+                    and body[0].exc.id == "NotImplementedError"
+                    or isinstance(body[0].exc, ast.Call)
+                    and isinstance(body[0].exc.func, ast.Name)
+                    and body[0].exc.func.id == "NotImplementedError"
+                )
+            )
+            if ellipsis_only:
+                kind = "ellipsis_only_function"
+            elif raises_not_implemented:
+                kind = "not_implemented_function"
         if kind:
             result.append(
                 {
@@ -396,14 +400,13 @@ def _external_runtime_blocked_stub_signals(source: str) -> list[dict[str, Any]]:
     function_calls: dict[str, set[str]] = {}
     for name, node in function_nodes.items():
         function_runtime[name] = call_capabilities(node)
-        function_calls[name] = {
-            call.func.id
-            for call in ast.walk(node)
-            if isinstance(call, ast.Call)
-            and isinstance(call.func, ast.Name)
-            and call.func.id in function_nodes
-            and call.func.id != name
-        }
+        called_functions = set()
+        for call in ast.walk(node):
+            if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Name):
+                continue
+            if call.func.id in function_nodes and call.func.id != name:
+                called_functions.add(call.func.id)
+        function_calls[name] = called_functions
 
     def reaches_runtime(name: str, runtime_index: int, seen: set[str] | None = None) -> bool:
         visited = set(seen or ())
@@ -915,12 +918,10 @@ def observe_capability_relationships(
     claim_signals = _runtime_claim_signals(skill_text)
     disclosure_signals = _signals(skill_text, _DISCLOSURE_PATTERNS)
     entrypoints = [path.relative_to(generated).as_posix() for path in scripts]
-    external_entrypoints = [
-        path.relative_to(generated).as_posix()
-        for path in scripts
-        if path.as_posix() in external_runtime_scripts
-        and path.name not in _OFFLINE_DIAGNOSTIC_ENTRYPOINTS
-    ]
+    external_entrypoints = []
+    for path in scripts:
+        if path.as_posix() in external_runtime_scripts and path.name not in _OFFLINE_DIAGNOSTIC_ENTRYPOINTS:
+            external_entrypoints.append(path.relative_to(generated).as_posix())
     placeholder_signals: list[dict[str, Any]] = []
     no_op_self_check_signals: list[dict[str, Any]] = []
     for script in scripts:
@@ -977,12 +978,12 @@ def observe_capability_relationships(
                 }
             )
 
-    blocking_placeholder_signals = [
-        signal
-        for signal in placeholder_signals
-        if PurePath(str(signal.get("path") or "")).name not in _OFFLINE_DIAGNOSTIC_ENTRYPOINTS
-        and str(signal.get("kind") or "") not in _HEURISTIC_PLACEHOLDER_KINDS
-    ]
+    blocking_placeholder_signals = []
+    for signal in placeholder_signals:
+        path_name = PurePath(str(signal.get("path") or "")).name
+        signal_kind = str(signal.get("kind") or "")
+        if path_name not in _OFFLINE_DIAGNOSTIC_ENTRYPOINTS and signal_kind not in _HEURISTIC_PLACEHOLDER_KINDS:
+            blocking_placeholder_signals.append(signal)
 
     runtime_entrypoints = _runtime_entrypoint_capabilities(
         generated,
@@ -1014,19 +1015,15 @@ def observe_capability_relationships(
         if external_entrypoints or _explicit_runtime_boundary(skill_text)
         else claim_signals
     )
-    unbacked_runtime_declarations = [
-        item
-        for item in runtime_declarations
-        if item.get("source") != "agent_self_check"
-        and not item.get("explicitBoundary")
-        and not runtime_entrypoints.get(str(item.get("capability") or ""))
-    ]
-    agent_runtime_unverified = [
-        item
-        for item in runtime_declarations
-        if item.get("source") == "agent_self_check"
-        and runtime_entrypoints.get(str(item.get("capability") or ""))
-    ]
+    unbacked_runtime_declarations = []
+    agent_runtime_unverified = []
+    for item in runtime_declarations:
+        source = item.get("source")
+        implemented = runtime_entrypoints.get(str(item.get("capability") or ""))
+        if source != "agent_self_check" and not item.get("explicitBoundary") and not implemented:
+            unbacked_runtime_declarations.append(item)
+        if source == "agent_self_check" and implemented:
+            agent_runtime_unverified.append(item)
     agent_status = str((agent_self_check or {}).get("status") or "").strip().lower()
     agent_status_inconsistencies = (
         agent_runtime_unverified if agent_status == "pass" else []

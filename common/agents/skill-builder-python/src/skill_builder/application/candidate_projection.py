@@ -30,12 +30,14 @@ def candidate_export_files(root: Path) -> list[str]:
     generated = root / "generated-skill"
     if not generated.is_dir():
         return []
-    return [
-        f"generated-skill/{path.relative_to(generated).as_posix()}"
-        for path in sorted(generated.rglob("*"))
-        if path.is_file()
-        and export_package_path_allowed(path.relative_to(generated).as_posix())
-    ]
+    result = []
+    for path in sorted(generated.rglob("*")):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(generated).as_posix()
+        if export_package_path_allowed(relative):
+            result.append(f"generated-skill/{relative}")
+    return result
 
 
 def candidate_completion_from_draft(

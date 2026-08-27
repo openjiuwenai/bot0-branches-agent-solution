@@ -112,7 +112,8 @@ def missing_package_references(generated: Path) -> list[dict[str, Any]]:
         for raw, offset, source in candidates:
             normalized = raw.split("#", 1)[0].rstrip(".,:;)]}")
             key = (document_relative, normalized)
-            if not normalized or "{" in normalized or "}" in normalized or key in seen:
+            invalid_reference = not normalized or "{" in normalized or "}" in normalized or key in seen
+            if invalid_reference:
                 continue
             seen.add(key)
             pure = PurePath(normalized)
@@ -197,15 +198,15 @@ def reserved_example_endpoint_signals(
             tree = ast.parse(source)
         except (OSError, SyntaxError):
             continue
-        docstrings = {
-            id(node.body[0].value)
-            for node in ast.walk(tree)
-            if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
-            and node.body
-            and isinstance(node.body[0], ast.Expr)
-            and isinstance(node.body[0].value, ast.Constant)
-            and isinstance(node.body[0].value.value, str)
-        }
+        docstrings = set()
+        containers = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+        for node in ast.walk(tree):
+            if not isinstance(node, containers) or not node.body:
+                continue
+            first = node.body[0]
+            if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
+                if isinstance(first.value.value, str):
+                    docstrings.add(id(first.value))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
                 continue
@@ -571,14 +572,12 @@ def _referenced_names(
 def _function_parameters(
     function: ast.FunctionDef | ast.AsyncFunctionDef,
 ) -> list[str]:
-    return [
-        argument.arg
-        for argument in (
-            *function.args.posonlyargs,
-            *function.args.args,
-            *function.args.kwonlyargs,
-        )
-    ]
+    arguments = (
+        *function.args.posonlyargs,
+        *function.args.args,
+        *function.args.kwonlyargs,
+    )
+    return [argument.arg for argument in arguments]
 
 
 def _call_argument(
@@ -835,14 +834,12 @@ def offline_cli_coverage_signals(
         external = expanded
 
     documented = documented_cli_entrypoints(generated)
-    entrypoints = {
-        relative
-        for relative, (_source, tree) in sources.items()
-        if PurePath(relative).name not in _DIAGNOSTIC_NAMES
-        and relative in documented
-        and relative not in external
-        and _is_cli_entrypoint(tree)
-    }
+    entrypoints = set()
+    for relative, (_source, tree) in sources.items():
+        if PurePath(relative).name in _DIAGNOSTIC_NAMES:
+            continue
+        if relative in documented and relative not in external and _is_cli_entrypoint(tree):
+            entrypoints.add(relative)
     if not entrypoints:
         return []
 

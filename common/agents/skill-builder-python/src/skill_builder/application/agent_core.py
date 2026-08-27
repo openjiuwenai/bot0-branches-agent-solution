@@ -391,11 +391,11 @@ def _has_agent_artifact_progress(
         if _artifact_has_substantive_change(root, rel, initial_digests=initial_digests):
             return True
 
-    meaningful_generated_writes = [
-        rel for rel in written
-        if rel.startswith("generated-skill/")
-        and rel not in {"generated-skill/agents/openai.yaml"}
-    ]
+    meaningful_generated_writes = []
+    excluded_writes = {"generated-skill/agents/openai.yaml"}
+    for rel in written:
+        if rel.startswith("generated-skill/") and rel not in excluded_writes:
+            meaningful_generated_writes.append(rel)
     return bool(meaningful_generated_writes)
 
 
@@ -482,17 +482,16 @@ class SkillBuilderWorkspaceAccessor:
             return {"ok": True, "path": rel, "exists": False, "entries": []}
         if target.is_file():
             entries = [self._entry(target)]
-            entries = [
-                item
-                for item in entries
+            allowed_entries = []
+            for item in entries:
                 if phase_workspace_list_entry_allowed(
                     self.purpose,
                     str(item.get("path") or ""),
                     is_dir=item.get("type") == "directory",
                     workspace_root=self.root,
-                )
-            ]
-            return {"ok": True, "path": rel, "exists": True, "entries": entries}
+                ):
+                    allowed_entries.append(item)
+            return {"ok": True, "path": rel, "exists": True, "entries": allowed_entries}
 
         base_depth = len(target.relative_to(self.root).parts)
         entries: list[dict[str, Any]] = []
@@ -514,18 +513,17 @@ class SkillBuilderWorkspaceAccessor:
                 if len(entries) >= 500:
                     return {"ok": True, "path": rel, "exists": True, "truncated": True, "entries": entries}
         else:
-            entries = [
-                candidate
-                for item in sorted(target.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
-                if item.name != ".DS_Store"
-                for candidate in [self._entry(item)]
+            for item in sorted(target.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
+                if item.name == ".DS_Store":
+                    continue
+                candidate = self._entry(item)
                 if phase_workspace_list_entry_allowed(
                     self.purpose,
                     str(candidate.get("path") or ""),
                     is_dir=candidate.get("type") == "directory",
                     workspace_root=self.root,
-                )
-            ]
+                ):
+                    entries.append(candidate)
         return {"ok": True, "path": rel, "exists": True, "entries": entries}
 
     def read_workspace_file(

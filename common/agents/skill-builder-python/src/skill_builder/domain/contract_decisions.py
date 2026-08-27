@@ -159,12 +159,13 @@ def normalize_capability_condition(value: Any) -> dict[str, Any] | None:
     expected = when.get("equals", True)
     then_value = value.get("then", True)
     else_value = value.get("else", False)
-    if (
+    invalid_condition = (
         dependency is None
         or not isinstance(expected, bool)
         or not isinstance(then_value, bool)
         or not isinstance(else_value, bool)
-    ):
+    )
+    if invalid_condition:
         return None
     return {
         "when": {"capability": dependency, "equals": expected},

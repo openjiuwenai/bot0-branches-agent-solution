@@ -261,33 +261,36 @@ def _normalized_assertion(value: Any) -> dict[str, Any] | None:
     operator = str(value.get("operator") or assertion_alias or "").strip().lower()
     expected_present = "expected" in value
     expected = value.get("expected")
-    if (
+    assertion_value_is_expected = (
         not expected_present
         and value.get("operator")
         and assertion_alias not in (None, "")
         and str(assertion_alias).strip().lower()
         not in SELF_CHECK_ASSERTION_OPERATORS
-    ):
+    )
+    if assertion_value_is_expected:
         expected_present = True
         expected = assertion_alias
     # Normalize the common file-existence spelling emitted by models.  It is
     # semantically unambiguous and equivalent to the canonical
     # ``path=$, operator=exists`` form; accepting it here keeps one protocol
     # boundary instead of spending a Repair turn on syntax alone.
-    if (
+    file_exists_alias = (
         source != "$command"
         and path == "exists"
         and operator == "equals"
         and isinstance(value.get("expected"), bool)
-    ):
+    )
+    if file_exists_alias:
         path = "$"
         operator = "exists"
-    if (
+    file_not_empty_alias = (
         source != "$command"
         and path == "not_empty"
         and operator == "equals"
         and value.get("expected") is True
-    ):
+    )
+    if file_not_empty_alias:
         path = "$"
         operator = "not_empty"
     if source == "$command":
@@ -670,7 +673,7 @@ def validate_self_check_summary(
                         commandIndexes=zero_exit_commands,
                     )
                 )
-        if (
+        missing_business_assertion = (
             kind != "invalid_input"
             and assertions
             and not _case_has_business_output_assertion(normalized_case)
@@ -678,7 +681,8 @@ def validate_self_check_summary(
                 kind == "external_offline"
                 and _case_has_external_boundary_assertion(normalized_case)
             )
-        ):
+        )
+        if missing_business_assertion:
             issues.append(
                 _issue(
                     "self_check_output_assertion_missing",
@@ -751,21 +755,21 @@ def validate_self_check_summary(
                 missingContractIds=missing_contracts,
             )
         )
-    output_assertions = [
-        assertion
-        for case in normalized_cases
-        for assertion in case.get("assertions") or []
-        if assertion.get("source") != "$command"
-    ]
+    output_assertions = []
+    for case in normalized_cases:
+        for assertion in case.get("assertions") or []:
+            if assertion.get("source") != "$command":
+                output_assertions.append(assertion)
     output_fields = dict(required_output_fields or {})
-    missing_output_fields = sorted(
-        field
-        for field in output_fields
-        if not any(
+    missing_output_fields = []
+    for field in output_fields:
+        covered = any(
             str(assertion.get("path") or "").strip("$.").split(".")[-1] == field
             for assertion in output_assertions
         )
-    )
+        if not covered:
+            missing_output_fields.append(field)
+    missing_output_fields.sort()
     if missing_output_fields:
         issues.append(
             _issue(
@@ -774,16 +778,18 @@ def validate_self_check_summary(
                 missingFields=missing_output_fields,
             )
         )
-    missing_type_assertions = sorted(
-        field
-        for field, declared_type in output_fields.items()
-        if declared_type
-        and not any(
+    missing_type_assertions = []
+    for field, declared_type in output_fields.items():
+        if not declared_type:
+            continue
+        covered = any(
             str(assertion.get("path") or "").strip("$.").split(".")[-1] == field
             and assertion.get("operator") == "type"
             for assertion in output_assertions
         )
-    )
+        if not covered:
+            missing_type_assertions.append(field)
+    missing_type_assertions.sort()
     if missing_type_assertions:
         issues.append(
             _issue(
@@ -797,18 +803,14 @@ def validate_self_check_summary(
         for assertion in output_assertions
         if assertion.get("operator") == "contains"
     )
-    missing_sections = sorted(
-        {
-            label
-            for section in (required_output_sections or set())
-            if not _section_is_covered(
-                section,
-                contains_expectations=contains_expectations,
-            )
-            for label, _details in [_section_coverage_parts(section)]
-            if label
-        }
-    )
+    missing_section_labels = set()
+    for section in required_output_sections or set():
+        if _section_is_covered(section, contains_expectations=contains_expectations):
+            continue
+        label, _details = _section_coverage_parts(section)
+        if label:
+            missing_section_labels.add(label)
+    missing_sections = sorted(missing_section_labels)
     if missing_sections:
         issues.append(
             _issue(
@@ -1010,12 +1012,13 @@ def _traceback_producer_paths(stderr: str, generated: Path) -> set[str]:
         else:
             continue
         package_path = _package_relative_path(relative)
-        if (
+        valid_producer_path = (
             package_path is not None
             and package_path.startswith("scripts/")
             and package_path.endswith(".py")
             and (generated / package_path).is_file()
-        ):
+        )
+        if valid_producer_path:
             producers.add(package_path)
     return producers
 
@@ -1068,13 +1071,10 @@ async def replay_self_check_cases(
                 "stdout": (result.stdout or "")[-2000:],
                 "stderr": (result.stderr or "")[-2000:],
             }
-            command_producer_paths = {
-                script
-                for script in (
-                    _command_script([str(part) for part in command_spec.get("command") or []]),
-                )
-                if script is not None
-            } | _traceback_producer_paths(result.stderr or "", generated)
+            command_producer_paths = _traceback_producer_paths(result.stderr or "", generated)
+            script = _command_script([str(part) for part in command_spec.get("command") or []])
+            if script is not None:
+                command_producer_paths.add(script)
             producer_paths.update(command_producer_paths)
             command_result["producerPaths"] = sorted(command_producer_paths)
             command_results.append(command_result)
@@ -1550,13 +1550,13 @@ def scenario_input_fixture_issues(root: Path, generated: Path) -> list[dict[str,
     if not contracts:
         return []
     fixtures_root = generated / "fixtures"
-    fixtures = [
-        path
-        for path in fixtures_root.rglob("*")
-        if path.is_file()
-        and path.suffix.lower() in {".csv", ".json", ".jsonl", ".xlsx"}
-        and not any(token in path.stem.lower() for token in ("invalid", "error", "malformed", "empty"))
-    ] if fixtures_root.is_dir() else []
+    fixtures = []
+    if fixtures_root.is_dir():
+        invalid_tokens = ("invalid", "error", "malformed", "empty")
+        for path in fixtures_root.rglob("*"):
+            supported = path.suffix.lower() in {".csv", ".json", ".jsonl", ".xlsx"}
+            if path.is_file() and supported and not any(token in path.stem.lower() for token in invalid_tokens):
+                fixtures.append(path)
     issues: list[dict[str, Any]] = []
     parsed: dict[Path, tuple[list[str], list[dict[str, Any]], list[dict[str, Any]]]] = {}
     for path in fixtures:
@@ -1584,17 +1584,17 @@ def scenario_input_fixture_issues(root: Path, generated: Path) -> list[dict[str,
         if not all_names:
             continue
         format_text = str(contract.get("format") or "").lower()
-        allowed_suffixes = {
-            suffix
-            for token, suffix in (
-                ("csv", ".csv"),
-                ("jsonl", ".jsonl"),
-                ("json", ".json"),
-                ("excel", ".xlsx"),
-                ("xlsx", ".xlsx"),
-            )
-            if token in format_text
-        }
+        allowed_suffixes = set()
+        format_suffixes = (
+            ("csv", ".csv"),
+            ("jsonl", ".jsonl"),
+            ("json", ".json"),
+            ("excel", ".xlsx"),
+            ("xlsx", ".xlsx"),
+        )
+        for token, suffix in format_suffixes:
+            if token in format_text:
+                allowed_suffixes.add(suffix)
         candidates = {
             path: value
             for path, value in parsed.items()
@@ -1648,14 +1648,15 @@ def scenario_input_fixture_issues(root: Path, generated: Path) -> list[dict[str,
             for field in fields:
                 name = str(field.get("name") or "").strip()
                 value = record.get(name)
-                if (
+                invalid_field_value = (
                     name
                     and value not in (None, "")
                     and (
                         not _type_matches(value, str(field.get("type") or ""))
                         or not _field_constraints_match(value, field)
                     )
-                ):
+                )
+                if invalid_field_value:
                     type_valid = False
                     break
             if type_valid:

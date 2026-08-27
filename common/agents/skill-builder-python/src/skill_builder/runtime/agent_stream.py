@@ -71,18 +71,16 @@ def _agent_stream_transient_error(error: Any) -> bool:
         return False
     class_name = type(error).__name__.lower()
     message = f"{type(error).__name__}: {error}".strip().lower()
-    if any(
-        marker in message
-        for marker in (
-            "invalid_api_key",
-            "authentication",
-            "unauthorized",
-            "permission_denied",
-            "insufficient_quota",
-            "quota has been exhausted",
-            "allocated quota exceeded",
-        )
-    ):
+    terminal_markers = (
+        "invalid_api_key",
+        "authentication",
+        "unauthorized",
+        "permission_denied",
+        "insufficient_quota",
+        "quota has been exhausted",
+        "allocated quota exceeded",
+    )
+    if any(marker in message for marker in terminal_markers):
         return False
     if class_name in {
         "apiconnectionerror",
@@ -371,28 +369,31 @@ def _agent_runtime_failure_message(text: str) -> str | None:
             "模型调用失败：模型输出达到当前阶段 token 上限，平台已停止本轮生成，"
             "未使用截断的正文或工具参数继续写入（output_truncated）。"
         )
-    if (
+    quota_error = (
         "insufficient_quota" in lowered
         or "quota has been exhausted" in lowered
         or "allocated quota exceeded" in lowered
         or ("ratelimiterror" in lowered and "429" in lowered)
         or "token-plan quota" in lowered
-    ):
+    )
+    if quota_error:
         return "模型调用失败：当前 Skill 抽取模型额度已耗尽（429 insufficient_quota）。请更换可用的 SKILL_BUILDER_LLM_API_KEY 或补充模型额度后重新生成。"
-    if (
+    authentication_error = (
         "invalid_api_key" in lowered
         or "incorrect api key" in lowered
         or "unauthorized" in lowered
         or "authentication" in lowered
         or re.search(r"\b401\b", lowered)
-    ):
+    )
+    if authentication_error:
         return "模型调用失败：Skill 抽取模型认证失败，请检查 SKILL_BUILDER_LLM_API_KEY 和 SKILL_BUILDER_LLM_BASE_URL 后重新生成。"
-    if (
+    permission_error = (
         "permission_denied" in lowered
         or "access denied" in lowered
         or "forbidden" in lowered
         or re.search(r"\b403\b", lowered)
-    ):
+    )
+    if permission_error:
         return "模型调用失败：当前模型账号没有访问该模型或接口的权限，请检查模型授权、模型名和 API Key。"
     if (
         "receive batching backend response failed" in lowered
@@ -407,13 +408,14 @@ def _agent_runtime_failure_code(text: str) -> str | None:
     lowered = str(text or "").strip().lower()
     if not lowered:
         return None
-    if (
+    request_too_large = (
         "requesttoolarge" in lowered
         or "request_too_large" in lowered
         or "payload too large" in lowered
         or "request body size exceeds" in lowered
         or ("413" in lowered and ("request" in lowered or "payload" in lowered))
-    ):
+    )
+    if request_too_large:
         return "request_too_large"
     if "output_truncated" in lowered or "finish_reason=length" in lowered:
         return "output_truncated"

@@ -315,7 +315,7 @@ def normalize_scenario_draft_surface(value: Any) -> dict[str, Any]:
             fact = dict(raw)
             kind = str(fact.get("kind") or "").strip().lower().replace("-", "_")
             fact_value = fact.get("value")
-            if (
+            fact_value_contains_quoted_items = (
                 kind in _MATERIAL_FACT_TYPES
                 and isinstance(fact_value, list)
                 and not str(fact.get("sourceQuote") or "").strip()
@@ -325,7 +325,8 @@ def normalize_scenario_draft_surface(value: Any) -> dict[str, Any]:
                     and str(item.get("sourceQuote") or "").strip()
                     for item in fact_value
                 )
-            ):
+            )
+            if fact_value_contains_quoted_items:
                 for item in fact_value:
                     normalized_value = dict(item)
                     nested_source_quote = normalized_value.pop("sourceQuote")
@@ -564,14 +565,14 @@ def _normalize_business_rule(value: Any, *, index: int) -> tuple[dict[str, Any] 
     source_quote = _text(value.get("sourceQuote"), limit=2000)
     definition = value.get("definition")
     if definition in (None, "", [], {}):
-        definition = {
-            key: item
-            for key, item in value.items()
-            if key not in {
-                "ruleId", "id", "title", "kind", "description",
-                "evidenceRefs", "sourceQuote",
-            }
+        definition = {}
+        metadata_keys = {
+            "ruleId", "id", "title", "kind", "description",
+            "evidenceRefs", "sourceQuote",
         }
+        for key, item in value.items():
+            if key not in metadata_keys:
+                definition[key] = item
     normalized_definition = _normalize_semantic_payload(definition)
     issues: list[str] = []
     if not rule_id:
@@ -701,12 +702,9 @@ def scenario_contract_requires_business_rules(value: Any) -> bool:
     """
 
     source = value if isinstance(value, dict) else {}
-    semantic_surface = {
-        key: source.get(key)
-        for key in (
-            "inputs", "outputs", "steps", "scriptRequirements", "acceptanceCriteria",
-        )
-    }
+    semantic_surface = {}
+    for key in ("inputs", "outputs", "steps", "scriptRequirements", "acceptanceCriteria"):
+        semantic_surface[key] = source.get(key)
     if _contains_structured_business_rule(semantic_surface):
         return True
     encoded = json.dumps(semantic_surface, ensure_ascii=False, sort_keys=True, default=str)
@@ -714,13 +712,10 @@ def scenario_contract_requires_business_rules(value: Any) -> bool:
 
 
 def _decision_id(value: str) -> str:
-    normalized = "_".join(
-        part for part in "".join(
-            character.lower() if character.isascii() and character.isalnum() else " "
-            for character in value
-        ).split()
-        if part
-    )[:64]
+    characters = []
+    for character in value:
+        characters.append(character.lower() if character.isascii() and character.isalnum() else " ")
+    normalized = "_".join(part for part in "".join(characters).split() if part)[:64]
     if normalized and normalized[0].isalpha():
         return normalized
     return f"decision_{hashlib.sha256(value.encode('utf-8')).hexdigest()[:12]}"
@@ -802,13 +797,14 @@ def _scenario_capability_profile(
         )
     )
     capability_evidence_aware = "capabilityEvidence" in source
-    trusted_capability_values = [
-        item.get("sourceQuote")
-        for item in source.get("capabilityEvidence") or []
-        if isinstance(item, dict)
-        and str(item.get("evidenceStatus") or "").strip() == "quoted"
-        and str(item.get("sourceQuote") or "").strip()
-    ]
+    trusted_capability_values = []
+    for item in source.get("capabilityEvidence") or []:
+        if not isinstance(item, dict):
+            continue
+        quoted = str(item.get("evidenceStatus") or "").strip() == "quoted"
+        source_quote = str(item.get("sourceQuote") or "").strip()
+        if quoted and source_quote:
+            trusted_capability_values.append(item.get("sourceQuote"))
     hard_runtime_signal_text = (
         json.dumps(
             trusted_capability_values,
@@ -1011,12 +1007,11 @@ def scenario_capability_requirements(
         if len(option_capabilities) < 2:
             continue
 
-        controlled = {
-            name
-            for capabilities in option_capabilities
-            for name in capabilities
-            if name in controlled_names
-        }
+        controlled = set()
+        for capabilities in option_capabilities:
+            for name in capabilities:
+                if name in controlled_names:
+                    controlled.add(name)
         for name in controlled:
             values = [bool(item.get(name)) for item in option_capabilities]
             if all(values):
@@ -1515,12 +1510,12 @@ def normalize_scenario_contract(value: Any) -> tuple[dict[str, Any], list[str]]:
         }
     ) or bool(optional_capabilities) or ambiguous_acquisition
     if not has_runtime_capability_evidence:
-        result["pendingDecisions"] = [
-            item
-            for item in result["pendingDecisions"]
-            if normalize_decision_concept(item.get("semanticConcept"))
-            not in {"acquisition_mode", "external_system_access_mode"}
-        ]
+        retained_decisions = []
+        excluded_concepts = {"acquisition_mode", "external_system_access_mode"}
+        for item in result["pendingDecisions"]:
+            if normalize_decision_concept(item.get("semanticConcept")) not in excluded_concepts:
+                retained_decisions.append(item)
+        result["pendingDecisions"] = retained_decisions
     generic_external_acquisition = bool(
         result["requiredCapabilities"].get("external_runtime")
         and not result["requiredCapabilities"].get("browser_runtime")
@@ -1670,11 +1665,12 @@ def scenario_draft_shape_issues(value: Any) -> list[str]:
                     f"ScenarioDraft.facts[{index}].value is {fact_value_bytes} bytes; "
                     f"keep one reusable fact within {SCENARIO_FACT_VALUE_MAX_BYTES} bytes"
                 )
-            if (
+            serialized_fact_value = (
                 isinstance(fact_value, str)
                 and '"kind"' in fact_value
                 and ('"evidenceRefs"' in fact_value or "'evidenceRefs'" in fact_value)
-            ):
+            )
+            if serialized_fact_value:
                 precise_issues.append(
                     f"ScenarioDraft.facts[{index}].value appears to contain serialized fact objects; "
                     "put every fact in its own facts[] JSON object instead of concatenating JSON into value"
@@ -1686,11 +1682,12 @@ def scenario_draft_shape_issues(value: Any) -> list[str]:
             if not isinstance(item, dict):
                 continue
             description = item.get("description")
-            if (
+            serialized_conflict_description = (
                 isinstance(description, str)
                 and '"conflicts"' in description
                 and ('"facts"' in description or '"evidenceRefs"' in description)
-            ):
+            )
+            if serialized_conflict_description:
                 precise_issues.append(
                     f"ScenarioDraft.conflicts[{index}].description appears to contain serialized "
                     "ScenarioDraft objects; "
@@ -1836,22 +1833,18 @@ def scenario_contract_requires_dimension_runtime(value: Any) -> bool:
     contract, issues = normalize_scenario_contract(value)
     if issues:
         return False
+    semantic_surface = {}
+    for key in ("purpose", "outputs", "steps", "scriptRequirements", "acceptanceCriteria", "businessRules"):
+        semantic_surface[key] = contract.get(key)
     semantic_text = json.dumps(
-        {
-            key: contract.get(key)
-            for key in (
-                "purpose", "outputs", "steps", "scriptRequirements", "acceptanceCriteria", "businessRules",
-            )
-        },
+        semantic_surface,
         ensure_ascii=False,
     ).lower()
-    return any(
-        marker in semantic_text
-        for marker in (
-            "评分", "得分", "评级", "权重", "维度",
-            "score", "scoring", "rating", "weighted", "dimension",
-        )
+    dimension_markers = (
+        "评分", "得分", "评级", "权重", "维度",
+        "score", "scoring", "rating", "weighted", "dimension",
     )
+    return any(marker in semantic_text for marker in dimension_markers)
 
 
 def _scenario_output_text(value: Any) -> str:

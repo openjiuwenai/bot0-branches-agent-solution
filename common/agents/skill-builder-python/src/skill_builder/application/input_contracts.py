@@ -92,15 +92,12 @@ def scenario_structured_input_contracts(scenario: Any) -> list[dict[str, Any]]:
                 )
             )
         else:
-            candidates.extend(
-                (str(name or "").strip(), nested)
-                for name, nested in item.items()
-                if isinstance(nested, dict)
-                and isinstance(
-                    _first(nested, "fields", "字段", "columns", "列"),
-                    list,
-                )
-            )
+            for name, nested in item.items():
+                if not isinstance(nested, dict):
+                    continue
+                nested_fields = _first(nested, "fields", "字段", "columns", "列")
+                if isinstance(nested_fields, list):
+                    candidates.append((str(name or "").strip(), nested))
         for name, raw in candidates:
             fields = _field_contracts(raw)
             if not fields:

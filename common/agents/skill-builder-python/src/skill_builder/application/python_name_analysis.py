@@ -68,15 +68,11 @@ def analyze_undefined_python_names(
 
     table = symtable.symtable(source, filename, "exec")
     allowed = _BUILTIN_NAMES | _IMPLICIT_MODULE_GLOBALS
-    module_bindings = {
-        name
-        for name in table.get_identifiers()
-        if (
-            table.lookup(name).is_assigned()
-            or table.lookup(name).is_imported()
-            or table.lookup(name).is_namespace()
-        )
-    }
+    module_bindings = set()
+    for name in table.get_identifiers():
+        symbol = table.lookup(name)
+        if symbol.is_assigned() or symbol.is_imported() or symbol.is_namespace():
+            module_bindings.add(name)
     unresolved: set[str] = set()
 
     for name in table.get_identifiers():
@@ -90,12 +86,13 @@ def analyze_undefined_python_names(
         pending.extend(child.get_children())
         for name in child.get_identifiers():
             symbol = child.lookup(name)
-            if (
+            unresolved_global = (
                 symbol.is_referenced()
                 and symbol.is_global()
                 and name not in module_bindings
                 and name not in allowed
-            ):
+            )
+            if unresolved_global:
                 unresolved.add(name)
 
     first_lines = _first_load_lines(tree)

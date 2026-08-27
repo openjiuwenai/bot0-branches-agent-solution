@@ -245,20 +245,20 @@ def _decision_field_merge_signature(field: dict[str, Any]) -> str:
     for option in field.get("options") or []:
         if not isinstance(option, dict):
             continue
-        options.append({
-            key: option.get(key)
-            for key in (
-                "value",
-                "semanticValue",
-                "evidenceStatus",
-                "capabilityDecisions",
-                "capabilityCondition",
-                "capabilityConditions",
-                "semanticEffects",
-                "implementationDependencies",
-            )
-            if option.get(key) not in (None, "", [], {})
-        })
+        projected = {}
+        for key in (
+            "value",
+            "semanticValue",
+            "evidenceStatus",
+            "capabilityDecisions",
+            "capabilityCondition",
+            "capabilityConditions",
+            "semanticEffects",
+            "implementationDependencies",
+        ):
+            if option.get(key) not in (None, "", [], {}):
+                projected[key] = option.get(key)
+        options.append(projected)
     payload = {
         "id": str(field.get("id") or field.get("decisionId") or field.get("key") or "").strip(),
         "type": str(field.get("type") or "").strip().lower(),
@@ -318,11 +318,12 @@ def _merge_duplicate_decision_fields(fields: list[dict[str, Any]]) -> list[dict[
             next_field["label"] = secondary["label"]
         preferred_default = next_field.get("defaultValue")
         secondary_default = secondary.get("defaultValue")
-        if (
+        should_adopt_secondary_default = (
             (preferred_default is None or isinstance(preferred_default, str) and not preferred_default.strip())
             and secondary_default is not None
             and not (isinstance(secondary_default, str) and not secondary_default.strip())
-        ):
+        )
+        if should_adopt_secondary_default:
             next_field["defaultValue"] = secondary["defaultValue"]
             next_field["defaultLabel"] = secondary.get("defaultLabel") or _decision_value_label(
                 secondary["defaultValue"]

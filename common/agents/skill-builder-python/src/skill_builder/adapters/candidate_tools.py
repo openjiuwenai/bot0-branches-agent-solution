@@ -75,47 +75,49 @@ def _agent_acceptance_feedback(payload: dict[str, Any]) -> dict[str, Any]:
         for item in payload.get("findings") or []
         if isinstance(item, dict)
     ]
-    failed = [
-        json_safe(
-            {
-                key: item.get(key)
-                for key in (
-                    "id",
-                    "severity",
-                    "path",
-                    "message",
-                    "details",
-                    "repairable",
-                    "failureOwner",
-                )
-                if item.get(key) not in (None, "", [])
-            },
-            max_text_length=1500,
-            max_items=20,
-        )
-        for item in findings
-        if item.get("severity") == "fail"
-    ][:12]
-    warnings = [
-        {
-            key: item.get(key)
-            for key in ("id", "severity", "message", "reviewRequired")
-            if item.get(key) not in (None, "")
-        }
-        for item in findings
-        if item.get("severity") == "warn"
-    ][:12]
-    return {
-        key: payload.get(key)
-        for key in (
-            "schemaVersion",
-            "status",
-            "outcome",
-            "deliveryStatus",
-            "blockingFailureIds",
-            "blockingCheckIds",
-        )
-    } | {
+    failed = []
+    failure_keys = (
+        "id",
+        "severity",
+        "path",
+        "message",
+        "details",
+        "repairable",
+        "failureOwner",
+    )
+    for item in findings:
+        if item.get("severity") != "fail":
+            continue
+        projected = {}
+        for key in failure_keys:
+            if item.get(key) not in (None, "", []):
+                projected[key] = item.get(key)
+        failed.append(json_safe(projected, max_text_length=1500, max_items=20))
+    failed = failed[:12]
+
+    warnings = []
+    warning_keys = ("id", "severity", "message", "reviewRequired")
+    for item in findings:
+        if item.get("severity") != "warn":
+            continue
+        projected = {}
+        for key in warning_keys:
+            if item.get(key) not in (None, ""):
+                projected[key] = item.get(key)
+        warnings.append(projected)
+    warnings = warnings[:12]
+
+    result = {}
+    for key in (
+        "schemaVersion",
+        "status",
+        "outcome",
+        "deliveryStatus",
+        "blockingFailureIds",
+        "blockingCheckIds",
+    ):
+        result[key] = payload.get(key)
+    return result | {
         "findings": failed,
         "warnings": warnings,
         "checks": [

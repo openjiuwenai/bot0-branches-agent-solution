@@ -315,13 +315,11 @@ def _platform_values(scenario: dict[str, Any]) -> tuple[str, ...]:
     for dependency in scenario.get("dependencies") or []:
         if not isinstance(dependency, dict):
             continue
-        candidates = [
-            str(name or "").strip()
-            for name, detail in dependency.items()
-            if isinstance(detail, dict)
-            and str(name or "").strip()
-            and str(name or "").strip().lower() not in ignored
-        ]
+        candidates = []
+        for name, detail in dependency.items():
+            normalized_name = str(name or "").strip()
+            if isinstance(detail, dict) and normalized_name and normalized_name.lower() not in ignored:
+                candidates.append(normalized_name)
         if len(candidates) >= 2:
             values.extend(candidates)
     return tuple(dict.fromkeys(values))
@@ -375,13 +373,11 @@ def _invalid_field_priority(field: dict[str, Any]) -> int:
     ):
         return 2
     declared = str(field.get("type") or "").lower()
-    return 1 if any(
-        token in declared
-        for token in (
-            "整数", "integer", "int", "数值", "数字", "number", "decimal",
-            "float", "布尔", "boolean", "bool",
-        )
-    ) else 0
+    numeric_tokens = (
+        "整数", "integer", "int", "数值", "数字", "number", "decimal",
+        "float", "布尔", "boolean", "bool",
+    )
+    return 1 if any(token in declared for token in numeric_tokens) else 0
 
 
 def _invalid_field_value(field: dict[str, Any]) -> str:
@@ -565,13 +561,12 @@ def ensure_synthetic_input_fixtures(root: Path, generated: Path) -> dict[str, An
 
         # Invalid-input replay is also platform-owned. Keep the complete schema
         # and invalidate one constrained required field per named input.
-        required_fields = [
-            field
-            for field in input_contract.get("fields") or []
-            if isinstance(field, dict)
-            and field.get("required") is True
-            and str(field.get("name") or "").strip()
-        ]
+        required_fields = []
+        for field in input_contract.get("fields") or []:
+            if not isinstance(field, dict):
+                continue
+            if field.get("required") is True and str(field.get("name") or "").strip():
+                required_fields.append(field)
         invalid_headers = list(headers)
         invalid_values = dict(values)
         if required_fields:
@@ -639,12 +634,13 @@ def platform_owned_fixture_paths(root: Path, generated: Path) -> set[str]:
     for raw_path, digest in paths.items():
         path = str(raw_path or "").replace("\\", "/")
         target = generated / path
-        if (
+        fixture_matches_manifest = (
             path
             and target.is_file()
             and isinstance(digest, str)
             and hashlib.sha256(target.read_bytes()).hexdigest() == digest
-        ):
+        )
+        if fixture_matches_manifest:
             owned.add(path)
     return owned
 

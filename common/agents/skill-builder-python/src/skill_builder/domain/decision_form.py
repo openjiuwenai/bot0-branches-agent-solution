@@ -20,14 +20,12 @@ def _declared_decision_count(message: str | None) -> int:
         for match in re.finditer(pattern, text, re.IGNORECASE):
             token = match.group(1)
             counts.append(int(token) if token.isdigit() else _COUNT_DIGITS.get(token, 0))
-    headings = {
-        int(value)
-        for value in re.findall(
-            r"(?:^|\n)\s*#{1,6}\s*(?:关键\s*)?决策\s*([1-9])\s*[：:]",
-            text,
-            re.IGNORECASE,
-        )
-    }
+    heading_values = re.findall(
+        r"(?:^|\n)\s*#{1,6}\s*(?:关键\s*)?决策\s*([1-9])\s*[：:]",
+        text,
+        re.IGNORECASE,
+    )
+    headings = {int(value) for value in heading_values}
     if headings:
         counts.extend((max(headings), len(headings)))
     return max(counts, default=0)

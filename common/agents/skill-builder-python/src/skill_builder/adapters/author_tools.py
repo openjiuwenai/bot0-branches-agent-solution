@@ -157,12 +157,13 @@ def create_author_completion_tool(
                 "message": "只有 Author 或 Repair 阶段可以提交 Agent 自检。",
             }
         implementation_plan = load_implementation_plan(root) if root is not None else None
-        if (
+        should_synthesize_plan = (
             root is not None
             and task_mode in {"author", "author_build"}
             and (root / "validation" / "author_handoff.json").is_file()
             and implementation_plan is None
-        ):
+        )
+        if should_synthesize_plan:
             synthesized = synthesize_implementation_plan(root)
             if not synthesized.get("ok"):
                 return {
@@ -228,26 +229,26 @@ def create_author_completion_tool(
                 severity="fail",
             )
             if build_findings:
+                projected_findings = []
+                for finding in build_findings[:20]:
+                    projected = {}
+                    for key in (
+                        "id",
+                        "severity",
+                        "category",
+                        "message",
+                        "path",
+                        "failureOwner",
+                        "repairable",
+                        "details",
+                    ):
+                        if finding.get(key) not in (None, "", [], {}):
+                            projected[key] = finding.get(key)
+                    projected_findings.append(projected)
                 return {
                     "ok": False,
                     "error": "author_build_preflight_failed",
-                    "findings": [
-                        {
-                            key: finding.get(key)
-                            for key in (
-                                "id",
-                                "severity",
-                                "category",
-                                "message",
-                                "path",
-                                "failureOwner",
-                                "repairable",
-                                "details",
-                            )
-                            if finding.get(key) not in (None, "", [], {})
-                        }
-                        for finding in build_findings[:20]
-                    ],
+                    "findings": projected_findings,
                     "message": (
                         "生产包未通过 Build-owned 预检。只修复返回 findings 指向的"
                         "生产文件，再次调用 finish_authoring；不要生成 self-check。"
@@ -267,7 +268,7 @@ def create_author_completion_tool(
             if callable(latest_offline_self_check)
             else None
         )
-        if (
+        self_check_required = (
             task_mode in {"author", "author_validate"}
             and root is not None
             and (
@@ -275,7 +276,8 @@ def create_author_completion_tool(
                 or self_check_protocol_requirements(root).get("documented_entrypoints")
             )
             and not latest_check
-        ):
+        )
+        if self_check_required:
             return {
                 "ok": False,
                 "error": "offline_self_check_required",
@@ -946,12 +948,10 @@ def create_author_tools(
             root / "generated-skill",
         )
         protocol = validate_self_check_summary(payload, **requirements)
-        unexpected_external_cases = [
-            str(case.get("id") or "")
-            for case in protocol.cases
-            if case.get("kind") == "external_offline"
-            and not requirements.get("external_entrypoints")
-        ]
+        unexpected_external_cases = []
+        for case in protocol.cases:
+            if case.get("kind") == "external_offline" and not requirements.get("external_entrypoints"):
+                unexpected_external_cases.append(str(case.get("id") or ""))
         if unexpected_external_cases:
             issues = [
                 {
@@ -981,20 +981,13 @@ def create_author_tools(
         if task_mode in {"author", "author_validate"}:
             implementation_plan = load_implementation_plan(root) or {}
             capability_entrypoints = implementation_plan.get("capabilityEntrypoints")
-            external_entrypoints = {
-                str(path).strip()
-                for capability, path in (
-                    capability_entrypoints.items()
-                    if isinstance(capability_entrypoints, dict)
-                    else ()
-                )
-                if capability in {
-                    "api_runtime",
-                    "browser_runtime",
-                    "external_runtime",
-                }
-                and str(path).strip()
-            }
+            external_entrypoints = set()
+            runtime_capabilities = {"api_runtime", "browser_runtime", "external_runtime"}
+            entrypoint_items = capability_entrypoints.items() if isinstance(capability_entrypoints, dict) else ()
+            for capability, path in entrypoint_items:
+                normalized_path = str(path).strip()
+                if capability in runtime_capabilities and normalized_path:
+                    external_entrypoints.add(normalized_path)
             planned_cases = tuple({**case, "status": "pass"} for case in protocol.cases)
             if external_entrypoints and not _external_success_evidence(
                 root,

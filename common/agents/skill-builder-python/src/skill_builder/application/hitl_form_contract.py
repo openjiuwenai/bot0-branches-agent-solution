@@ -61,27 +61,27 @@ def public_decision_form_fields(fields: list[Any] | None) -> list[dict[str, Any]
     for raw_field in fields or []:
         if not isinstance(raw_field, dict):
             continue
-        field = {
-            key: raw_field.get(key)
-            for key in (
-                "id",
-                "label",
-                "description",
-                "type",
-                "defaultValue",
-                "requiresExplicitSelection",
-            )
-            if raw_field.get(key) not in (None, "")
-        }
-        field["options"] = [
-            {
-                key: raw_option.get(key)
-                for key in ("value", "label", "description")
-                if raw_option.get(key) not in (None, "")
-            }
-            for raw_option in raw_field.get("options") or []
-            if isinstance(raw_option, dict)
-        ]
+        field = {}
+        for key in (
+            "id",
+            "label",
+            "description",
+            "type",
+            "defaultValue",
+            "requiresExplicitSelection",
+        ):
+            if raw_field.get(key) not in (None, ""):
+                field[key] = raw_field.get(key)
+        field_options = []
+        for raw_option in raw_field.get("options") or []:
+            if not isinstance(raw_option, dict):
+                continue
+            option = {}
+            for key in ("value", "label", "description"):
+                if raw_option.get(key) not in (None, ""):
+                    option[key] = raw_option.get(key)
+            field_options.append(option)
+        field["options"] = field_options
         result.append(field)
     return result
 
@@ -370,28 +370,23 @@ def _normalize_decision_form_fields(
                 }
             )
         requires_explicit_selection = item.get("requiresExplicitSelection") is True
-        if (
+        should_infer_default = (
             not requires_explicit_selection
             and (default is None or isinstance(default, str) and not default.strip())
-        ):
+        )
+        if should_infer_default:
             eligible_options = normalized_options if field_type == "select" else [
                 option for option in normalized_options if isinstance(option.get("value"), bool)
             ]
             if eligible_options:
-                preferred = next(
-                    (
-                        option
-                        for option in eligible_options
-                        if re.search(
-                            r"(?:推荐|默认|recommended|default)",
-                            f"{option.get('label') or ''} {option.get('description') or ''}",
-                            re.IGNORECASE,
-                        )
-                    ),
-                    eligible_options[0],
-                )
+                preferred = eligible_options[0]
+                for option in eligible_options:
+                    option_text = f"{option.get('label') or ''} {option.get('description') or ''}"
+                    if re.search(r"(?:推荐|默认|recommended|default)", option_text, re.IGNORECASE):
+                        preferred = option
+                        break
                 default = preferred.get("value")
-        if (
+        should_offer_confirmation_options = (
             field_type == "text"
             and (default is None or isinstance(default, str) and not default.strip())
             and not normalized_options
@@ -400,14 +395,18 @@ def _normalize_decision_form_fields(
                 f"{item.get('label') or ''} {item.get('title') or ''} {item.get('description') or ''}",
                 re.IGNORECASE,
             )
-        ):
+        )
+        if should_offer_confirmation_options:
             field_type = "select"
             normalized_options = [
                 {"value": "confirmed", "label": "确认，按当前理解继续", "description": ""},
                 {"value": "needs_adjustment", "label": "需要调整范围或口径", "description": ""},
             ]
             default = "confirmed"
-        if field_type == "text" and (default is None or isinstance(default, str) and not default.strip()):
+        needs_text_fallback = field_type == "text" and (
+            default is None or isinstance(default, str) and not default.strip()
+        )
+        if needs_text_fallback:
             default = "暂不明确，按未验证处理"
         matched_default_option = next(
             (option for option in normalized_options if option.get("value") == default),
@@ -504,12 +503,13 @@ def _decision_form_conflicting_default_ids(
             assignments.setdefault(str(capability), {True: set(), False: set()})[
                 enabled
             ].add(field_id)
-    return {
-        field_id
-        for values in assignments.values()
-        if values[True] and values[False]
-        for field_id in (*values[True], *values[False])
-    }
+    result = set()
+    for values in assignments.values():
+        if not values[True] or not values[False]:
+            continue
+        result.update(values[True])
+        result.update(values[False])
+    return result
 
 
 def _decision_form_field_errors(
@@ -643,20 +643,11 @@ def normalize_decision_form_answer(
         raise DecisionFormAnswerError("请逐项完成决策表单后再提交")
 
     contract_defaults = _decision_form_default_object(fields, default_value)
-    presentation_issues = [
-        issue
-        for issue in _decision_form_field_errors(fields, contract_defaults)
-        if any(
-            marker in issue
-            for marker in (
-                "占位枚举",
-                "后台枚举",
-                "value 重复",
-                "结构化参数",
-                "损坏",
-            )
-        )
-    ]
+    presentation_issues = []
+    presentation_markers = ("占位枚举", "后台枚举", "value 重复", "结构化参数", "损坏")
+    for issue in _decision_form_field_errors(fields, contract_defaults):
+        if any(marker in issue for marker in presentation_markers):
+            presentation_issues.append(issue)
     integrity_issues = [
         *presentation_issues,
         *decision_form_integrity_issues(

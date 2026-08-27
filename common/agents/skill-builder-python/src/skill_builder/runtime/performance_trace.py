@@ -161,17 +161,17 @@ class SkillBuilderPerformanceTrace:
         elif event_type == "internal.performance.llm_request_completed":
             request_index = int(payload.get("requestIndex") or 0)
             transport_attempt = int(payload.get("transportAttempt") or 1)
-            record = next(
-                (
-                    item
-                    for item in reversed(requests)
-                    if item.get("sourceId") == self.source_id
-                    and item.get("requestIndex") == request_index
-                    and item.get("transportAttempt") == transport_attempt
-                    and item.get("finishedAt") is None
-                ),
-                None,
-            )
+            record = None
+            for item in reversed(requests):
+                if item.get("sourceId") != self.source_id:
+                    continue
+                if item.get("requestIndex") != request_index:
+                    continue
+                if item.get("transportAttempt") != transport_attempt:
+                    continue
+                if item.get("finishedAt") is None:
+                    record = item
+                    break
             if record is None:
                 record = {
                     "sourceId": self.source_id,
@@ -207,16 +207,13 @@ class SkillBuilderPerformanceTrace:
             tools.append(record)
         elif event_type == "tool.completed":
             tool_name = str(payload.get("tool") or "unknown")[:160]
-            record = next(
-                (
-                    item
-                    for item in reversed(tools)
-                    if item.get("sourceId") == self.source_id
-                    and item.get("tool") == tool_name
-                    and item.get("finishedAt") is None
-                ),
-                None,
-            )
+            record = None
+            for item in reversed(tools):
+                if item.get("sourceId") != self.source_id or item.get("tool") != tool_name:
+                    continue
+                if item.get("finishedAt") is None:
+                    record = item
+                    break
             if record is None:
                 record = {
                     "sourceId": self.source_id,

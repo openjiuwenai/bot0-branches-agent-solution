@@ -14,29 +14,22 @@ def compact_submission_failure(value: Any) -> dict[str, Any]:
     """Keep only the diagnostic fields required to explain one failed submit."""
 
     failure = value if isinstance(value, dict) else {}
-    compact = {
-        key: failure.get(key)
-        for key in (
-            "stage",
-            "error",
-            "message",
-            "issues",
-            "files",
-            "missing",
-        )
-        if failure.get(key) not in (None, "", [])
-    }
+    compact = {}
+    for key in ("stage", "error", "message", "issues", "files", "missing"):
+        if failure.get(key) not in (None, "", []):
+            compact[key] = failure.get(key)
     validation = failure.get("validation")
     if isinstance(validation, dict):
-        compact["errors"] = [
-            {
-                key: item.get(key)
-                for key in ("id", "path", "message")
-                if item.get(key) not in (None, "")
-            }
-            for item in validation.get("findings") or []
-            if isinstance(item, dict) and item.get("severity") == "fail"
-        ][:20]
+        errors = []
+        for item in validation.get("findings") or []:
+            if not isinstance(item, dict) or item.get("severity") != "fail":
+                continue
+            projected = {}
+            for key in ("id", "path", "message"):
+                if item.get(key) not in (None, ""):
+                    projected[key] = item.get(key)
+            errors.append(projected)
+        compact["errors"] = errors[:20]
     return compact
 
 

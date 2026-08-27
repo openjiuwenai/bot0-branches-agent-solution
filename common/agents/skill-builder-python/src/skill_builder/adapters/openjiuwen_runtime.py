@@ -224,12 +224,13 @@ def _load_valid_author_handoff(
         loaded = json.loads(raw.decode("utf-8"))
     except (OSError, TypeError, ValueError):
         return None
-    if (
+    invalid_handoff = (
         len(raw) > AUTHOR_HANDOFF_MAX_BYTES
         or not isinstance(loaded, dict)
         or loaded.get("schemaVersion") != AUTHOR_HANDOFF_SCHEMA_VERSION
         or not str(loaded.get("scenarioContractHash") or "").strip()
-    ):
+    )
+    if invalid_handoff:
         return None
     return loaded
 
@@ -248,14 +249,12 @@ def _recoverable_tool_input_validation_error(payload: Any) -> bool:
         return False
     error = payload.get("error")
     error_code = error.get("error_code") if isinstance(error, dict) else None
-    message = " ".join(
-        str(value or "")
-        for value in (
-            error.get("message") if isinstance(error, dict) else error,
-            payload.get("message"),
-            payload.get("exception"),
-        )
-    ).lower()
+    message_values = (
+        error.get("message") if isinstance(error, dict) else error,
+        payload.get("message"),
+        payload.get("exception"),
+    )
+    message = " ".join(str(value or "") for value in message_values).lower()
     normalized_code = str(error_code or "").strip()
     schema_failure = (
         "validation error for dynamicmodel" in message
@@ -1380,13 +1379,14 @@ async def run_skill_builder_agent_runtime(
                 ) as exc:  # noqa: BLE001 - classify model/runtime failures surfaced by agent-core streaming
                     elapsed = elapsed_for_timeout()
                     raw_message = str(exc)
-                    if (
+                    can_recover_stream = (
                         pending_error is None
                         and candidate_tool_state.completion_payload is None
                         and author_completion_state.completion_payload is None
                         and stream_recovery_count < 1
                         and _agent_stream_transient_error(exc)
-                    ):
+                    )
+                    if can_recover_stream:
                         stream_recovery_count += 1
                         await stream_owner.close()
                         continuation_query = "\n".join(
@@ -1525,11 +1525,12 @@ async def run_skill_builder_agent_runtime(
                     initial_digests=initial_artifact_digests,
                     task_mode=task_mode,
                 )
-                if (
+                no_write_progress = (
                     task_mode != "chat"
                     and not has_artifact_progress
                     and (chunk_count > no_write_chunk_limit or elapsed > no_write_seconds_limit)
-                ):
+                )
+                if no_write_progress:
                     if not no_write_warning_emitted:
                         no_write_warning_emitted = True
                         await _emit(
@@ -1601,18 +1602,15 @@ async def run_skill_builder_agent_runtime(
                     for event in stream_events
                 ):
                     author_visible_text_chars_since_tool = 0
-                result_events = [
-                    event
-                    for event in stream_events
-                    if event.get("event_type")
-                    in {"tool.result.stream", "tool.error.stream"}
-                ]
-                result_events = [
-                    event
-                    for event in result_events
-                    if _author_tool_result_identity(event)
-                    not in author_seen_tool_result_ids
-                ]
+                result_events = []
+                for event in stream_events:
+                    if event.get("event_type") in {"tool.result.stream", "tool.error.stream"}:
+                        result_events.append(event)
+                new_result_events = []
+                for event in result_events:
+                    if _author_tool_result_identity(event) not in author_seen_tool_result_ids:
+                        new_result_events.append(event)
+                result_events = new_result_events
                 if result_events:
                     author_seen_tool_result_ids.update(
                         _author_tool_result_identity(event)
@@ -1646,12 +1644,13 @@ async def run_skill_builder_agent_runtime(
                         author_last_progress_signature = current_progress_signature
                     else:
                         author_unchanged_tool_results += 1
-                if (
+                scenario_submission_stalled = (
                     task_mode == "scenario"
                     and not scenario_tools.state.committed
                     and candidate_tool_state.completion_payload is None
                     and scenario_visible_text_chars > scenario_no_submit_text_limit
-                ):
+                )
+                if scenario_submission_stalled:
                     set_scenario_protocol_failure(
                         code="scenario_protocol_stalled",
                         summary=(
@@ -2097,12 +2096,13 @@ async def run_skill_builder_agent_runtime(
                         if runtime_failure_message
                         else SkillBuilderAgentCoreError(message)
                     )
-                    if (
+                    truncated_scenario = (
                         isinstance(runtime_failure, SkillBuilderAgentRuntimeUnavailableError)
                         and task_mode == "scenario"
                         and runtime_failure.code == "output_truncated"
                         and not scenario_tools.state.committed
-                    ):
+                    )
+                    if truncated_scenario:
                         set_scenario_protocol_failure(
                             code="scenario_output_truncated",
                             summary=(
@@ -2184,12 +2184,13 @@ async def run_skill_builder_agent_runtime(
         scenario_tools.state.last_draft_sha256
         or str(draft_workspace.load_state().get("scenarioDraftSha256") or "")
     )
-    if (
+    scenario_checkpoint_ready = (
         task_mode == "scenario"
         and not scenario_tools.state.committed
         and persisted_scenario_sha256
         and not scenario_tools.state.submitted
-    ):
+    )
+    if scenario_checkpoint_ready:
         candidate_tool_state.completion_payload = None
         await _emit(
             emit_event,
@@ -2235,12 +2236,13 @@ async def run_skill_builder_agent_runtime(
         task_mode != "author_validate"
         or offline_self_check_status in {"pass", "warn"}
     )
-    if (
+    candidate_checkpoint_ready = (
         task_mode in candidate_modes
         and validation_finalization_ready
         and controller_finalization_required
         and skill_artifact_sha256(root / "generated-skill") is not None
-    ):
+    )
+    if candidate_checkpoint_ready:
         if repaired_after_rejection:
             candidate_tool_state.completion_payload = None
         author_completion = author_completion_state.completion_payload

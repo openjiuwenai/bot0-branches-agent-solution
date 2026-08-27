@@ -117,9 +117,10 @@ def host_path_for_jiuwenbox(
     normalized_sandbox_prefix = _normalize_host_path_for_prefix_match(
         sandbox_prefix if sandbox_prefix is not None else _first_env("JIUWENBOX_SANDBOX_PATH_PREFIX")
     )
-    if normalized_host_prefix and normalized_sandbox_prefix and (
+    should_map_prefix = normalized_host_prefix and normalized_sandbox_prefix and (
         normalized == normalized_host_prefix or normalized.startswith(f"{normalized_host_prefix}/")
-    ):
+    )
+    if should_map_prefix:
         suffix = normalized[len(normalized_host_prefix):].lstrip("/")
         mapped = f"{normalized_sandbox_prefix}/{suffix}" if suffix else normalized_sandbox_prefix
         return _as_jiuwenbox_absolute_host_path(mapped)

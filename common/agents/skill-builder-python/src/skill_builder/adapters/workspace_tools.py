@@ -220,7 +220,7 @@ def create_workspace_read_tools(
     ) -> dict[str, Any]:
         active_responsibility = responsibility_phase or task_mode
         normalized_list_path = str(path or "").replace("\\", "/").strip("/")
-        if (
+        inputs_listing_blocked = (
             str(active_responsibility or "").strip().lower()
             in {"author", "author_build"}
             and author_handoff_available
@@ -228,7 +228,8 @@ def create_workspace_read_tools(
                 normalized_list_path == "inputs"
                 or normalized_list_path.startswith("inputs/")
             )
-        ):
+        )
+        if inputs_listing_blocked:
             result = {
                 "ok": False,
                 "error": "author_handoff_source_list_forbidden",
@@ -476,27 +477,29 @@ def create_workspace_read_tools(
             if active_phase == "scenario"
             else None
         )
-        if (
+        material_already_read = (
             material_read_error is None
             and active_phase
             in {"author", "author_build", "author_validate", "repair"}
             and normalized_material_path.startswith("inputs/")
             and normalized_material_path in state.material_reads
-        ):
+        )
+        if material_already_read:
             material_read_error = "material_already_read"
         if material_read_error:
-            cached_recording = next(
-                (
-                    item
-                    for item in (state.material_bundle_snapshot or {}).get("files") or []
-                    if isinstance(item, dict)
-                    and str(item.get("path") or "").replace("\\", "/").lstrip("./")
-                    == normalized_material_path
-                    and isinstance(item.get("recordingDigest"), dict)
-                    and item.get("coverageComplete") is True
-                ),
-                None,
-            )
+            cached_recording = None
+            cached_files = (state.material_bundle_snapshot or {}).get("files") or []
+            for item in cached_files:
+                if not isinstance(item, dict):
+                    continue
+                item_path = str(item.get("path") or "").replace("\\", "/").lstrip("./")
+                if item_path != normalized_material_path:
+                    continue
+                if not isinstance(item.get("recordingDigest"), dict):
+                    continue
+                if item.get("coverageComplete") is True:
+                    cached_recording = item
+                    break
             if (
                 material_read_error == "material_bundle_already_contains_file"
                 and cached_recording is not None

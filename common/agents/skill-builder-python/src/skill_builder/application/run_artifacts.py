@@ -92,23 +92,19 @@ def changed_repair_artifact_files(before: dict[str, str], after: dict[str, str])
 
 
 def relevant_repair_artifact_files(files: set[str]) -> set[str]:
-    return {
-        relative_path
-        for relative_path in files
-        if (
-            relative_path.startswith("generated-skill/")
-            and not relative_path.startswith(
-                (
-                    "generated-skill/.skill-builder/",
-                    "generated-skill/inputs/",
-                    "generated-skill/output/",
-                    "generated-skill/playwright/",
-                    "generated-skill/validation/",
-                    "generated-skill/workspace/",
-                )
-            )
-        )
-    }
+    result = set()
+    excluded_prefixes = (
+        "generated-skill/.skill-builder/",
+        "generated-skill/inputs/",
+        "generated-skill/output/",
+        "generated-skill/playwright/",
+        "generated-skill/validation/",
+        "generated-skill/workspace/",
+    )
+    for relative_path in files:
+        if relative_path.startswith("generated-skill/") and not relative_path.startswith(excluded_prefixes):
+            result.add(relative_path)
+    return result
 
 
 def has_substantive_scenario_checkpoint(root: Path) -> bool:

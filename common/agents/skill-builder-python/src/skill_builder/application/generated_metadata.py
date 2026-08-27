@@ -97,13 +97,14 @@ def _is_generic_workspace_title_candidate(value: str | None) -> bool:
 def _is_high_confidence_workspace_title_candidate(value: str | None) -> bool:
     text = _clean_workspace_title_candidate(value)
     compact = re.sub(r"\s+", "", text)
-    if (
+    invalid_candidate = (
         not compact
         or not _contains_cjk(text)
         or _is_default_skill_display_name(text)
         or _is_generic_workspace_title_candidate(text)
         or _looks_like_workspace_title_sentence(text)
-    ):
+    )
+    if invalid_candidate:
         return False
     return bool(
         re.search(
@@ -176,25 +177,25 @@ def workspace_title_candidates_from_text(text: str) -> list[str]:
         )
         if match:
             candidates.append(match.group("title").strip())
-        candidates.extend(
-            match.group("title").strip()
-            for match in re.finditer(
-                rf"(?P<title>[\u3400-\u9fffA-Za-z0-9/、 +_-]{{3,60}}?{title_suffix}){title_boundary}",
-                line,
-                flags=re.IGNORECASE,
-            )
+        title_matches = re.finditer(
+            rf"(?P<title>[\u3400-\u9fffA-Za-z0-9/、 +_-]{{3,60}}?{title_suffix}){title_boundary}",
+            line,
+            flags=re.IGNORECASE,
         )
+        for title_match in title_matches:
+            candidates.append(title_match.group("title").strip())
     result: list[str] = []
     seen: set[str] = set()
     for candidate in candidates:
         title = re.sub(r"\s+", " ", _clean_workspace_title_candidate(candidate)).strip(" ，。；:：-—")
-        if (
+        invalid_candidate = (
             not title
             or _is_default_skill_display_name(title)
             or _is_generic_workspace_title_candidate(title)
             or _looks_like_workspace_title_sentence(title)
             or not _contains_cjk(title)
-        ):
+        )
+        if invalid_candidate:
             continue
         key = title.lower()
         if key not in seen:
@@ -346,12 +347,13 @@ def adopt_generated_metadata(
         description = generated_description.strip()[:4096]
     generated_display_name, generated_short_description = _generated_openai_metadata(root)
     generated_display_title = _chinese_display_title(generated_display_name)
-    if (
+    generated_title_is_usable = (
         not explicit_display_name
         and generated_display_title
         and not _is_default_skill_display_name(generated_display_title)
         and _is_high_confidence_workspace_title_candidate(generated_display_title)
-    ):
+    )
+    if generated_title_is_usable:
         display_name = generated_display_title[:128]
     elif not explicit_display_name:
         generated_heading_title = _chinese_display_title(_generated_skill_heading(root))
@@ -363,28 +365,29 @@ def adopt_generated_metadata(
             display_name = generated_heading_title
     if display_name_should_be_localized(display_name):
         chinese_display = generated_chinese_workspace_title(root, display_name).strip()
-        if (
+        localized_title_is_usable = (
             chinese_display
             and _contains_cjk(chinese_display)
             and not _is_default_skill_display_name(chinese_display)
             and _is_high_confidence_workspace_title_candidate(chinese_display)
-        ):
+        )
+        if localized_title_is_usable:
             display_name = chinese_display[:128]
     display_name = _chinese_display_title(display_name) or "业务处理助手"
     if not explicit_description and not generated_description and generated_short_description:
         description = generated_short_description[:4096]
     if not tags:
         tags = list(default_tags)
-    changed = {
-        key: {"from": original.get(key), "to": value}
-        for key, value in {
-            "skill_name": skill_name,
-            "display_name": display_name,
-            "description": description,
-            "tags": tags,
-        }.items()
-        if value != original.get(key)
+    changed = {}
+    projected_values = {
+        "skill_name": skill_name,
+        "display_name": display_name,
+        "description": description,
+        "tags": tags,
     }
+    for key, value in projected_values.items():
+        if value != original.get(key):
+            changed[key] = {"from": original.get(key), "to": value}
     return skill_name, display_name, description, tags, changed
 
 

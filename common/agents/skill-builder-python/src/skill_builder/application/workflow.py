@@ -155,12 +155,13 @@ def _confirmations_for_scenario(
     semantic_hash = str(scenario_contract.get("semanticHash") or "").strip()
     if not semantic_hash:
         return ()
-    matching = tuple(
-        item
-        for item in confirmations
-        if isinstance(item, dict)
-        and str(item.get("scenarioContractHash") or "").strip() == semantic_hash
-    )
+    matching_items = []
+    for item in confirmations:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("scenarioContractHash") or "").strip() == semantic_hash:
+            matching_items.append(item)
+    matching = tuple(matching_items)
     # One Scenario has one HITL boundary. A repeated identical hash can occur
     # after host retries; the latest completed answer is the durable choice.
     return matching[-1:] if matching else ()
@@ -353,6 +354,15 @@ def _candidate_failure(status: dict[str, Any] | None) -> dict[str, Any]:
     return status
 
 
+def _repair_failure_projection(status: dict[str, Any] | None) -> dict[str, Any]:
+    failure = _candidate_failure(status)
+    result = {}
+    for key in ("stage", "error", "message", "repairable", "blockingFindingIds"):
+        if failure.get(key) not in (None, "", [], {}):
+            result[key] = failure.get(key)
+    return result
+
+
 def _repair_finding_has_deterministic_evidence(finding: dict[str, Any]) -> bool:
     finding_id = str(finding.get("id") or "").strip()
     if finding_id == "business_output_invariant_failed":
@@ -442,18 +452,19 @@ def _candidate_lifecycle_state(
     )
     if failure.get("stage") == "draft_acceptance":
         return CandidateLifecycleState.PREFLIGHT_FAILED
-    failure_codes = {
-        str(value or "").strip()
-        for value in (
-            status.get("error") if isinstance(status, dict) else None,
-            failure.get("error"),
-            failure.get("code"),
-            lifecycle.get("code"),
-            lifecycle.get("rootBlockerCode"),
-            lifecycle.get("terminationCode"),
-        )
-        if str(value or "").strip()
-    }
+    failure_codes = set()
+    failure_values = (
+        status.get("error") if isinstance(status, dict) else None,
+        failure.get("error"),
+        failure.get("code"),
+        lifecycle.get("code"),
+        lifecycle.get("rootBlockerCode"),
+        lifecycle.get("terminationCode"),
+    )
+    for value in failure_values:
+        normalized = str(value or "").strip()
+        if normalized:
+            failure_codes.add(normalized)
     if failure.get("stage") in {
         "draft_snapshot",
         "candidate_revision",
@@ -507,33 +518,22 @@ def _candidate_repair_plan(
     failure = _candidate_failure(status)
     acceptance = failure.get("acceptance")
     findings = acceptance.get("findings") if isinstance(acceptance, dict) else []
-    blocking_findings = [
-        {
-            key: item.get(key)
-            for key in (
-                "id",
-                "severity",
-                "message",
-                "path",
-                "failureOwner",
-                "repairable",
-                "details",
-            )
-            if item.get(key) not in (None, "", [], {})
-        }
-        for item in findings or []
-        if isinstance(item, dict)
-        and item.get("severity") == "fail"
-        and item.get("repairable") is True
-    ][:20]
-    selected_family = next(
-        (
-            family
-            for family, finding_ids in _MECHANICAL_REPAIR_FAMILIES.items()
-            if any(item.get("id") in finding_ids for item in blocking_findings)
-        ),
-        "",
-    )
+    blocking_findings = []
+    projection_keys = ("id", "severity", "message", "path", "failureOwner", "repairable", "details")
+    for item in findings or []:
+        if not isinstance(item, dict) or item.get("severity") != "fail" or item.get("repairable") is not True:
+            continue
+        projected = {}
+        for key in projection_keys:
+            if item.get(key) not in (None, "", [], {}):
+                projected[key] = item.get(key)
+        blocking_findings.append(projected)
+    blocking_findings = blocking_findings[:20]
+    selected_family = ""
+    for family, finding_ids in _MECHANICAL_REPAIR_FAMILIES.items():
+        if any(item.get("id") in finding_ids for item in blocking_findings):
+            selected_family = family
+            break
     if selected_family:
         allowed_ids = _MECHANICAL_REPAIR_FAMILIES[selected_family]
         blocking_findings = [
@@ -619,19 +619,10 @@ def _repair_issue_keys(status: dict[str, Any] | None) -> set[str]:
             keys.add(finding_id)
             continue
         for detail in details:
-            identity: dict[str, Any] = {
-                key: detail.get(key)
-                for key in (
-                    "id",
-                    "kind",
-                    "caseId",
-                    "contractId",
-                    "obligationKind",
-                    "path",
-                    "commandIndex",
-                )
-                if detail.get(key) not in (None, "", [], {})
-            }
+            identity: dict[str, Any] = {}
+            for key in ("id", "kind", "caseId", "contractId", "obligationKind", "path", "commandIndex"):
+                if detail.get(key) not in (None, "", [], {}):
+                    identity[key] = detail.get(key)
             assertion = detail.get("assertion")
             if isinstance(assertion, dict):
                 identity["assertion"] = {
@@ -674,13 +665,11 @@ def _repair_check_regressions(
         for item in _candidate_acceptance(after_status).get("checks") or []
         if isinstance(item, dict) and str(item.get("id") or "")
     }
-    return [
-        {"id": check_id, "before": "pass", "after": after_checks[check_id]}
-        for check_id, before_value in sorted(before_checks.items())
-        if before_value == "pass"
-        and check_id in after_checks
-        and after_checks[check_id] != "pass"
-    ]
+    regressions = []
+    for check_id, before_value in sorted(before_checks.items()):
+        if before_value == "pass" and check_id in after_checks and after_checks[check_id] != "pass":
+            regressions.append({"id": check_id, "before": "pass", "after": after_checks[check_id]})
+    return regressions
 
 
 def _repair_blocker_delta(
@@ -836,18 +825,7 @@ async def _run_candidate_repairs(
                 "phase": "repair",
                 "attempt": 1,
                 "maxAttempts": 1,
-                "failure": {
-                    key: _candidate_failure(original_status).get(key)
-                    for key in (
-                        "stage",
-                        "error",
-                        "message",
-                        "repairable",
-                        "blockingFindingIds",
-                    )
-                    if _candidate_failure(original_status).get(key)
-                    not in (None, "", [], {})
-                },
+                "failure": _repair_failure_projection(original_status),
             },
         )
         repair_input = replace(
@@ -882,17 +860,13 @@ async def _run_candidate_repairs(
                 repair_artifact_snapshot(builder_input.root),
             )
         )
-        platform_paths = {
-            f"generated-skill/{path}"
-            for path in platform_owned_fixture_paths(
-                builder_input.root,
-                builder_input.root / "generated-skill",
-            )
-        }
-        allowed_paths = {
-            f"generated-skill/{path}"
-            for path in initial_plan.get("targetPaths") or []
-        } | platform_paths | {"generated-skill/agents/openai.yaml"}
+        platform_paths = set()
+        owned_paths = platform_owned_fixture_paths(builder_input.root, builder_input.root / "generated-skill")
+        for path in owned_paths:
+            platform_paths.add(f"generated-skill/{path}")
+        allowed_paths = {"generated-skill/agents/openai.yaml"} | platform_paths
+        for path in initial_plan.get("targetPaths") or []:
+            allowed_paths.add(f"generated-skill/{path}")
         unauthorized_paths = sorted(changed_paths - allowed_paths)
         await lifecycle_io.emit(
             "agent.repair_completed",
