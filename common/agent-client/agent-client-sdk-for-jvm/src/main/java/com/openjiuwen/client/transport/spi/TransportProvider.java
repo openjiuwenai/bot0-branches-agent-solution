@@ -70,6 +70,16 @@ public interface TransportProvider extends AutoCloseable {
         // 兼容第三方 Transport；没有长期观察资源的实现无需处理。
     }
 
+    /**
+     * Returns the cumulative number of raw response observations dropped by the optional observer queue.
+     * Custom transports that do not implement raw observation return zero.
+     *
+     * @return dropped observation count
+     */
+    default long rawResponseDroppedCount() {
+        return 0L;
+    }
+
     @Override
     void close();
 

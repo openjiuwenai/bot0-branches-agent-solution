@@ -167,6 +167,11 @@ public final class DefaultAgentClient implements AgentClient {
                 });
     }
 
+    @Override
+    public long rawResponseDroppedCount() {
+        return transport.rawResponseDroppedCount();
+    }
+
     /**
      * 传输层按 taskRef 解析出的 invocationRef 可能是回退值，这里统一改写为业务持有的句柄。
      *
