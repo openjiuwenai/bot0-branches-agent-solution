@@ -484,7 +484,7 @@ bash common/agents/edp-agent-java/deploy/start.sh
 network: agent-net
 adapter alias: adapter-versatile
 adapter internal port: 8191
-EDP URL: http://adapter-versatile:8191/a2a
+EDP URL: http://adapter-versatile:8191
 ```
 
 容器间访问使用内部端口 8191，不依赖 adapter 是否把 8191 映射到宿主机。双方脚本都应只 `ensure` 这个共享网络，不在常规停止/卸载中删除。
@@ -494,7 +494,7 @@ EDP URL: http://adapter-versatile:8191/a2a
 Docker bridge 网络不能跨主机，`adapter-versatile` 也不会跨主机解析。必须由 adapter 团队提供可路由的 DNS、负载均衡或网关地址，例如：
 
 ```dotenv
-EDP_AGENT_VERSATILE_A2A_URL=https://adapter.example.internal/a2a
+EDP_AGENT_VERSATILE_A2A_URL=https://adapter.example.internal
 ```
 
 同时配置防火墙、TLS 和鉴权。外部 Redis 同理使用容器内可路由的 DNS/IP，不能依靠另一台主机上的 Docker 容器名。

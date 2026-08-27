@@ -239,7 +239,7 @@ curl http://localhost:8190/.well-known/agent-card.json
 | 变量名 | 说明 | 默认值 |
 |--------|------|--------|
 | EDP_AGENT_VERSATILE_URL | Versatile 业务系统地址（含占位符） | http://localhost:30001/... |
-| EDP_AGENT_VERSATILE_A2A_URL | Versatile A2A 适配器地址 | http://localhost:8191/a2a |
+| EDP_AGENT_VERSATILE_A2A_URL | Versatile A2A 适配器地址 | http://localhost:8191 |
 | EDP_AGENT_VERSATILE_TIMEOUT | 调用超时 | 30s |
 
 ### MCP SSE 配置
