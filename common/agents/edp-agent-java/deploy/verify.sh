@@ -10,7 +10,7 @@ EDP_CONTAINER="$(config_value EDP_CONTAINER edp-agent)"
 HOST_PORT="$(config_value EDP_HOST_PORT 8190)"
 DEPLOYMENT="$(config_value EDP_REDIS_DEPLOYMENT local)"
 REDIS_CONTAINER="$(config_value EDP_REDIS_CONTAINER edp-redis)"
-ADAPTER_A2A_URL="$(config_value EDP_AGENT_VERSATILE_A2A_URL http://adapter-versatile:8191/a2a)"
+ADAPTER_A2A_URL="$(config_value EDP_AGENT_VERSATILE_A2A_URL http://adapter-versatile:8191)"
 
 validate_resource_name "EDP 容器" "${EDP_CONTAINER}"
 validate_port EDP_HOST_PORT "${HOST_PORT}"
