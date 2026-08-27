@@ -445,6 +445,9 @@ public class A2aHttpTransportProvider
             java.net.http.HttpHeaders headers) {
     }
 
+    private record SseReadResult(int acceptedFrames, Throwable failure) {
+    }
+
     private static RawResponsePayload rawResponsePayload(int status, java.net.http.HttpHeaders headers,
             String body, String eventId, boolean replayed) {
         return new RawResponsePayload(status, headers, body, eventId, replayed);
@@ -1015,9 +1018,36 @@ public class A2aHttpTransportProvider
         ch.idleTimedOut.set(false);
         ScheduledFuture<?> watchdog = armWatchdog(ch, in);
         ch.watchdog = watchdog;
-        Throwable failure = null;
-        int acceptedFrames = 0;
         SseFrameContext frameContext = new SseFrameContext(ch, subscription, httpStatus, headers);
+        SseReadResult result;
+        try {
+            result = readSseLines(in, frameContext);
+        } finally {
+            ch.activeInput.compareAndSet(in, null);
+            if (watchdog != null) {
+                watchdog.cancel(false);
+            }
+        }
+        if (subscription && result.acceptedFrames() == 0 && !ch.terminal.get()
+                && ch.lastState != TaskState.INPUT_REQUIRED) {
+            onSubscriptionFailure(ch, "SubscribeToTask closed before a valid event",
+                    result.failure() != null ? result.failure() : new IOException("empty subscription stream"));
+            return;
+        }
+        onSseStreamEnd(ch, result.failure());
+    }
+
+    /**
+     * 逐行读取 SSE 流并统计通过校验的帧。
+     *
+     * @param in SSE 输入流
+     * @param frameContext SSE 帧上下文
+     * @return SSE 读取结果
+     */
+    private SseReadResult readSseLines(InputStream in, SseFrameContext frameContext) {
+        Channel ch = frameContext.ch();
+        int acceptedFrames = 0;
+        Throwable failure = null;
         try (BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
             StringBuilder data = new StringBuilder();
             StringBuilder eventBlock = new StringBuilder();
@@ -1043,25 +1073,14 @@ public class A2aHttpTransportProvider
             if (flushFrame(frameContext, data, eventBlock, eventId)) {
                 acceptedFrames++;
             }
-            if (subscription && acceptedFrames > 0) {
+            if (frameContext.replayed() && acceptedFrames > 0) {
                 ch.observationFailures = 0;
                 markRecoveredTree(ch);
             }
         } catch (IOException | A2aTransportException | IllegalArgumentException e) {
             failure = e;
-        } finally {
-            ch.activeInput.compareAndSet(in, null);
-            if (watchdog != null) {
-                watchdog.cancel(false);
-            }
         }
-        if (subscription && acceptedFrames == 0 && !ch.terminal.get()
-                && ch.lastState != TaskState.INPUT_REQUIRED) {
-            onSubscriptionFailure(ch, "SubscribeToTask closed before a valid event",
-                    failure != null ? failure : new IOException("empty subscription stream"));
-            return;
-        }
-        onSseStreamEnd(ch, failure);
+        return new SseReadResult(acceptedFrames, failure);
     }
 
     /**
