@@ -311,6 +311,6 @@ class RequestHandlerBusA2aBridgeTest {
 
     private static AgentBusEventEnvelope event(String type) {
         return new AgentBusEventEnvelope(type, "message-1", "tenant-a", "source", "runtime-a", null, "corr-1",
-                "trace-1", "idem-1", Instant.now().plusSeconds(60), "application/json", new byte[]{1}, null, Map.of());
+                "trace-1", "idem-1", Instant.now().plusSeconds(60), new byte[]{1}, null, Map.of());
     }
 }

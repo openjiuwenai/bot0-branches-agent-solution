@@ -144,6 +144,6 @@ class RuntimeBusEventConsumerTest {
                 + "\",\"method\":\"SendMessage\",\"params\":{}}")
                 .getBytes(java.nio.charset.StandardCharsets.UTF_8);
         return new AgentBusEventEnvelope(type, key, "tenant-a", "source", "runtime-a", null, "corr-1", "trace-1",
-                key, Instant.parse("2026-07-20T00:01:00Z"), "application/json", payload, null, Map.of());
+                key, Instant.parse("2026-07-20T00:01:00Z"), payload, null, Map.of());
     }
 }

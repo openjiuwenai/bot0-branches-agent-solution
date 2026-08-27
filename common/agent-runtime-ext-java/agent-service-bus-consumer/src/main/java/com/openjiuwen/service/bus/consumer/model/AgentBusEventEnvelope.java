@@ -18,8 +18,7 @@ import java.util.Map;
  */
 public record AgentBusEventEnvelope(String eventType, String messageId, String tenantId, String sourceServiceId,
         String targetServiceId, String routeHandle, String correlationId, String traceId, String idempotencyKey,
-        Instant deadline, String payloadContentType, byte[] inlinePayload, String payloadRef,
-        Map<String, String> metadata) {
+        Instant deadline, byte[] inlinePayload, String payloadRef, Map<String, String> metadata) {
 
     /**
      * Performs the hasPayload operation.

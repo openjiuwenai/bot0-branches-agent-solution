@@ -109,9 +109,6 @@ public final class BusEnvelopeValidator {
         if (envelope.inlinePayload() != null && envelope.inlinePayload().length > maxInlinePayloadBytes) {
             return Optional.of("PAYLOAD_TOO_LARGE");
         }
-        if (envelope.inlinePayload() != null && !"application/json".equalsIgnoreCase(envelope.payloadContentType())) {
-            return Optional.of("CONTENT_TYPE_UNSUPPORTED");
-        }
         return Optional.empty();
     }
 
