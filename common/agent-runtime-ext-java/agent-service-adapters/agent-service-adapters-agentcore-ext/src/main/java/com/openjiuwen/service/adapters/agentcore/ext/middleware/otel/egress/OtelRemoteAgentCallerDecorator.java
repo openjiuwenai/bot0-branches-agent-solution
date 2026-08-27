@@ -123,19 +123,21 @@ public class OtelRemoteAgentCallerDecorator implements RemoteAgentCaller {
     }
 
     private Span startSpan(RemoteCall call, boolean versatile) {
-        Optional<Context> parent = resolveParent(call.contextId());
+        Optional<EgressParent> parent = resolveParent(call.contextId());
         Span span = tracer.spanBuilder(versatile ? "service.versatile_adapter" : "sub_agent.dispatch")
                 .setSpanKind(SpanKind.CLIENT)
-                .setParent(parent.orElseGet(Context::root))
+                .setParent(parent.map(EgressParent::context).orElseGet(Context::root))
                 .startSpan();
         if (parent.isEmpty()) {
             LOGGER.warn("otel egress span starts new trace (no stashed/bridge context): agent={}", call.agentName());
         }
-        // coordinator 线程无 SessionContextHolder，SessionIdSpanProcessor 注入不到——显式补 session.id
-        Optional<String> conversationId = EgressContextStash.findConversationId(call.contextId());
-        conversationId.ifPresent(id -> span.setAttribute("session.id", id));
-        // dispatch 上下文单独暂存：供 SPI header 注入解析出 dispatch span 的 id（异步发送线程无线程上下文）
-        conversationId.ifPresent(id -> EgressContextStash.putOutbound(id, span.storeInContext(Context.root())));
+        // coordinator 线程无 SessionContextHolder，SessionIdSpanProcessor 注入不到——显式补 session.id；
+        // 解析到父上下文即无条件写 OUTBOUND（异步发送线程经它取 dispatch span 身份）——
+        // 不再以 BY_SESSION 先建档为前提（消除"先有 stash 才能写 OUTBOUND"的循环前提）
+        parent.ifPresent(value -> {
+            span.setAttribute("session.id", value.conversationId());
+            EgressContextStash.putOutbound(value.conversationId(), span.storeInContext(Context.root()));
+        });
         if (versatile) {
             span.setAttribute("openjiuwen.va.dispatch_mode", "single");
             Map<String, Object> args = parseMessage(call.message());
@@ -149,26 +151,25 @@ public class OtelRemoteAgentCallerDecorator implements RemoteAgentCaller {
             span.setAttribute("openjiuwen.subagent.query", nullToEmpty(call.message()));
             span.setAttribute("openjiuwen.subagent.sub_agent_url", resolveUrl(call.agentName()));
             span.setAttribute("openjiuwen.subagent.context_id", nullToEmpty(call.contextId()));
-            conversationId.ifPresent(id -> span.setAttribute("openjiuwen.subagent.sub_task_path",
+            parent.map(EgressParent::conversationId).ifPresent(id -> span.setAttribute("openjiuwen.subagent.sub_task_path",
                     "[\"" + id + "\",\"" + nullToEmpty(call.agentName()) + "\"]"));
         }
         return span;
     }
 
-    private Optional<Context> resolveParent(String contextId) {
+    private Optional<EgressParent> resolveParent(String contextId) {
         Optional<Context> stashed = EgressContextStash.find(contextId);
-        if (stashed.isPresent()) {
-            return stashed;
+        Optional<String> stashedId = EgressContextStash.findConversationId(contextId);
+        if (stashed.isPresent() && stashedId.isPresent()) {
+            return Optional.of(new EgressParent(stashedId.get(), stashed.get()));
         }
-        Optional<String> conversationId = EgressContextStash.findConversationId(contextId);
-        Optional<HttpContextBridge> bridge = OtelRuntimeSupport.bridge();
-        if (bridge.isPresent() && conversationId.isPresent()) {
-            HttpContextBridge.Entry entry = bridge.get().get(conversationId.get());
-            if (entry != null && entry.getSpan() != null) {
-                return Optional.of(entry.getSpan().storeInContext(Context.root()));
-            }
-        }
-        return Optional.empty();
+        // stash 未命中时直接按 contextId（含组合形态）查 HTTP bridge——不依赖
+        // BY_SESSION 先建档（真实委托路径上 rail 暂存不保证先于 decorator 发生）
+        return OtelRuntimeSupport.bridge()
+                .flatMap(bridge -> bridge.find(contextId))
+                .filter(match -> match.entry().getSpan() != null)
+                .map(match -> new EgressParent(match.conversationId(),
+                        match.entry().getSpan().storeInContext(Context.root())));
     }
 
     private String resolveUrl(String agentName) {
@@ -228,5 +229,9 @@ public class OtelRemoteAgentCallerDecorator implements RemoteAgentCaller {
 
     private static String nullToEmpty(String value) {
         return value != null ? value : "";
+    }
+
+    /** Resolved egress parent: canonical conversation key + parent context. */
+    private record EgressParent(String conversationId, Context context) {
     }
 }
