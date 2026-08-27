@@ -39,6 +39,10 @@ import java.util.Map;
  */
 
 public final class FlowAgentEngine {
+    /**
+     * USER_FIELDS.
+     * @since 0.1.0
+     */
     public static final String USER_FIELDS = "userFields";
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -61,11 +65,23 @@ public final class FlowAgentEngine {
     private volatile boolean initialized;
     private final Object initLock = new Object();
 
+    /**
+     * FlowAgentEngine.
+     * @param nodeId nodeId
+     * @since 0.1.0
+     */
     public FlowAgentEngine(String nodeId) {
         this.nodeId = nodeId == null ? "agent" : nodeId;
         this.presetBridge = null;
     }
 
+    /**
+     * FlowAgentEngine.
+     * @param nodeId nodeId
+     * @param config config
+     * @param bridge bridge
+     * @since 0.1.0
+     */
     public FlowAgentEngine(String nodeId, FlowAgentConfig config, ReactBridge bridge) {
         this.nodeId = nodeId;
         this.config = config;
@@ -178,6 +194,12 @@ public final class FlowAgentEngine {
             Map<String, Object> result = bridge != null
                     ? bridge.invoke(mapped)
                     : asMap(reactAgent.invoke(mapped, toSession(session)));
+            /**
+             * formatInvokeOutput.
+             * @param result result
+             * @return result
+             * @since 0.1.0
+             */
             return formatInvokeOutput(result);
         } catch (RuntimeException | IOException | InterruptedException e) {
             Map<String, Object> err = new LinkedHashMap<>();
@@ -243,6 +265,12 @@ public final class FlowAgentEngine {
             Object result = bridge != null
                     ? bridge.invoke(mapped)
                     : reactAgent.invoke(mapped, toSession(session));
+            /**
+             * asMap.
+             * @param result result
+             * @return result
+             * @since 0.1.0
+             */
             return asMap(result);
         } catch (RuntimeException | IOException | InterruptedException e) {
             Map<String, Object> err = new LinkedHashMap<>();

@@ -23,7 +23,15 @@ import java.util.regex.Pattern;
  */
 
 public final class FlowEndEngine {
+    /**
+     * OUTPUT_PREFIX.
+     * @since 0.1.0
+     */
     public static final String OUTPUT_PREFIX = "#end_";
+    /**
+     * SPLIT_DELIMITER.
+     * @since 0.1.0
+     */
     public static final String SPLIT_DELIMITER = "\u0001";
 
     /** @deprecated use {@link #scopedKey(String, String)} — kept for tests referencing raw suffix */

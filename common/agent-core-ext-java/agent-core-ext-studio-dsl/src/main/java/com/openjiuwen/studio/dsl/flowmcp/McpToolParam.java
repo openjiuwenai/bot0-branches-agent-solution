@@ -13,8 +13,20 @@ import java.util.Map;
  */
 
 public final class McpToolParam {
+    /**
+     * METHOD_BODY.
+     * @since 0.1.0
+     */
     public static final String METHOD_BODY = "Body";
+    /**
+     * METHOD_HEADERS.
+     * @since 0.1.0
+     */
     public static final String METHOD_HEADERS = "Headers";
+    /**
+     * METHOD_QUERY.
+     * @since 0.1.0
+     */
     public static final String METHOD_QUERY = "Query";
 
     private final String name;
@@ -24,6 +36,16 @@ public final class McpToolParam {
     private final String method;
     private final Object defaultValue;
 
+    /**
+     * McpToolParam.
+     * @param name name
+     * @param description description
+     * @param type type
+     * @param required required
+     * @param method method
+     * @param defaultValue defaultValue
+     * @since 0.1.0
+     */
     public McpToolParam(
             String name, String description, String type, boolean required, String method, Object defaultValue) {
         this.name = name == null ? "" : name;

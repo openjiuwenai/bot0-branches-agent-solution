@@ -15,11 +15,26 @@ import com.openjiuwen.core.foundation.llm.schema.UserMessage;
 public class ConversationUserMessage extends UserMessage {
     private Boolean enableHistory = true;
 
+    /**
+     * ConversationUserMessage.
+     * @since 0.1.0
+     */
     public ConversationUserMessage() {}
 
+    /**
+     * ConversationUserMessage.
+     * @param content content
+     * @since 0.1.0
+     */
     public ConversationUserMessage(String content) {
         super(content);
     }
+    /**
+     * ConversationUserMessage.
+     * @param content content
+     * @param enableHistory enableHistory
+     * @since 0.1.0
+     */
     public ConversationUserMessage(String content, boolean enableHistory) {
         super(content);
         this.enableHistory = enableHistory;

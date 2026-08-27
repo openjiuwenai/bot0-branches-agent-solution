@@ -33,19 +33,67 @@ import java.util.Set;
  */
 
 public final class FlowSubWorkflowEngine {
+    /**
+     * USER_FIELDS.
+     * @since 0.1.0
+     */
     public static final String USER_FIELDS = "userFields";
+    /**
+     * SYSTEM_FIELDS.
+     * @since 0.1.0
+     */
     public static final String SYSTEM_FIELDS = "systemFields";
+    /**
+     * PRE_DEFINE_FIELDS.
+     * @since 0.1.0
+     */
     public static final String PRE_DEFINE_FIELDS = "preDefineFields";
+    /**
+     * GLOBAL_VARIABLES.
+     * @since 0.1.0
+     */
     public static final String GLOBAL_VARIABLES = "global_variables";
+    /**
+     * REQUEST_VARIABLES.
+     * @since 0.1.0
+     */
     public static final String REQUEST_VARIABLES = "_request";
+    /**
+     * MESSAGE_NODE_END.
+     * @since 0.1.0
+     */
     public static final String MESSAGE_NODE_END = "message_end";
+    /**
+     * GLOBAL_REF_PREFIX.
+     * @since 0.1.0
+     */
     public static final String GLOBAL_REF_PREFIX = "MEMORY_VARIABLE.";
+    /**
+     * INTERACTION.
+     * @since 0.1.0
+     */
     public static final String INTERACTION = "interaction";
 
+    /**
+     * DEFAULT_SUB_WORKFLOW_TIMEOUT.
+     * @since 0.1.0
+     */
     public static final int DEFAULT_SUB_WORKFLOW_TIMEOUT = 300;
+    /**
+     * DEFAULT_STREAM_FRAME_TIMEOUT.
+     * @since 0.1.0
+     */
     public static final int DEFAULT_STREAM_FRAME_TIMEOUT = 120;
+    /**
+     * DEFAULT_FIRST_FRAME_TIMEOUT.
+     * @since 0.1.0
+     */
     public static final int DEFAULT_FIRST_FRAME_TIMEOUT = 10;
 
+    /**
+     * CHILD_INTERRUPT_STATE_KEYS.
+     * @since 0.1.0
+     */
     public static final Set<String> CHILD_INTERRUPT_STATE_KEYS =
             SessionStateIsolator.CHILD_INTERRUPT_STATE_KEYS;
 
@@ -57,6 +105,11 @@ public final class FlowSubWorkflowEngine {
     private Map<String, Object> streamState;
     private List<String> globalVarNames;
 
+    /**
+     * FlowSubWorkflowEngine.
+     * @param config config
+     * @since 0.1.0
+     */
     public FlowSubWorkflowEngine(FlowSubWorkflowConfig config) {
         this.config = config == null
                 ? FlowSubWorkflowConfig.fromNodeConfigs("", Map.of())

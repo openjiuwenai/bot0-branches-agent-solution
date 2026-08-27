@@ -33,6 +33,14 @@ public final class WorkflowAbortException extends RuntimeException {
     private final String nodeName;
     private final String nodeType;
 
+    /**
+     * WorkflowAbortException.
+     * @param data data
+     * @param nodeId nodeId
+     * @param nodeName nodeName
+     * @param nodeType nodeType
+     * @since 0.1.0
+     */
     public WorkflowAbortException(
             Map<String, Object> data, String nodeId, String nodeName, String nodeType) {
         super(ERROR_MESSAGE);

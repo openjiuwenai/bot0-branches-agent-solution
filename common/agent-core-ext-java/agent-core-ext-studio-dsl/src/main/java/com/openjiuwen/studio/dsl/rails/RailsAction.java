@@ -14,6 +14,10 @@ import java.util.Map;
  */
 
 public abstract class RailsAction {
+    /**
+     * config.
+     * @since 0.1.0
+     */
     protected final ActionConfig config;
     protected final Map<String, Object> extraArgs;
 

@@ -17,13 +17,34 @@ import java.util.Map;
  */
 
 public final class FlowExceptionEngine {
+    /**
+     * USER_FIELDS.
+     * @since 0.1.0
+     */
     public static final String USER_FIELDS = "userFields";
+    /**
+     * WORKFLOW_EXCEPTION.
+     * @since 0.1.0
+     */
     public static final String WORKFLOW_EXCEPTION = "workflow_exception";
+    /**
+     * ABORT_FLAG.
+     * @since 0.1.0
+     */
     public static final String ABORT_FLAG = "__abort__";
+    /**
+     * EXCEPTION_NODE_ID_KEY.
+     * @since 0.1.0
+     */
     public static final String EXCEPTION_NODE_ID_KEY = "jiuwen_exception_node_id";
 
     private final FlowExceptionConfig config;
 
+    /**
+     * FlowExceptionEngine.
+     * @param config config
+     * @since 0.1.0
+     */
     public FlowExceptionEngine(FlowExceptionConfig config) {
         this.config = config;
     }

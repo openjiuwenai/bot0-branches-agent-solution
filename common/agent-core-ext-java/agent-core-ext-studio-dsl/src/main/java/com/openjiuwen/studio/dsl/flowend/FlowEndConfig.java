@@ -24,6 +24,18 @@ public final class FlowEndConfig {
     private final List<Map<String, Object>> userFieldsInputs;
     private final Map<String, Object> raw;
 
+    /**
+     * FlowEndConfig.
+     * @param responseTemplate responseTemplate
+     * @param enableStructMessage enableStructMessage
+     * @param structOutputTemplate structOutputTemplate
+     * @param outputMode outputMode
+     * @param endInterrupt endInterrupt
+     * @param nodeName nodeName
+     * @param userFieldsInputs userFieldsInputs
+     * @param raw raw
+     * @since 0.1.0
+     */
     public FlowEndConfig(
             String responseTemplate,
             boolean enableStructMessage,

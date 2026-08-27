@@ -25,9 +25,25 @@ import java.util.Map;
  */
 
 public final class FlowMessageEngine {
+    /**
+     * MESSAGE_OUTPUTS_KEY.
+     * @since 0.1.0
+     */
     public static final String MESSAGE_OUTPUTS_KEY = "message_outputs";
+    /**
+     * USER_FIELDS.
+     * @since 0.1.0
+     */
     public static final String USER_FIELDS = "userFields";
+    /**
+     * NODE_TYPE.
+     * @since 0.1.0
+     */
     public static final String NODE_TYPE = "message";
+    /**
+     * JIUWEN_MESSAGE_TYPE.
+     * @since 0.1.0
+     */
     public static final String JIUWEN_MESSAGE_TYPE = "jiuwen.message";
 
     /**
@@ -41,6 +57,12 @@ public final class FlowMessageEngine {
     private final String nodeId;
     private final FlowMessageConfig config;
 
+    /**
+     * FlowMessageEngine.
+     * @param nodeId nodeId
+     * @param config config
+     * @since 0.1.0
+     */
     public FlowMessageEngine(String nodeId, FlowMessageConfig config) {
         this.nodeId = nodeId;
         this.config = config;

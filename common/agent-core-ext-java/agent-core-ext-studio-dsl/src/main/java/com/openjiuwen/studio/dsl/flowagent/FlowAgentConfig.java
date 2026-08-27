@@ -19,6 +19,10 @@ import java.util.Map;
  */
 
 public final class FlowAgentConfig {
+    /**
+     * JIUWEN_AGENT_TYPE.
+     * @since 0.1.0
+     */
     public static final String JIUWEN_AGENT_TYPE = "jiuwen.agent";
 
     private final String strategyName;

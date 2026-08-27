@@ -21,11 +21,21 @@ import java.util.Map;
  */
 
 public final class FlowAggregateEngine {
+    /**
+     * USER_FIELDS.
+     * @since 0.1.0
+     */
     public static final String USER_FIELDS = "userFields";
 
     private final String nodeId;
     private final FlowAggregateConfig config;
 
+    /**
+     * FlowAggregateEngine.
+     * @param nodeId nodeId
+     * @param config config
+     * @since 0.1.0
+     */
     public FlowAggregateEngine(String nodeId, FlowAggregateConfig config) {
         this.nodeId = nodeId == null ? "aggregate" : nodeId;
         this.config = config;

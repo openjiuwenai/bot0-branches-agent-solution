@@ -22,6 +22,17 @@ public final class FlowSubWorkflowConfig {
     private final Map<String, Object> preDefineFields;
     private final Map<String, Object> raw;
 
+    /**
+     * FlowSubWorkflowConfig.
+     * @param nodeId nodeId
+     * @param referenceId referenceId
+     * @param referencePath referencePath
+     * @param userFields userFields
+     * @param systemFields systemFields
+     * @param preDefineFields preDefineFields
+     * @param raw raw
+     * @since 0.1.0
+     */
     public FlowSubWorkflowConfig(
             String nodeId,
             String referenceId,

@@ -93,12 +93,33 @@ public final class IntentDetectionLlmDetector {
     private final IntentDetectionConfig config;
     private final ModelInvoker invoker;
 
+    /**
+     * IntentDetectionLlmDetector.
+     * @param nodeId nodeId
+     * @param config config
+     * @since 0.1.0
+     */
     public IntentDetectionLlmDetector(String nodeId, IntentDetectionConfig config) {
         this(nodeId, config, null, Map.of());
     }
+    /**
+     * IntentDetectionLlmDetector.
+     * @param nodeId nodeId
+     * @param config config
+     * @param invoker invoker
+     * @since 0.1.0
+     */
     public IntentDetectionLlmDetector(String nodeId, IntentDetectionConfig config, ModelInvoker invoker) {
         this(nodeId, config, invoker, Map.of());
     }
+    /**
+     * IntentDetectionLlmDetector.
+     * @param nodeId nodeId
+     * @param config config
+     * @param invoker invoker
+     * @param modelMap modelMap
+     * @since 0.1.0
+     */
     public IntentDetectionLlmDetector(
             String nodeId, IntentDetectionConfig config, ModelInvoker invoker, Map<String, Object> modelMap) {
         this.nodeId = nodeId;

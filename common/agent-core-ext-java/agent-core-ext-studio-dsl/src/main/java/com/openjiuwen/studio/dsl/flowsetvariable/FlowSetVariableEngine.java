@@ -24,6 +24,10 @@ import java.util.Map;
  */
 
 public final class FlowSetVariableEngine {
+    /**
+     * USER_FIELDS.
+     * @since 0.1.0
+     */
     public static final String USER_FIELDS = "userFields";
 
     /**
@@ -40,8 +44,20 @@ public final class FlowSetVariableEngine {
      * Python {@code REDIS_GLOBAL_VALS_NAME}.
      */
     public static final String REDIS_GLOBAL_VALS_NAME = "global.vals";
+    /**
+     * SESSION_VAR_DEFS.
+     * @since 0.1.0
+     */
     public static final String SESSION_VAR_DEFS = "_session_var_defs";
+    /**
+     * REQUEST_KEY.
+     * @since 0.1.0
+     */
     public static final String REQUEST_KEY = "_REQUEST";
+    /**
+     * REQUEST_KEY_ALT.
+     * @since 0.1.0
+     */
     public static final String REQUEST_KEY_ALT = "_request";
     private static final long DEFAULT_CONVERSATION_TTL_SECONDS = 3L * 24 * 3600;
 
@@ -50,6 +66,14 @@ public final class FlowSetVariableEngine {
     private final String workflowId;
     private final ConversationValsStore valsStore;
 
+    /**
+     * FlowSetVariableEngine.
+     * @param config config
+     * @param scope scope
+     * @param workflowId workflowId
+     * @param valsStore valsStore
+     * @since 0.1.0
+     */
     public FlowSetVariableEngine(
             FlowSetVariableConfig config,
             WorkflowVariableScope scope,

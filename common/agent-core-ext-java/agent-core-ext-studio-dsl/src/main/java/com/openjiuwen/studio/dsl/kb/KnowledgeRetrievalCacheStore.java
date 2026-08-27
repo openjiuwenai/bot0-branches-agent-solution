@@ -22,7 +22,15 @@ import java.util.Map;
  */
 
 public final class KnowledgeRetrievalCacheStore {
+    /**
+     * IMAGE_PREFIX.
+     * @since 0.1.0
+     */
     public static final String IMAGE_PREFIX = "knowledge:image:";
+    /**
+     * FILE_PREFIX.
+     * @since 0.1.0
+     */
     public static final String FILE_PREFIX = "knowledge:file:";
 
     private static final Logger LOG = Logger.getLogger(KnowledgeRetrievalCacheStore.class.getName());

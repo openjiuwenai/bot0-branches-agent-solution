@@ -24,9 +24,19 @@ import java.util.Map;
 public final class StubModelContext extends ModelContext {
     private final List<BaseMessage> messages;
 
+    /**
+     * StubModelContext.
+     * @param messages messages
+     * @since 0.1.0
+     */
     public StubModelContext(BaseMessage... messages) {
         this.messages = new ArrayList<>(List.of(messages));
     }
+    /**
+     * StubModelContext.
+     * @param messages messages
+     * @since 0.1.0
+     */
     public StubModelContext(List<BaseMessage> messages) {
         this.messages = new ArrayList<>(messages);
     }

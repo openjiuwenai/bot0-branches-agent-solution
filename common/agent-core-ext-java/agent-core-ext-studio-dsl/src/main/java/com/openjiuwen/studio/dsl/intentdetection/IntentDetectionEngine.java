@@ -53,12 +53,33 @@ public final class IntentDetectionEngine {
 
     private boolean enableKnowledge;
 
+    /**
+     * IntentDetectionEngine.
+     * @param nodeId nodeId
+     * @param nodeConfigs nodeConfigs
+     * @since 0.1.0
+     */
     public IntentDetectionEngine(String nodeId, Map<String, Object> nodeConfigs) {
         this(nodeId, nodeConfigs, null, null);
     }
+    /**
+     * IntentDetectionEngine.
+     * @param nodeId nodeId
+     * @param nodeConfigs nodeConfigs
+     * @param toolRegistry toolRegistry
+     * @since 0.1.0
+     */
     public IntentDetectionEngine(String nodeId, Map<String, Object> nodeConfigs, ToolRegistry toolRegistry) {
         this(nodeId, nodeConfigs, null, toolRegistry);
     }
+    /**
+     * IntentDetectionEngine.
+     * @param nodeId nodeId
+     * @param nodeConfigs nodeConfigs
+     * @param modelInvoker modelInvoker
+     * @param toolRegistry toolRegistry
+     * @since 0.1.0
+     */
     public IntentDetectionEngine(
             String nodeId,
             Map<String, Object> nodeConfigs,

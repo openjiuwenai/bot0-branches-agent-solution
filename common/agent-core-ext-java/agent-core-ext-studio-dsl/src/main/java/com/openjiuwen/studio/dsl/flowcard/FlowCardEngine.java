@@ -25,9 +25,25 @@ import java.util.Map;
  */
 
 public final class FlowCardEngine {
+    /**
+     * CARD_OUTPUTS_KEY.
+     * @since 0.1.0
+     */
     public static final String CARD_OUTPUTS_KEY = "card_outputs";
+    /**
+     * USER_FIELDS.
+     * @since 0.1.0
+     */
     public static final String USER_FIELDS = "userFields";
+    /**
+     * NODE_TYPE.
+     * @since 0.1.0
+     */
     public static final String NODE_TYPE = "card";
+    /**
+     * JIUWEN_CARD_TYPE.
+     * @since 0.1.0
+     */
     public static final String JIUWEN_CARD_TYPE = "jiuwen.card";
 
     private static final ZoneId BJ_ZONE = ZoneId.of("Asia/Shanghai");
@@ -35,6 +51,12 @@ public final class FlowCardEngine {
     private final String nodeId;
     private final FlowCardConfig config;
 
+    /**
+     * FlowCardEngine.
+     * @param nodeId nodeId
+     * @param config config
+     * @since 0.1.0
+     */
     public FlowCardEngine(String nodeId, FlowCardConfig config) {
         this.nodeId = nodeId;
         this.config = config;

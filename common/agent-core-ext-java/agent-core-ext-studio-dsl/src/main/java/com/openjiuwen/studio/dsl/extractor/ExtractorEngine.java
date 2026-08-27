@@ -35,6 +35,11 @@ public final class ExtractorEngine {
     private Map<String, Object> inputs = Map.of();
     private Map<String, Object> extractedKeyFields = new LinkedHashMap<>();
 
+    /**
+     * ExtractorEngine.
+     * @param nodeId nodeId
+     * @since 0.1.0
+     */
     public ExtractorEngine(String nodeId) {
         this.nodeId = nodeId;
         this.presetInvoker = null;

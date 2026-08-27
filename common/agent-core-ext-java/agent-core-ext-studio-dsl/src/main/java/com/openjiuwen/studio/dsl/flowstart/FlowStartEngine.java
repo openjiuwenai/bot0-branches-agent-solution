@@ -30,6 +30,14 @@ public final class FlowStartEngine {
     private final String buildWorkflowId;
     private final ConversationValsStore valsStore;
 
+    /**
+     * FlowStartEngine.
+     * @param nodeId nodeId
+     * @param config config
+     * @param buildWorkflowId buildWorkflowId
+     * @param valsStore valsStore
+     * @since 0.1.0
+     */
     public FlowStartEngine(
             String nodeId, FlowStartConfig config, String buildWorkflowId, ConversationValsStore valsStore) {
         this.config = config == null ? FlowStartConfig.fromNodeConfigs(Map.of(), nodeId) : config;

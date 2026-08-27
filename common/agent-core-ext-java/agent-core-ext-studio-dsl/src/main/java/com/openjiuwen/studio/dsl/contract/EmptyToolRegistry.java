@@ -15,6 +15,10 @@ import java.util.Optional;
  */
 
 public final class EmptyToolRegistry implements ToolRegistry {
+    /**
+     * INSTANCE.
+     * @since 0.1.0
+     */
     public static final EmptyToolRegistry INSTANCE = new EmptyToolRegistry();
 
     private EmptyToolRegistry() {}

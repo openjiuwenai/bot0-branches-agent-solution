@@ -33,6 +33,10 @@ import java.util.Map;
  */
 
 public final class FlowMcpEngine {
+    /**
+     * USER_FIELDS.
+     * @since 0.1.0
+     */
     public static final String USER_FIELDS = "userFields";
 
     /**
@@ -55,6 +59,11 @@ public final class FlowMcpEngine {
     private Map<String, Object> headerParams = Map.of();
     private final ReentrantLock initLock = new ReentrantLock();
 
+    /**
+     * FlowMcpEngine.
+     * @param nodeId nodeId
+     * @since 0.1.0
+     */
     public FlowMcpEngine(String nodeId) {
         this(nodeId, null);
     }

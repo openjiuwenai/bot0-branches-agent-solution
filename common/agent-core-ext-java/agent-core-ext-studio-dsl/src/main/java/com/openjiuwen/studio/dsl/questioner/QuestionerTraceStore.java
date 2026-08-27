@@ -32,6 +32,10 @@ import java.util.Map;
  */
 
 public final class QuestionerTraceStore {
+    /**
+     * KEY_PREFIX.
+     * @since 0.1.0
+     */
     public static final String KEY_PREFIX = "agentBuilder:questioner:trace";
     private static final Logger LOG = Logger.getLogger(QuestionerTraceStore.class.getName());
     private static final ObjectMapper MAPPER = new ObjectMapper();

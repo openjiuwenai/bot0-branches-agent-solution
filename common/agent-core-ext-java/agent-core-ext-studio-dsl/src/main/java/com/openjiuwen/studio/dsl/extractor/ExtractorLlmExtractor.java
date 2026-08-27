@@ -77,12 +77,33 @@ public final class ExtractorLlmExtractor {
     private final ExtractorConfig config;
     private final ModelInvoker invoker;
 
+    /**
+     * ExtractorLlmExtractor.
+     * @param nodeId nodeId
+     * @param config config
+     * @since 0.1.0
+     */
     public ExtractorLlmExtractor(String nodeId, ExtractorConfig config) {
         this(nodeId, config, null, Map.of());
     }
+    /**
+     * ExtractorLlmExtractor.
+     * @param nodeId nodeId
+     * @param config config
+     * @param invoker invoker
+     * @since 0.1.0
+     */
     public ExtractorLlmExtractor(String nodeId, ExtractorConfig config, ModelInvoker invoker) {
         this(nodeId, config, invoker, Map.of());
     }
+    /**
+     * ExtractorLlmExtractor.
+     * @param nodeId nodeId
+     * @param config config
+     * @param invoker invoker
+     * @param modelMap modelMap
+     * @since 0.1.0
+     */
     public ExtractorLlmExtractor(
             String nodeId, ExtractorConfig config, ModelInvoker invoker, Map<String, Object> modelMap) {
         this.nodeId = nodeId;
@@ -131,6 +152,12 @@ public final class ExtractorLlmExtractor {
                     e);
         }
         trace(session, Map.of("llm_outputs", response == null ? "" : response));
+        /**
+         * parseAndNormalize.
+         * @param response response
+         * @return result
+         * @since 0.1.0
+         */
         return parseAndNormalize(response);
     }
 
@@ -247,6 +274,11 @@ public final class ExtractorLlmExtractor {
         if (chatHistory == null || chatHistory.isEmpty()) {
         return "";
     }
+        /**
+         * str.
+         * @return result
+         * @since 0.1.0
+         */
         return str(chatHistory.get(chatHistory.size() - 1).get("content"));
     }
 
@@ -276,6 +308,13 @@ public final class ExtractorLlmExtractor {
     }
 
     private static ModelInvoker defaultInvoker(ExtractorConfig config, Map<String, Object> modelMap) {
+        /**
+         * createDefaultInvoker.
+         * @param config config
+         * @param modelMap modelMap
+         * @return result
+         * @since 0.1.0
+         */
         return createDefaultInvoker(config, modelMap);
     }
 

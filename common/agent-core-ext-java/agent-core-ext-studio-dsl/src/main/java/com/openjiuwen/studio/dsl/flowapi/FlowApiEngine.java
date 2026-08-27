@@ -43,12 +43,36 @@ import java.util.Map;
  */
 
 public final class FlowApiEngine {
+    /**
+     * USER_FIELDS.
+     * @since 0.1.0
+     */
     public static final String USER_FIELDS = "userFields";
+    /**
+     * EXCEPTION_ENABLE.
+     * @since 0.1.0
+     */
     public static final String EXCEPTION_ENABLE = "exceptionEnable";
+    /**
+     * EXCEPTION_SUPPRESSION.
+     * @since 0.1.0
+     */
     public static final String EXCEPTION_SUPPRESSION = "exceptionSuppression";
+    /**
+     * OLD_IR_PLUGIN_RESPONSE.
+     * @since 0.1.0
+     */
     public static final String OLD_IR_PLUGIN_RESPONSE = "raw_output";
 
+    /**
+     * PLUGIN_PARAM_MISS.
+     * @since 0.1.0
+     */
     public static final String PLUGIN_PARAM_MISS = "plugin_param_miss";
+    /**
+     * PLUGIN_CALL_CONFIRM.
+     * @since 0.1.0
+     */
     public static final String PLUGIN_CALL_CONFIRM = "plugin_call_confirm";
 
     /**
@@ -88,9 +112,20 @@ public final class FlowApiEngine {
     private Object mockResponse;
     private WorkflowMetadata metadata = WorkflowMetadata.EMPTY;
 
+    /**
+     * FlowApiEngine.
+     * @param nodeId nodeId
+     * @since 0.1.0
+     */
     public FlowApiEngine(String nodeId) {
         this(nodeId, null);
     }
+    /**
+     * FlowApiEngine.
+     * @param nodeId nodeId
+     * @param bridge bridge
+     * @since 0.1.0
+     */
     public FlowApiEngine(String nodeId, TestBridge bridge) {
         this.nodeId = nodeId == null ? "plugin" : nodeId;
         this.presetBridge = bridge;
@@ -332,6 +367,12 @@ public final class FlowApiEngine {
      * @since 0.1.0
      */
     public Map<String, Object> formatApiOutputs(Object outputs) {
+        /**
+         * formatApiOutputs.
+         * @param outputs outputs
+         * @return result
+         * @since 0.1.0
+         */
         return formatApiOutputs(outputs, !response.isEmpty());
     }
 
@@ -419,6 +460,11 @@ public final class FlowApiEngine {
      * @since 0.1.0
      */
     public Map<String, String> getAuthToken() {
+        /**
+         * getAuthToken.
+         * @return result
+         * @since 0.1.0
+         */
         return getAuthToken(Map.of());
     }
 
@@ -535,6 +581,12 @@ public final class FlowApiEngine {
             return bridge.ainvoke(apiId, inputs, headers);
         }
         if (mockResponse != null) {
+            /**
+             * asMap.
+             * @param mockResponse mockResponse
+             * @return result
+             * @since 0.1.0
+             */
             return asMap(mockResponse);
         }
         if (apiId != null && !apiId.isBlank() && toolRegistry != null) {
@@ -549,8 +601,21 @@ public final class FlowApiEngine {
                 kwargs.put("runtime_auth", Map.of("headers", headers));
             }
             Object raw = tool.invoke(inputs, kwargs);
+            /**
+             * asMap.
+             * @param raw raw
+             * @return result
+             * @since 0.1.0
+             */
             return asMap(raw);
         }
+        /**
+         * invokeHttp.
+         * @param inputs inputs
+         * @param headers headers
+         * @return result
+         * @since 0.1.0
+         */
         return invokeHttp(inputs, headers);
     }
 
@@ -581,6 +646,13 @@ public final class FlowApiEngine {
             return tool.stream(inputs, kwargs);
         }
         // IR HTTP SSE — 1:1 RestfulApiToolNew.astream (data: lines)
+        /**
+         * streamHttpSse.
+         * @param inputs inputs
+         * @param headers headers
+         * @return result
+         * @since 0.1.0
+         */
         return streamHttpSse(inputs, headers);
     }
 

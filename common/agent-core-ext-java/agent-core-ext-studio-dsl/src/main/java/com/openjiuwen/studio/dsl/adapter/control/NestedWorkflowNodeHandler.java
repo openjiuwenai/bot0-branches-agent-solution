@@ -54,6 +54,11 @@ import java.util.Set;
 public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
     private final NodeTypeRegistry registry;
 
+    /**
+     * NestedWorkflowNodeHandler.
+     * @param registry registry
+     * @since 0.1.0
+     */
     public NestedWorkflowNodeHandler(NodeTypeRegistry registry) {
         this.registry = registry;
     }

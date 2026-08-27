@@ -17,6 +17,12 @@ public final class FlowStartConfig {
     private final Map<String, Object> raw;
     private final String nodeName;
 
+    /**
+     * FlowStartConfig.
+     * @param raw raw
+     * @param nodeName nodeName
+     * @since 0.1.0
+     */
     public FlowStartConfig(Map<String, Object> raw, String nodeName) {
         this.raw = raw == null ? Map.of() : Map.copyOf(new LinkedHashMap<>(raw));
         this.nodeName = nodeName;

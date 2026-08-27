@@ -1,0 +1,1892 @@
+[
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowinput",
+    "line": 18,
+    "name": "USER_INTERACT",
+    "desc": "Missing javadoc on 'USER_INTERACT' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowinput",
+    "line": 19,
+    "name": "END",
+    "desc": "Missing javadoc on 'END' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowinput",
+    "line": 17,
+    "name": "START",
+    "desc": "Missing javadoc on 'START' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowinput",
+    "line": 53,
+    "name": "isFreshState",
+    "desc": "Missing javadoc on 'isFreshState' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowinput",
+    "line": 49,
+    "name": "isUndergoingInteraction",
+    "desc": "Missing javadoc on 'isUndergoingInteraction' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowinput",
+    "line": 42,
+    "name": "serialize",
+    "desc": "Missing javadoc on 'serialize' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowinput",
+    "line": 33,
+    "name": "deserialize",
+    "desc": "Missing javadoc on 'deserialize' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowapi",
+    "line": 13,
+    "name": "fromDict",
+    "desc": "Missing javadoc on 'fromDict' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowmcp",
+    "line": 44,
+    "name": "message",
+    "desc": "Missing javadoc on 'message' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowinput",
+    "line": 21,
+    "name": "USER_FIELDS",
+    "desc": "Missing javadoc on 'USER_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowinput",
+    "line": 270,
+    "name": "fieldId",
+    "desc": "Missing javadoc on 'fieldId' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 103,
+    "name": "isGenerator",
+    "desc": "Missing javadoc on 'isGenerator' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 107,
+    "name": "drainToString",
+    "desc": "Missing javadoc on 'drainToString' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 129,
+    "name": "wrapIteratorChunks",
+    "desc": "Missing javadoc on 'wrapIteratorChunks' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 23,
+    "name": "buildOutputToInput",
+    "desc": "Missing javadoc on 'buildOutputToInput' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowinput",
+    "line": 34,
+    "name": "JIUWEN_FLOW_INPUT_TYPE",
+    "desc": "Missing javadoc on 'JIUWEN_FLOW_INPUT_TYPE' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowinput",
+    "line": 32,
+    "name": "STATE_KEY",
+    "desc": "Missing javadoc on 'STATE_KEY' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowinput",
+    "line": 33,
+    "name": "USER_FIELDS",
+    "desc": "Missing javadoc on 'USER_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowinput",
+    "line": 146,
+    "name": "shouldInterrupt",
+    "desc": "Missing javadoc on 'shouldInterrupt' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowapi",
+    "line": 20,
+    "name": "of",
+    "desc": "Missing javadoc on 'of' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowapi",
+    "line": 38,
+    "name": "of",
+    "desc": "Missing javadoc on 'of' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowapi",
+    "line": 30,
+    "name": "ofCode",
+    "desc": "Missing javadoc on 'ofCode' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowaggregate",
+    "line": 23,
+    "name": "USER_FIELDS",
+    "desc": "Missing javadoc on 'USER_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 26,
+    "name": "SPLIT_DELIMITER",
+    "desc": "Missing javadoc on 'SPLIT_DELIMITER' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 25,
+    "name": "OUTPUT_PREFIX",
+    "desc": "Missing javadoc on 'OUTPUT_PREFIX' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 307,
+    "name": "inputDefsFromConfigs",
+    "desc": "Missing javadoc on 'inputDefsFromConfigs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 66,
+    "name": "alreadyTransformed",
+    "desc": "Missing javadoc on 'alreadyTransformed' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 293,
+    "name": "emitEndFrames",
+    "desc": "Missing javadoc on 'emitEndFrames' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 289,
+    "name": "renderTemplate",
+    "desc": "Missing javadoc on 'renderTemplate' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 114,
+    "name": "applyTypeConversion",
+    "desc": "Missing javadoc on 'applyTypeConversion' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 50,
+    "name": "alreadyStreamed",
+    "desc": "Missing javadoc on 'alreadyStreamed' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 54,
+    "name": "markStreamed",
+    "desc": "Missing javadoc on 'markStreamed' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 235,
+    "name": "stripEndPrefixed",
+    "desc": "Missing javadoc on 'stripEndPrefixed' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 128,
+    "name": "convertSimple",
+    "desc": "Missing javadoc on 'convertSimple' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 62,
+    "name": "markCollected",
+    "desc": "Missing javadoc on 'markCollected' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 245,
+    "name": "metadata",
+    "desc": "Missing javadoc on 'metadata' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 58,
+    "name": "alreadyCollected",
+    "desc": "Missing javadoc on 'alreadyCollected' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 46,
+    "name": "markInvoked",
+    "desc": "Missing javadoc on 'markInvoked' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 42,
+    "name": "alreadyInvoked",
+    "desc": "Missing javadoc on 'alreadyInvoked' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 82,
+    "name": "scopedKey",
+    "desc": "Missing javadoc on 'scopedKey' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 224,
+    "name": "mapEndPrefixed",
+    "desc": "Missing javadoc on 'mapEndPrefixed' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 70,
+    "name": "markTransformed",
+    "desc": "Missing javadoc on 'markTransformed' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowapi",
+    "line": 45,
+    "name": "EXCEPTION_ENABLE",
+    "desc": "Missing javadoc on 'EXCEPTION_ENABLE' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowapi",
+    "line": 46,
+    "name": "EXCEPTION_SUPPRESSION",
+    "desc": "Missing javadoc on 'EXCEPTION_SUPPRESSION' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowapi",
+    "line": 44,
+    "name": "USER_FIELDS",
+    "desc": "Missing javadoc on 'USER_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowapi",
+    "line": 49,
+    "name": "PLUGIN_PARAM_MISS",
+    "desc": "Missing javadoc on 'PLUGIN_PARAM_MISS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowapi",
+    "line": 50,
+    "name": "PLUGIN_CALL_CONFIRM",
+    "desc": "Missing javadoc on 'PLUGIN_CALL_CONFIRM' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowapi",
+    "line": 47,
+    "name": "OLD_IR_PLUGIN_RESPONSE",
+    "desc": "Missing javadoc on 'OLD_IR_PLUGIN_RESPONSE' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowapi",
+    "line": 66,
+    "name": "astream",
+    "desc": "Missing javadoc on 'astream' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowapi",
+    "line": 64,
+    "name": "ainvoke",
+    "desc": "Missing javadoc on 'ainvoke' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/python",
+    "line": 348,
+    "name": "SimpleJson",
+    "desc": "Missing javadoc on 'SimpleJson' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/python",
+    "line": 321,
+    "name": "parseJsonObject",
+    "desc": "Missing javadoc on 'parseJsonObject' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/python",
+    "line": 356,
+    "name": "parse",
+    "desc": "Missing javadoc on 'parse' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/python",
+    "line": 192,
+    "name": "buildWrappedCode",
+    "desc": "Missing javadoc on 'buildWrappedCode' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/questioner",
+    "line": 278,
+    "name": "parseJsonObject",
+    "desc": "Missing javadoc on 'parseJsonObject' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/questioner",
+    "line": 94,
+    "name": "extract",
+    "desc": "Missing javadoc on 'extract' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/questioner",
+    "line": 66,
+    "name": "invoke",
+    "desc": "Missing javadoc on 'invoke' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/questioner",
+    "line": 83,
+    "name": "hasModelWiring",
+    "desc": "Missing javadoc on 'hasModelWiring' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/kb",
+    "line": 21,
+    "name": "SearchDelegate",
+    "desc": "Missing javadoc on 'SearchDelegate' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/kb",
+    "line": 22,
+    "name": "search",
+    "desc": "Missing javadoc on 'search' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/kb",
+    "line": 24,
+    "name": "FILE_PREFIX",
+    "desc": "Missing javadoc on 'FILE_PREFIX' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/kb",
+    "line": 23,
+    "name": "IMAGE_PREFIX",
+    "desc": "Missing javadoc on 'IMAGE_PREFIX' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/kb",
+    "line": 52,
+    "name": "storage",
+    "desc": "Missing javadoc on 'storage' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/llmchain",
+    "line": 65,
+    "name": "extension",
+    "desc": "Missing javadoc on 'extension' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/llmchain",
+    "line": 89,
+    "name": "enableHistory",
+    "desc": "Missing javadoc on 'enableHistory' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/llmchain",
+    "line": 126,
+    "name": "vlEnable",
+    "desc": "Missing javadoc on 'vlEnable' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/llmchain",
+    "line": 77,
+    "name": "responseFormat",
+    "desc": "Missing javadoc on 'responseFormat' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/llmchain",
+    "line": 85,
+    "name": "responseType",
+    "desc": "Missing javadoc on 'responseType' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/llmchain",
+    "line": 105,
+    "name": "templateContent",
+    "desc": "Missing javadoc on 'templateContent' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/llmchain",
+    "line": 69,
+    "name": "modelName",
+    "desc": "Missing javadoc on 'modelName' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/llmchain",
+    "line": 34,
+    "name": "from",
+    "desc": "Missing javadoc on 'from' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/llmchain",
+    "line": 73,
+    "name": "modelType",
+    "desc": "Missing javadoc on 'modelType' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/llmchain",
+    "line": 143,
+    "name": "systemTemplateOrNull",
+    "desc": "Missing javadoc on 'systemTemplateOrNull' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/llmchain",
+    "line": 44,
+    "name": "nodeName",
+    "desc": "Missing javadoc on 'nodeName' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/llmchain",
+    "line": 57,
+    "name": "model",
+    "desc": "Missing javadoc on 'model' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/llmchain",
+    "line": 61,
+    "name": "hyperParameters",
+    "desc": "Missing javadoc on 'hyperParameters' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/llmchain",
+    "line": 114,
+    "name": "isThinkingEnabled",
+    "desc": "Missing javadoc on 'isThinkingEnabled' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/llmchain",
+    "line": 97,
+    "name": "historySize",
+    "desc": "Missing javadoc on 'historySize' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/llmchain",
+    "line": 134,
+    "name": "userTemplate",
+    "desc": "Missing javadoc on 'userTemplate' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/llmchain",
+    "line": 109,
+    "name": "outputs",
+    "desc": "Missing javadoc on 'outputs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/questioner",
+    "line": 83,
+    "name": "fromNodeConfigs",
+    "desc": "Missing javadoc on 'fromNodeConfigs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/questioner",
+    "line": 307,
+    "name": "hasModelWiring",
+    "desc": "Missing javadoc on 'hasModelWiring' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/questioner",
+    "line": 315,
+    "name": "needExtractFields",
+    "desc": "Missing javadoc on 'needExtractFields' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/questioner",
+    "line": 311,
+    "name": "hasQuestionContent",
+    "desc": "Missing javadoc on 'hasQuestionContent' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/llmchain",
+    "line": 37,
+    "name": "invoke",
+    "desc": "Missing javadoc on 'invoke' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/llmchain",
+    "line": 39,
+    "name": "stream",
+    "desc": "Missing javadoc on 'stream' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/rails",
+    "line": 58,
+    "name": "argsOf",
+    "desc": "Missing javadoc on 'argsOf' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/questioner",
+    "line": 18,
+    "name": "KEY",
+    "desc": "Missing javadoc on 'KEY' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/questioner",
+    "line": 20,
+    "name": "USER_INTERACT",
+    "desc": "Missing javadoc on 'USER_INTERACT' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/questioner",
+    "line": 19,
+    "name": "START",
+    "desc": "Missing javadoc on 'START' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/questioner",
+    "line": 21,
+    "name": "END",
+    "desc": "Missing javadoc on 'END' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/questioner",
+    "line": 33,
+    "name": "KEY_PREFIX",
+    "desc": "Missing javadoc on 'KEY_PREFIX' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/questioner",
+    "line": 56,
+    "name": "buildKey",
+    "desc": "Missing javadoc on 'buildKey' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/questioner",
+    "line": 127,
+    "name": "delete",
+    "desc": "Missing javadoc on 'delete' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/questioner",
+    "line": 92,
+    "name": "getAll",
+    "desc": "Missing javadoc on 'getAll' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/questioner",
+    "line": 60,
+    "name": "append",
+    "desc": "Missing javadoc on 'append' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/rails/formatters",
+    "line": 54,
+    "name": "toJavaPattern",
+    "desc": "Missing javadoc on 'toJavaPattern' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/rails/formatters",
+    "line": 50,
+    "name": "tryParse",
+    "desc": "Missing javadoc on 'tryParse' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/rails",
+    "line": 16,
+    "name": "config",
+    "desc": "Missing javadoc on 'config' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/rails",
+    "line": 17,
+    "name": "extraArgs",
+    "desc": "Missing javadoc on 'extraArgs' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 111,
+    "name": "installIntent",
+    "desc": "Missing javadoc on 'installIntent' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 126,
+    "name": "installExtractor",
+    "desc": "Missing javadoc on 'installExtractor' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 115,
+    "name": "createIntentDetection",
+    "desc": "Missing javadoc on 'createIntentDetection' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 164,
+    "name": "installMcp",
+    "desc": "Missing javadoc on 'installMcp' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 177,
+    "name": "get",
+    "desc": "Missing javadoc on 'get' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 39,
+    "name": "install",
+    "desc": "Missing javadoc on 'install' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 144,
+    "name": "createComplexIntent",
+    "desc": "Missing javadoc on 'createComplexIntent' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 53,
+    "name": "current",
+    "desc": "Missing javadoc on 'current' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 154,
+    "name": "installFlowApi",
+    "desc": "Missing javadoc on 'installFlowApi' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 130,
+    "name": "createExtractor",
+    "desc": "Missing javadoc on 'createExtractor' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 63,
+    "name": "context",
+    "desc": "Missing javadoc on 'context' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 49,
+    "name": "isActive",
+    "desc": "Missing javadoc on 'isActive' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 158,
+    "name": "createFlowApi",
+    "desc": "Missing javadoc on 'createFlowApi' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 77,
+    "name": "installFlowAgent",
+    "desc": "Missing javadoc on 'installFlowAgent' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 140,
+    "name": "installComplexIntent",
+    "desc": "Missing javadoc on 'installComplexIntent' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 98,
+    "name": "createLlmChain",
+    "desc": "Missing javadoc on 'createLlmChain' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 57,
+    "name": "context",
+    "desc": "Missing javadoc on 'context' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 168,
+    "name": "createFlowMcp",
+    "desc": "Missing javadoc on 'createFlowMcp' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 44,
+    "name": "clear",
+    "desc": "Missing javadoc on 'clear' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 94,
+    "name": "installLlm",
+    "desc": "Missing javadoc on 'installLlm' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/testsupport",
+    "line": 81,
+    "name": "createFlowAgent",
+    "desc": "Missing javadoc on 'createFlowAgent' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/flowmcp",
+    "line": 60,
+    "name": "callToolCalls",
+    "desc": "Missing javadoc on 'callToolCalls' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/flowmcp",
+    "line": 56,
+    "name": "listToolsCalls",
+    "desc": "Missing javadoc on 'listToolsCalls' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/flowmcp",
+    "line": 64,
+    "name": "lastCallArguments",
+    "desc": "Missing javadoc on 'lastCallArguments' which is public or protected"
+  },
+  {
+    "file": "src/test/java/com/openjiuwen/studio/dsl/flowmcp",
+    "line": 35,
+    "name": "withContent",
+    "desc": "Missing javadoc on 'withContent' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowagent",
+    "line": 21,
+    "name": "JIUWEN_AGENT_TYPE",
+    "desc": "Missing javadoc on 'JIUWEN_AGENT_TYPE' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowagent",
+    "line": 54,
+    "name": "from",
+    "desc": "Missing javadoc on 'from' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/conversation",
+    "line": 20,
+    "name": "readEnableHistory",
+    "desc": "Missing javadoc on 'readEnableHistory' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/exec",
+    "line": 73,
+    "name": "Builder",
+    "desc": "Missing javadoc on 'Builder' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/exec",
+    "line": 102,
+    "name": "complexIntentBridge",
+    "desc": "Missing javadoc on 'complexIntentBridge' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/exec",
+    "line": 117,
+    "name": "build",
+    "desc": "Missing javadoc on 'build' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/exec",
+    "line": 112,
+    "name": "mcpClient",
+    "desc": "Missing javadoc on 'mcpClient' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/exec",
+    "line": 69,
+    "name": "builder",
+    "desc": "Missing javadoc on 'builder' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/exec",
+    "line": 87,
+    "name": "intentInvoker",
+    "desc": "Missing javadoc on 'intentInvoker' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/exec",
+    "line": 107,
+    "name": "flowApiBridge",
+    "desc": "Missing javadoc on 'flowApiBridge' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/exec",
+    "line": 82,
+    "name": "llmBridge",
+    "desc": "Missing javadoc on 'llmBridge' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/exec",
+    "line": 97,
+    "name": "flowAgentBridge",
+    "desc": "Missing javadoc on 'flowAgentBridge' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/exec",
+    "line": 92,
+    "name": "extractorInvoker",
+    "desc": "Missing javadoc on 'extractorInvoker' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/exec",
+    "line": 32,
+    "name": "USER_FIELDS",
+    "desc": "Missing javadoc on 'USER_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/contract",
+    "line": 17,
+    "name": "INSTANCE",
+    "desc": "Missing javadoc on 'INSTANCE' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/extractor",
+    "line": 65,
+    "name": "fromNodeConfigs",
+    "desc": "Missing javadoc on 'fromNodeConfigs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/complexintent",
+    "line": 16,
+    "name": "START",
+    "desc": "Missing javadoc on 'START' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/complexintent",
+    "line": 18,
+    "name": "USER_INTERACT",
+    "desc": "Missing javadoc on 'USER_INTERACT' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/complexintent",
+    "line": 17,
+    "name": "END",
+    "desc": "Missing javadoc on 'END' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/complexintent",
+    "line": 19,
+    "name": "STATE_KEY",
+    "desc": "Missing javadoc on 'STATE_KEY' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/complexintent",
+    "line": 147,
+    "name": "copy",
+    "desc": "Missing javadoc on 'copy' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/complexintent",
+    "line": 108,
+    "name": "fromMap",
+    "desc": "Missing javadoc on 'fromMap' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/complexintent",
+    "line": 94,
+    "name": "toMap",
+    "desc": "Missing javadoc on 'toMap' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowagent",
+    "line": 39,
+    "name": "USER_FIELDS",
+    "desc": "Missing javadoc on 'USER_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowagent",
+    "line": 46,
+    "name": "stream",
+    "desc": "Missing javadoc on 'stream' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowagent",
+    "line": 44,
+    "name": "invoke",
+    "desc": "Missing javadoc on 'invoke' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowagent",
+    "line": 102,
+    "name": "tools",
+    "desc": "Missing javadoc on 'tools' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/extractor",
+    "line": 107,
+    "name": "extract",
+    "desc": "Missing javadoc on 'extract' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/extractor",
+    "line": 69,
+    "name": "invoke",
+    "desc": "Missing javadoc on 'invoke' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/extractor",
+    "line": 91,
+    "name": "hasModelWiring",
+    "desc": "Missing javadoc on 'hasModelWiring' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/complexintent",
+    "line": 21,
+    "name": "TYPE",
+    "desc": "Missing javadoc on 'TYPE' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/complexintent",
+    "line": 66,
+    "name": "from",
+    "desc": "Missing javadoc on 'from' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/complexintent",
+    "line": 36,
+    "name": "USER_FIELDS",
+    "desc": "Missing javadoc on 'USER_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/complexintent",
+    "line": 39,
+    "name": "INPUT",
+    "desc": "Missing javadoc on 'INPUT' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/complexintent",
+    "line": 37,
+    "name": "KEY_CLASSIFICATION_ID",
+    "desc": "Missing javadoc on 'KEY_CLASSIFICATION_ID' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/complexintent",
+    "line": 38,
+    "name": "RESPONSE_CONTENT",
+    "desc": "Missing javadoc on 'RESPONSE_CONTENT' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/complexintent",
+    "line": 43,
+    "name": "intentResult",
+    "desc": "Missing javadoc on 'intentResult' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/complexintent",
+    "line": 135,
+    "name": "reset",
+    "desc": "Missing javadoc on 'reset' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/adapter/interact",
+    "line": 18,
+    "name": "buildInputsMessage",
+    "desc": "Missing javadoc on 'buildInputsMessage' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/adapter/interact",
+    "line": 30,
+    "name": "fillInputs",
+    "desc": "Missing javadoc on 'fillInputs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowinput",
+    "line": 244,
+    "name": "inputDefs",
+    "desc": "Missing javadoc on 'inputDefs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/adapter/interact",
+    "line": 35,
+    "name": "inputDefs",
+    "desc": "Missing javadoc on 'inputDefs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/adapter/interact",
+    "line": 26,
+    "name": "validateInputs",
+    "desc": "Missing javadoc on 'validateInputs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/adapter/interact",
+    "line": 22,
+    "name": "parseUserResponse",
+    "desc": "Missing javadoc on 'parseUserResponse' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/adapter/control",
+    "line": 48,
+    "name": "EndExecutable",
+    "desc": "Missing javadoc on 'EndExecutable' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/adapter/control",
+    "line": 134,
+    "name": "writeRequest",
+    "desc": "Missing javadoc on 'writeRequest' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/adapter/control",
+    "line": 112,
+    "name": "readRequest",
+    "desc": "Missing javadoc on 'readRequest' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/adapter/external",
+    "line": 30,
+    "name": "TYPE",
+    "desc": "Missing javadoc on 'TYPE' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/adapter/external",
+    "line": 31,
+    "name": "USER_FIELDS",
+    "desc": "Missing javadoc on 'USER_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/adapter/external",
+    "line": 32,
+    "name": "SYSTEM_FIELDS",
+    "desc": "Missing javadoc on 'SYSTEM_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/adapter/model",
+    "line": 68,
+    "name": "router",
+    "desc": "Missing javadoc on 'router' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/adapter/model",
+    "line": 64,
+    "name": "addBranch",
+    "desc": "Missing javadoc on 'addBranch' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/adapter",
+    "line": 20,
+    "name": "WORKFLOW_END",
+    "desc": "Missing javadoc on 'WORKFLOW_END' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/adapter",
+    "line": 19,
+    "name": "MESSAGE_NODE_END",
+    "desc": "Missing javadoc on 'MESSAGE_NODE_END' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/adapter",
+    "line": 18,
+    "name": "PARTIAL_CONTENT",
+    "desc": "Missing javadoc on 'PARTIAL_CONTENT' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/adapter/control",
+    "line": 36,
+    "name": "assemble",
+    "desc": "Missing javadoc on 'assemble' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/adapter/control",
+    "line": 104,
+    "name": "NestedExecutable",
+    "desc": "Missing javadoc on 'NestedExecutable' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/adapter/control",
+    "line": 710,
+    "name": "isChildInterrupt",
+    "desc": "Missing javadoc on 'isChildInterrupt' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/adapter/control",
+    "line": 715,
+    "name": "detectInterruptInSession",
+    "desc": "Missing javadoc on 'detectInterruptInSession' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowmessage",
+    "line": 95,
+    "name": "normalizeEnableHistory",
+    "desc": "Missing javadoc on 'normalizeEnableHistory' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowmessage",
+    "line": 42,
+    "name": "fromNodeConfigs",
+    "desc": "Missing javadoc on 'fromNodeConfigs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowmessage",
+    "line": 91,
+    "name": "endInterrupt",
+    "desc": "Missing javadoc on 'endInterrupt' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowmessage",
+    "line": 30,
+    "name": "JIUWEN_MESSAGE_TYPE",
+    "desc": "Missing javadoc on 'JIUWEN_MESSAGE_TYPE' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowmessage",
+    "line": 28,
+    "name": "USER_FIELDS",
+    "desc": "Missing javadoc on 'USER_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowmessage",
+    "line": 29,
+    "name": "NODE_TYPE",
+    "desc": "Missing javadoc on 'NODE_TYPE' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowmessage",
+    "line": 27,
+    "name": "MESSAGE_OUTPUTS_KEY",
+    "desc": "Missing javadoc on 'MESSAGE_OUTPUTS_KEY' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowmessage",
+    "line": 144,
+    "name": "formatStructAnswer",
+    "desc": "Missing javadoc on 'formatStructAnswer' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowmessage",
+    "line": 173,
+    "name": "messageOutputRecord",
+    "desc": "Missing javadoc on 'messageOutputRecord' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowmessage",
+    "line": 117,
+    "name": "extractUserFields",
+    "desc": "Missing javadoc on 'extractUserFields' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowmessage",
+    "line": 162,
+    "name": "splitAnswerThink",
+    "desc": "Missing javadoc on 'splitAnswerThink' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 23,
+    "name": "shouldInterrupt",
+    "desc": "Missing javadoc on 'shouldInterrupt' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 24,
+    "name": "fromNodeConfigs",
+    "desc": "Missing javadoc on 'fromNodeConfigs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowqa",
+    "line": 30,
+    "name": "STATE_KEY",
+    "desc": "Missing javadoc on 'STATE_KEY' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowqa",
+    "line": 31,
+    "name": "USER_FIELDS",
+    "desc": "Missing javadoc on 'USER_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowqa",
+    "line": 43,
+    "name": "fromConfigs",
+    "desc": "Missing javadoc on 'fromConfigs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 42,
+    "name": "fromNodeConfigs",
+    "desc": "Missing javadoc on 'fromNodeConfigs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsetvariable",
+    "line": 26,
+    "name": "USER_FIELDS",
+    "desc": "Missing javadoc on 'USER_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsetvariable",
+    "line": 35,
+    "name": "REQUEST_KEY_ALT",
+    "desc": "Missing javadoc on 'REQUEST_KEY_ALT' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsetvariable",
+    "line": 33,
+    "name": "SESSION_VAR_DEFS",
+    "desc": "Missing javadoc on 'SESSION_VAR_DEFS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsetvariable",
+    "line": 34,
+    "name": "REQUEST_KEY",
+    "desc": "Missing javadoc on 'REQUEST_KEY' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/intentdetection",
+    "line": 175,
+    "name": "hasModelWiring",
+    "desc": "Missing javadoc on 'hasModelWiring' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/intentdetection",
+    "line": 87,
+    "name": "fromNodeConfigs",
+    "desc": "Missing javadoc on 'fromNodeConfigs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowqa",
+    "line": 37,
+    "name": "normalizeStructInputs",
+    "desc": "Missing javadoc on 'normalizeStructInputs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowqa",
+    "line": 55,
+    "name": "normalizeWithSchema",
+    "desc": "Missing javadoc on 'normalizeWithSchema' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowqa",
+    "line": 20,
+    "name": "buildStructInputSchemas",
+    "desc": "Missing javadoc on 'buildStructInputSchemas' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/intentdetection",
+    "line": 137,
+    "name": "invoke",
+    "desc": "Missing javadoc on 'invoke' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/intentdetection",
+    "line": 101,
+    "name": "reset",
+    "desc": "Missing javadoc on 'reset' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/intentdetection",
+    "line": 125,
+    "name": "addBranch",
+    "desc": "Missing javadoc on 'addBranch' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/intentdetection",
+    "line": 35,
+    "name": "match",
+    "desc": "Missing javadoc on 'match' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowqa",
+    "line": 18,
+    "name": "TYPE",
+    "desc": "Missing javadoc on 'TYPE' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowqa",
+    "line": 52,
+    "name": "from",
+    "desc": "Missing javadoc on 'from' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsetvariable",
+    "line": 71,
+    "name": "isEmpty",
+    "desc": "Missing javadoc on 'isEmpty' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsetvariable",
+    "line": 28,
+    "name": "fromNodeConfigs",
+    "desc": "Missing javadoc on 'fromNodeConfigs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 27,
+    "name": "isUserInteract",
+    "desc": "Missing javadoc on 'isUserInteract' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/intentdetection",
+    "line": 73,
+    "name": "ModelInvoker",
+    "desc": "Missing javadoc on 'ModelInvoker' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/intentdetection",
+    "line": 98,
+    "name": "hasModelWiring",
+    "desc": "Missing javadoc on 'hasModelWiring' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/intentdetection",
+    "line": 74,
+    "name": "invoke",
+    "desc": "Missing javadoc on 'invoke' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 14,
+    "name": "WORKFLOW_INSTANCE_NOT_FOUND",
+    "desc": "Missing javadoc on 'WORKFLOW_INSTANCE_NOT_FOUND' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 15,
+    "name": "EXECUTION_ERROR",
+    "desc": "Missing javadoc on 'EXECUTION_ERROR' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 17,
+    "name": "EXECUTION_TIMEOUT",
+    "desc": "Missing javadoc on 'EXECUTION_TIMEOUT' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 16,
+    "name": "STREAM_ERROR",
+    "desc": "Missing javadoc on 'STREAM_ERROR' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 13,
+    "name": "CONFIG_VALIDATION_ERROR",
+    "desc": "Missing javadoc on 'CONFIG_VALIDATION_ERROR' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 35,
+    "name": "executionError",
+    "desc": "Missing javadoc on 'executionError' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 56,
+    "name": "timeout",
+    "desc": "Missing javadoc on 'timeout' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 45,
+    "name": "streamError",
+    "desc": "Missing javadoc on 'streamError' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 50,
+    "name": "instanceNotFound",
+    "desc": "Missing javadoc on 'instanceNotFound' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 40,
+    "name": "executionError",
+    "desc": "Missing javadoc on 'executionError' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 909,
+    "name": "StreamChunkAction",
+    "desc": "Missing javadoc on 'StreamChunkAction' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 910,
+    "name": "Kind",
+    "desc": "Missing javadoc on 'Kind' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 38,
+    "name": "GLOBAL_VARIABLES",
+    "desc": "Missing javadoc on 'GLOBAL_VARIABLES' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 42,
+    "name": "INTERACTION",
+    "desc": "Missing javadoc on 'INTERACTION' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 35,
+    "name": "USER_FIELDS",
+    "desc": "Missing javadoc on 'USER_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 46,
+    "name": "DEFAULT_FIRST_FRAME_TIMEOUT",
+    "desc": "Missing javadoc on 'DEFAULT_FIRST_FRAME_TIMEOUT' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 36,
+    "name": "SYSTEM_FIELDS",
+    "desc": "Missing javadoc on 'SYSTEM_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 39,
+    "name": "REQUEST_VARIABLES",
+    "desc": "Missing javadoc on 'REQUEST_VARIABLES' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 40,
+    "name": "MESSAGE_NODE_END",
+    "desc": "Missing javadoc on 'MESSAGE_NODE_END' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 41,
+    "name": "GLOBAL_REF_PREFIX",
+    "desc": "Missing javadoc on 'GLOBAL_REF_PREFIX' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 48,
+    "name": "CHILD_INTERRUPT_STATE_KEYS",
+    "desc": "Missing javadoc on 'CHILD_INTERRUPT_STATE_KEYS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 37,
+    "name": "PRE_DEFINE_FIELDS",
+    "desc": "Missing javadoc on 'PRE_DEFINE_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 45,
+    "name": "DEFAULT_STREAM_FRAME_TIMEOUT",
+    "desc": "Missing javadoc on 'DEFAULT_STREAM_FRAME_TIMEOUT' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 44,
+    "name": "DEFAULT_SUB_WORKFLOW_TIMEOUT",
+    "desc": "Missing javadoc on 'DEFAULT_SUB_WORKFLOW_TIMEOUT' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 356,
+    "name": "isChildInterruptFields",
+    "desc": "Missing javadoc on 'isChildInterruptFields' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 239,
+    "name": "enterRequestScope",
+    "desc": "Missing javadoc on 'enterRequestScope' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 420,
+    "name": "detectChildInterrupt",
+    "desc": "Missing javadoc on 'detectChildInterrupt' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 235,
+    "name": "buildChildInteractiveInput",
+    "desc": "Missing javadoc on 'buildChildInteractiveInput' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 415,
+    "name": "detectInterruptInSession",
+    "desc": "Missing javadoc on 'detectInterruptInSession' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 694,
+    "name": "collectUpdatedMemory",
+    "desc": "Missing javadoc on 'collectUpdatedMemory' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 511,
+    "name": "extractInteractPrompt",
+    "desc": "Missing javadoc on 'extractInteractPrompt' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 549,
+    "name": "extractParentResumeQuery",
+    "desc": "Missing javadoc on 'extractParentResumeQuery' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 738,
+    "name": "invokeTimeoutSeconds",
+    "desc": "Missing javadoc on 'invokeTimeoutSeconds' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 336,
+    "name": "findInteractionChunkInChildResult",
+    "desc": "Missing javadoc on 'findInteractionChunkInChildResult' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 110,
+    "name": "loadState",
+    "desc": "Missing javadoc on 'loadState' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 105,
+    "name": "reset",
+    "desc": "Missing javadoc on 'reset' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 487,
+    "name": "matchInterruptInNodeState",
+    "desc": "Missing javadoc on 'matchInterruptInNodeState' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 721,
+    "name": "traceInterruptMarker",
+    "desc": "Missing javadoc on 'traceInterruptMarker' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 747,
+    "name": "frameTimeoutSeconds",
+    "desc": "Missing javadoc on 'frameTimeoutSeconds' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 101,
+    "name": "shouldInterrupt",
+    "desc": "Missing javadoc on 'shouldInterrupt' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 595,
+    "name": "extractFromInteractiveInput",
+    "desc": "Missing javadoc on 'extractFromInteractiveInput' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 467,
+    "name": "findInterruptInStateTree",
+    "desc": "Missing javadoc on 'findInterruptInStateTree' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 527,
+    "name": "shouldResumeChildWorkflow",
+    "desc": "Missing javadoc on 'shouldResumeChildWorkflow' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 116,
+    "name": "errorToOutput",
+    "desc": "Missing javadoc on 'errorToOutput' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowsubworkflow",
+    "line": 245,
+    "name": "exitRequestScope",
+    "desc": "Missing javadoc on 'exitRequestScope' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 28,
+    "name": "DEFAULT_CONVERSATION_VARIABLE_TTL_SECONDS",
+    "desc": "Missing javadoc on 'DEFAULT_CONVERSATION_VARIABLE_TTL_SECONDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 27,
+    "name": "REDIS_GLOBAL_VALS_NAME",
+    "desc": "Missing javadoc on 'REDIS_GLOBAL_VALS_NAME' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 20,
+    "name": "USER_FIELDS",
+    "desc": "Missing javadoc on 'USER_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 22,
+    "name": "PRE_DEFINED_FIELDS",
+    "desc": "Missing javadoc on 'PRE_DEFINED_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 25,
+    "name": "ASSIGNMENT_SESSION",
+    "desc": "Missing javadoc on 'ASSIGNMENT_SESSION' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 26,
+    "name": "ASSIGNMENT_PERMANENT",
+    "desc": "Missing javadoc on 'ASSIGNMENT_PERMANENT' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 24,
+    "name": "ASSIGNMENT",
+    "desc": "Missing javadoc on 'ASSIGNMENT' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 21,
+    "name": "SYSTEM_FIELDS",
+    "desc": "Missing javadoc on 'SYSTEM_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 23,
+    "name": "MEMORY",
+    "desc": "Missing javadoc on 'MEMORY' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 47,
+    "name": "redisKey",
+    "desc": "Missing javadoc on 'redisKey' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 221,
+    "name": "userFieldInputs",
+    "desc": "Missing javadoc on 'userFieldInputs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 274,
+    "name": "stringKeyed",
+    "desc": "Missing javadoc on 'stringKeyed' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 64,
+    "name": "extractSessionVarDefs",
+    "desc": "Missing javadoc on 'extractSessionVarDefs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 259,
+    "name": "userInputMemoryVar",
+    "desc": "Missing javadoc on 'userInputMemoryVar' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 32,
+    "name": "conversationTtlSeconds",
+    "desc": "Missing javadoc on 'conversationTtlSeconds' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 201,
+    "name": "fillDefaults",
+    "desc": "Missing javadoc on 'fillDefaults' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 129,
+    "name": "transformType",
+    "desc": "Missing javadoc on 'transformType' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 52,
+    "name": "assignmentInputs",
+    "desc": "Missing javadoc on 'assignmentInputs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 103,
+    "name": "predefinedMemoryKeys",
+    "desc": "Missing javadoc on 'predefinedMemoryKeys' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 68,
+    "name": "extractAssignmentValues",
+    "desc": "Missing javadoc on 'extractAssignmentValues' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 186,
+    "name": "validateRequired",
+    "desc": "Missing javadoc on 'validateRequired' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowstart",
+    "line": 240,
+    "name": "startUserFieldsFromOutputs",
+    "desc": "Missing javadoc on 'startUserFieldsFromOutputs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowexception",
+    "line": 21,
+    "name": "ABORT_FLAG",
+    "desc": "Missing javadoc on 'ABORT_FLAG' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowexception",
+    "line": 22,
+    "name": "EXCEPTION_NODE_ID_KEY",
+    "desc": "Missing javadoc on 'EXCEPTION_NODE_ID_KEY' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowexception",
+    "line": 19,
+    "name": "USER_FIELDS",
+    "desc": "Missing javadoc on 'USER_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowexception",
+    "line": 20,
+    "name": "WORKFLOW_EXCEPTION",
+    "desc": "Missing javadoc on 'WORKFLOW_EXCEPTION' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowcard",
+    "line": 28,
+    "name": "USER_FIELDS",
+    "desc": "Missing javadoc on 'USER_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowcard",
+    "line": 27,
+    "name": "CARD_OUTPUTS_KEY",
+    "desc": "Missing javadoc on 'CARD_OUTPUTS_KEY' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowcard",
+    "line": 29,
+    "name": "NODE_TYPE",
+    "desc": "Missing javadoc on 'NODE_TYPE' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowcard",
+    "line": 30,
+    "name": "JIUWEN_CARD_TYPE",
+    "desc": "Missing javadoc on 'JIUWEN_CARD_TYPE' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowcard",
+    "line": 129,
+    "name": "formatCardOutputRecord",
+    "desc": "Missing javadoc on 'formatCardOutputRecord' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowcard",
+    "line": 161,
+    "name": "formatStructuredOutput",
+    "desc": "Missing javadoc on 'formatStructuredOutput' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowcard",
+    "line": 139,
+    "name": "extractUserFields",
+    "desc": "Missing javadoc on 'extractUserFields' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 45,
+    "name": "fromNodeConfigs",
+    "desc": "Missing javadoc on 'fromNodeConfigs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowmcp",
+    "line": 34,
+    "name": "USER_FIELDS",
+    "desc": "Missing javadoc on 'USER_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowaggregate",
+    "line": 18,
+    "name": "DEFAULT_MODE",
+    "desc": "Missing javadoc on 'DEFAULT_MODE' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowaggregate",
+    "line": 30,
+    "name": "fromNodeConfigs",
+    "desc": "Missing javadoc on 'fromNodeConfigs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowcode",
+    "line": 36,
+    "name": "JIUWEN_CODE_TYPE",
+    "desc": "Missing javadoc on 'JIUWEN_CODE_TYPE' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowcode",
+    "line": 35,
+    "name": "USER_FIELDS",
+    "desc": "Missing javadoc on 'USER_FIELDS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 106,
+    "name": "markRenderComplete",
+    "desc": "Missing javadoc on 'markRenderComplete' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 42,
+    "name": "reset",
+    "desc": "Missing javadoc on 'reset' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowend",
+    "line": 31,
+    "name": "setMix",
+    "desc": "Missing javadoc on 'setMix' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowmcp",
+    "line": 16,
+    "name": "METHOD_HEADERS",
+    "desc": "Missing javadoc on 'METHOD_HEADERS' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowmcp",
+    "line": 17,
+    "name": "METHOD_QUERY",
+    "desc": "Missing javadoc on 'METHOD_QUERY' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowmcp",
+    "line": 15,
+    "name": "METHOD_BODY",
+    "desc": "Missing javadoc on 'METHOD_BODY' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowmcp",
+    "line": 36,
+    "name": "fromMap",
+    "desc": "Missing javadoc on 'fromMap' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowcard",
+    "line": 39,
+    "name": "fromNodeConfigs",
+    "desc": "Missing javadoc on 'fromNodeConfigs' which is public or protected"
+  },
+  {
+    "file": "src/main/java/com/openjiuwen/studio/dsl/flowcard",
+    "line": 91,
+    "name": "endInterrupt",
+    "desc": "Missing javadoc on 'endInterrupt' which is public or protected"
+  }
+]

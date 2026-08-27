@@ -33,7 +33,15 @@ import java.util.Map;
 
 public final class FlowCodeEngine {
     private static final Logger LOG = Logger.getLogger(FlowCodeEngine.class.getName());
+    /**
+     * USER_FIELDS.
+     * @since 0.1.0
+     */
     public static final String USER_FIELDS = "userFields";
+    /**
+     * JIUWEN_CODE_TYPE.
+     * @since 0.1.0
+     */
     public static final String JIUWEN_CODE_TYPE = "jiuwen.code";
 
     private final String nodeId;
@@ -46,6 +54,11 @@ public final class FlowCodeEngine {
     private String tenantId;
     private String workflowId;
 
+    /**
+     * FlowCodeEngine.
+     * @param nodeId nodeId
+     * @since 0.1.0
+     */
     public FlowCodeEngine(String nodeId) {
         this.nodeId = nodeId == null ? "code" : nodeId;
     }

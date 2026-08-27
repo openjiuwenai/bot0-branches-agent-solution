@@ -50,11 +50,23 @@ public final class LlmChainEngine {
     private volatile boolean initialized;
     private Map<String, Object> streamFinalOutput;
 
+    /**
+     * LlmChainEngine.
+     * @param nodeId nodeId
+     * @since 0.1.0
+     */
     public LlmChainEngine(String nodeId) {
         this.nodeId = nodeId;
         this.presetBridge = null;
     }
 
+    /**
+     * LlmChainEngine.
+     * @param nodeId nodeId
+     * @param config config
+     * @param bridge bridge
+     * @since 0.1.0
+     */
     public LlmChainEngine(String nodeId, LlmChainConfig config, ModelBridge bridge) {
         this.nodeId = nodeId;
         this.config = config;
@@ -183,8 +195,27 @@ public final class LlmChainEngine {
 
         try {
             if (isEnabled) {
+                /**
+                 * streamThinkingEnabled.
+                 * @param languageModelInputs languageModelInputs
+                 * @param outputId outputId
+                 * @param nodeComponentId nodeComponentId
+                 * @param session session
+                 * @return result
+                 * @since 0.1.0
+                 */
                 return streamThinkingEnabled(languageModelInputs, outputId, nodeComponentId, session);
             }
+            /**
+             * streamRealTime.
+             * @param languageModelInputs languageModelInputs
+             * @param outputId outputId
+             * @param nodeComponentId nodeComponentId
+             * @param session session
+             * @param outputReasoning outputReasoning
+             * @return result
+             * @since 0.1.0
+             */
             return streamRealTime(languageModelInputs, outputId, nodeComponentId, session, outputReasoning);
         } catch (NodeExecutionException e) {
             throw e;

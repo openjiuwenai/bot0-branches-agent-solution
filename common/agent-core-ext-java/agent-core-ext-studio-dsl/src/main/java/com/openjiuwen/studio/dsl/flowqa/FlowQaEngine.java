@@ -28,7 +28,15 @@ import java.util.regex.Pattern;
  */
 
 public final class FlowQaEngine {
+    /**
+     * STATE_KEY.
+     * @since 0.1.0
+     */
     public static final String STATE_KEY = "flow_qa_state";
+    /**
+     * USER_FIELDS.
+     * @since 0.1.0
+     */
     public static final String USER_FIELDS = "userFields";
 
     private static final Pattern PLACEHOLDER_SPLIT = Pattern.compile("(\\{\\{.*?\\}\\})");
@@ -36,6 +44,12 @@ public final class FlowQaEngine {
     private final String nodeId;
     private final FlowQaConfig config;
 
+    /**
+     * FlowQaEngine.
+     * @param nodeId nodeId
+     * @param config config
+     * @since 0.1.0
+     */
     public FlowQaEngine(String nodeId, FlowQaConfig config) {
         this.nodeId = nodeId == null ? "qa" : nodeId;
         this.config = config == null ? FlowQaConfig.from(Map.of()) : config;

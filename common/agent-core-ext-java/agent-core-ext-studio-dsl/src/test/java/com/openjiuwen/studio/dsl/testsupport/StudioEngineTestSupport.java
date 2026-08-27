@@ -338,6 +338,12 @@ public final class StudioEngineTestSupport {
 
     @FunctionalInterface
     private interface OverrideBridge<T> {
+        /**
+         * get.
+         * @param overrides overrides
+         * @return result
+         * @since 0.1.0
+         */
         T get(StudioEngineTestOverrides overrides);
     }
 

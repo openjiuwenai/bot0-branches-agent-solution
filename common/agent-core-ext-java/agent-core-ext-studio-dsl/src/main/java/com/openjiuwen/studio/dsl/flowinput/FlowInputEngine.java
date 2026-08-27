@@ -31,8 +31,20 @@ import java.util.Map;
  */
 
 public final class FlowInputEngine {
+    /**
+     * STATE_KEY.
+     * @since 0.1.0
+     */
     public static final String STATE_KEY = "flow_input_state";
+    /**
+     * USER_FIELDS.
+     * @since 0.1.0
+     */
     public static final String USER_FIELDS = FlowInputUtils.USER_FIELDS;
+    /**
+     * JIUWEN_FLOW_INPUT_TYPE.
+     * @since 0.1.0
+     */
     public static final String JIUWEN_FLOW_INPUT_TYPE = "jiuwen.input";
 
     private final String nodeId;
@@ -41,6 +53,12 @@ public final class FlowInputEngine {
     private FlowInputState nodeState = new FlowInputState();
     private Map<String, Object> streamOutput;
 
+    /**
+     * FlowInputEngine.
+     * @param nodeId nodeId
+     * @param config config
+     * @since 0.1.0
+     */
     public FlowInputEngine(String nodeId, Map<String, Object> config) {
         this.nodeId = nodeId;
         this.config = config == null ? Map.of() : deepCopyMap(config);
