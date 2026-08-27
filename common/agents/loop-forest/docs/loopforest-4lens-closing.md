@@ -5,7 +5,7 @@
 - **审查对象**：`common/agents/loop-forest`（分支 `feat/loop-forest`）
 - **HEAD**：`f01425f0`；fork（gitcode `yaojun97/agent-solution`）的 `feat/loop-forest` 已包含该提交（`git branch -r --contains f01425f0` 实证）
 - **对照基线**：`70ffe929`（!381 合入点）——七 commit 链，132 个文件**全部**位于本模块目录，+11189 行、0 删除（本报告自身 commit 后为 133 文件/+11309）（纯新增，零修改任何既有模块）
-- **轮次角色**：轮⑥ = 重计后首个干净轮（1/3）；轮⑦ = 本轮（稳定态复扫 + 本报告），干净则 2/3；轮⑧ = 收口终审（3/3）
+- **轮次角色**：轮①-⑪ 进度、归零计数与各轮结局见 §4（单一真源——本行不再并行维护轮次进度）
 - **报告日期**：2026-08-27
 
 ---
@@ -81,6 +81,7 @@
 | 轮⑧ | 终审 NO-GO：**2 MAJOR**（MR body 数字半对齐 + 报告口头数字'5355 记录于 javadoc'）+ 4 MINOR → 归零 #4；勘误批 a4f32329 + MR body v3-v5 |
 | 轮⑨ | 勘误验证：**1 MAJOR**（MR body 轮次台账少计轮⑧ MAJOR 数）+ 1 MINOR → 归零 #5；报告补行 39a411d3+aaf18bcf + MR PATCH |
 | 轮⑩ | 声称面终闸：**3 MAJOR**（§4 行落点错位 / MR body 再少计轮⑨ / MR title'五层'零锚）+ 4 MINOR → 归零 #6；单一真源化处置（本 commit） |
+| 轮⑪ | R11-移交终镜：移交清单落库（§5.1 表 A 六 MINOR 锚点+验收判据、表 B R10 三移交项）+ 终检脚本（§5.2）；§4 冻结态核验通过（10 个被引 commit 锚全存在、变更面 133 文件/0 删除实测复认、归零 #1-#6 计数一致）；遗留"轮次角色"行改 §4 指针收尾单一真源化。零新文件（133 保持，MR body 零 PATCH 需求） | （本 commit） | 重计 1/3（自评零 MAJOR/BLOCKER，轮⑫复核） |
 
 **六次归零教训（轮②③⑤各 1 MAJOR、轮⑧ 2、轮⑨ 1、轮⑩ 3，同一物种）——"字面/声称层面的干净 ≠ 事实干净"**：
 
@@ -102,7 +103,7 @@
 - BudgetRail token 池维度 **deferred**：`recordTokens` API 保留待接线（`BudgetRail.java:30/145`，虚构钩子已诚实化）。
 - bench 已知副作用（两臂行为一致、非迁移引入）：goal_signal 字段清单的 dotted-path 被模型照抄为顶层键名→扁平 JSON，判分器期望嵌套结构→CA1.1 误形态 GAP（内容本身几乎全对）；修复方向已记录在 59d1a78b。
 
-**收口台账 6 项 MINOR（轮⑦零恶化，不阻塞收口）**：
+**收口台账 6 项 MINOR（轮⑦零恶化，不阻塞收口；锚点 / 验收判据 / 移交细化见 §5.1——移交真源）**：
 
 1. prompt 双源治理（模块自有 prompts 与宿主既有资源的并存治理）
 2. e2e 快照更新策略
@@ -110,6 +111,90 @@
 4. bench 语料 `evidence-pool.log` 相关治理（v2 corpus sdx_a3 fixture）
 5. 并发派发 deferred（锚点 `TraceForest.java:28`）
 6. MR body 数字滞后——轮⑧收口时 PATCH 对齐（轮② PATCH 后又有文件 131→132 增量实发轮②自身 commit 4bc28ade（smoke 基线 log 入库）、测试 104→105）
+
+### §5.1 移交清单（轮⑪ 落库——第二批处置的唯一输入）
+
+**落点决策**：不新增 `docs/handover.md`，本附录即移交真源。理由：(a) R10 结构性诊断"多份台账手抄同步必滞后"刚治本，新增独立文件即第六份并行台账（同物种复发）；(b) 保持 MR 文件数 133 不变——MR body "133 文件"表述继续成立，本轮零 MR PATCH 动作（少一次对齐 = 少一次失真面，轮⑧⑨⑩ 三次归零全是这个物种）；(c) 本报告已定随 MR 归档至 `docs/`，移交内容随报告走即随 MR 走。
+
+**表 A：六项 MINOR 移交（编号承上文 1-6；锚点为 HEAD `5b70621c` 实测行号，路径相对本模块根）**
+
+| # | 项 | deferred 锚（file:line） | 验收判据（可证伪） |
+|---|---|---|---|
+| 1 | prompt 双源治理 | `src/main/resources/prompts/`（18 个 .txt）；加载真源 `src/main/java/com/openjiuwen/agents/loopforest/search/PromptTemplates.java:20`、`src/main/java/com/openjiuwen/agents/loopforest/LoopForestAgent.java:103` | 模块 / 宿主资源归属边界成文（哪些 key 归模块 prompts/、哪些归宿主既有资源）；任一模板增改后 `mvn test` 仍绿且冒烟 `prompts_source=module_owned` 保持 true |
+| 2 | e2e 快照更新策略 | `docs/smoke-baseline-20260827.log`（入库基线）；数值断言 `src/test/java/com/openjiuwen/agents/loopforest/smoke/SmokeMetricsTest.java:94/158/179` | 策略成文：断言字段允许变更的触发条件；变更时基线 log 与 SmokeMetricsTest 断言必须同批 commit、旧基线保留（不静默改数） |
+| 3 | recordTokens 接线 | `src/main/java/com/openjiuwen/agents/loopforest/rail/BudgetRail.java:30`（deferred 注记）/ `:145`（API 保留待接线） | token 池拒绝路径有单测（超池拒 / 未超放行）且 mutation-RED 实证非恒真；`:30` 注记同批移除——javadoc 与实现不再错位 |
+| 4 | bench corpus 治理 | `src/test/resources/bench/v2/sealed/answers.json:43`（sdx_a3/evidence-pool.log sha256 pin）；注意 `src/test/resources/bench/v2/corpus/sdx_a3/` 下该文件**缺席**（仅 incident.md / postmortem-draft.md）——v2a3 任务当前不可跑，e2e 实跑 arm_a5 | 去留决策成文：补 evidence-pool.log 入 corpus，或 contract 明示 v2a3 sealed-only；决策后 answers pin 与 corpus 实际文件一致 |
+| 5 | 并发派发 | `src/main/java/com/openjiuwen/agents/loopforest/observability/TraceForest.java:28`（串行边界声明）；`src/main/java/com/openjiuwen/agents/loopforest/rail/GraphLoopRails.java:34-35` | 落地时 childrenOf 加 monitor 迭代 + 分支添加原子化 + 多写者并发压测绿；未落地则两处声明保持（锚不删） |
+| 6 | MR body 数字 | MR !385 body "133 文件"（轮次 / 归零 / 项数已 R10 count-free 指向 §4） | squash / 收口时 `git diff --shortstat 70ffe929..HEAD` 实测逐项对齐 body 数字；本 MR 后续不加新文件则 133 恒成立；行数不引用本报告数字，一律实测 |
+
+**表 B：R10 移交三项（流程面，非代码）**
+
+1. **squash message 预案**（squash 合入时用；其中数字一律届时不从本报告转抄、以 git 实测为准）：
+
+   ```
+   loop-forest：长程任务 Agent 的外置纪律与结构（三门 rail + 轨迹森林）
+
+   - 三门（GraphLoopRails.registerOnto 单一装配真源，config 可开关）：VetoRail 写入契约（产物零提及被拒事实即拒写）/ BudgetRail 三维预算 / ConvergenceRail 跨分支收敛（归因不替换）
+   - 结构层：TraceForest 轨迹树寻址与回滚路径 + ForkOrchestrator 分叉登记（组合 edpa SubAgentExecutor SPI）；统一入口 LoopForestAgent
+   - 133 文件全部位于 common/agents/loop-forest/，纯新增、零修改既有模块（行数以 squash 时 git diff --shortstat 70ffe929..squash 点实测为准）
+   - 测试 105 run / 0 failures / 0 errors / 5 skipped（5 = env-gated 真 LLM e2e，诚实边界非缺陷）；冒烟 A 档零 env 可复跑：bash common/agents/loop-forest/smoke.sh --a-only
+   - prompts 模块自有（src/main/resources/prompts/，prompts_source=module_owned 断言入库防寄生）
+   - 对抗收口 11 轮、六次归零教训与轮次台账见 docs/loopforest-4lens-closing.md §4（单一真源）
+   ```
+2. **ci-failed 沟通口径**：CI 红先分诊再发言——(a) 缺 env 的 e2e：本地形态是 **skip 不是 fail**，CI 若因缺 `DEEPSEEK_API_KEY`/`BASE_URL` 等报 fail 即 runner 配置问题，非代码缺陷；(b) 编译 / 单测真红：以 surefire 汇总行为准贴回 MR。对外一句话口径："A 档零 env 可复跑（`bash common/agents/loop-forest/smoke.sh --a-only`，rc=0）；B 档需 DEEPSEEK_API_KEY/BASE_URL；5 个 skip 是诚实边界设计，不是没跑到。"
+3. **治理第二批 MR 建议**：6 MINOR 不在本 MR 强行清零（§6 收口动作 2 既有承诺），合入后开第二批——批 1 纯治理文档（项 1/2/4：双源边界、快照策略、corpus 去留，零承重代码）；批 2 小接线（项 3 recordTokens：改 BudgetRail 承重路径，走 mock 单测 + mutation-RED gate + javadoc 同批）；批 3 单列最大项（项 5 并发派发：TraceForest 结构改动 + 并发压测，独立成 MR）。每批独立可回退，验收判据照表 A 逐项。
+
+### §5.2 轮⑫⑬ 终检脚本（逐项断言；未来 CI 种子）
+
+提取运行（仓库根）：`sed -n '/^```bash/,/^```$/p' common/agents/loop-forest/docs/loopforest-4lens-closing.md | sed '1d;$d' | bash`——默认零 env 零网络；`STRICT=1` 时 D6 fork 检查由 WARN 升 FAIL（收口终态用）。任一 FAIL 即非零退出。数字口径 = 轮⑪ 落库时 HEAD；第二批 MR 落地时同批更新断言（表 A 项 2 快照策略）。
+
+```bash
+#!/bin/bash
+# loop-forest 收口终检——轮⑫⑬逐项断言（未来 CI 种子；A 档零 env 零网络）
+set -u
+BASE=70ffe929; MOD=common/agents/loop-forest
+REP=$MOD/docs/loopforest-4lens-closing.md
+SRC=$MOD/src/main/java/com/openjiuwen/agents/loopforest
+cd "$(git rev-parse --show-toplevel)" || exit 2
+fails=0; warns=0
+pass(){ echo "PASS $1"; }; fail(){ echo "FAIL $1"; fails=$((fails+1)); }; warn(){ echo "WARN $1"; warns=$((warns+1)); }
+
+# A 变更面（§1）
+n=$(git diff --name-only $BASE..HEAD | wc -l | tr -d ' ')
+[ "$n" = 133 ] && pass "A1 文件数=133（零新文件）" || fail "A1 文件数=${n}≠133（新增文件需 MR body 同步）"
+[ -z "$(git diff --name-only $BASE..HEAD | grep -v "^$MOD/")" ] && pass "A2 变更全在模块内" || fail "A2 存在越界文件"
+[ -z "$(git diff --numstat $BASE..HEAD | awk '$2>0')" ] && pass "A3 零删除" || fail "A3 存在删除行"
+
+# B 台账真源（§4）
+rows=0; for r in ① ② ③ ④ ⑤ ⑥ ⑦ ⑧ ⑨ ⑩ ⑪; do grep -qE "^\| (轮)?$r \|" $REP && rows=$((rows+1)); done
+[ $rows -eq 11 ] && pass "B1 §4 轮①-⑪行齐（$rows/11）" || fail "B1 §4 行=$rows/11（少计=轮⑨⑩物种）"
+z=$(grep -oE '归零 #[0-9]+' $REP | sort -u | wc -l | tr -d ' ')
+l=$(sed -n '/^\*\*六次归零教训/,/^六者共同范式/p' $REP | grep -cE '^[0-9]+\. ')
+[ "$z" = 6 ] && [ "$l" = 6 ] && pass "B2 归零事件=6 且教训列表=6" || fail "B2 归零=${z} 教训=${l}（不一致）"
+
+# C 测试与冒烟（A 档零 env）
+if mvn -f $MOD/pom.xml test >/dev/null 2>&1; then
+  sum=$(awk -F'[:,]' '/^Tests run:/{t+=$2;f+=$4;e+=$6;s+=$8} END{printf "Tests run: %d, Failures: %d, Errors: %d, Skipped: %d",t,f,e,s}' $MOD/target/surefire-reports/*.txt)
+  [ "$sum" = "Tests run: 105, Failures: 0, Errors: 0, Skipped: 5" ] && pass "C1 105/0/0/5" || fail "C1 surefire 汇总=$sum"
+else fail "C1 mvn test 非 BUILD SUCCESS"; fi
+lg=""; bash $MOD/smoke.sh --a-only >/dev/null 2>&1 && lg=$(ls -t $MOD/logs/smoke-*.log | head -1)
+[ -n "$lg" ] && grep -q 'A 档 rc=0' "$lg" && grep -q 'prompts_source=module_owned' "$lg" \
+  && pass "C2 冒烟 A 档 rc=0 + module_owned" || fail "C2 冒烟 A 档失败"
+
+# D 六 MINOR deferred 锚存活（§5.1 表 A——锚漂移即移交清单失真）
+[ "$(ls $MOD/src/main/resources/prompts/*.txt | wc -l | tr -d ' ')" = 18 ] && pass "D1 prompts=18 个（项1）" || fail "D1 prompts 数漂移（项1）"
+[ -f $MOD/docs/smoke-baseline-20260827.log ] && pass "D2 基线 log 在（项2）" || fail "D2 基线 log 缺（项2）"
+grep -q deferred <(sed -n 30p $SRC/rail/BudgetRail.java) && grep -q recordTokens <(sed -n 145p $SRC/rail/BudgetRail.java) \
+  && pass "D3 BudgetRail:30/145 锚在（项3）" || fail "D3 BudgetRail 锚漂移（项3）"
+grep -q 'sdx_a3/evidence-pool.log' $MOD/src/test/resources/bench/v2/sealed/answers.json \
+  && pass "D4 answers sha pin 在（项4）" || fail "D4 answers pin 缺（项4）"
+grep -q 并发边界 <(sed -n 28p $SRC/observability/TraceForest.java) && grep -q 串行 <(sed -n 34p $SRC/rail/GraphLoopRails.java) \
+  && pass "D5 TraceForest:28 + Rails:34 锚在（项5）" || fail "D5 并发锚漂移（项5）"
+if git branch -r --contains HEAD | grep -q 'fork/feat/loop-forest'; then pass "D6 fork 含 HEAD（项6）"
+else if [ "${STRICT:-0}" = 1 ]; then fail "D6 fork 未含 HEAD（收口态必须先 push）"; else warn "D6 fork 未含 HEAD（push 后复跑；收口终态用 STRICT=1）"; fi; fi
+
+echo "----"; echo "FAILS=$fails WARNS=$warns"; [ $fails -eq 0 ]
+```
 
 ## §6 用户三令核对与轮⑧终审预告（实际结局：NO-GO 归零 #4，见 §4）——后续轮次预告
 
