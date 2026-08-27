@@ -134,7 +134,7 @@ class IntentFaqParityTest {
     }
 
     @Test
-    void docLineScopeUsesDocSearchContent() {
+    void docLineScopeUsesStrSearchDataLikePython() {
         InMemoryToolRegistry tools = new InMemoryToolRegistry();
         tools.register(
                 "doc-kb-1",

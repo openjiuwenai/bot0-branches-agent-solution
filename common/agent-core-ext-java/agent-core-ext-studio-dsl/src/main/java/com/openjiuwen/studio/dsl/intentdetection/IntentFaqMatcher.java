@@ -25,6 +25,8 @@ public final class IntentFaqMatcher {
     private static final int SEARCH_NUM = 1;
     private static final String DEFAULT_QUERY_CATE = "title";
     private static final String DEFAULT_CLASS_CATE = "content";
+    /** Python module constant {@code SEARCH_TYPE} (extension {@code intent_detection.py}). */
+    private static final String SEARCH_TYPE = "faq";
 
     private IntentFaqMatcher() {}
 
@@ -54,7 +56,7 @@ public final class IntentFaqMatcher {
         if ("faq".equalsIgnoreCase(config.kgScope())) {
             return matchFaqScope(config, searchData);
         }
-        if ("doc_line".equalsIgnoreCase(config.kgScope())) {
+        if ("doc_line".equals(SEARCH_TYPE)) {
             return new FaqMatchResult(config.defaultClass(), docSearch(config, searchData), false);
         }
         return new FaqMatchResult(config.defaultClass(), String.valueOf(searchData), false);
@@ -91,21 +93,7 @@ public final class IntentFaqMatcher {
     static String docSearch(IntentDetectionConfig config, Map<String, Object> searchData) {
         String res = "";
         try {
-            Map<String, Object> qqResult = searchData;
-            if (searchData instanceof Map) {
-                Object listRaw = searchData.get("output_list");
-                if (listRaw == null && searchData.containsKey("doc_list")) {
-                    List<Map<String, Object>> analyzed = anaylsSearch(config, searchData);
-                    List<Map<String, Object>> outputList = new ArrayList<>();
-                    for (Map<String, Object> item : analyzed) {
-                        Map<String, Object> row = new LinkedHashMap<>(item);
-                        row.put("content", item.get("content"));
-                        outputList.add(row);
-                    }
-                    qqResult = Map.of("output_list", outputList);
-                }
-            }
-            Object listRaw = qqResult.get("output_list");
+            Object listRaw = searchData.get("output_list");
             if (!(listRaw instanceof List<?> reslist)) {
                 return res;
             }
@@ -240,7 +228,7 @@ public final class IntentFaqMatcher {
         if (filter == null) {
             filter = config.kgConfig().get("filter_string");
         }
-        if (filter != null && !String.valueOf(filter).isBlank()) {
+        if (filter != null && !String.valueOf(filter).isEmpty()) {
             request.put("filter_string", String.valueOf(filter));
         }
         return request;

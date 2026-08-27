@@ -221,7 +221,7 @@ final class LlmChainPrompt {
         } else {
             return messages;
         }
-        String escaped = htmlEscape(userContent);
+        String escaped = userContent;
         Map<String, Object> updated = new LinkedHashMap<>(messages.get(lastUserIdx));
         updated.put("content", instruction.replace("${query}", escaped));
         List<Map<String, Object>> out = new ArrayList<>(messages);
@@ -327,7 +327,9 @@ final class LlmChainPrompt {
         for (Map<String, Object> history : truncateHistoryByTurn(chatHistory, config.historySize())) {
             String role = str(history.getOrDefault("role", "user"));
             String content = str(history.get("content"));
-            if (("user".equals(role) || "assistant".equals(role) || "system".equals(role)) && !content.isBlank()) {
+            if (("user".equals(role) || "assistant".equals(role) || "system".equals(role))
+                    && content != null
+                    && !content.isEmpty()) {
                 messages.add(mutableMsg(role, content));
             }
         }

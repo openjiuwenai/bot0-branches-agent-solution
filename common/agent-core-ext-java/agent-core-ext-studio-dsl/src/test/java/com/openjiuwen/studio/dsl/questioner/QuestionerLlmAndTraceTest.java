@@ -35,6 +35,19 @@ class QuestionerLlmAndTraceTest {
     }
 
     @Test
+    void llmExtractor_rejectsEmptyCollections() {
+        QuestionerConfig cfg =
+                QuestionerConfig.fromNodeConfigs(
+                        Map.of(
+                                "fieldNames",
+                                List.of(Map.of("fieldName", "name", "type", "string", "required", true))));
+        QuestionerLlmExtractor extractor =
+                new QuestionerLlmExtractor("q1", cfg, messages -> "{\"name\": \"\", \"meta\": {}}");
+        Map<String, Object> out = extractor.extract("test", List.of(), new QuestionerState(), null);
+        assertThat(out).doesNotContainKey("name");
+    }
+
+    @Test
     void llmExtractor_parsesJsonAndFiltersFields() {
         QuestionerConfig cfg =
                 QuestionerConfig.fromNodeConfigs(

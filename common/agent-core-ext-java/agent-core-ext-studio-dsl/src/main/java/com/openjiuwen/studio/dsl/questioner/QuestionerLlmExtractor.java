@@ -346,8 +346,14 @@ public final class QuestionerLlmExtractor {
             return false;
         }
         if (v instanceof String s) {
-            String t = s.trim();
-            return !t.isEmpty() && !"null".equalsIgnoreCase(t) && !"none".equalsIgnoreCase(t);
+            String t = s.strip().toLowerCase();
+            return !t.isEmpty() && !"null".equals(t) && !"none".equals(t);
+        }
+        if (v instanceof Map<?, ?> m) {
+            return !m.isEmpty();
+        }
+        if (v instanceof List<?> list) {
+            return !list.isEmpty();
         }
         return true;
     }

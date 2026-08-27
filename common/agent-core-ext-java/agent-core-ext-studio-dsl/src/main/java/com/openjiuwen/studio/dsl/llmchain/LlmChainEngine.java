@@ -130,7 +130,7 @@ public final class LlmChainEngine {
             customData.put("componentType", "LLM");
             customData.put("should_interrupt", false);
             customData.put(USER_FIELDS, result.get(USER_FIELDS));
-            customData.put("model_stats", result.getOrDefault("metadata", Map.of()));
+            customData.put("model_stats", modelStatsFromInvokeResult(result));
             customData.put("status", "finish");
             if (outputReasoning) {
                 Object uf = result.get(USER_FIELDS);
@@ -183,6 +183,7 @@ public final class LlmChainEngine {
         List<String> contentChunks = new ArrayList<>();
         StringBuilder reasoning = new StringBuilder();
         UsageMetadata usage = null;
+        Map<String, Object> modelStats = new LinkedHashMap<>();
         Long firstTokenMs = null;
         boolean first = true;
         int index = 0;
@@ -196,7 +197,9 @@ public final class LlmChainEngine {
             }
             if (item.getUsageMetadata() != null) {
                 usage = item.getUsageMetadata();
+                modelStats.putAll(modelStatsFromUsage(usage));
             }
+            mergeChunkMetadata(item, modelStats);
             if (item.getReasoningContent() != null && !item.getReasoningContent().isEmpty()) {
                 reasoning.append(item.getReasoningContent());
                 Map<String, Object> data = new LinkedHashMap<>();
@@ -225,7 +228,7 @@ public final class LlmChainEngine {
             frames.add(Map.of(USER_FIELDS, Map.of(outputId, chunk)));
         }
 
-        Map<String, Object> modelStats = modelStatsFromUsage(usage);
+        Map<String, Object> modelStatsFinal = modelStats.isEmpty() ? Map.of() : Map.copyOf(modelStats);
         Map<String, Object> customData = new LinkedHashMap<>();
         customData.put(
                 "rawOutput",
@@ -235,7 +238,7 @@ public final class LlmChainEngine {
         customData.put("node_type", LlmChainConfig.JIUWEN_LLM_TYPE);
         customData.put("componentType", "LLM");
         customData.put(USER_FIELDS, formatted);
-        customData.put("model_stats", modelStats);
+        customData.put("model_stats", modelStatsFinal);
         if (formatted.get("reasoning_content") != null) {
             customData.put("think", formatted.get("reasoning_content"));
         }
@@ -357,7 +360,6 @@ public final class LlmChainEngine {
                 AssistantMessageChunk chunk = source.next();
                 if (chunk.getUsageMetadata() != null) {
                     usage = chunk.getUsageMetadata();
-                    modelStats.clear();
                     modelStats.putAll(modelStatsFromUsage(usage));
                 }
                 mergeChunkMetadata(chunk, modelStats);
@@ -405,7 +407,7 @@ public final class LlmChainEngine {
             customData.put("componentType", "LLM");
             customData.put("should_interrupt", false);
             customData.put(USER_FIELDS, formatted);
-            customData.put("model_stats", modelStats.isEmpty() ? Map.of() : Map.copyOf(modelStats));
+            customData.put("model_stats", Map.copyOf(modelStats));
             customData.put("status", "finish");
 
             trace(session, Map.of(
@@ -546,6 +548,19 @@ public final class LlmChainEngine {
             return;
         }
         finalOutput.putAll(usageToMap(usage));
+    }
+
+    private static Map<String, Object> modelStatsFromInvokeResult(Map<String, Object> invokeResult) {
+        if (invokeResult == null) {
+            return Map.of();
+        }
+        Object meta = invokeResult.get("metadata");
+        if (meta instanceof Map<?, ?> m) {
+            Map<String, Object> out = new LinkedHashMap<>();
+            m.forEach((k, v) -> out.put(String.valueOf(k), v));
+            return out;
+        }
+        return Map.of();
     }
 
     private static Map<String, Object> modelStatsFromUsage(UsageMetadata usage) {

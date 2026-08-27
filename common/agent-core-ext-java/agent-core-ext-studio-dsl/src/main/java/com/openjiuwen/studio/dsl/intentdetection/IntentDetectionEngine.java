@@ -47,6 +47,7 @@ public final class IntentDetectionEngine {
     private final IntentDetectionConfig intentConfigRetry;
     private IntentDetectionState nodeState = new IntentDetectionState();
     private final IntentDetectionState nodeStateRetry = new IntentDetectionState();
+    private String fewShotExample = "";
 
     private boolean enableKnowledge;
 
@@ -100,6 +101,7 @@ public final class IntentDetectionEngine {
     public boolean reset() {
         this.intentConfig = intentConfigRetry;
         this.nodeState = nodeStateRetry.copy();
+        this.fewShotExample = "";
         if (!hasBranch0) {
             this.intentConfig =
                     IntentDetectionConfigFormatter.withDefaultClass(
@@ -204,6 +206,9 @@ public final class IntentDetectionEngine {
         IntentFaqMatcher.FaqMatchResult faq =
                 IntentFaqMatcher.match(intentConfig, toolRegistry, query, chatHistory, enableKnowledge);
         String fewShot = faq.fewShotExample();
+        if (fewShot != null && !fewShot.isEmpty()) {
+            fewShotExample = fewShotExample.isEmpty() ? fewShot : fewShotExample + "\n" + fewShot;
+        }
         currentInputs.put("example_content", fewShot);
         return faq.intentClass();
     }

@@ -99,7 +99,7 @@ public final class QuestionerEngine {
         String query = queryOf(in, userFields);
         if (resuming) {
             String fromHistory = lastChatHistoryContent(userFields);
-            if (fromHistory != null && !fromHistory.isBlank()) {
+            if (fromHistory != null) {
                 query = fromHistory;
             }
         }
@@ -249,8 +249,9 @@ public final class QuestionerEngine {
 
         if (config.hasQuestionContent() && !config.needExtractFields(state)) {
             state.setStatus(QuestionerState.END);
+            String userResponse = resolveUserResponseFromHistory(userFields, query);
             Map<String, Object> out = new LinkedHashMap<>();
-            out.put("user_response", query);
+            out.put("user_response", userResponse);
             out.put("question", state.question());
             out.put("status", "end");
             out.put("_state", state.toMap());
@@ -452,7 +453,7 @@ public final class QuestionerEngine {
     }
 
     private void writeUserToContext(ModelContext context, String content) {
-        if (!config.withChatHistory() || context == null || content == null || content.isBlank()) {
+        if (!config.withChatHistory() || context == null || content == null || content.isEmpty()) {
             return;
         }
         try {
@@ -463,7 +464,7 @@ public final class QuestionerEngine {
     }
 
     private void writeAssistantToContext(ModelContext context, String content) {
-        if (!config.withChatHistory() || context == null || content == null || content.isBlank()) {
+        if (!config.withChatHistory() || context == null || content == null || content.isEmpty()) {
             return;
         }
         try {
@@ -731,12 +732,21 @@ public final class QuestionerEngine {
             Object item = list.get(i);
             if (item instanceof Map<?, ?> m) {
                 Object content = m.get("content");
-                if (content != null && !String.valueOf(content).isBlank()) {
+                if (content != null && !String.valueOf(content).isEmpty()) {
                     return String.valueOf(content);
                 }
             }
         }
         return null;
+    }
+
+    /** Python {@code chat_history[-1].content} with {@code query} fallback. */
+    private static String resolveUserResponseFromHistory(Map<String, Object> userFields, String query) {
+        String fromHistory = lastChatHistoryContent(userFields);
+        if (fromHistory != null) {
+            return fromHistory;
+        }
+        return query == null ? "" : query;
     }
 
     private Object collectViaInteract(NodeSessionApi session, QuestionerState state) {
