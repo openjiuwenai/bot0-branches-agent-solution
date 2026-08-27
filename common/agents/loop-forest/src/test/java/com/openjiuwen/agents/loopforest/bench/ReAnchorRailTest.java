@@ -336,16 +336,23 @@ class ReAnchorRailTest {
         CapturingQueue queue = new CapturingQueue();
         // 轮1：干净——signal 进队（drain 后下轮进窗口）
         rail.beforeModelCall(ctxWith(msgs("start"), queue));
-        // 轮2：窗口含 signal 回显（[GOAL SIGNAL] 大写原文）+ 无注入新文本
-        // → 守卫应跳过 signal 段（活守卫）→ drift=0
-        rail.beforeModelCall(ctxWith(msgs("start", "[GOAL SIGNAL] 0 of 1 missing"),
+        // 轮2：窗口含**携带词元的真实重锚回显**（reanchorMessage 实际形态：
+        // 内嵌 OUT-OF-SIGNATURE 标记 + 命中词元清单）——活守卫经 needle 跳过
+        // → drift=0；死守卫（宿主当前版）扫描命中 certified → drift=1 → RED。
+        // R3-F1 修正：旧 fixture "[GOAL SIGNAL] 0 of 1 missing" 不含词元，
+        // 守卫死活两态 drift 都=0——恒真假承重（mutation 实证剥 needle 全绿）。
+        rail.beforeModelCall(ctxWith(msgs("start",
+                "[GOAL RE-ANCHOR] OUT-OF-SIGNATURE marker on task v2A5\n"
+                        + "drift detected: 1 hit(s): certified\n"
+                        + "Note: out-of-signature content does NOT count"),
                 queue));
         assertThat(rail.driftEvents())
-                .as("活守卫：自产 signal 回显不自触发（宿主死守卫版此断言会失败"
-                        + "——drift 被回显误计）")
+                .as("活守卫：携带词元的自产重锚回显不自触发（死守卫版此断言 RED"
+                        + "——certified 命中）")
                 .isZero();
         // 对照：真注入文本（含词元）仍触发——消息窗须含前史使新文本落在增量区
-        rail.beforeModelCall(ctxWith(msgs("start", "[GOAL SIGNAL] 0 of 1 missing",
+        rail.beforeModelCall(ctxWith(msgs("start",
+                "[GOAL RE-ANCHOR] OUT-OF-SIGNATURE drift: certified",
                 "权威 certified 组合"), queue));
         assertThat(rail.driftEvents()).as("注入文本仍触发 drift（守卫只跳自产段）")
                 .isEqualTo(1);

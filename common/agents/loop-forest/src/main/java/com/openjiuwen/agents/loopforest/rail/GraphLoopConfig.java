@@ -37,15 +37,13 @@ public record GraphLoopConfig(
      * @return 最小配置（空契约 + 恒空评估器 + 默认 fork 描述）
      */
     public static GraphLoopConfig minimal(SubAgentExecutor executor) {
+        // R3-2 修正：null evaluator 走 GraphLoopRails 的 null-gate（真不挂
+        // 收敛）——旧版恒空评估器非 null，ConvergenceRail 仍被构造挂载，
+        // "不挂收敛"的 javadoc 契约为假（gate 测试同款 null 约定）
         return new GraphLoopConfig(
                 new VetoContract(Collections.emptyMap()),
                 "veto",
-                new ConvergenceEvaluator() {
-                    @Override
-                    public java.util.Optional<Double> score(String branchId, String result) {
-                        return java.util.Optional.empty();
-                    }
-                },
+                null,
                 executor,
                 "Fork a sub-task exploration");
     }

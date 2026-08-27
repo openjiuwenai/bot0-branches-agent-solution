@@ -1,13 +1,13 @@
-== loop-forest smoke 20260827-114933 ==
-[smoke] budget: attempts=5 accepted=3 rejected=2 reason_from_prompts=true elapsed_ms=6
+== loop-forest smoke 20260827-122036 ==
+[smoke] budget: attempts=5 accepted=3 rejected=2 reason_from_prompts=true elapsed_ms=7
 [smoke] convergence: candidates=6 qualified=4 pruned=5 winner=b-2 elapsed_ms=0
-[smoke] forest: branches=4 depth=2 rollback_path=2 prompts_source=module_owned elapsed_ms=1
-[smoke] veto: attempts=10 intercepted=3 passthrough=7 zero_mention=true elapsed_ms=0
+[smoke] forest: branches=5 depth=2 rollback_path=2 prompts_source=module_owned elapsed_ms=1
+[smoke] veto: attempts=10 intercepted=3 passthrough=7 zero_mention=true elapsed_ms=1
 [smoke.sh] A 档 rc=0
 == 实测数值（收益面）==
-[smoke] veto: attempts=10 intercepted=3 passthrough=7 zero_mention=true elapsed_ms=0
+[smoke] veto: attempts=10 intercepted=3 passthrough=7 zero_mention=true elapsed_ms=1
 [smoke] convergence: candidates=6 qualified=4 pruned=5 winner=b-2 elapsed_ms=0
-[smoke] budget: attempts=5 accepted=3 rejected=2 reason_from_prompts=true elapsed_ms=6
-[smoke] forest: branches=4 depth=2 rollback_path=2 prompts_source=module_owned elapsed_ms=1
+[smoke] budget: attempts=5 accepted=3 rejected=2 reason_from_prompts=true elapsed_ms=7
+[smoke] forest: branches=5 depth=2 rollback_path=2 prompts_source=module_owned elapsed_ms=1
 [smoke.sh] B 档跳过（--a-only 指定——env 存在与否不判）
-[smoke.sh] ALL_PASS log=logs/smoke-20260827-114933.log
+[smoke.sh] ALL_PASS log=logs/smoke-20260827-122036.log

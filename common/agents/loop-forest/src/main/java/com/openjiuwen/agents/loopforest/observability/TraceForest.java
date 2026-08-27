@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *   <li>{@link #size}——森林中的分支总数</li>
  * </ul>
  *
- * <p><b>线程安全</b>：ConcurrentHashMap 存储；分支一旦添加不可修改（record 不可变）。
+ * <p><b>并发边界</b>：仅限单写者/串行宿主循环（见 GraphLoopRails 串行边界声明）——并发派发 deferred，落地前需为 childrenOf 加 monitor 迭代、协作方补原子性；分支一旦添加不可修改（record 不可变）。
  *
  * <p><b>Honest boundary</b>：
  * <ul>

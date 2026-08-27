@@ -29,7 +29,9 @@ class MinimalWriteE2eTest {
 
     @Test
     void minimalWriteDiscriminator() throws Exception {
+        // R3-snapshot：空串 env 误跑（只查 non-null）——isBlank 对齐其余 e2e
         Assumptions.assumeTrue(System.getenv("DEEPSEEK_API_KEY") != null
+                && !System.getenv("DEEPSEEK_API_KEY").isBlank()
                 && System.getenv("DEEPSEEK_BASE_URL") != null, "env-gated");
         String key = System.getenv("DEEPSEEK_API_KEY");
         String base = System.getenv("DEEPSEEK_BASE_URL");

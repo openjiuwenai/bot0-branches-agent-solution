@@ -177,6 +177,7 @@ class SmokeMetricsTest {
         int pathLen = forest.pathToRoot(grandChild).size();
         long ms = (System.nanoTime() - t0) / 1_000_000;
         assertThat(children).as("根下 3 分叉").hasSize(3);
+        assertThat(forest.size()).as("森林总分支=root+3叉+1孙=5").isEqualTo(5);
         assertThat(forest.depth(grandChild)).as("孙辈深度 2").isEqualTo(2);
         assertThat(pathLen).as("回滚寻址路径=孙→子 2 节点（不含根）").isEqualTo(2);
         // 真源断言（R1-F1 治本面）：prompts 从本模块加载而非依赖 jar
@@ -184,8 +185,9 @@ class SmokeMetricsTest {
                 .getResource("/prompts/veto-rejection.txt"));
         assertThat(url).as("prompt 真源在本模块（loop-forest）——寄生依赖 jar 已治本")
                 .contains("loop-forest");
-        System.out.printf("[smoke] forest: branches=4 depth=2 rollback_path=%d "
-                + "prompts_source=module_owned elapsed_ms=%d%n", pathLen, ms);
+        System.out.printf("[smoke] forest: branches=%d depth=2 rollback_path=%d "
+                + "prompts_source=module_owned elapsed_ms=%d%n",
+                forest.size(), pathLen, ms);
     }
 
     private static ConvergenceEvaluator.Candidate cand(String id, String result) {

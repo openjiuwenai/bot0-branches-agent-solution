@@ -9,7 +9,7 @@
     <version>0.1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
     <name>loop-forest — 循环森林：长程任务 Agent 的外置纪律与结构</name>
-    <description>Loop-forest: loop organized as a forest (VetoRail/TraceForest/ForkOrchestrator/ConvergenceRail/BudgetRail + LoopForestAgent entry). Bench assets synced to host S2-fixed version; mock-level 103 tests green; real-LLM v2 bench e2e is env-gated (DEEPSEEK_*)</description>
+    <description>Loop-forest: loop organized as a forest (VetoRail/TraceForest/ForkOrchestrator/ConvergenceRail/BudgetRail + LoopForestAgent entry). Bench assets synced to host S2-fixed version; mock-level suite green; real-LLM v2 bench e2e is env-gated (DEEPSEEK_*)</description>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>

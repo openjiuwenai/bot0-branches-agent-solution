@@ -14,7 +14,7 @@ import java.util.Set;
  * <p>GLH-2 Python 实验验证的核心机制（bait 根除 0% 双模型一致 + SAT 不伤）的 Java 移植。
  * 契约由宿主在装配时提供（构造注入），不依赖外部文件——白名单本身是配置而非 prompt。
  *
- * <p><b>零提及纪律</b>：契约只用于 {@link VetoRail#shouldVeto} 的判定，
+ * <p><b>零提及纪律</b>：契约只用于 {@link #shouldVeto} 的判定，
  * 拒绝消息永远不点名哪个字段多余（提示即诱导的反面教训——提及本身就是诱导）。
  *
  * <p>不可变；线程安全。
