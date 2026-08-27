@@ -54,7 +54,14 @@ public final class RuntimeTransportProvider extends A2aHttpTransportProvider {
                 retryPolicy, observer, observerExecutor, observerQueueCapacity, observerFlushTimeout);
     }
 
-    /** @deprecated use the structured observer constructor. */
+    /**
+     * 构造兼容旧 raw frame consumer 的 Runtime 直连传输提供者。
+     *
+     * @param baseUrl Runtime 基址
+     * @param retryPolicy 链路异常恢复策略
+     * @param consumer 原始帧消费者
+     * @deprecated use the structured observer constructor
+     */
     @Deprecated(forRemoval = false)
     public RuntimeTransportProvider(String baseUrl, RetryPolicy retryPolicy, RawFrameConsumer consumer) {
         this(baseUrl, retryPolicy, event -> consumer.accept(event.invocationRef(), event.conversationId(),

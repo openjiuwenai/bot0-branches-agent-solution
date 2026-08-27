@@ -31,7 +31,21 @@ public record RawResponseEvent(
         boolean replayed,
         Instant receivedAt,
         long droppedBefore) {
-    /** Backward-compatible constructor for events created before drop markers were added. */
+    /**
+     * Backward-compatible constructor for events created before drop markers were added.
+     *
+     * @param invocationRef invocation ref
+     * @param conversationId conversation id
+     * @param taskRef task ref
+     * @param endpointType endpoint type
+     * @param source source
+     * @param httpStatus http status
+     * @param headers headers
+     * @param body body
+     * @param eventId event id
+     * @param replayed replayed flag
+     * @param receivedAt received time
+     */
     public RawResponseEvent(String invocationRef, String conversationId, String taskRef,
             EndpointType endpointType, Source source, int httpStatus,
             Map<String, List<String>> headers, String body, String eventId,
@@ -56,13 +70,21 @@ public record RawResponseEvent(
         }
     }
 
-    /** Returns a copy carrying the number of observations dropped before this event. */
+    /**
+     * Returns a copy carrying the number of observations dropped before this event.
+     *
+     * @return copy with drop count
+     */
     public RawResponseEvent withDroppedBefore(long count) {
         return new RawResponseEvent(invocationRef, conversationId, taskRef, endpointType, source,
                 httpStatus, headers, body, eventId, replayed, receivedAt, count);
     }
 
-    /** Origin of the observed response unit. */
+    /**
+     * Origin of the observed response unit.
+     *
+     * @since 2026-07-27
+     */
     public enum Source {
         CREATE_STREAM,
         CREATE_UNARY,

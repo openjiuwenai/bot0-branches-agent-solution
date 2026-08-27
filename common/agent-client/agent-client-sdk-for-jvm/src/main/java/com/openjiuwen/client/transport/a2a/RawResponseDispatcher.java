@@ -23,6 +23,7 @@ import java.util.logging.Logger;
  */
 final class RawResponseDispatcher implements AutoCloseable {
     private static final Logger LOG = Logger.getLogger(RawResponseDispatcher.class.getName());
+
     private final RawResponseObserver observer;
     private final Executor executor;
     private final int capacity;
@@ -94,7 +95,8 @@ final class RawResponseDispatcher implements AutoCloseable {
             }
             try {
                 observer.onResponse(event);
-            } catch (RuntimeException ex) {
+            } catch (IllegalStateException | IllegalArgumentException
+                    | UnsupportedOperationException | NullPointerException ex) {
                 LOG.log(Level.FINE, "raw response observer failed", ex);
             }
         }
@@ -114,7 +116,6 @@ final class RawResponseDispatcher implements AutoCloseable {
                 try {
                     TimeUnit.NANOSECONDS.timedWait(this, nanos);
                 } catch (InterruptedException ex) {
-                    Thread.currentThread().interrupt();
                     break;
                 }
                 nanos = deadline - System.nanoTime();

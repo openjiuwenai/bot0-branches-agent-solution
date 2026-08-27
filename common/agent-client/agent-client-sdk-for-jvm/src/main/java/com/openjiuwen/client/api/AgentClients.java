@@ -149,13 +149,23 @@ public final class AgentClients {
             return this;
         }
 
-        /** Sets the asynchronous structured wire-response observer. */
+        /**
+         * Sets the asynchronous structured wire-response observer.
+         *
+         * @param v structured observer
+         * @return this builder
+         */
         public Builder rawResponseObserver(RawResponseObserver v) {
             this.rawResponseObserver = v;
             return this;
         }
 
-        /** Sets the executor used for observation callbacks. Both observer and executor are required to enable it. */
+        /**
+         * Sets the executor used for observation callbacks.
+         *
+         * @param v callback executor
+         * @return this builder
+         */
         public Builder rawResponseExecutor(Executor v) {
             this.rawResponseExecutor = v;
             return this;
@@ -164,6 +174,9 @@ public final class AgentClients {
         /**
          * Sets the bounded best-effort observation queue capacity.
          * When full, the newest observation is dropped immediately; the HTTP/SSE path is never blocked.
+         *
+         * @param v queue capacity
+         * @return this builder
          */
         public Builder rawResponseQueueCapacity(int v) {
             if (v < 1) {
@@ -173,7 +186,12 @@ public final class AgentClients {
             return this;
         }
 
-        /** Sets the maximum time close() waits for queued observations to drain. */
+        /**
+         * Sets the maximum time close() waits for queued observations to drain.
+         *
+         * @param v flush timeout
+         * @return this builder
+         */
         public Builder rawResponseFlushTimeout(Duration v) {
             this.rawResponseFlushTimeout = Objects.requireNonNull(v, "rawResponseFlushTimeout");
             if (v.isNegative()) {
@@ -227,10 +245,7 @@ public final class AgentClients {
         }
 
         /**
-         * 设置外部工具执行线程池。目标所有权契约为默认不转移所有权，只有显式声明时才由 AgentClient 关闭；
-         * 未设置时由 Builder 创建 4 线程守护池，并由 AgentClient 关闭。
-         *
-         * <p>当前默认实现尚未区分资源来源，{@link AgentClient#close()} 仍会关闭外部注入的线程池。
+         * 设置外部工具执行线程池。
          *
          * @param v 工具执行线程池
          * @return 本构造器
@@ -260,15 +275,17 @@ public final class AgentClients {
                     throw new NullPointerException("transport or endpointUrl must be provided");
                 }
                 if (rawFrameConsumer != null && rawResponseObserver != null) {
-                    throw new IllegalArgumentException("rawFrameConsumer and rawResponseObserver are mutually exclusive");
+                    throw new IllegalArgumentException(
+                            "rawFrameConsumer and rawResponseObserver are mutually exclusive");
                 }
                 RawResponseObserver observer = rawResponseObserver;
                 if (rawFrameConsumer != null) {
-                    observer = event -> rawFrameConsumer.accept(event.invocationRef(), event.conversationId(),
-                            event.body(), event.source().name());
+                    observer = event -> rawFrameConsumer.accept(
+                            event.invocationRef(), event.conversationId(), event.body(), event.source().name());
                 }
                 if (observer != null && rawResponseExecutor == null && rawFrameConsumer == null) {
-                    throw new IllegalArgumentException("rawResponseExecutor is required when observation is enabled");
+                    throw new IllegalArgumentException(
+                            "rawResponseExecutor is required when observation is enabled");
                 }
                 Executor observerExecutor = rawResponseExecutor != null ? rawResponseExecutor
                         : java.util.concurrent.ForkJoinPool.commonPool();
@@ -286,8 +303,8 @@ public final class AgentClients {
                     (approvalProvider != null) ? approvalProvider : Governance.ApprovalProvider.autoApprove();
             ExecutorService exec = (toolExecutor != null) ? toolExecutor : defaultExecutor();
             ObjectMapper mapper = new ObjectMapper();
-            return new DefaultAgentClient(
-                    resolvedTransport, reg, store, guard, approval, exec, mapper, credentialProvider);
+            return new DefaultAgentClient(resolvedTransport, reg, store, guard, approval, exec, mapper,
+                    credentialProvider);
         }
 
         private static ExecutorService defaultExecutor() {

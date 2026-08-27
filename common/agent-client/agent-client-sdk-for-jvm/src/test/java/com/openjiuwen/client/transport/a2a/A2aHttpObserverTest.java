@@ -20,10 +20,13 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Observer-related A2A transport tests.
+ *
+ * @since 2026-08-27
+ */
 class A2aHttpObserverTest {
     @Test
     void rawResponseObserverSeesCreateAndGetTask() throws Exception {
@@ -37,7 +40,7 @@ class A2aHttpObserverTest {
                     + "\"id\":\"task-observed\",\"contextId\":\"observed\","
                     + "\"status\":{\"state\":\"" + state + "\"}}}}");
         })) {
-            ExecutorService executor = Executors.newSingleThreadExecutor();
+            var executor = A2aHttpTestSupport.observerExecutor("a2a-observer-test");
             try {
                 try (AgentClient client = AgentClients.builder()
                         .endpointType(com.openjiuwen.client.api.EndpointType.RUNTIME)

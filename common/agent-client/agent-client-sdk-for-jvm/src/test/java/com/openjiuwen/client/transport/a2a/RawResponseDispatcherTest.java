@@ -16,6 +16,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * Raw response dispatcher tests.
+ *
+ * @since 2026-08-27
+ */
 class RawResponseDispatcherTest {
     @Test
     void acceptedEventMarksObservationsDroppedBeforeIt() {

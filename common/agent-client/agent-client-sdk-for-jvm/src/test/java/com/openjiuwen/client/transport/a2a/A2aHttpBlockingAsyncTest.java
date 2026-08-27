@@ -29,6 +29,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * Blocking and async A2A transport tests.
+ *
+ * @since 2026-08-27
+ */
 class A2aHttpBlockingAsyncTest {
     @Test
     void runtimeBlockingPollsGetTask() throws Exception {
@@ -49,9 +54,10 @@ class A2aHttpBlockingAsyncTest {
                 A2aHttpTestSupport.json(exchange, A2aHttpTestSupport.taskBody("task-working",
                         "strict-blocking", "TASK_STATE_COMPLETED"));
                 return;
+            } else {
+                A2aHttpTestSupport.json(exchange, A2aHttpTestSupport.taskBody("task-working",
+                        "strict-blocking", "TASK_STATE_COMPLETED"));
             }
-            A2aHttpTestSupport.json(exchange, A2aHttpTestSupport.taskBody("task-working",
-                    "strict-blocking", "TASK_STATE_COMPLETED"));
         })) {
             try (AgentClient client = AgentClients.builder()
                     .transport(new A2aHttpTransportProvider(server.baseUrl(), A2aHttpTestSupport.MAPPER,
@@ -91,9 +97,10 @@ class A2aHttpBlockingAsyncTest {
                 A2aHttpTestSupport.json(exchange, A2aHttpTestSupport.taskBody("task-working",
                         "strict-blocking", "TASK_STATE_COMPLETED"));
                 return;
+            } else {
+                A2aHttpTestSupport.json(exchange, A2aHttpTestSupport.taskBody("task-working",
+                        "strict-blocking", "TASK_STATE_COMPLETED"));
             }
-            A2aHttpTestSupport.json(exchange, A2aHttpTestSupport.taskBody("task-working",
-                    "strict-blocking", "TASK_STATE_COMPLETED"));
         })) {
             try (AgentClient client = AgentClients.builder()
                     .transport(new A2aHttpTransportProvider(server.baseUrl(), A2aHttpTestSupport.MAPPER,
@@ -131,15 +138,15 @@ class A2aHttpBlockingAsyncTest {
                 A2aHttpTestSupport.json(exchange, A2aHttpTestSupport.taskBody("task-working",
                         "strict-blocking-input", state));
                 return;
-            }
-            if ("GetTask".equals(method)) {
+            } else if ("GetTask".equals(method)) {
                 getCalls.incrementAndGet();
                 A2aHttpTestSupport.json(exchange, A2aHttpTestSupport.taskBody("task-working",
                         "strict-blocking-input", "TASK_STATE_COMPLETED"));
                 return;
+            } else {
+                A2aHttpTestSupport.json(exchange, A2aHttpTestSupport.taskBody("task-working",
+                        "strict-blocking-input", "TASK_STATE_COMPLETED"));
             }
-            A2aHttpTestSupport.json(exchange, A2aHttpTestSupport.taskBody("task-working",
-                    "strict-blocking-input", "TASK_STATE_COMPLETED"));
         })) {
             try (AgentClient client = AgentClients.builder()
                     .transport(new A2aHttpTransportProvider(server.baseUrl(), A2aHttpTestSupport.MAPPER,
@@ -188,9 +195,10 @@ class A2aHttpBlockingAsyncTest {
                 A2aHttpTestSupport.json(exchange, A2aHttpTestSupport.taskBody("task-working",
                         "async-create", "TASK_STATE_COMPLETED"));
                 return;
+            } else {
+                A2aHttpTestSupport.json(exchange, A2aHttpTestSupport.taskBody("task-working",
+                        "async-create", "TASK_STATE_WORKING"));
             }
-            A2aHttpTestSupport.json(exchange, A2aHttpTestSupport.taskBody("task-working",
-                    "async-create", "TASK_STATE_WORKING"));
         })) {
             try (AgentClient client = AgentClients.builder()
                     .transport(new A2aHttpTransportProvider(server.baseUrl(), A2aHttpTestSupport.MAPPER,
@@ -235,8 +243,9 @@ class A2aHttpBlockingAsyncTest {
                 getCalls.incrementAndGet();
                 A2aHttpTestSupport.json(exchange, A2aHttpTestSupport.runtimeTimeoutBody("TASK_STATE_WORKING"));
                 return;
+            } else {
+                A2aHttpTestSupport.json(exchange, A2aHttpTestSupport.runtimeTimeoutBody("TASK_STATE_WORKING"));
             }
-            A2aHttpTestSupport.json(exchange, A2aHttpTestSupport.runtimeTimeoutBody("TASK_STATE_WORKING"));
         })) {
             try (AgentClient client = AgentClients.builder()
                     .transport(new A2aHttpTransportProvider(server.baseUrl(), A2aHttpTestSupport.MAPPER,

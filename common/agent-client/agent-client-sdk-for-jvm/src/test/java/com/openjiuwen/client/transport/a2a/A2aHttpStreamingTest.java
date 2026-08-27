@@ -29,13 +29,16 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * Streaming and interrupt A2A transport tests.
+ *
+ * @since 2026-08-27
+ */
 class A2aHttpStreamingTest {
     @Test
     void streamingContinueInputUsesStreamingPath() throws Exception {
@@ -84,7 +87,7 @@ class A2aHttpStreamingTest {
         AtomicInteger streamingResumeCalls = new AtomicInteger();
         List<RawResponseEvent> observed = new CopyOnWriteArrayList<>();
         CountDownLatch received = new CountDownLatch(2);
-        ExecutorService executor = Executors.newSingleThreadExecutor();
+        var executor = A2aHttpTestSupport.observerExecutor("a2a-stream-observer-test");
         try (A2aHttpTestSupport.TestServer server = A2aHttpTestSupport.start((request, exchange) -> {
             String method = request.path("method").asText();
             String taskId = request.path("params").path("message").path("taskId").asText("");
@@ -159,8 +162,9 @@ class A2aHttpStreamingTest {
                 diagnosed.await(1, TimeUnit.SECONDS);
                 assertEquals(0, executions.get());
                 assertEquals(TaskState.INPUT_REQUIRED, snapshot.state());
-                assertTrue(events.stream().anyMatch(event -> event instanceof InvocationEvent.ProtocolDiagnostic diagnostic
-                        && ErrorCodes.INPUT_RESUME_TARGET_MISSING.equals(diagnostic.code())));
+                assertTrue(events.stream().anyMatch(event ->
+                        event instanceof InvocationEvent.ProtocolDiagnostic diagnostic
+                                && ErrorCodes.INPUT_RESUME_TARGET_MISSING.equals(diagnostic.code())));
             }
         }
     }
