@@ -105,4 +105,20 @@ class GraphLoopRailsGateTest {
                 .as("评估器为空不挂载——铁律⑰双向之 false 侧")
                 .isNull();
     }
+
+
+    // ═══ R4-1 处置：minimal() 语义锁定（mutation-RED——恒空评估器回退即红）═══
+
+    @Test
+    void minimalConfigMountsNoConvergenceRail() {
+        ReActAgent agent = newAgent();
+        GraphLoopRails.RegistrationSummary summary = GraphLoopRails.registerOnto(
+                agent, GraphLoopConfig.minimal((userInput, subGoal) -> "done"));
+        assertThat(summary.convergenceRail())
+                .as("minimal()=null 评估器走 null-gate——真不挂收敛"
+                        + "（R3-2 语义；恒空评估器回退会挂载 → 本断言 RED）")
+                .isNull();
+        assertThat(summary.vetoRail())
+                .as("minimal()=空契约走 isEmpty-gate——不挂 veto").isNull();
+    }
 }
