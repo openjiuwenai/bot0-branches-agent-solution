@@ -9,16 +9,13 @@ import com.openjiuwen.core.graph.pregel.GraphInterrupt;
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.interaction.InteractiveInput;
 import com.openjiuwen.core.session.interaction.WorkflowInteraction;
-import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.contract.SubWorkflowResolver;
 import com.openjiuwen.studio.dsl.contract.ToolRegistry;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
-import com.openjiuwen.studio.dsl.exec.WorkflowAssemblyBridge;
+import com.openjiuwen.studio.dsl.exec.StudioChildWorkflowRunner;
 import com.openjiuwen.studio.dsl.intentdetection.IntentDetectionEngine;
-import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.AssembledWorkflow;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
-import com.openjiuwen.studio.dsl.util.DeepCopies;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -250,7 +247,14 @@ public final class ComplexIntentDetectionEngine {
             NodeTypeRegistry reg =
                     nodeTypeRegistry != null ? nodeTypeRegistry : NodeTypeRegistry.createWithBuiltins();
             Map<String, Object> out =
-                    invokeChildLinear(child, childCtx, subInputs, session, context, reg);
+                    StudioChildWorkflowRunner.invoke(
+                            child,
+                            nodeId + "-child",
+                            reg,
+                            childCtx,
+                            subInputs,
+                            session,
+                            context);
             if (isHang(out)) {
                 state.setStatus(ComplexIntentState.USER_INTERACT);
             } else {
@@ -491,43 +495,5 @@ public final class ComplexIntentDetectionEngine {
 
     private static String str(Object v) {
         return v == null ? "" : String.valueOf(v);
-    }
-
-    /** Child sub-workflow: declaration-order invoke (nested handler owns graph scheduling). */
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> invokeChildLinear(
-            AssembledWorkflow child,
-            NodeBuildContext childCtx,
-            Map<String, Object> subInputs,
-            NodeSessionApi session,
-            ModelContext context,
-            NodeTypeRegistry registry) {
-        try {
-            Map<String, Object> current = DeepCopies.map(subInputs == null ? Map.of() : subInputs);
-            if (!current.containsKey(USER_FIELDS)) {
-                Map<String, Object> wrap = new LinkedHashMap<>();
-                wrap.put(USER_FIELDS, new LinkedHashMap<>(current));
-                current = wrap;
-            }
-            WorkflowAssemblyBridge bridge = new WorkflowAssemblyBridge(registry);
-            Map<String, ComponentExecutable> execs = bridge.mapExecutables(child, childCtx);
-            for (AssembledNode node : child.nodes()) {
-                ComponentExecutable exec = execs.get(node.id());
-                if (exec == null) {
-                    continue;
-                }
-                Object out = exec.invoke(current, session, context);
-                if (out instanceof Map<?, ?> m) {
-                    Map<String, Object> produced = new LinkedHashMap<>();
-                    m.forEach((k, v) -> produced.put(String.valueOf(k), v));
-                    current = DeepCopies.map(
-                            WorkflowAssemblyBridge.mergeLinearStep(
-                                    current, produced, childCtx.variableScope()));
-                }
-            }
-            return current;
-        } finally {
-            childCtx.variableScope().close();
-        }
     }
 }

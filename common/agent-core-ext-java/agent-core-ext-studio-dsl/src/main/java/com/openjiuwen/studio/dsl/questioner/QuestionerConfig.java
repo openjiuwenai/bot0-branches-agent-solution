@@ -198,7 +198,7 @@ public final class QuestionerConfig {
                     m.forEach((k, v) -> cast.put(String.valueOf(k), v));
                     out.add(QuestionerField.fromMap(cast));
                 } else if (item instanceof String s) {
-                    out.add(new QuestionerField(s, "", "string", s, true, null, false));
+                    out.add(new QuestionerField(s, "", "string", s, false, null, false));
                 }
             }
         }

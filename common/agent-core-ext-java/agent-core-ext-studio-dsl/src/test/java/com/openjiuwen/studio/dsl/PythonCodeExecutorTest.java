@@ -49,6 +49,35 @@ class PythonCodeExecutorTest {
     }
 
     @Test
+    void subprocess_preservesNewlinesAndBackslashesInInputs() {
+        assumeTrue(pythonAvailable, "python3 not available");
+        String script =
+                """
+                def main(args):
+                    return {'text': args.get('text'), 'path': args.get('path')}
+                """;
+        SubprocessPythonCodeExecutor exec = new SubprocessPythonCodeExecutor();
+        PythonExecResult result = exec.execute(new PythonExecRequest(
+                "esc1",
+                script,
+                Map.of("text", "line1\nline2", "path", "C:\\temp"),
+                10_000L,
+                "python3"));
+        assertThat(result.outputs()).containsEntry("text", "line1\nline2");
+        assertThat(result.outputs()).containsEntry("path", "C:\\temp");
+    }
+
+    @Test
+    void buildWrappedCode_usesPythonReprLiteral() {
+        String wrapped =
+                SubprocessPythonCodeExecutor.buildWrappedCode(
+                        "def main(args): return args",
+                        Map.of("k", "a\nb", "path", "C:\\temp"));
+        assertThat(wrapped).contains("'k': 'a\\nb'").contains("'path': 'C:\\\\temp'");
+        assertThat(wrapped).doesNotContain("json.loads");
+    }
+
+    @Test
     void subprocess_runsMainAndReturnsJson() {
         assumeTrue(pythonAvailable, "python3 not available");
         SubprocessPythonCodeExecutor exec = new SubprocessPythonCodeExecutor();

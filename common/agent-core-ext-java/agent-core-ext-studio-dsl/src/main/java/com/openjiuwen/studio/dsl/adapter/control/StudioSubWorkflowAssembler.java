@@ -30,10 +30,10 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * @since 2026-08-26
  */
-final class StudioSubWorkflowAssembler {
+public final class StudioSubWorkflowAssembler {
     private StudioSubWorkflowAssembler() {}
 
-    static AssembledSub assemble(
+    public static AssembledSub assemble(
             AssembledWorkflow child,
             String nestNodeId,
             NodeTypeRegistry registry,
@@ -86,7 +86,7 @@ final class StudioSubWorkflowAssembler {
         return new AssembledSub(workflow, new SubWorkflowComponent(workflow), ids, frame);
     }
 
-    record AssembledSub(
+    public record AssembledSub(
             Workflow workflow,
             SubWorkflowComponent component,
             List<String> nodeIds,

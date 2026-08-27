@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -188,7 +189,7 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
         return s.isEmpty() ? "x" : (s.length() > 64 ? s.substring(0, 64) : s);
     }
 
-    static String buildWrappedCode(String userCode, Map<String, Object> inputs) {
+    public static String buildWrappedCode(String userCode, Map<String, Object> inputs) {
         String inputsLiteral = toPythonLiteral(inputs == null ? Map.of() : inputs);
         return ""
                 + "import sys, json, io\n"
@@ -210,14 +211,75 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
                 + "print(json.dumps(result, default=str))\n";
     }
 
-    private static String toPythonLiteral(Map<String, Object> inputs) {
-        // Prefer JSON then python-compatible via json.loads in wrapper — embed as JSON string.
-        String json = toJson(inputs);
-        return "json.loads(" + quotePython(json) + ")";
+    /**
+     * Embed inputs as a Python literal (Python {@code repr(inputs)} in {@code build_wrapped_code}).
+     */
+    static String toPythonLiteral(Map<String, Object> inputs) {
+        return pythonRepr(inputs);
     }
 
-    private static String quotePython(String s) {
-        return "'''" + s.replace("'''", "\\'\\'\\'") + "'''";
+    static String pythonRepr(Object value) {
+        if (value == null) {
+            return "None";
+        }
+        if (value instanceof Boolean b) {
+            return b ? "True" : "False";
+        }
+        if (value instanceof Number) {
+            return value.toString();
+        }
+        if (value instanceof Map<?, ?> map) {
+            StringBuilder sb = new StringBuilder("{");
+            boolean first = true;
+            for (Map.Entry<?, ?> e : map.entrySet()) {
+                if (!first) {
+                    sb.append(", ");
+                }
+                first = false;
+                sb.append(pythonRepr(String.valueOf(e.getKey())))
+                        .append(": ")
+                        .append(pythonRepr(e.getValue()));
+            }
+            sb.append('}');
+            return sb.toString();
+        }
+        if (value instanceof List<?> list) {
+            StringBuilder sb = new StringBuilder("[");
+            boolean first = true;
+            for (Object item : list) {
+                if (!first) {
+                    sb.append(", ");
+                }
+                first = false;
+                sb.append(pythonRepr(item));
+            }
+            sb.append(']');
+            return sb.toString();
+        }
+        return pythonStringRepr(String.valueOf(value));
+    }
+
+    private static String pythonStringRepr(String s) {
+        StringBuilder sb = new StringBuilder("'");
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '\\' -> sb.append("\\\\");
+                case '\'' -> sb.append("\\'");
+                case '\n' -> sb.append("\\n");
+                case '\r' -> sb.append("\\r");
+                case '\t' -> sb.append("\\t");
+                default -> {
+                    if (c < 0x20) {
+                        sb.append(String.format("\\x%02x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+                }
+            }
+        }
+        sb.append('\'');
+        return sb.toString();
     }
 
     private static String toJson(Map<String, Object> map) {

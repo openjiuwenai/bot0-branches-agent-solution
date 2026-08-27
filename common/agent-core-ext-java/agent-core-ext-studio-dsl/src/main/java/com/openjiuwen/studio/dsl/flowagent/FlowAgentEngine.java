@@ -203,6 +203,8 @@ public final class FlowAgentEngine {
         createReactAgent();
         tools.addAll(FlowAgentToolLoader.loadToolsFromPlugins(config.plugins(), studioToolRegistry));
         registerTools();
+        // max_iteration = tool-call rounds; reserve one model call for the final answer.
+        reactAgent.registerRail(new ToolCallLimitRail(config.maxIteration()));
         this.initialized = true;
     }
 
@@ -266,7 +268,7 @@ public final class FlowAgentEngine {
                 .modelProvider(str(modelCfg.get("model_provider"), str(modelCfg.get("modelProvider"), "openai")))
                 .apiKey(str(modelCfg.get("api_key"), str(modelCfg.get("apiKey"), "")))
                 .apiBase(str(modelCfg.get("api_base"), str(modelCfg.get("apiBase"), "")))
-                .maxIterations(config.maxIteration())
+                .maxIterations(config.maxIteration() + 1)
                 .promptTemplate(promptTemplate)
                 .modelClientConfig(modelClientConfig)
                 .modelConfigObj(modelRequestConfig)

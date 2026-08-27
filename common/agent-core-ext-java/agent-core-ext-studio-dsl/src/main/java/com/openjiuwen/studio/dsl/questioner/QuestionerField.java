@@ -59,7 +59,7 @@ public final class QuestionerField {
         String desc = str(m.get("description"));
         String type = str(m.getOrDefault("type", "string"));
         String cn = str(m.getOrDefault("cnFieldName", name));
-        boolean required = !(m.get("required") instanceof Boolean b) || b;
+        boolean required = m.get("required") instanceof Boolean b && b;
         Object def = m.get("defaultValue");
         boolean reflection = m.get("reflection") instanceof Boolean rb && rb;
         return new QuestionerField(name, desc, type, cn, required, def, reflection);

@@ -353,7 +353,7 @@ public final class QuestionerEngine {
 
     private Map<String, Object> extractFields(
             String query, Map<String, Object> userFields, QuestionerState state, NodeSessionApi session) {
-        if (!config.mockExtractedFields().isEmpty()) {
+        if (config.rawConfigs().containsKey("mockExtractedFields")) {
             return new LinkedHashMap<>(config.mockExtractedFields());
         }
         if (config.hasModelWiring() || modelInvoker != null) {
@@ -362,31 +362,11 @@ public final class QuestionerEngine {
             List<Map<String, String>> history = chatHistoryFrom(userFields, query);
             return extractor.extract(query, history, state, session);
         }
-        String trimmed = query == null ? "" : query.trim();
-        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-            try {
-                Map<String, Object> parsed = QuestionerLlmExtractor.parseJsonObject(trimmed);
-                if (!parsed.isEmpty()) {
-                    return filterKnown(parsed);
-                }
-            } catch (Exception ignored) {
-                // fall through
-            }
-        }
-        List<QuestionerField> required =
-                config.keyFields().stream().filter(QuestionerField::required).toList();
-        if (required.size() == 1 && !trimmed.isEmpty()) {
-            Map<String, Object> one = new LinkedHashMap<>();
-            one.put(required.get(0).fieldName(), convertType(trimmed, required.get(0).type()));
-            return one;
-        }
-        Map<String, Object> out = new LinkedHashMap<>();
-        for (QuestionerField f : config.keyFields()) {
-            if (userFields.containsKey(f.fieldName())) {
-                out.put(f.fieldName(), convertType(userFields.get(f.fieldName()), f.type()));
-            }
-        }
-        return out;
+        throw new NodeExecutionException(
+                nodeId,
+                "jiuwen.questioner",
+                NodeCauseCode.NODE_INVOKE_FAILED,
+                "failed to invoke llm for extraction: model wiring is required");
     }
 
     private static List<Map<String, String>> chatHistoryFrom(Map<String, Object> userFields, String query) {

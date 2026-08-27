@@ -332,7 +332,8 @@ class QuestionerLlmAndTraceTest {
                                                 "enum_legality_validate",
                                                 "action_extra_args",
                                                 Map.of("city", List.of("上海", "北京")))))));
-        QuestionerEngine engine = new QuestionerEngine("q1", cfg);
+        QuestionerLlmExtractor.ModelInvoker invoker = messages -> "{\"city\": \"\"}";
+        QuestionerEngine engine = new QuestionerEngine("q1", cfg, invoker);
         Map<String, Object> hang = engine.invoke(Map.of("query", "hello"), null);
         assertThat(hang.get("STATUS")).isEqualTo("INPUT_REQUIRED");
         assertThat(String.valueOf(hang.get("question"))).contains("上海");

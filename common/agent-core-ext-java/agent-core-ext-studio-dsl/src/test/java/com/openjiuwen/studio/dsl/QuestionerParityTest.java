@@ -13,6 +13,7 @@ import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.questioner.QuestionerConfig;
 import com.openjiuwen.studio.dsl.questioner.QuestionerEngine;
+import com.openjiuwen.studio.dsl.questioner.QuestionerField;
 import com.openjiuwen.studio.dsl.questioner.QuestionerState;
 import com.openjiuwen.studio.dsl.rails.RailsRegistry;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
@@ -146,6 +147,25 @@ class QuestionerParityTest {
         Map<String, Object> out = engine.invoke(Map.of("query", "我在上海出差"), null);
         assertThat(out.get("city")).isEqualTo("上海");
         assertThat(out.get("questionerState")).isEqualTo("answered");
+    }
+
+    @Test
+    void questionerField_requiredDefaultsFalseWhenOmitted() {
+        QuestionerField field = QuestionerField.fromMap(Map.of("fieldName", "city", "type", "string"));
+        assertThat(field.required()).isFalse();
+    }
+
+    @Test
+    void extractWithoutModel_throws() {
+        QuestionerConfig cfg = QuestionerConfig.fromNodeConfigs(Map.of(
+                "extractFieldsFromResponse",
+                true,
+                "fieldNames",
+                List.of(Map.of("fieldName", "city", "type", "string", "required", true))));
+        QuestionerEngine engine = new QuestionerEngine("q1", cfg);
+        assertThatThrownBy(() -> engine.invoke(Map.of("query", "上海"), null))
+                .isInstanceOf(NodeExecutionException.class)
+                .hasMessageContaining("failed to invoke llm for extraction");
     }
 
     @Test
