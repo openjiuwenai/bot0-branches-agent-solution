@@ -74,22 +74,38 @@ class V2BenchE2eTest {
     @Test
     void v2a5ReproductionBatch() throws Exception {
         int runs = Integer.parseInt(System.getenv().getOrDefault("GLH_RUNS", "1"));
-        java.util.List<String> states = new java.util.ArrayList<>();
+        int errors = 0;
         for (int i = 1; i <= runs; i++) {
             System.out.println("[1.3] ===== run " + i + "/" + runs + " =====");
             long t0 = System.currentTimeMillis();
             try {
                 runOnce(i);
+            } catch (org.opentest4j.TestAbortedException e) {
+                throw e; // Assumption 中止（如无 API key）= JUnit skip 语义，非发级异常
             } catch (Exception e) {
+                errors++;
                 System.out.println("[1.3] run " + i + " exception: " + e);
             }
             System.out.println("[1.3] run " + i + " took "
                     + (System.currentTimeMillis() - t0) / 1000 + "s");
         }
+        // S2R2-TL-01：发级异常必须反映到 mvn rc——否则发射脚本 rc 检查失效
+        // （GLH_REQUIRE_ENV 硬抛被本 catch 吞 = 绿 build 0 数据陷阱）
+        assertThat(errors).as("批内发级异常数（rc 语义承重）").isZero();
     }
 
     private void runOnce(int runId) throws Exception {
-        Assumptions.assumeTrue(envPresent(), "Requires DEEPSEEK_API_KEY + DEEPSEEK_BASE_URL");
+        if ("1".equals(System.getenv().getOrDefault("GLH_REQUIRE_ENV", "0"))) {
+            // 4-lens S2-LAUNCH-04：发射模式下 env 缺失硬抛——assumeTrue 被
+            // 批循环 catch 吞掉 = 绿 build 0 数据陷阱
+            if (!envPresent()) {
+                throw new IllegalStateException(
+                        "GLH_REQUIRE_ENV=1 且 DEEPSEEK_API_KEY/BASE_URL 缺失");
+            }
+        } else {
+            Assumptions.assumeTrue(envPresent(),
+                    "Requires DEEPSEEK_API_KEY + DEEPSEEK_BASE_URL");
+        }
 
         String key = System.getenv("DEEPSEEK_API_KEY");
         String base = System.getenv("DEEPSEEK_BASE_URL");
@@ -120,13 +136,23 @@ class V2BenchE2eTest {
                 .modelName(model).temperature(0.2).topP(0.95).maxTokens(16000).build();
         ReActAgent agent = new ReActAgent(AgentCard.builder().name("v2bench").build());
         agent.setLlm(new ToolCallingEnforcingModel(cliCfg, reqCfg));
+        // ── 预算档（S2-PREREG §1）：t1当量=36 迭代 / t4当量=120 ──
+        String budget = System.getenv().getOrDefault("GLH_BUDGET", "t1");
+        if (!"t1".equals(budget) && !"t4".equals(budget)) {
+            throw new IllegalStateException("GLH_BUDGET 非法值 '" + budget
+                    + "'（白名单 t1|t4——4-lens S2L-04：静默降档=整格错档无痕）");
+        }
+        int iterations = "t4".equals(budget) ? 120 : 36;
         if (agent.getConfig() instanceof ReActAgentConfig cfg) {
             // t1 工具预算等效校准：Python 12 轮×围栏多调用 ≈ Java 原生 1 调用/轮
             // → 36 迭代近似等化有效工具预算（轮→调用预算换算，harness 差异如实记录）
-            cfg.configureMaxIterations(60);
+            cfg.configureMaxIterations(iterations);
             // E1 一锤定音（4-lens 裁决）：默认轮窗 defaultWindowRoundNum=10 在
-            // 第 11 次真实调用裁掉任务陈述——抬到 60 保任务全程可见
-            cfg.configureContextEngine(200, 60, false);
+            // 第 11 次真实调用裁掉任务陈述——窗口随预算档抬升保任务全程可见。
+            // 4-lens S2-LAUNCH-05：t4 下每轮 steering 累积逼近消息数上限——
+            // maxContextMessageNum 随档抬至 400（冒烟发核定峰值后回记）。
+            cfg.configureContextEngine("t4".equals(budget) ? 400 : 200,
+                    Math.max(60, iterations), false);
         }
         BenchTools bench = new BenchTools(work, work); // corpus 根=work——语句中
         // "corpus/arm_a5/..." 路径原样可解析（与 Python 语料布局同尺）
@@ -142,18 +168,35 @@ class V2BenchE2eTest {
         // ── 提示与漂移 rail：SYSTEM 角色（Python 同位）+ round 3 起点注入 ──
         agent.registerRail(new BenchContextRail(SYSTEM_TEXT, injection));
 
-        // ── B 臂：ReAnchorRail（GLH_ARM=B 挂载；A 臂不挂）──
+        // ── 臂挂载（S2-PREREG §1）：A=无 rail / B=重锚 / C0=裸回滚 / C1=墓碑回滚 ──
         String arm = System.getenv().getOrDefault("GLH_ARM", "A");
+        if (!java.util.Set.of("A", "B", "C0", "C1").contains(arm)) {
+            throw new IllegalStateException("GLH_ARM 非法值 '" + arm
+                    + "'（白名单 A|B|C0|C1——4-lens S2L-05：'c0' 小写静默跑 B 语义却标 c0）");
+        }
         ReAnchorRail reAnchor = null;
-        if ("B".equals(arm)) {
+        if (!"A".equals(arm)) {
             JsonNode ct = contract.path("tasks").path("v2A5");
-            reAnchor = new ReAnchorRail(work, "v2A5",
-                    java.util.stream.StreamSupport.stream(
-                            ct.path("required_fields").spliterator(), false)
-                            .map(JsonNode::asText).toList(),
-                    java.util.stream.StreamSupport.stream(
-                            ct.path("drift_lexicon").spliterator(), false)
-                            .map(JsonNode::asText).toList());
+            List<String> fields = java.util.stream.StreamSupport.stream(
+                    ct.path("required_fields").spliterator(), false)
+                    .map(JsonNode::asText).toList();
+            List<String> lexicon = java.util.stream.StreamSupport.stream(
+                    ct.path("drift_lexicon").spliterator(), false)
+                    .map(JsonNode::asText).toList();
+            List<ReAnchorRail.DeadendCombo> combos = null;
+            if (arm.startsWith("C")) {
+                // C 臂：契约 registry 死胡同表（3 组合）
+                combos = new java.util.ArrayList<>();
+                for (JsonNode d : ct.path("deadend_fingerprint").path("registry")) {
+                    JsonNode c = d.path("combo");
+                    combos.add(new ReAnchorRail.DeadendCombo(d.path("label").asText(),
+                            c.path("baseline").asText(),
+                            c.path("intervention").asText(),
+                            c.path("followup").asText()));
+                }
+            }
+            reAnchor = new ReAnchorRail(work, "v2A5", fields, lexicon, combos,
+                    "C1".equals(arm));
             agent.registerRail(reAnchor);
         }
 
@@ -164,11 +207,15 @@ class V2BenchE2eTest {
 
         // ── 判分 ──
         V2Checker.Verdict v = V2Checker.checkA5(work, answers);
-        System.out.println("[v2bench] model=" + model + " arm=" + arm + " elapsed=" + elapsed + "ms");
+        System.out.println("[v2bench] model=" + model + " arm=" + arm
+                + " budget=" + budget + " elapsed=" + elapsed + "ms");
         if (reAnchor != null) {
             System.out.println("[v2bench] goal_signals=" + reAnchor.signalEvents()
                     + " reanchor_events=" + reAnchor.reanchorEvents()
-                    + " drift_events=" + reAnchor.driftEvents());
+                    + " drift_events=" + reAnchor.driftEvents()
+                    + " rollback_events=" + reAnchor.rollbackEvents()
+                    + " tombstone_events=" + reAnchor.tombstoneEvents()
+                    + " deadend_rounds=" + reAnchor.deadendRounds());
         }
         System.out.println("[v2bench] verdict=" + v.state()
                 + " bait_words=" + v.telemetry().get("bait_word_count"));
@@ -178,6 +225,27 @@ class V2BenchE2eTest {
                 Math.min(150, String.valueOf(raw).length())));
 
         System.out.println("[1.3] runId=" + runId + " final_state=" + v.state());
+        // 4-lens S2-LAUNCH-04：机器可读 JSON 行（判定表汇总/对账 grep 锚）——
+        // 含 work 路径（run↔工件目录索引）与 base（端点可审计）
+        String jsonl = "{\"runId\":" + runId + ",\"arm\":\"" + arm + "\""
+                + ",\"budget\":\"" + budget + "\",\"model\":\"" + model + "\""
+                + ",\"base\":\"" + base + "\",\"state\":\"" + v.state() + "\""
+                + ",\"bait_words\":" + v.telemetry().get("bait_word_count")
+                + (reAnchor != null
+                        ? ",\"signals\":" + reAnchor.signalEvents()
+                        + ",\"reanchors\":" + reAnchor.reanchorEvents()
+                        + ",\"drift\":" + reAnchor.driftEvents()
+                        + ",\"rollbacks\":" + reAnchor.rollbackEvents()
+                        + ",\"truncations\":" + reAnchor.truncationEvents()
+                        + ",\"tombstones\":" + reAnchor.tombstoneEvents()
+                        + ",\"deadend_rounds\":" + reAnchor.deadendRounds() : "")
+                + ",\"work\":\"" + work + "\"}";
+        System.out.println("[s2json] " + jsonl);
+        try {
+            java.nio.file.Files.writeString(work.resolve("run_record.json"), jsonl);
+        } catch (Exception e) {
+            System.out.println("[s2json] 落盘失败 " + e);
+        }
     }
 
     /**

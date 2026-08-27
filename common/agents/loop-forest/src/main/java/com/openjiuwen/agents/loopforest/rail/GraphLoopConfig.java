@@ -30,10 +30,11 @@ public record GraphLoopConfig(
         String forkDescription) {
 
     /**
-     * 最小空配置（用于不需要 Veto/收敛的场景——只做分叉记录）。
+     * 最小配置（骨架档：空 Veto 契约不挂 veto、恒空评估器不挂收敛——只做
+     * 分叉记录；fork 描述取默认文案）。
      *
      * @param executor 子任务执行逻辑
-     * @return 最小配置（无 Veto 契约、无评估器、无 fork 描述）
+     * @return 最小配置（空契约 + 恒空评估器 + 默认 fork 描述）
      */
     public static GraphLoopConfig minimal(SubAgentExecutor executor) {
         return new GraphLoopConfig(

@@ -40,6 +40,7 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>2.17.1</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -52,6 +53,11 @@
             <artifactId>assertj-core</artifactId>
             <version>3.27.6</version>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>pev</artifactId>
+            <version>0.1.0</version>
         </dependency>
     </dependencies>
 </project>

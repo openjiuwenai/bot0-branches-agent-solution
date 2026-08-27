@@ -169,6 +169,17 @@ public final class TraceForest {
     }
 
     /**
+     * 全部根分支（pathToRoot 为空者——多根场景逐个返回；ForkOrchestrator 单根）。
+     *
+     * @return 根分支列表（无根返回空）
+     */
+    public List<BranchedTrace> roots() {
+        return branches.values().stream()
+                .filter(bt -> bt.address().isRoot())
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    /**
      * 森林中的分支总数。
      *
      * @return 分支数

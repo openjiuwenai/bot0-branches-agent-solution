@@ -15,7 +15,6 @@ import com.openjiuwen.agents.loopforest.verification.ConvergenceEvaluator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -93,10 +92,11 @@ public final class ForkOrchestrator {
      * @return 包装后的 executor
      */
     public SubAgentExecutor forkingFromRoot(SubAgentExecutor delegate) {
-        // 根分支需要先存在
-        String rootId = forest.isEmpty() ? null : findRootId();
+        // 根分支需要先存在（R1-F6：字段追踪替代死守卫——findRootId 复用既有根）
+        String rootId = findRootId();
         if (rootId == null) {
             rootId = forest.addRoot(resultTrace("root", "root")).branchId();
+            this.rootBranchId = rootId;
         }
         String finalRootId = rootId;
         return forking(finalRootId, 0, delegate);
@@ -139,10 +139,11 @@ public final class ForkOrchestrator {
      *
      * @return 第一个根分支的 ID；无根返回 null
      */
+    /** 根分支 ID（addRoot 时记账——R1-F6：替代两臂皆 null 的死守卫）。 */
+    private String rootBranchId;
+
     private String findRootId() {
-        return forest.pathToRoot(forest.nextBranchId()).isEmpty()
-                ? null
-                : null; // 简化：根分支由宿主管理，此处不做深度搜索
+        return rootBranchId; // null=尚未建根（首次调用 forkingFromRoot 时建）
     }
 
     /**

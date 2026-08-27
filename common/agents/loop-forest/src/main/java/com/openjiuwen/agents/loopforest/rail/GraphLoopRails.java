@@ -64,7 +64,7 @@ public final class GraphLoopRails {
         ForkOrchestrator orchestrator = new ForkOrchestrator(forest);
         SubAgentTool forkTool = SubAgentDispatcher.registerOnto(
                 agent,
-                "fork_subtask",
+                BudgetRail.FORK_TOOL_NAME,
                 config.forkDescription(),
                 orchestrator.forkingFromRoot(config.subAgentExecutor()));
 

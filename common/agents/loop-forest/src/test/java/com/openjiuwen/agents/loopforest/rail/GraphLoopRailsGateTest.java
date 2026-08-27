@@ -67,4 +67,42 @@ class GraphLoopRailsGateTest {
 
         assertThat(summary.vetoRail()).isNull();
     }
+
+    // ═══ R1-F6(bearing) 处置：convergence gate 双向——原只证 null 侧 ═══
+
+    private static GraphLoopConfig configWithEvaluator(
+            com.openjiuwen.agents.loopforest.verification.ConvergenceEvaluator ev) {
+        SubAgentExecutor noop = (userInput, subGoal) -> "done";
+        return new GraphLoopConfig(
+                new VetoContract(Map.of("write_report", Set.of("findings"))),
+                "rejection", ev, noop, "Fork a sub-task");
+    }
+
+    @Test
+    void nonNullEvaluatorMountsConvergenceRail() {
+        ReActAgent agent = newAgent();
+        var ev = new com.openjiuwen.agents.loopforest.verification
+                .ConvergenceEvaluator() {
+            @Override
+            public java.util.Optional<Double> score(String branchId, String result) {
+                return java.util.Optional.empty();
+            }
+        };
+        GraphLoopRails.RegistrationSummary summary = GraphLoopRails.registerOnto(agent,
+                configWithEvaluator(ev));
+        assertThat(summary.convergenceRail())
+                .as("评估器非空必须挂载 ConvergenceRail——铁律⑰双向之 true 侧")
+                .isNotNull();
+        assertThat(summary.vetoRail()).as("契约同时生效（两 gate 独立）").isNotNull();
+    }
+
+    @Test
+    void nullEvaluatorMountsNoConvergenceRail() {
+        ReActAgent agent = newAgent();
+        GraphLoopRails.RegistrationSummary summary = GraphLoopRails.registerOnto(agent,
+                configWithEvaluator(null));
+        assertThat(summary.convergenceRail())
+                .as("评估器为空不挂载——铁律⑰双向之 false 侧")
+                .isNull();
+    }
 }

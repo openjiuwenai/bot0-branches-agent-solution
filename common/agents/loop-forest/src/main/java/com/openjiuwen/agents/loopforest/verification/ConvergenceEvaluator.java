@@ -13,8 +13,8 @@ import java.util.Optional;
  * <p>实现方（宿主）提供具体的评估逻辑。零 LLM——收敛评估必须是确定性信号
  * （GLH-1 禁区 2：模型弱时 LLM-judge 更弱）。
  *
- * <p>与 {@link CriteriaVerifier} 的关系：CriteriaVerifier 判定单分支的
- * pass/fail；本接口在多个 pass 分支中选最优（或判定全部 fail）。
+ * <p>分支级 pass/fail 判定属宿主 criteria 体系；本接口在多个分支中
+ * 选最优（或判定全部不合格）。
  *
  * @since 2026-08
  */

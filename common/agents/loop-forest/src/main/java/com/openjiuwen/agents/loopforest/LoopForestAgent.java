@@ -25,7 +25,7 @@ import com.openjiuwen.core.runner.Runner;
 import java.util.Map;
 
 /**
- * 循环森林统一入口——组合 {@link ReActAgent} 与全套外置纪律（一个 build() 得到完整能力）。
+ * 循环森林统一入口——组合 {@link ReActAgent} 与全套外置纪律（build() 得到骨架装配（Veto/Convergence/Budget 按参数逐层激活））。
  *
  * <p>内置的"踩过的坑"（bench 调试实证，新宿主不再踩）：
  * <ul>
@@ -45,7 +45,7 @@ import java.util.Map;
  * </pre>
  *
  * <p>机器配重（1.3 复现实验结论）：弱地板模型（如 qwen3.7-flash）吃不到
- * 重锚收益——按模型档位选 {@link GoalMachine} 档（NONE 适合地板模型）。
+ * 重锚收益——机器配重按模型档位（接线 deferred，见 S2-OUTCOME）。
  *
  * @since 2026-08
  */
@@ -72,10 +72,14 @@ public final class LoopForestAgent {
                 .maxTokens(b.maxTokens)
                 .build();
         host.setLlm(new com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel(cli, req));
-        if (host.getConfig() instanceof ReActAgentConfig cfg) {
-            cfg.configureMaxIterations(b.maxIterations);
-            cfg.configureContextEngine(200, 60, false);
+        if (!(host.getConfig() instanceof ReActAgentConfig cfg)) {
+            // R1-F8：静默跳过=踩坑三件失效无痕——fail-loud
+            throw new IllegalStateException(
+                    "ReActAgent 默认配置应为 ReActAgentConfig，实际 "
+                    + host.getConfig().getClass().getName());
         }
+        cfg.configureMaxIterations(b.maxIterations);
+        cfg.configureContextEngine(200, 60, false);
         // steering 治本必挂（String 分支缺陷 #1）
         host.registerRail(new SteeringProvisionRail());
 
@@ -93,7 +97,11 @@ public final class LoopForestAgent {
         // graph 四层 + 机器配重
         SubAgentExecutor executor = b.executor != null ? b.executor : (in, goal) -> "sub-task not configured";
         VetoContract contract = b.contract != null ? b.contract : new VetoContract(Map.of());
-        String rejection = b.rejectionMessage != null ? b.rejectionMessage : "write rejected";
+        // R1-F9：fallback 从本模块 prompts 真源加载（原硬编码 "write rejected"
+        // 绕过零提及纪律的外置治理）
+        String rejection = b.rejectionMessage != null ? b.rejectionMessage
+                : loadResourceOrDefault("/prompts/veto-rejection.txt",
+                        "write rejected: artifact fields outside the task signature");
         this.graph = GraphLoopRails.registerOnto(host, new GraphLoopConfig(
                 contract, rejection, b.evaluator, executor,
                 "Fork a sub-task to explore a different direction"));
@@ -134,8 +142,6 @@ public final class LoopForestAgent {
         return new Builder();
     }
 
-    /** 目标机器配重档位（1.3 复现：地板模型选 NONE）。 */
-    public enum GoalMachine { NONE, REANCHOR }
 
     /** Builder——必填 apiKey/apiBase/model，其余有默认。 */
     public static final class Builder {
@@ -190,6 +196,15 @@ public final class LoopForestAgent {
                 throw new IllegalStateException("apiKey/apiBase/model 必填");
             }
             return new LoopForestAgent(this);
+        }
+    }
+
+    private static String loadResourceOrDefault(String path, String fallback) {
+        try (var in = LoopForestAgent.class.getResourceAsStream(path)) {
+            return in == null ? fallback
+                    : new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim();
+        } catch (Exception e) {
+            return fallback;
         }
     }
 }

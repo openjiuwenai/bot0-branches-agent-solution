@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 单分支 loop 只需 token 上限；graph 多分支需要**共享资源管理**。
  *
  * <p><b>Hook 位置</b>：beforeToolCall 拦截 fork_subtask（束宽/总次数），
- * afterInvoke 检查 token 池（预算耗尽 → forceFinish）。
+ * token 池维度 deferred（recordTokens 保留 API 待接线——4-lens R1-F4 诚实化）。
  *
  * <p><b>Honest boundary</b>：
  * <ul>
