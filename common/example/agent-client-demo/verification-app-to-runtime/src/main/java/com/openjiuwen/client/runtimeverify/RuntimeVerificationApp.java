@@ -278,6 +278,13 @@ public final class RuntimeVerificationApp {
 
     /**
      * 验证同一 Client、同一 conversationId 下多个独立 invocation/task。
+     *
+     * @param run 运行记录
+     * @param client Client 实例
+     * @param conversationId 会话标识
+     * @throws InterruptedException 等待结果时被中断
+     * @throws java.util.concurrent.ExecutionException 等待结果执行失败
+     * @throws java.util.concurrent.TimeoutException 等待结果超时
      */
     private void executeMultiInvocation(RunRecord run, AgentClient client, String conversationId)
             throws InterruptedException, java.util.concurrent.ExecutionException,
