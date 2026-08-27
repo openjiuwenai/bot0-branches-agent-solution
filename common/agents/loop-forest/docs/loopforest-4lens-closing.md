@@ -4,7 +4,7 @@
 
 - **审查对象**：`common/agents/loop-forest`（分支 `feat/loop-forest`）
 - **HEAD**：`f01425f0`；fork（gitcode `yaojun97/agent-solution`）的 `feat/loop-forest` 已包含该提交（`git branch -r --contains f01425f0` 实证）
-- **对照基线**：`70ffe929`（!381 合入点）——七 commit 链，132 个文件**全部**位于本模块目录，+11189 行、0 删除（纯新增，零修改任何既有模块）
+- **对照基线**：`70ffe929`（!381 合入点）——七 commit 链，132 个文件**全部**位于本模块目录，+11189 行、0 删除（本报告自身 commit 后为 133 文件/+11309）（纯新增，零修改任何既有模块）
 - **轮次角色**：轮⑥ = 重计后首个干净轮（1/3）；轮⑦ = 本轮（稳定态复扫 + 本报告），干净则 2/3；轮⑧ = 收口终审（3/3）
 - **报告日期**：2026-08-27
 
@@ -16,7 +16,7 @@
 |---|---|---|
 | 测试 | **105 run / 0 failures / 0 errors / 5 skipped**，BUILD SUCCESS | 轮⑦全量复跑 `mvn test`（surefire 汇总：`Tests run: 105, Failures: 0, Errors: 0, Skipped: 5`） |
 | skip 语义 | 5 个 skip = 5 个 env-gated 真 LLM e2e（DeepResearch / VetoSchema / V2Bench / MinimalWrite / AgentSmoke 各 1 例）——诚实边界而非缺陷 | surefire 逐类明细：20 个测试类中 5 个 e2e 类各 1 例 skip |
-| 冒烟 | 四行度量**两次复现逐字一致**（入库基线 20260827-122036 vs 轮⑦复跑 20260827-231008） | `docs/smoke-baseline-20260827.log` + `logs/smoke-20260827-231008.log` |
+| 冒烟 | 四行断言度量字段**两次复现一致**（elapsed_ms 为时延观测非断言值，两次运行存在差异）（入库基线 20260827-122036 vs 轮⑦复跑 20260827-231008） | `docs/smoke-baseline-20260827.log` + `logs/smoke-20260827-231008.log` |
 | 变更面 | 7 commit / 132 文件 / +11189 / −0，全部位于 `common/agents/loop-forest/` | `git diff --shortstat 70ffe929..f01425f0` |
 | 处置台账 | 累计 35 项已处置；余 6 项 MINOR 全部转收口台账，轮⑦零恶化 | 见 §4 / §5 |
 | 结构 | 五个主包（verification / observability / rail / fork / search）+ 统一入口 `LoopForestAgent` + bench / e2e 测试基建；20 个测试类 | 源码树 |
@@ -91,7 +91,7 @@
 **结构性边界（诚实标注，不装已解决）**：
 
 - 5 个 skip = env-gated 真 LLM e2e：无 env 不跑、不假装跑过。
-- TraceForest 并发边界：仅限单写者/串行宿主循环；**并发派发 deferred**（落地前需 childrenOf 加 monitor 迭代、协作方补原子性；并发压测已实证风险：3 秒内 5355 次 ConcurrentModificationException，记录于 javadoc）。
+- TraceForest 并发边界：仅限单写者/串行宿主循环；**并发派发 deferred**（落地前需 childrenOf 加 monitor 迭代、协作方补原子性；并发风险已定性识别（TraceForest.java:28 串行边界声明、GraphLoopRails.java:34）；量化压测数字（3s/5355 次 CME）来自 4-lens 轮③敌意镜头的实跑探针，证据记录于轮③处置 commit ad7b3a38 的 message——模块内 javadoc 仅含定性声明，量化数字未入库不作可复现宣称）。
 - BudgetRail token 池维度 **deferred**：`recordTokens` API 保留待接线（`BudgetRail.java:30/145`，虚构钩子已诚实化）。
 - bench 已知副作用（两臂行为一致、非迁移引入）：goal_signal 字段清单的 dotted-path 被模型照抄为顶层键名→扁平 JSON，判分器期望嵌套结构→CA1.1 误形态 GAP（内容本身几乎全对）；修复方向已记录在 59d1a78b。
 
@@ -102,13 +102,13 @@
 3. recordTokens 接线 deferred（锚点 `BudgetRail.java:30/145`）
 4. bench 语料 `evidence-pool.log` 相关治理（v2 corpus sdx_a3 fixture）
 5. 并发派发 deferred（锚点 `TraceForest.java:28`）
-6. MR body 数字滞后——轮⑧收口时 PATCH 对齐（轮② PATCH 后又有轮③④⑤增量未同步：文件 131→132、测试 104→105）
+6. MR body 数字滞后——轮⑧收口时 PATCH 对齐（轮② PATCH 后又有文件 131→132 增量实发轮②自身 commit 4bc28ade（smoke 基线 log 入库）、测试 104→105）
 
 ## §6 用户三令核对与轮⑧终审预告
 
 | 令 | 内容 | 核对结果 |
 |---|---|---|
-| 令一 | 连续 3 轮干净才收口（最短路径） | 轮⑥ = 1/3；轮⑦ = 2/3（本轮四项复现全过：105/0/5 全绿、冒烟四行逐字复现、fork 含 `f01425f0`、台账零恶化）；轮⑧ = 3/3 终审 |
+| 令一 | 连续 3 轮干净才收口（最短路径） | 轮⑥ = 1/3；轮⑦ = 2/3（本轮四项复现全过：105/0/5 全绿、冒烟四行断言度量字段复现一致（elapsed_ms 除外）、fork 含 `f01425f0`、台账零恶化）；轮⑧ = 3/3 终审 |
 | 令二 | 诚实计数——处置必须真落地，假处置作废重计 | 轮⑤三镜头裁定轮④ 1/3 作废；`f01425f0` 真修（assert 双验）后重计；轮⑥⑦稳定态、台账六 MINOR 零恶化 |
 | 令三 | MR 纪律——对外描述与代码事实一致（中文、随收口 PATCH、数字对齐 HEAD） | R2-F2 已 PATCH 一次（API+Bearer、中文）；遗留"数字滞后"1 项 MINOR 排入轮⑧收口 PATCH，对齐基准以本报告 §1 为准（132 文件 / +11189 / 105 用例） |
 
