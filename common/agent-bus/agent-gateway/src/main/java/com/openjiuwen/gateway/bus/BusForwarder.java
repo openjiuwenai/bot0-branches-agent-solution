@@ -173,7 +173,7 @@ public class BusForwarder {
             if (System.currentTimeMillis() - start > singleResponseWindowMillis) {
                 log.info("forwardQuery corrId={} TIMEOUT (single-response-window {}ms)",
                         correlationId, singleResponseWindowMillis);
-                return ResponseEntity.ok().body(
+                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(
                         statusBody(InvocationResponseStatus.FAILED, null, "Query timeout"));
             }
             var proj = projectionFeed.poll(correlationId);
@@ -190,17 +190,17 @@ public class BusForwarder {
                 log.info("forwardQuery corrId={} RESPONSE taskId={}", correlationId, event.taskId());
                 String responseBody = event.a2aResponsePresent()
                         ? body : statusBody(folded, event.taskId(), body);
-                return ResponseEntity.ok().body(responseBody);
+                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(responseBody);
             }
             if (FiveStateFolder.isTerminal(folded) || folded == InvocationResponseStatus.REJECTED
                     || folded == InvocationResponseStatus.FAILED) {
                 String responseBody = statusBody(folded, event.taskId(), event.body());
                 log.info("forwardQuery corrId={} folded={} bodyPresent={}",
                         correlationId, folded, event.body() != null);
-                return ResponseEntity.ok().body(responseBody);
+                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(responseBody);
             }
         }
-        return ResponseEntity.ok().body(
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(
                 statusBody(InvocationResponseStatus.FAILED, null, "Query exhausted poll budget"));
     }
 

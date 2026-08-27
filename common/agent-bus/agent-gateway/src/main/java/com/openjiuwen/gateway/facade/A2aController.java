@@ -133,7 +133,7 @@ public class A2aController {
             if (pathSelector.isBus() && busForwarder.isPresent()) {
                 return busForwarder.get().forwardQuery(context);
             }
-            return router.routeGet(context);
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(router.routeGet(context));
         }
         // v0830 S8: SubscribeToTask re-subscription (read-only, no G4 idempotency)
         if ("SubscribeToTask".equals(context.method())) {

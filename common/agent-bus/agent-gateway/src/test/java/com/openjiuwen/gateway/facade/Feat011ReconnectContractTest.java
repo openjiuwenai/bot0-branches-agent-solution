@@ -6,6 +6,7 @@ package com.openjiuwen.gateway.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -224,5 +225,21 @@ class Feat011ReconnectContractTest {
                 .andExpect(jsonPath("$.code").value("ROUTE_RESOLVE_FAILED"))
                 .andExpect(jsonPath("$.traceId").isNotEmpty())
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("resolve")));
+    }
+
+    /**
+     * §2.5: a GetTask success response is a JSON-RPC body — its response header MUST be
+     * {@code application/json}, matching the create/resume branches (which wrap the runtime body
+     * in {@code ResponseEntity.ok().contentType(APPLICATION_JSON)}). A bare-String return would be
+     * serialized by Spring as {@code text/plain}, breaking strict (non-sniffing) clients.
+     */
+    @Test
+    void getTaskMustReturnJsonContentType() throws Exception {
+        tenantACreatesTaskX();
+        runtime.setResponse(TASK_SNAPSHOT);
+        mvc.perform(post("/a2a").contentType(MediaType.APPLICATION_JSON)
+                .header("Authorization", "Bearer token-a").content(GETTASK_TASK_X))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON));
     }
 }
