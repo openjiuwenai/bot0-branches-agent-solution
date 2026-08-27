@@ -15,12 +15,11 @@
 | 维度 | 终态 | 证据 |
 |---|---|---|
 | 测试 | **105 run / 0 failures / 0 errors / 5 skipped**，BUILD SUCCESS | 轮⑦全量复跑 `mvn test`（surefire 汇总：`Tests run: 105, Failures: 0, Errors: 0, Skipped: 5`） |
-| 轮⑧ | 终审 NO-GO：**2 MAJOR**（MR body 数字半对齐 + 报告口头数字'5355 记录于 javadoc'）+ 4 MINOR → 归零 #4；勘误批 a4f32329 + MR body v3-v5 |
-| 轮⑨ | 勘误验证：1 MAJOR（MR body 轮次台账少计轮⑧ MAJOR 数）+ 1 MINOR → 归零 #5；单行 PATCH + §4 补行（本 commit）|
+| 轮次台账 | 轮①-⑩ 全量见 §4（单一真源——本表不再并行维护轮次计数） |
 | skip 语义 | 5 个 skip = 5 个 env-gated 真 LLM e2e（DeepResearch / VetoSchema / V2Bench / MinimalWrite / AgentSmoke 各 1 例）——诚实边界而非缺陷 | surefire 逐类明细：20 个测试类中 5 个 e2e 类各 1 例 skip |
 | 冒烟 | 四行断言度量字段**两次复现一致**（elapsed_ms 为时延观测非断言值，两次运行存在差异）（入库基线 20260827-122036 vs 轮⑦复跑 20260827-231008） | `docs/smoke-baseline-20260827.log` + `logs/smoke-20260827-231008.log` |
 | 变更面 | 7 commit / 132 文件 / +11189 / −0，全部位于 `common/agents/loop-forest/` | `git diff --shortstat 70ffe929..f01425f0` |
-| 处置台账 | 累计 35 项已处置；余 6 项 MINOR 全部转收口台账，轮⑦零恶化 | 见 §4 / §5 |
+| 处置台账 | 累计处置项数与归零计数以 §4 台账为准（轮①-⑦ 期 35 项 + 轮⑧⑨⑩ 增量）；余 6 项 MINOR 全部转收口台账，轮⑦零恶化 | 见 §4 / §5 |
 | 结构 | 五个主包（verification / observability / rail / fork / search）+ 统一入口 `LoopForestAgent` + bench / e2e 测试基建；20 个测试类 | 源码树 |
 
 模块一句话定位：**长程任务 Agent 的外置纪律与结构（循环森林）**——把写入契约（否决）、预算约束、跨分支收敛、轨迹树与回滚做成宿主 Agent 之外可装配的 rail 与结构，而不是内嵌在某个 Agent 实现里。
@@ -66,7 +65,7 @@
 
 **防回归保护真化**：T2 守卫从恒真断言真化为双语义锁定（自产 signal 回显不自触发 ∧ 注入文本仍触发），mutation 自验剥掉被守护词元后全套件 RED（expected:0 was:1），实证非恒真。
 
-## §4 轮次台账（轮①-⑦）
+## §4 轮次台账（轮①-⑩——单一真源：其余制品一律指向本表）
 
 计数规则（用户令）：连续 3 轮零 BLOCKER / 零 MAJOR 才收口；任一轮出 MAJOR 则计数归零重计。
 
@@ -79,14 +78,20 @@
 | ⑤ | **R5-1 假处置识破**：轮④批声称的 javadoc 替换实为静默 no-op（old_string 换行形态与文件不符且无 assert），commit message 描述的改动不在 diff 中——三个独立审查镜头同时捕获。注：同批的语义锁定测试（GateTest +16 行）是真落地的，no-op 的仅 javadoc 两处 | `f01425f0` 真修：带 assert 双验（anchor 匹配 + 替换生效确认），minimal() javadoc 两处对齐 null-gate 真语义 | **归零 #3**：轮④ 1/3 作废、重计 |
 | ⑥ | 重计后首个干净轮 **1/3**（双镜头稳定态复扫，零新 commit） | — | streak 1/3 |
 | ⑦ | 本轮：稳定态复扫（可复现性验证）+ 本收口报告实例化；四项复现全过（105/0/5 / 冒烟四行 / fork 含 HEAD / 台账零恶化） | —（零新 commit） | **2/3** |
+| 轮⑧ | 终审 NO-GO：**2 MAJOR**（MR body 数字半对齐 + 报告口头数字'5355 记录于 javadoc'）+ 4 MINOR → 归零 #4；勘误批 a4f32329 + MR body v3-v5 |
+| 轮⑨ | 勘误验证：**1 MAJOR**（MR body 轮次台账少计轮⑧ MAJOR 数）+ 1 MINOR → 归零 #5；报告补行 39a411d3+aaf18bcf + MR PATCH |
+| 轮⑩ | 声称面终闸：**3 MAJOR**（§4 行落点错位 / MR body 再少计轮⑨ / MR title'五层'零锚）+ 4 MINOR → 归零 #6；单一真源化处置（本 commit） |
 
-**五次归零教训（轮②③⑤各 1 MAJOR、轮⑧ 2 MAJOR、轮⑨ 1 MAJOR，同一物种）——"字面/声称层面的干净 ≠ 事实干净"**：
+**六次归零教训（轮②③⑤各 1 MAJOR、轮⑧ 2、轮⑨ 1、轮⑩ 3，同一物种）——"字面/声称层面的干净 ≠ 事实干净"**：
 
 1. **R2-F2（轮②）· 对外声称面**：MR 描述与代码事实三处失真（"零改动抽取"实为抽取+处置批、文件数滞后、"Validated by"缺 mock 级限定）。教训：对外叙述必须与 diff 对齐。
 2. **R3-F1（轮③）· 测试声称面**：自产防回退测试恒真（mutation 剥掉被守护词元后全套件仍绿）。教训：防回归测试必须 mutation-RED 实证非恒真，"有测试"不等于"有保护"。
 3. **R5-1（轮⑤）· 处置声称面**：处置 commit 声称的修改实为静默 no-op，不在 diff 中。教训：处置以 diff 为准；文本替换类操作必须带 assert 验证生效。
+4. 轮⑧：MR body 半对齐 + 报告引用不存在的锚——对外描述须逐条对照 git diff
+5. 轮⑨：轮次台账转写少计——多份台账手抄同步必滞后，须单一真源化
+6. 轮⑩：title'五层'零锚 + §4 行落点错位——最外层声称面（title/落点）同样要审
 
-三者共同范式：**声称必须可证伪**——MR 文本对 diff、测试对 mutation、处置对 assert 双验。R5-1 之后，"anchor 匹配 + 替换生效"双断言成为处置批惯例。
+六者共同范式：**声称必须可证伪**——MR 文本对 diff、测试对 mutation、处置对 assert 双验。R5-1 之后，"anchor 匹配 + 替换生效"双断言成为处置批惯例。
 
 ## §5 诚实边界与 deferred 清单
 
