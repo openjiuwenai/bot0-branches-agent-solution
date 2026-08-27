@@ -73,6 +73,7 @@ public record RawResponseEvent(
     /**
      * Returns a copy carrying the number of observations dropped before this event.
      *
+     * @param count observations dropped before this event
      * @return copy with drop count
      */
     public RawResponseEvent withDroppedBefore(long count) {

@@ -347,7 +347,11 @@ public class A2aHttpTransportProvider
         }
     }
 
-    /** Returns the cumulative number of raw response observations dropped by the bounded queue. */
+    /**
+     * 返回原始响应观察队列累计丢弃的事件数。
+     *
+     * @return 累计丢弃事件数
+     */
     public long rawResponseDroppedCount() {
         return rawResponseDispatcher == null ? 0L : rawResponseDispatcher.droppedCount();
     }
@@ -437,6 +441,10 @@ public class A2aHttpTransportProvider
             java.net.http.HttpHeaders headers) {
     }
 
+    private record SseFrameContext(Channel ch, boolean replayed, int httpStatus,
+            java.net.http.HttpHeaders headers) {
+    }
+
     private static RawResponsePayload rawResponsePayload(int status, java.net.http.HttpHeaders headers,
             String body, String eventId, boolean replayed) {
         return new RawResponsePayload(status, headers, body, eventId, replayed);
@@ -502,11 +510,7 @@ public class A2aHttpTransportProvider
      * <p>与创建场景的 {@link #readSse} 不同：续跑已确认 taskRef，不需要 UNKNOWN 幂等重发恢复；
      * 断连时直接走 {@code GetTask} 查询确认状态。读到终态或 INPUT_REQUIRED 即结算 future。
      *
-     * @param ch 通道
-     * @param sink 事件汇入目标；为 null 表示帧不进入任何事件流
-     * @param in SSE 输入流
-     * @param ack 待结算的 future
-     * @param snapshotRef 返回快照使用的 invocationRef
+     * @param request 续跑 SSE 读取请求
      */
     private void readResumeSse(ResumeRequest request) {
         Channel ch = request.ch();
@@ -530,11 +534,7 @@ public class A2aHttpTransportProvider
     /**
      * 逐行读取续跑 SSE 流并尝试结算，返回流尾观测结果供兜底查询使用。
      *
-     * @param ch 通道
-     * @param sink 事件汇入目标；为 null 表示帧不进入任何事件流
-     * @param in SSE 输入流
-     * @param ack 待结算的 future
-     * @param snapshotRef 返回快照使用的 invocationRef
+     * @param request 续跑 SSE 读取请求
      * @return 流尾观测结果（最后帧与读取异常）
      */
     private ResumeTail readResumeLines(ResumeRequest request) {
@@ -574,9 +574,9 @@ public class A2aHttpTransportProvider
     /**
      * 处理单行续跑 SSE：空行触发帧解析与投递，data: 行累积，其余行忽略。
      *
-     * @param ch 通道
-     * @param sink 事件汇入目标
+     * @param request 续跑 SSE 读取请求
      * @param data 累积缓冲
+     * @param eventBlock 原始 SSE 事件块缓冲
      * @param line 当前 SSE 行
      * @return 空行触发并解析出的帧；其他情况为空
      */
@@ -628,9 +628,9 @@ public class A2aHttpTransportProvider
     /**
      * 解析并投递单个续跑 SSE 帧。
      *
-     * @param ch 通道
-     * @param sink 事件汇入目标；为 null 只解析不投递
+     * @param request 续跑 SSE 读取请求
      * @param data 累积的 data 行内容（会被清空）
+     * @param eventBlock 原始 SSE 事件块缓冲
      * @return 解析出的帧；无内容时为空
      */
     private Optional<A2aJsonCodec.Frame> flushResumeFrame(ResumeRequest request, StringBuilder data,
@@ -659,10 +659,7 @@ public class A2aHttpTransportProvider
     /**
      * 流式续跑断连/未达终态时的查询兜底：用 {@code GetTask} 确认真实状态并结算 future。
      *
-     * @param ch 通道
-     * @param sink 事件汇入目标；为 null 不投递
-     * @param ack 待结算的 future
-     * @param snapshotRef 返回快照使用的 invocationRef
+     * @param request 续跑 SSE 读取请求
      * @param tail 流尾观测结果（最后帧与读取异常）
      */
     private void confirmResumeByQuery(ResumeRequest request, ResumeTail tail) {
@@ -718,11 +715,7 @@ public class A2aHttpTransportProvider
     /**
      * Unary {@code SendMessage}：解析响应为该 Task 的<b>完整</b>下一状态快照。
      *
-     * @param ch 用于 taskRef 绑定与失败传播的通道
-     * @param sink 事件汇入目标；为 null 表示本次响应帧不进入任何事件流
-     * @param body 请求正文
-     * @param credential 凭据
-     * @param snapshotRef 返回快照使用的 invocationRef
+     * @param request unary 请求上下文
      * @return 完整下一状态快照
      */
     private CompletionStage<InvocationSnapshot> sendUnary(UnaryRequest request) {
@@ -1024,6 +1017,7 @@ public class A2aHttpTransportProvider
         ch.watchdog = watchdog;
         Throwable failure = null;
         int acceptedFrames = 0;
+        SseFrameContext frameContext = new SseFrameContext(ch, subscription, httpStatus, headers);
         try (BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
             StringBuilder data = new StringBuilder();
             StringBuilder eventBlock = new StringBuilder();
@@ -1033,7 +1027,7 @@ public class A2aHttpTransportProvider
                 ch.touch();
                 eventBlock.append(line).append('\n');
                 if (line.isEmpty()) {
-                    if (flushFrame(ch, data, eventId, subscription, eventBlock, httpStatus, headers)) {
+                    if (flushFrame(frameContext, data, eventBlock, eventId)) {
                         acceptedFrames++;
                     }
                     eventId = null;
@@ -1046,7 +1040,7 @@ public class A2aHttpTransportProvider
                     continue;
                 }
             }
-            if (flushFrame(ch, data, eventId, subscription, eventBlock, httpStatus, headers)) {
+            if (flushFrame(frameContext, data, eventBlock, eventId)) {
                 acceptedFrames++;
             }
             if (subscription && acceptedFrames > 0) {
@@ -1466,18 +1460,20 @@ public class A2aHttpTransportProvider
                 ch == null ? null : ch.conversationId, ch == null ? null : ch.taskRef);
     }
 
-    private boolean flushFrame(Channel ch, StringBuilder data, String eventId, boolean replayed,
-            StringBuilder eventBlock, int httpStatus, java.net.http.HttpHeaders headers) {
+    private boolean flushFrame(SseFrameContext context, StringBuilder data, StringBuilder eventBlock,
+            String eventId) {
         if (data.length() == 0) {
             eventBlock.setLength(0);
             return false;
         }
+        Channel ch = context.ch();
+        boolean replayed = context.replayed();
         String json = data.toString();
         data.setLength(0);
         String wireBlock = eventBlock.length() == 0 ? json : eventBlock.toString();
         eventBlock.setLength(0);
         emitRawResponse(ch, replayed ? RawResponseEvent.Source.SUBSCRIBE : RawResponseEvent.Source.CREATE_STREAM,
-                rawResponsePayload(httpStatus, headers, wireBlock, eventId, replayed));
+                rawResponsePayload(context.httpStatus(), context.headers(), wireBlock, eventId, replayed));
         if (endpointPolicy.cursorReplaySupported() && eventId != null && !eventId.isBlank()
                 && ch.seenEventIds.contains(eventId)) {
             return false;
