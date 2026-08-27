@@ -69,39 +69,58 @@ class AgentInstanceManagerTest {
     }
 
     @Test
-    void acquire_raceWindowDuringCreate_loserAgentDestroyed() throws Exception {
+    void acquire_concurrentDuringCreate_secondFailsFastWithoutCreate() throws Exception {
+        // Issue #157: while the winner is mid-create, a concurrent acquire for
+        // the same conversation must fail fast — no waiting for the creation
+        // and no wasted create()+destroy() round-trip.
         AgentFactory factory = mock(AgentFactory.class);
         Object slowAgent = new Object();
-        Object fastAgent = new Object();
         CountDownLatch enteredCreate = new CountDownLatch(1);
         CountDownLatch releaseSlowCreate = new CountDownLatch(1);
         when(factory.create()).thenAnswer(invocation -> {
             enteredCreate.countDown();
             releaseSlowCreate.await();
             return slowAgent;
-        }).thenReturn(fastAgent);
+        });
 
         AgentInstanceManager manager = new AgentInstanceManager(factory);
         ExecutorService executor = new ThreadPoolExecutor(
                 1, 1, 0L, TimeUnit.MILLISECONDS,
                 new LinkedBlockingQueue<>());
         try {
-            Future<Object> slow = executor.submit(() -> manager.acquire("conv-1"));
+            Future<Object> winner = executor.submit(() -> manager.acquire("conv-1"));
             assertThat(enteredCreate.await(5, TimeUnit.SECONDS)).isTrue();
 
-            Object winner = manager.acquire("conv-1");
-            releaseSlowCreate.countDown();
+            assertThatThrownBy(() -> manager.acquire("conv-1"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("conv-1");
+            // Only the winner's create ran; the rejected acquire created nothing
+            verify(factory, times(1)).create();
 
-            assertThatThrownBy(slow::get)
-                    .isInstanceOf(ExecutionException.class)
-                    .hasCauseInstanceOf(IllegalStateException.class);
-            assertThat(winner).isSameAs(fastAgent);
-            verify(factory).destroy(slowAgent);
-            verify(factory, never()).destroy(fastAgent);
+            releaseSlowCreate.countDown();
+            assertThat(winner.get(5, TimeUnit.SECONDS)).isSameAs(slowAgent);
+            verify(factory, never()).destroy(any());
         } finally {
             releaseSlowCreate.countDown();
             executor.shutdownNow();
         }
+    }
+
+    @Test
+    void acquire_createReturnsNull_cleansReservation() {
+        // A misbehaving factory returning null must not leave the reservation
+        // placeholder behind — the conversation would be permanently busy.
+        AgentFactory factory = mock(AgentFactory.class);
+        Object recreated = new Object();
+        when(factory.create()).thenReturn(null).thenReturn(recreated);
+        AgentInstanceManager manager = new AgentInstanceManager(factory);
+
+        assertThatThrownBy(() -> manager.acquire("conv-1"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("null");
+        verify(factory, never()).destroy(any());
+
+        assertThat(manager.acquire("conv-1")).isSameAs(recreated);
     }
 
     @Test
@@ -183,6 +202,66 @@ class AgentInstanceManagerTest {
         Object acquired = manager.acquire("conv-1");
         manager.release("conv-1", acquired);
         verify(factory).destroy(agent);
+    }
+
+    @Test
+    void release_twiceSameAgent_destroysExactlyOnce() {
+        // Issue #156: double-release must be a no-op the second time —
+        // destroy() runs exactly once per acquired instance.
+        AgentFactory factory = mock(AgentFactory.class);
+        Object agent = new Object();
+        when(factory.create()).thenReturn(agent);
+        AgentInstanceManager manager = new AgentInstanceManager(factory);
+        Object acquired = manager.acquire("conv-1");
+
+        manager.release("conv-1", acquired);
+        manager.release("conv-1", acquired);
+
+        verify(factory, times(1)).destroy(agent);
+    }
+
+    @Test
+    void release_afterReacquire_doesNotDestroySuccessorAgent() {
+        // Issue #156 racing shape: agent A released, agent B re-acquired for
+        // the same conversation; a stale delayed release of A must not evict
+        // or destroy B.
+        AgentFactory factory = mock(AgentFactory.class);
+        Object agentA = new Object();
+        Object agentB = new Object();
+        when(factory.create()).thenReturn(agentA, agentB);
+        AgentInstanceManager manager = new AgentInstanceManager(factory);
+        Object acquiredA = manager.acquire("conv-1");
+        manager.release("conv-1", acquiredA);
+        Object acquiredB = manager.acquire("conv-1");
+
+        manager.release("conv-1", acquiredA);
+
+        verify(factory, times(1)).destroy(agentA);
+        verify(factory, never()).destroy(agentB);
+        // B is still tracked: a third acquire for the conversation is busy
+        assertThatThrownBy(() -> manager.acquire("conv-1"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("conv-1");
+    }
+
+    @Test
+    void release_unknownAgent_destroySkipped_entryIntact() {
+        // A foreign/stale agent reference must neither destroy that agent nor
+        // evict the tracked owner: entry removal and destroy are decided by
+        // the same atomic remove(key, agent).
+        AgentFactory factory = mock(AgentFactory.class);
+        Object tracked = new Object();
+        Object foreign = new Object();
+        when(factory.create()).thenReturn(tracked);
+        AgentInstanceManager manager = new AgentInstanceManager(factory);
+        manager.acquire("conv-1");
+
+        manager.release("conv-1", foreign);
+
+        verify(factory, never()).destroy(any());
+        assertThatThrownBy(() -> manager.acquire("conv-1"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("conv-1");
     }
 
     @Test

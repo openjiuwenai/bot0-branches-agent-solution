@@ -19,12 +19,22 @@ import java.util.concurrent.ConcurrentHashMap;
  * Tracks active task information for quota lifecycle management (DFX-002).
  *
  * <p>Implements {@link TaskAdmissionListener} so the A2A executor drives the
- * recording at the exact points where an admission quota slot is acquired and
- * released. A task is therefore visible from {@code snapshot()} for precisely
- * as long as it occupies admission quota ({@code TaskAdmissionGate#currentCount()}
- * and the probe's {@code currentActiveTasks} can never diverge), which spans
- * the whole orchestrated processing — including agent construction and any
- * orchestrator re-drive — not just the AgentHandler invocation.
+ * recording at the points where an admission quota slot is acquired and
+ * released. A task is therefore visible from {@code snapshot()} for
+ * approximately as long as it occupies admission quota, which spans the whole
+ * orchestrated processing — including agent construction and any orchestrator
+ * re-drive — not just the AgentHandler invocation.
+ *
+ * <p><strong>Count source.</strong> {@code snapshot()}'s
+ * {@code currentActiveTasks} reads {@link TaskAdmissionGate#currentCount()}
+ * directly, so it always equals the authoritative quota occupancy — the same
+ * value 503 admission decisions use. The per-task {@code tasks} list is fed by
+ * {@code onAdmitted}/{@code onReleased} notifications, which fire inside the
+ * executor's admission scope but not atomically with {@code tryAcquire} and
+ * {@code release}; during those sub-millisecond windows the list size may lag
+ * the count by one. Consumers needing the exact quota occupancy must use
+ * {@code currentActiveTasks}; the list is task metadata (which tasks, since
+ * when), not a counting primitive.
  *
  * <p>Entries are keyed by taskId (falling back to the conversationId when a
  * transport provides no task id), so concurrent tasks from the same
@@ -69,7 +79,7 @@ public class TaskQuotaTracker implements ActiveTaskQuery, TaskAdmissionListener 
         List<ActiveTaskInfo> tasks = new ArrayList<>(activeTasks.values());
         return new ConcurrencyLoadSnapshot(
                 admissionGate != null ? admissionGate.limit() : -1,
-                tasks.size(),
+                admissionGate != null ? admissionGate.currentCount() : tasks.size(),
                 tasks);
     }
 

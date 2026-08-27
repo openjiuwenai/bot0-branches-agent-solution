@@ -31,6 +31,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Unit tests for {@link JiuwenCoreAgentExtHandler} per-Task Agent lifecycle
@@ -131,6 +135,60 @@ class JiuwenCoreAgentExtHandlerTest {
         assertThat(handler.currentTaskAgent.get()).isNull();
         assertThat(((Map<String, Object>) chunks2.get(0).getData()).get("payload"))
                 .isEqualTo(Map.of("content", "second"));
+    }
+
+    @Test
+    void executeAgent_bindingLost_failsLoud() {
+        // Issue #154: a lost per-Task binding must fail loudly instead of
+        // silently running the shared singleton agent.
+        JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityInvokeAgent("singleton"));
+
+        assertThatThrownBy(() -> handler.executeAgent(Map.of(), "session"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Per-Task agent binding lost");
+    }
+
+    @Test
+    void executeAgentStreaming_bindingLost_failsLoud() {
+        // Issue #154: same contract for the streaming template method.
+        JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityStreamAgent("singleton"));
+
+        assertThatThrownBy(() -> handler.executeAgentStreaming(Map.of(), "session", List.of(StreamMode.OUTPUT)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Per-Task agent binding lost");
+    }
+
+    @Test
+    void executeAgent_onDifferentThread_failsLoud_crossThreadRepro() throws Exception {
+        // Issue #154 reproduction: the binding set on the entering thread is
+        // invisible to another thread (bare ThreadLocal does not propagate),
+        // and the cross-thread execution must fail instead of degrading.
+        JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(new IdentityInvokeAgent("singleton"));
+        handler.currentTaskAgent.set(new IdentityInvokeAgent("per-task"));
+
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        // A pooled worker is still a different thread than the entering one,
+        // so the ThreadLocal invisibility reproduction is preserved.
+        ThreadPoolExecutor pool = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
+        try {
+            pool.submit(() -> {
+                try {
+                    handler.executeAgent(Map.of(), "session");
+                } catch (RuntimeException | Error thrown) {
+                    failure.set(thrown);
+                }
+            }).get(5L, TimeUnit.SECONDS);
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(failure.get())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Per-Task agent binding lost");
+        // The entering thread's binding is untouched by the failure.
+        assertThat(handler.currentTaskAgent.get()).isNotNull();
+        handler.currentTaskAgent.remove();
     }
 
     @Test

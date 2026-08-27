@@ -36,38 +36,61 @@ public class AgentInstanceManager {
      * instance. The instance is tracked internally until released. Concurrent
      * acquire for the same conversationId is rejected.
      *
-     * <p>Because {@link AgentFactory#create()} is expensive (serialized by the
-     * factory's creation lock), a conversation that already has an active agent
-     * is rejected <em>before</em> any instance is created. The
-     * {@code putIfAbsent} re-check after creation guards the race window
-     * between the pre-check and the insertion; a loser of that window has its
-     * freshly created instance destroyed.
+     * <p>Issue #157: the conversation slot is reserved atomically with a
+     * short-lived placeholder <em>before</em> the expensive
+     * {@code factory.create()} runs. A concurrent acquire for a conversation
+     * whose agent is still being created fails fast with
+     * {@link ConversationBusyException} — it neither waits for the ongoing
+     * creation nor performs a wasted {@code create()} + {@code destroy()}
+     * round-trip. If {@code create()} fails or returns null, the placeholder
+     * is removed so the conversation stays acquirable.
+     *
+     * <p>The reservation also avoids {@code computeIfAbsent}-style long
+     * computations under the map's bin lock: every map operation here
+     * ({@code putIfAbsent}, {@code put}, {@code remove}) is short, so a slow
+     * creation never blocks unrelated conversations' operations.
      *
      * @param conversationId conversation identifier
      * @return a new Agent object
-     * @throws ConversationBusyException if the conversation already has an active agent
+     * @throws ConversationBusyException if the conversation already has an
+     *         active agent (or one being created)
      */
     public Object acquire(String conversationId) {
-        if (activeAgents.containsKey(conversationId)) {
-            throw new ConversationBusyException("Conversation already has an active agent: " + conversationId);
+        Object placeholder = new Object();
+        if (activeAgents.putIfAbsent(conversationId, placeholder) != null) {
+            throw new ConversationBusyException(
+                    "Conversation already has an active or initializing agent: " + conversationId);
         }
-        Object agent = factory.create();
-        if (activeAgents.putIfAbsent(conversationId, agent) != null) {
-            factory.destroy(agent);
-            throw new ConversationBusyException("Conversation already has an active agent: " + conversationId);
+        try {
+            Object agent = factory.create();
+            if (agent == null) {
+                throw new IllegalStateException(
+                        "AgentFactory.create() returned null for conversation: " + conversationId);
+            }
+            activeAgents.put(conversationId, agent);
+            return agent;
+        } catch (RuntimeException | Error failure) {
+            activeAgents.remove(conversationId, placeholder);
+            throw failure;
         }
-        return agent;
     }
 
     /**
      * Release an Agent instance and its resources.
      *
+     * <p>Idempotent (issue #156): the entry is removed with
+     * {@code remove(key, agent)} — a value-equality check — so only the caller
+     * presenting the currently tracked agent destroys it. A second release of
+     * the same agent, or a release racing with a newer acquire that replaced
+     * the entry, finds the entry gone (or pointing at another instance) and
+     * does nothing, preventing a double {@code destroy()} of the same instance
+     * or destruction of a successor's agent.
+     *
      * @param conversationId conversation identifier
      * @param agent the Agent object to release
      */
     public void release(String conversationId, Object agent) {
-        activeAgents.remove(conversationId);
-        if (agent != null) {
+        if (activeAgents.remove(conversationId, agent) && agent != null) {
             factory.destroy(agent);
         }
     }
@@ -75,8 +98,12 @@ public class AgentInstanceManager {
     /**
      * Returns the active agent for a conversation without acquiring a new one.
      *
+     * <p>While an agent is being created for the conversation this returns the
+     * internal reservation placeholder (never an usable agent); callers must
+     * treat any non-null value merely as "conversation is busy".
+     *
      * @param conversationId conversation identifier
-     * @return the active agent, or null if none exists
+     * @return the active agent (or reservation placeholder), or null if none exists
      */
     public Object get(String conversationId) {
         return activeAgents.get(conversationId);

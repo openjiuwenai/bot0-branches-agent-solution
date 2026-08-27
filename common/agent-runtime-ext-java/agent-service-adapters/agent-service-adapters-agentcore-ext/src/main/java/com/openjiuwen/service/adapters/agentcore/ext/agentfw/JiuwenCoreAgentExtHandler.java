@@ -41,6 +41,15 @@ import java.util.concurrent.ConcurrentHashMap;
  * issues in agent-core-java. The per-Task agent is passed to Runner via the
  * {@code currentTaskAgent} ThreadLocal, which is cleaned in the finally block.
  *
+ * <p>Thread contract (issue #154): the parent template methods
+ * {@code executeAgent} / {@code executeAgentStreaming} must run on the same
+ * thread that entered {@code query} / {@code streamQuery} (the current parent
+ * implementations call back synchronously). If that contract is ever broken —
+ * e.g. the parent moves execution onto a pool thread — the ThreadLocal binding
+ * is missing on the execution thread and the request fails with
+ * {@link IllegalStateException} instead of silently degrading to the shared
+ * singleton agent, which would break per-Task isolation unnoticed.
+ *
  * @since 2026-06-30
  */
 public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
@@ -192,20 +201,36 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     @Override
     protected Iterator<Object> executeAgentStreaming(Map<String, Object> inputs, Object session,
             List<StreamMode> streamModes) {
-        Object agent = currentTaskAgent.get();
-        if (agent != null) {
-            return Runner.runAgentStreaming(agent, inputs, session, null, streamModes);
-        }
-        return super.executeAgentStreaming(inputs, session, streamModes);
+        return Runner.runAgentStreaming(requireTaskAgent("executeAgentStreaming"), inputs, session, null,
+                streamModes);
     }
 
     @Override
     protected Object executeAgent(Map<String, Object> inputs, Object session) {
+        return Runner.runAgent(requireTaskAgent("executeAgent"), inputs, session, null);
+    }
+
+    /**
+     * Returns the per-Task agent bound by {@link #query}/{@link #streamQuery}
+     * on the entering thread, failing loudly when the binding is missing.
+     *
+     * <p>A missing binding means the execution crossed a thread boundary inside
+     * the parent template method (see the class-level thread contract). Falling
+     * back to the shared singleton agent would silently break per-Task
+     * isolation and reintroduce agent-core concurrency hazards, so the request
+     * fails instead.
+     *
+     * @param executionPoint the calling template method, for diagnostics
+     * @return the per-Task agent for the current request
+     */
+    private Object requireTaskAgent(String executionPoint) {
         Object agent = currentTaskAgent.get();
-        if (agent != null) {
-            return Runner.runAgent(agent, inputs, session, null);
+        if (agent == null) {
+            throw new IllegalStateException("Per-Task agent binding lost at " + executionPoint
+                    + ": execution thread differs from the query/streamQuery entry thread."
+                    + " Refusing to fall back to the shared agent -- per-Task isolation would be broken.");
         }
-        return super.executeAgent(inputs, session);
+        return agent;
     }
 
     /**

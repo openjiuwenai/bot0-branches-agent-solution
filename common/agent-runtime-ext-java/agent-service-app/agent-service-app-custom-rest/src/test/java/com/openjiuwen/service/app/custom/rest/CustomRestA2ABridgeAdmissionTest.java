@@ -18,6 +18,7 @@ import org.a2aproject.sdk.jsonrpc.common.wrappers.ListTasksResult;
 import org.a2aproject.sdk.server.requesthandlers.RequestHandler;
 import org.a2aproject.sdk.server.tasks.TaskStore;
 import org.a2aproject.sdk.spec.A2AError;
+import org.a2aproject.sdk.spec.A2AErrorCodes;
 import org.a2aproject.sdk.spec.EventKind;
 import org.a2aproject.sdk.spec.Message;
 import org.a2aproject.sdk.spec.MessageSendParams;
@@ -124,6 +125,40 @@ class CustomRestA2ABridgeAdmissionTest {
 
         verify(gate, never()).tryAcquire();
         verify(gate, never()).release();
+    }
+
+    @Test
+    void executeBlocking_admissionRejectionFromRuntime_mappedTo503() {
+        // A request that slips past the read-only pre-check is rejected by the
+        // runtime's authoritative gate; the bridge must surface it with the
+        // same 503 shape as its own pre-check instead of INTERNAL's HTTP 500.
+        RequestHandler handler = mock(RequestHandler.class);
+        when(handler.onMessageSend(any(), any())).thenThrow(
+                new A2AError(A2AErrorCodes.INTERNAL.code(),
+                        "Service Unavailable: concurrent task limit reached", null));
+        TaskAdmissionGate gate = mock(TaskAdmissionGate.class);
+        when(gate.limit()).thenReturn(5);
+        CustomRestA2ABridge bridge = newBridge(handler, gate);
+
+        assertThatThrownBy(() -> bridge.executeBlocking(bridge.prepare(context(), true)))
+                .isInstanceOfSatisfying(CustomRestFailure.class, f -> {
+                    assertThat(f.getHttpStatus()).isEqualTo(503);
+                    assertThat(f.getCode()).isEqualTo("concurrent_limit_reached");
+                });
+
+        verify(gate, never()).release();
+    }
+
+    @Test
+    void streamFailure_admissionRejectionFromRuntime_mappedTo503() {
+        RuntimeException wrapped = new RuntimeException("stream failed", new A2AError(
+                A2AErrorCodes.INTERNAL.code(), "Service Unavailable: concurrent task limit reached", null));
+        CustomRestA2ABridge bridge = newBridge(mock(RequestHandler.class), mock(TaskAdmissionGate.class));
+
+        CustomRestFailure failure = bridge.streamFailure(wrapped);
+
+        assertThat(failure.getHttpStatus()).isEqualTo(503);
+        assertThat(failure.getCode()).isEqualTo("concurrent_limit_reached");
     }
 
     @Test

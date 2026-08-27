@@ -88,15 +88,23 @@ class ConcurrencyAutoConfigurationTest {
     @Test
     void tracker_isAdmissionListenerDriven() {
         // The tracker must be registered as a TaskAdmissionListener so the
-        // A2A executor (not the AgentHandler) drives probe recording.
-        runner.run(context -> {
-            assertThat(context).hasSingleBean(TaskAdmissionListener.class);
-            assertThat(context.getBean(TaskAdmissionListener.class)).isSameAs(context.getBean(TaskQuotaTracker.class));
-            context.getBean(TaskAdmissionListener.class).onAdmitted("t-1", "c-1");
-            assertThat(context.getBean(ActiveTaskQuery.class).snapshot().getCurrentActiveTasks()).isEqualTo(1);
-            context.getBean(TaskAdmissionListener.class).onReleased("t-1", "c-1");
-            assertThat(context.getBean(ActiveTaskQuery.class).snapshot().getCurrentActiveTasks()).isZero();
-        });
+        // A2A executor (not the AgentHandler) drives probe recording. The
+        // snapshot count mirrors gate.currentCount(), so a finite limit is
+        // configured and the permit is acquired around onAdmitted exactly as
+        // the executor does.
+        runner.withPropertyValues("openjiuwen.service.concurrency.max-concurrent-tasks=2")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(TaskAdmissionListener.class);
+                    assertThat(context.getBean(TaskAdmissionListener.class))
+                            .isSameAs(context.getBean(TaskQuotaTracker.class));
+                    TaskAdmissionGate gate = context.getBean(TaskAdmissionGate.class);
+                    assertThat(gate.tryAcquire()).isTrue();
+                    context.getBean(TaskAdmissionListener.class).onAdmitted("t-1", "c-1");
+                    assertThat(context.getBean(ActiveTaskQuery.class).snapshot().getCurrentActiveTasks()).isEqualTo(1);
+                    context.getBean(TaskAdmissionListener.class).onReleased("t-1", "c-1");
+                    gate.release();
+                    assertThat(context.getBean(ActiveTaskQuery.class).snapshot().getCurrentActiveTasks()).isZero();
+                });
     }
 
     @Test
