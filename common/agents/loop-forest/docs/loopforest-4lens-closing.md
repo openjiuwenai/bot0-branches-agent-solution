@@ -15,6 +15,8 @@
 | 维度 | 终态 | 证据 |
 |---|---|---|
 | 测试 | **105 run / 0 failures / 0 errors / 5 skipped**，BUILD SUCCESS | 轮⑦全量复跑 `mvn test`（surefire 汇总：`Tests run: 105, Failures: 0, Errors: 0, Skipped: 5`） |
+| 轮⑧ | 终审 NO-GO：**2 MAJOR**（MR body 数字半对齐 + 报告口头数字'5355 记录于 javadoc'）+ 4 MINOR → 归零 #4；勘误批 a4f32329 + MR body v3-v5 |
+| 轮⑨ | 勘误验证：1 MAJOR（MR body 轮次台账少计轮⑧ MAJOR 数）+ 1 MINOR → 归零 #5；单行 PATCH + §4 补行（本 commit）|
 | skip 语义 | 5 个 skip = 5 个 env-gated 真 LLM e2e（DeepResearch / VetoSchema / V2Bench / MinimalWrite / AgentSmoke 各 1 例）——诚实边界而非缺陷 | surefire 逐类明细：20 个测试类中 5 个 e2e 类各 1 例 skip |
 | 冒烟 | 四行断言度量字段**两次复现一致**（elapsed_ms 为时延观测非断言值，两次运行存在差异）（入库基线 20260827-122036 vs 轮⑦复跑 20260827-231008） | `docs/smoke-baseline-20260827.log` + `logs/smoke-20260827-231008.log` |
 | 变更面 | 7 commit / 132 文件 / +11189 / −0，全部位于 `common/agents/loop-forest/` | `git diff --shortstat 70ffe929..f01425f0` |
@@ -104,7 +106,7 @@
 5. 并发派发 deferred（锚点 `TraceForest.java:28`）
 6. MR body 数字滞后——轮⑧收口时 PATCH 对齐（轮② PATCH 后又有文件 131→132 增量实发轮②自身 commit 4bc28ade（smoke 基线 log 入库）、测试 104→105）
 
-## §6 用户三令核对与轮⑧终审预告
+## §6 用户三令核对与轮⑧终审预告（实际结局：NO-GO 归零 #4，见 §4）——后续轮次预告
 
 | 令 | 内容 | 核对结果 |
 |---|---|---|
@@ -112,7 +114,7 @@
 | 令二 | 诚实计数——处置必须真落地，假处置作废重计 | 轮⑤三镜头裁定轮④ 1/3 作废；`f01425f0` 真修（assert 双验）后重计；轮⑥⑦稳定态、台账六 MINOR 零恶化 |
 | 令三 | MR 纪律——对外描述与代码事实一致（中文、随收口 PATCH、数字对齐 HEAD） | R2-F2 已 PATCH 一次（API+Bearer、中文）；遗留"数字滞后"1 项 MINOR 排入轮⑧收口 PATCH，对齐基准以本报告 §1 为准（132 文件 / +11189 / 105 用例） |
 
-**轮⑧终审预告（3/3 达成时的收口动作）**：
+**轮⑧终审预告（实际结局：NO-GO 归零 #4，见 §4）——后续轮次预告（3/3 达成时的收口动作）**：
 
 1. MR body 数字 PATCH：文件数 / 行数 / 测试数对齐 `f01425f0`（132 文件、+11189、105/0/5）；
 2. 6 项 MINOR 台账移交（转后续批次，不在本 MR 强行清零）；
