@@ -26,7 +26,7 @@ python3.11 -m venv .venv
 .venv/bin/python -m pytest -q
 ```
 
-当前测试共 5 个测试文件、21 个 pytest case：
+当前测试共 6 个测试文件、35 个 pytest case：
 
 | 测试文件 | 覆盖范围 |
 |---|---|
@@ -35,6 +35,7 @@ python3.11 -m venv .venv
 | `test_package_safety.py` | frontmatter、名称、保留路径、软链接和导出白名单 |
 | `test_agent_subprocess.py` | Agent Core 请求/事件/结果协议、结构化错误、超时和 worker 调用边界 |
 | `test_host_adapters.py` | Jiuwenbox workspace/Acceptance adapter，以及录屏停止、Markdown 生成和资源释放 |
+| `test_generation_stability.py` | 模型工具参数兼容、能力识别、fixture/输出验证、Scenario 有界恢复、AuthorBuild 检查点续跑和空宿主主流程 |
 
 `fake_agent_worker.py` 是子进程协议测试辅助程序，不是独立测试场景。
 
@@ -52,6 +53,9 @@ python3.11 -m venv .venv
 
 # Jiuwenbox/录屏 adapter
 .venv/bin/python -m pytest -q tests/test_host_adapters.py
+
+# 生成稳定性矩阵
+.venv/bin/python -m pytest -q tests/test_generation_stability.py
 ```
 
 查看具体测试名和执行过程：
