@@ -83,6 +83,11 @@ public record BrokerInboundMessage(
         requireNullOrNonBlank(idempotencyKey, "idempotencyKey");
         requireNullOrNonBlank(routeHandle, "routeHandle");
         requireNullOrNonBlank(capability, "capability");
+        // capability length is NOT enforced here (#161): a super-long capability injected bypassing
+        // the SDK construction cap (ForwardingEnvelope / BrokerMessageHeaders) is transport poison at
+        // the relay (consumer.commit + inbox REJECTED, no redelivery), not a decode-time throw — a
+        // throw here would block the consumer's poll. The cap is enforced at the SDK boundary; the
+        // relay handles non-SDK injection that would otherwise throw at buildHop2Envelope and loop.
         requireNullOrNonBlank(inlinePayload, "inlinePayload");
         requireNullOrNonBlank(originalCaller, "originalCaller");
     }

@@ -85,6 +85,12 @@ public record BrokerMessageHeaders(
         requireNullOrNonBlank(idempotencyKey, "idempotencyKey");
         requireNullOrNonBlank(routeHandle, "routeHandle");
         requireNullOrNonBlank(capability, "capability");
+        if (capability != null
+                && capability.length() > ForwardingEnvelope.MAX_CAPABILITY_CHARS) {
+            throw new IllegalArgumentException(
+                    "capability exceeds max " + ForwardingEnvelope.MAX_CAPABILITY_CHARS
+                            + " chars (mirrors ForwardingEnvelope / JDBC outbox VARCHAR(128))");
+        }
         requireNullOrNonBlank(inlinePayload, "inlinePayload");
         // P-06 (2b) size guard: inlinePayload is a BOUNDED small body — its UTF-8 byte length must not
         // exceed ForwardingEnvelope.MAX_INLINE_PAYLOAD_BYTES (belt-and-suspenders with the envelope's

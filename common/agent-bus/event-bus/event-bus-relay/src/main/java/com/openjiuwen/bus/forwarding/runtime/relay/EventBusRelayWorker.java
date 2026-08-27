@@ -263,6 +263,21 @@ public final class EventBusRelayWorker {
             return MessageOutcome.GOVERNANCE_REJECTED;
         }
 
+        // governance 2b: capability length contract (#161). A super-long capability (raw broker
+        // injection bypassing the SDK construction cap) cannot be persisted (JDBC outbox
+        // VARCHAR(128)) and cannot be fixed by a broker redelivery → transport poison (commit +
+        // inbox REJECTED, no redelivery). Enforced at the SDK boundary by ForwardingEnvelope /
+        // BrokerMessageHeaders; this catches non-SDK injection that would otherwise throw at
+        // buildHop2Envelope and loop. Failure code is non-retryable poison (same family as the
+        // control-plane-incomplete poison above).
+        if (msg.capability() != null
+                && msg.capability().length() > ForwardingEnvelope.MAX_CAPABILITY_CHARS) {
+            log.warn("[{}] REJECT poison (capability exceeds {} chars) messageId={}",
+                    role, ForwardingEnvelope.MAX_CAPABILITY_CHARS, msg.messageId());
+            rejectPoison(msg, ForwardingFailureCode.PAYLOAD_REF_INVALID);
+            return MessageOutcome.GOVERNANCE_REJECTED;
+        }
+
         // governance 3: inbox dedup (a replayed hop1 must not double-produce hop2).
         ForwardingEnvelope env = buildHop2Envelope(msg);
         ForwardingStatus.Inbox inboxStatus = inbox.receive(env, consumerServiceId, nowMillisEpoch);

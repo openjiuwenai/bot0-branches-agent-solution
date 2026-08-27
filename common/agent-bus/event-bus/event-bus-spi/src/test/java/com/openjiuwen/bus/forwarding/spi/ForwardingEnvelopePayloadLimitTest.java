@@ -121,4 +121,54 @@ class ForwardingEnvelopePayloadLimitTest {
         ForwardingEnvelope e = dataBearingInline(atMax);
         assertThat(e.inlinePayload()).isEqualTo(atMax);
     }
+
+    // ---- capability length contract (#161): char count, mirrors JDBC outbox VARCHAR(128) ----
+
+    /**
+     * DATA_BEARING envelope (data via payloadRef) carrying a variable {@code capability} — the
+     * capability is the field under test.
+     *
+     * @param capability the capability identifier under test
+     * @return a DATA_BEARING envelope with the given capability
+     */
+    private static ForwardingEnvelope withCapability(String capability) {
+        return new ForwardingEnvelope(
+                new ForwardingMessageId("msg-cap"),
+                AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
+                TENANT, "trace-cap", "corr-cap", "idem-cap",
+                ROUTE, capability, "src-cap", "tgt-cap", Long.MAX_VALUE,
+                ForwardingEnvelope.PayloadPolicy.DATA_BEARING, "ref://payload/cap", null);
+    }
+
+    @Test
+    void capability_at_max_chars_is_accepted() {
+        int max = ForwardingEnvelope.MAX_CAPABILITY_CHARS;
+        String atMax = "a".repeat(max);
+        assertThat(atMax.length()).isEqualTo(max);
+        ForwardingEnvelope e = withCapability(atMax);
+        assertThat(e.capability()).isEqualTo(atMax);
+    }
+
+    @Test
+    void capability_over_max_chars_is_rejected() {
+        int max = ForwardingEnvelope.MAX_CAPABILITY_CHARS;
+        String overMax = "a".repeat(max + 1);
+        assertThatThrownBy(() -> withCapability(overMax))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("capability exceeds max")
+                .hasMessageContaining(String.valueOf(max));
+    }
+
+    @Test
+    void capability_cap_counts_chars_not_utf8_bytes_for_multibyte() {
+        int max = ForwardingEnvelope.MAX_CAPABILITY_CHARS;
+        // '字' (U+5B57) is 3 UTF-8 bytes but 1 char (BMP). A max-char '字' string is max chars
+        // (≤ cap, accepted) but 3*max bytes — proving the cap counts chars (String.length), matching
+        // the JDBC outbox VARCHAR(128) char semantics, not UTF-8 bytes (unlike inlinePayload).
+        String atMaxChars = "字".repeat(max);
+        assertThat(atMaxChars.length()).isEqualTo(max);
+        assertThat(atMaxChars.getBytes(UTF_8).length).isGreaterThan(max);
+        ForwardingEnvelope e = withCapability(atMaxChars);
+        assertThat(e.capability()).isEqualTo(atMaxChars);
+    }
 }

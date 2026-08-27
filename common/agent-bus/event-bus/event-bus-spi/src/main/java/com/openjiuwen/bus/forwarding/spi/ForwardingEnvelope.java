@@ -96,6 +96,16 @@ public record ForwardingEnvelope(
         return 64 * 1024;
     }
 
+    /**
+     * Maximum character length of a {@code capability} control identifier (#161). Mirrors the JDBC
+     * outbox {@code capability VARCHAR(128)} column so the SDK construction boundary rejects an
+     * over-long capability deterministically (before the database) — the DB must never be the first
+     * length check. Character count (not UTF-8 bytes) to match the {@code VARCHAR(128)} semantics;
+     * enforced here and at {@link BrokerMessageHeaders}, with raw broker injection that bypasses
+     * the SDK handled as transport poison at the relay.
+     */
+    public static final int MAX_CAPABILITY_CHARS = 128;
+
     public ForwardingEnvelope {
         Objects.requireNonNull(messageId, "messageId is required");
         Objects.requireNonNull(eventType, "eventType is required");
@@ -119,6 +129,11 @@ public record ForwardingEnvelope(
         Objects.requireNonNull(capability, "capability is required");
         if (capability.isBlank()) {
             throw new IllegalArgumentException("capability must not be blank");
+        }
+        if (capability.length() > MAX_CAPABILITY_CHARS) {
+            throw new IllegalArgumentException(
+                    "capability exceeds max " + MAX_CAPABILITY_CHARS
+                            + " chars (JDBC outbox VARCHAR(128)); use a shorter capability identifier");
         }
         Objects.requireNonNull(sourceServiceId, "sourceServiceId is required");
         if (sourceServiceId.isBlank()) {
