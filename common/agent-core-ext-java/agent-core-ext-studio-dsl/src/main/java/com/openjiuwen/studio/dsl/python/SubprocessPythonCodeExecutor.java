@@ -231,6 +231,7 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
      * @return result
      * @since 0.1.0
      */
+
     static String toPythonLiteral(Map<String, Object> inputs) {
         return pythonRepr(inputs);
     }
@@ -354,7 +355,7 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
     }
 
     /**
-     * Tiny JSON subset parser sufficient for python json.dumps(dict) results.
+     * * * Tiny JSON subset parser sufficient for python json.dumps(dict) results.
      */
     private static final class JsonNull {
         private static final JsonNull INSTANCE = new JsonNull();

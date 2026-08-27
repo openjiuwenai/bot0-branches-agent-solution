@@ -34,29 +34,41 @@ import java.util.Map;
  */
 
 public final class ComplexIntentDetectionEngine {
+
     /**
      * USER_FIELDS.
+     *
      * @since 0.1.0
      */
+
     public static final String USER_FIELDS = "userFields";
+
     /**
      * KEY_CLASSIFICATION_ID.
+     *
      * @since 0.1.0
      */
+
     public static final String KEY_CLASSIFICATION_ID = "classificationId";
+
     /**
      * RESPONSE_CONTENT.
+     *
      * @since 0.1.0
      */
+
     public static final String RESPONSE_CONTENT = "responseContent";
+
     /**
      * INPUT.
+     *
      * @since 0.1.0
      */
+
     public static final String INPUT = "input";
 
     /**
-     * Test stub for intent + optional sub-workflow (mirrors patching IntentDetection / SubWorkflow).
+     * * * Test stub for intent + optional sub-workflow (mirrors patching IntentDetection / SubWorkflow).
      */
     public interface TestBridge {
         Map<String, Object> intentResult(Map<String, Object> convertedInputs);
@@ -69,6 +81,7 @@ public final class ComplexIntentDetectionEngine {
          * @return result
          * @since 0.1.0
          */
+
         Map<String, Object> subWorkflowResult(String workflowId, Map<String, Object> subInputs);
     }
 
@@ -87,15 +100,19 @@ public final class ComplexIntentDetectionEngine {
 
     /**
      * ComplexIntentDetectionEngine.
+     *
      * @param nodeId nodeId
      * @param nodeConfigs nodeConfigs
      * @since 0.1.0
      */
+
     public ComplexIntentDetectionEngine(String nodeId, Map<String, Object> nodeConfigs) {
         this(nodeId, nodeConfigs, null, null, null, null, null);
     }
+
     /**
      * ComplexIntentDetectionEngine.
+     *
      * @param nodeId nodeId
      * @param nodeConfigs nodeConfigs
      * @param subWorkflowResolver subWorkflowResolver
@@ -103,6 +120,7 @@ public final class ComplexIntentDetectionEngine {
      * @param buildContext buildContext
      * @since 0.1.0
      */
+
     public ComplexIntentDetectionEngine(
             String nodeId,
             Map<String, Object> nodeConfigs,
@@ -111,8 +129,10 @@ public final class ComplexIntentDetectionEngine {
             NodeBuildContext buildContext) {
         this(nodeId, nodeConfigs, subWorkflowResolver, nodeTypeRegistry, buildContext, null, null);
     }
+
     /**
      * ComplexIntentDetectionEngine.
+     *
      * @param nodeId nodeId
      * @param nodeConfigs nodeConfigs
      * @param subWorkflowResolver subWorkflowResolver
@@ -121,6 +141,7 @@ public final class ComplexIntentDetectionEngine {
      * @param toolRegistry toolRegistry
      * @since 0.1.0
      */
+
     public ComplexIntentDetectionEngine(
             String nodeId,
             Map<String, Object> nodeConfigs,
@@ -130,8 +151,10 @@ public final class ComplexIntentDetectionEngine {
             ToolRegistry toolRegistry) {
         this(nodeId, nodeConfigs, subWorkflowResolver, nodeTypeRegistry, buildContext, toolRegistry, null);
     }
+
     /**
      * ComplexIntentDetectionEngine.
+     *
      * @param nodeId nodeId
      * @param nodeConfigs nodeConfigs
      * @param subWorkflowResolver subWorkflowResolver
@@ -141,6 +164,7 @@ public final class ComplexIntentDetectionEngine {
      * @param testBridge testBridge
      * @since 0.1.0
      */
+
     public ComplexIntentDetectionEngine(
             String nodeId,
             Map<String, Object> nodeConfigs,
@@ -178,9 +202,11 @@ public final class ComplexIntentDetectionEngine {
             this.intentDetection =
                     /**
                      * IntentDetectionEngine.
+                     *
                      * @return result
                      * @since 0.1.0
                      */
+
                     new IntentDetectionEngine(this.nodeId + "-intent", config.toIntentDetectionConfigs(), toolRegistry);
         }
         this.subWorkflowResolver = subWorkflowResolver;
@@ -231,6 +257,7 @@ public final class ComplexIntentDetectionEngine {
      * @return result
      * @since 0.1.0
      */
+
     public Map<String, Object> invoke(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         try {
@@ -242,12 +269,15 @@ public final class ComplexIntentDetectionEngine {
             String intentBranch = intentPair.getValue();
 
             if (Boolean.TRUE.equals(converted.get("__single_debug_recovery__"))) {
+
                 /**
                  * wrapUserFields.
+                 *
                  * @param intentResult intentResult
                  * @return result
                  * @since 0.1.0
                  */
+
                 return wrapUserFields(intentResult);
             }
 
@@ -263,24 +293,30 @@ public final class ComplexIntentDetectionEngine {
 
             Map<String, Object> result = getAggregateResult(wfId, wfResult, enrichedIntent);
             storeStateToSession(session);
+
             /**
              * wrapUserFields.
+             *
              * @param result result
              * @return result
              * @since 0.1.0
              */
+
             return wrapUserFields(result);
         } catch (RuntimeException e) {
             rethrowGraphInterrupt(e);
             Map<String, Object> err = new LinkedHashMap<>();
             err.put("result", getDefaultResult());
             err.put("error", String.valueOf(e.getMessage()));
+
             /**
              * wrapUserFields.
+             *
              * @param err err
              * @return result
              * @since 0.1.0
              */
+
             return wrapUserFields(err);
         }
     }
@@ -386,12 +422,15 @@ public final class ComplexIntentDetectionEngine {
             } else {
                 state.setStatus(ComplexIntentState.END);
             }
+
             /**
              * flattenWorkflowResult.
+             *
              * @param out out
              * @return result
              * @since 0.1.0
              */
+
             return flattenWorkflowResult(out);
         } catch (RuntimeException e) {
             rethrowGraphInterrupt(e);
@@ -581,7 +620,7 @@ public final class ComplexIntentDetectionEngine {
                 m.forEach((k, v) -> map.put(String.valueOf(k), v));
                 state = ComplexIntentState.fromMap(map);
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }

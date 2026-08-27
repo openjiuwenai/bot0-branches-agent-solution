@@ -12,6 +12,7 @@ import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.BaseMessage;
 import com.openjiuwen.core.foundation.llm.schema.UserMessage;
 import com.openjiuwen.core.session.NodeSessionApi;
+import com.openjiuwen.core.session.interaction.WorkflowInteraction;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.rails.RailsRegistry;
@@ -453,7 +454,7 @@ public final class QuestionerEngine {
             if (!history.isEmpty()) {
                 userFields.put("chatHistory", history);
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // soft-fail
         }
     }
@@ -464,7 +465,7 @@ public final class QuestionerEngine {
     }
         try {
             context.addMessages(new UserMessage(content));
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // soft-fail
         }
     }
@@ -475,7 +476,7 @@ public final class QuestionerEngine {
     }
         try {
             context.addMessages(new AssistantMessage(content));
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // soft-fail
         }
     }
@@ -536,7 +537,7 @@ public final class QuestionerEngine {
     }
         try {
             session.trace(data);
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }
@@ -672,7 +673,7 @@ public final class QuestionerEngine {
                     m.forEach((k, v) -> cast.put(String.valueOf(k), v));
                     return QuestionerState.fromMap(cast);
                 }
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                 // mock
             }
         }
@@ -685,7 +686,7 @@ public final class QuestionerEngine {
     }
         try {
             session.updateState(Map.of(QuestionerState.KEY, state.toMap()));
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }
@@ -715,7 +716,7 @@ public final class QuestionerEngine {
                     question,
                     "nodeId",
                     nodeId));
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock / no stream
         }
     }
@@ -753,6 +754,7 @@ public final class QuestionerEngine {
      * @return result
      * @since 0.1.0
      */
+
     private static String resolveUserResponseFromHistory(Map<String, Object> userFields, String query) {
         String fromHistory = lastChatHistoryContent(userFields);
         if (fromHistory != null) {
@@ -771,7 +773,9 @@ public final class QuestionerEngine {
             ask.put("question", state.question());
             ask.put("nodeId", nodeId);
             return session.interact(ask);
-        } catch (RuntimeException ignored) {
+        } catch (WorkflowInteraction.GraphInterruptRuntimeWrapper ignored) {
+            return null;
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             return null;
         }
     }
@@ -779,7 +783,9 @@ public final class QuestionerEngine {
     private Object tryLatestReply(NodeSessionApi session, String question) {
         try {
             return session.userLatestInput(question);
-        } catch (RuntimeException ignored) {
+        } catch (WorkflowInteraction.GraphInterruptRuntimeWrapper ignored) {
+            return null;
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             return null;
         }
     }

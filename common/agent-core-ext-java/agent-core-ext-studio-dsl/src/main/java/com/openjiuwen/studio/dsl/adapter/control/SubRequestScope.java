@@ -24,12 +24,12 @@ import java.util.Map;
 public final class SubRequestScope {
 
     /**
-     * Python {@code REQUEST_VARIABLES}.
+     * * * Python {@code REQUEST_VARIABLES}.
      */
     public static final String REQUEST_KEY = "_request";
 
     /**
-     * Alternate key used by Start / SetVariable.
+     * * * Alternate key used by Start / SetVariable.
      */
     public static final String REQUEST_KEY_ALT = "_REQUEST";
 
@@ -78,7 +78,7 @@ public final class SubRequestScope {
         } catch (RuntimeException e) {
             try {
                 writeRequest(session, parentSnapshot);
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                 // soft-fail like Python
             }
         }
@@ -139,7 +139,7 @@ public final class SubRequestScope {
             if (raw instanceof Map<?, ?> m) {
                 m.forEach((k, v) -> out.put(String.valueOf(k), v));
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
         return out;
@@ -160,7 +160,7 @@ public final class SubRequestScope {
         Map<String, Object> copy = request == null ? Map.of() : DeepCopies.map(request);
         try {
             session.updateGlobalState(Map.of(REQUEST_KEY, copy, REQUEST_KEY_ALT, copy));
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }

@@ -71,7 +71,9 @@ public final class WorkflowVariableScope {
      * * Workflow execution ended — variables must not remain readable (L2 §3.7).
      *
      * @since 0.1.0
+     *
      */
+
     public synchronized void close() {
         vars.clear();
         closed = true;

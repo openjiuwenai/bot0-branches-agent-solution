@@ -24,6 +24,7 @@ public final class FlowSubWorkflowConfig {
 
     /**
      * FlowSubWorkflowConfig.
+     *
      * @param nodeId nodeId
      * @param referenceId referenceId
      * @param referencePath referencePath
@@ -33,6 +34,7 @@ public final class FlowSubWorkflowConfig {
      * @param raw raw
      * @since 0.1.0
      */
+
     public FlowSubWorkflowConfig(
             String nodeId,
             String referenceId,

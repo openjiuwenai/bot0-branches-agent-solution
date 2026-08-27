@@ -42,6 +42,7 @@ public final class LinearWorkflowTestSupport {
      * @return result
      * @since 0.1.0
      */
+
     @SuppressWarnings("unchecked")
     public static Map<String, Object> executeLinear(
             NodeTypeRegistry registry,

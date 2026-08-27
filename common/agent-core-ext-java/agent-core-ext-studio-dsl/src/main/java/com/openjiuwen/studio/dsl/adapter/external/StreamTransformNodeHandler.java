@@ -31,32 +31,32 @@ import java.util.Set;
 public final class StreamTransformNodeHandler implements NodeHandlerFactory {
 
     /**
-     * userFields key.
+     * * * userFields key.
      */
     public static final String USER_FIELDS = FlowStreamTransformEngine.USER_FIELDS;
 
     /**
-     * Python STREAM_TYPE_PARTIAL_CONTENT.
+     * * * Python STREAM_TYPE_PARTIAL_CONTENT.
      */
     public static final String STREAM_TYPE_PARTIAL_CONTENT = FlowStreamTransformEngine.STREAM_TYPE_PARTIAL_CONTENT;
 
     /**
-     * Python STREAM_TYPE_MESSAGE_END.
+     * * * Python STREAM_TYPE_MESSAGE_END.
      */
     public static final String STREAM_TYPE_MESSAGE_END = FlowStreamTransformEngine.STREAM_TYPE_MESSAGE_END;
 
     /**
-     * Python CONFIG_ERROR code.
+     * * * Python CONFIG_ERROR code.
      */
     public static final int CONFIG_ERROR = FlowStreamTransformEngine.CONFIG_ERROR;
 
     /**
-     * Python INPUT_INVALID code.
+     * * * Python INPUT_INVALID code.
      */
     public static final int INPUT_INVALID = FlowStreamTransformEngine.INPUT_INVALID;
 
     /**
-     * Python TRANSFORMER_CONFIG_ERROR code.
+     * * * Python TRANSFORMER_CONFIG_ERROR code.
      */
     public static final int TRANSFORMER_CONFIG_ERROR = FlowStreamTransformEngine.TRANSFORMER_CONFIG_ERROR;
 

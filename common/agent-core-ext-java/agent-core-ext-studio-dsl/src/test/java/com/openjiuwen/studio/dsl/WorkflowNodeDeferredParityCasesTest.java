@@ -63,6 +63,7 @@ class WorkflowNodeDeferredParityCasesTest {
      * @return result
      * @since 0.1.0
      */
+
     private static NodeSessionApi sessionWithGlobalQuery(String query) {
         NodeSessionApi session = mock(NodeSessionApi.class);
         when(session.getGlobalState("query")).thenReturn(query);
@@ -99,7 +100,7 @@ class WorkflowNodeDeferredParityCasesTest {
     }
 
     /**
-     * #29 test_case_llm_react_multy_tools_010 — simplified Start→Message echo→End.
+     * * * #29 test_case_llm_react_multy_tools_010 — simplified Start→Message echo→End.
      */
     @Nested
     class ReactToolsSimplified {
@@ -141,7 +142,7 @@ class WorkflowNodeDeferredParityCasesTest {
     }
 
     /**
-     * * #30 test_case_loop_multi_condition_logic_or — numLoop + Message {{index}} + OR breakCondition.
+     * * * * #30 test_case_loop_multi_condition_logic_or — numLoop + Message {{index}} + OR breakCondition.
      */
     @Nested
     class LoopMultiConditionOr {
@@ -212,7 +213,7 @@ class WorkflowNodeDeferredParityCasesTest {
     }
 
     /**
-     * #32 test_questioner_ssq — multi-field hang / partial resume / complete → End.
+     * * * #32 test_questioner_ssq — multi-field hang / partial resume / complete → End.
      */
     @Nested
     class QuestionerSsq {
@@ -322,7 +323,7 @@ class WorkflowNodeDeferredParityCasesTest {
     }
 
     /**
-     * #36 test_case_workflow_mult_loop_common_002 — Branch then Loop body (simplified mock).
+     * * * #36 test_case_workflow_mult_loop_common_002 — Branch then Loop body (simplified mock).
      */
     @Nested
     class MultLoopBranch {

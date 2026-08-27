@@ -22,15 +22,21 @@ import java.util.Map;
  */
 
 public final class KnowledgeRetrievalCacheStore {
+
     /**
      * IMAGE_PREFIX.
+     *
      * @since 0.1.0
      */
+
     public static final String IMAGE_PREFIX = "knowledge:image:";
+
     /**
      * FILE_PREFIX.
+     *
      * @since 0.1.0
      */
+
     public static final String FILE_PREFIX = "knowledge:file:";
 
     private static final Logger LOG = Logger.getLogger(KnowledgeRetrievalCacheStore.class.getName());
@@ -45,6 +51,7 @@ public final class KnowledgeRetrievalCacheStore {
      * @param jedis jedis
      * @since 0.1.0
      */
+
     public static void setJedis(JedisPooled jedis) {
         jedisOverride = jedis;
     }
@@ -53,7 +60,9 @@ public final class KnowledgeRetrievalCacheStore {
      * Clear in-memory cache (tests).
      *
      * @since 0.1.0
+     *
      */
+
     public static void clearMemory() {
         MEMORY.clear();
     }
@@ -118,6 +127,7 @@ public final class KnowledgeRetrievalCacheStore {
      * @return result
      * @since 0.1.0
      */
+
     static Map<String, String> memorySnapshot() {
         return Map.copyOf(MEMORY);
     }

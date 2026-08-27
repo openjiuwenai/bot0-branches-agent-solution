@@ -64,7 +64,7 @@ public final class QuestionerLlmExtractor {
             """;
 
     /**
-     * Injectable for tests (returns raw LLM text).
+     * * * Injectable for tests (returns raw LLM text).
      */
     @FunctionalInterface
     public interface ModelInvoker {
@@ -77,20 +77,25 @@ public final class QuestionerLlmExtractor {
 
     /**
      * QuestionerLlmExtractor.
+     *
      * @param nodeId nodeId
      * @param config config
      * @since 0.1.0
      */
+
     public QuestionerLlmExtractor(String nodeId, QuestionerConfig config) {
         this(nodeId, config, null);
     }
+
     /**
      * QuestionerLlmExtractor.
+     *
      * @param nodeId nodeId
      * @param config config
      * @param invoker invoker
      * @since 0.1.0
      */
+
     public QuestionerLlmExtractor(String nodeId, QuestionerConfig config, ModelInvoker invoker) {
         this.nodeId = nodeId;
         this.config = config;
@@ -136,12 +141,15 @@ public final class QuestionerLlmExtractor {
         result = tryParseTimeFromUserInput(result, query);
         result = filterValid(result);
         result = reflect(result, state, session);
+
         /**
          * validateAndConvert.
+         *
          * @param result result
          * @return result
          * @since 0.1.0
          */
+
         return validateAndConvert(result);
     }
 
@@ -453,7 +461,7 @@ public final class QuestionerLlmExtractor {
                 return;
             }
             QuestionerTraceStore.append(sessionId, nodeId, data);
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }
@@ -464,7 +472,7 @@ public final class QuestionerLlmExtractor {
     }
         try {
             session.trace(data);
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }

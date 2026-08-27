@@ -37,32 +37,32 @@ import java.util.regex.Pattern;
 public final class FlowStreamTransformEngine {
 
     /**
-     * Python USER_FIELDS.
+     * * * Python USER_FIELDS.
      */
     public static final String USER_FIELDS = "userFields";
 
     /**
-     * Python STREAM_TYPE_PARTIAL_CONTENT.
+     * * * Python STREAM_TYPE_PARTIAL_CONTENT.
      */
     public static final String STREAM_TYPE_PARTIAL_CONTENT = "end node stream";
 
     /**
-     * Python STREAM_TYPE_MESSAGE_END.
+     * * * Python STREAM_TYPE_MESSAGE_END.
      */
     public static final String STREAM_TYPE_MESSAGE_END = "message_end";
 
     /**
-     * Python CONFIG_ERROR.
+     * * * Python CONFIG_ERROR.
      */
     public static final int CONFIG_ERROR = 101170;
 
     /**
-     * Python INPUT_INVALID.
+     * * * Python INPUT_INVALID.
      */
     public static final int INPUT_INVALID = 101171;
 
     /**
-     * Python TRANSFORMER_CONFIG_ERROR.
+     * * * Python TRANSFORMER_CONFIG_ERROR.
      */
     public static final int TRANSFORMER_CONFIG_ERROR = 101172;
 
@@ -443,7 +443,7 @@ public final class FlowStreamTransformEngine {
                 new OutputSchema(type, index, getDataOfStreamingWithMetadata(answer, metadata, null));
         try {
             session.writeStream(schema);
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock session without stream writer
         }
     }
@@ -502,6 +502,7 @@ public final class FlowStreamTransformEngine {
      * @return result
      * @since 0.1.0
      */
+
     static Map<String, Object> parseLiteralOrJson(String s) {
         Map<String, Object> literal = tryPythonLiteralMap(s);
         if (literal != null) {
@@ -572,6 +573,7 @@ public final class FlowStreamTransformEngine {
      * @return result
      * @since 0.1.0
      */
+
     private static boolean isAsyncGeneratorAnalogue(Object value) {
         if (value == null || value instanceof Map<?, ?> || value instanceof CharSequence) {
         return false;

@@ -17,11 +17,13 @@ public final class FlowExceptionConfig {
 
     /**
      * FlowExceptionConfig.
+     *
      * @param nodeId nodeId
      * @param nodeName nodeName
      * @param nodeType nodeType
      * @since 0.1.0
      */
+
     public FlowExceptionConfig(String nodeId, String nodeName, String nodeType) {
         this.nodeId = nodeId == null ? "" : nodeId;
         this.nodeName = nodeName == null || nodeName.isBlank() ? this.nodeId : nodeName;

@@ -16,10 +16,13 @@ import java.util.Map;
  */
 
 public final class FlowAggregateConfig {
+
     /**
      * DEFAULT_MODE.
+     *
      * @since 0.1.0
      */
+
     public static final String DEFAULT_MODE = "first-non-null";
 
     private final String mode;
@@ -28,11 +31,13 @@ public final class FlowAggregateConfig {
 
     /**
      * FlowAggregateConfig.
+     *
      * @param mode mode
      * @param groups groups
      * @param raw raw
      * @since 0.1.0
      */
+
     public FlowAggregateConfig(String mode, Map<String, List<String>> groups, Map<String, Object> raw) {
         this.mode = mode == null || mode.isBlank() ? DEFAULT_MODE : mode;
         this.groups = groups == null ? Map.of() : Map.copyOf(copyGroups(groups));
@@ -62,6 +67,7 @@ public final class FlowAggregateConfig {
      * @return result
      * @since 0.1.0
      */
+
     @SuppressWarnings("unchecked")
     public static Map<String, List<String>> groupsMap(Object raw) {
         Map<String, List<String>> normalized = new LinkedHashMap<>();

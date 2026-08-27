@@ -17,24 +17,33 @@ public class ConversationUserMessage extends UserMessage {
 
     /**
      * ConversationUserMessage.
+     *
      * @since 0.1.0
+     *
+     * @return result
      */
+
     public ConversationUserMessage() {}
 
     /**
      * ConversationUserMessage.
+     *
      * @param content content
      * @since 0.1.0
      */
+
     public ConversationUserMessage(String content) {
         super(content);
     }
+
     /**
      * ConversationUserMessage.
+     *
      * @param content content
      * @param enableHistory enableHistory
      * @since 0.1.0
      */
+
     public ConversationUserMessage(String content, boolean enableHistory) {
         super(content);
         this.enableHistory = enableHistory;

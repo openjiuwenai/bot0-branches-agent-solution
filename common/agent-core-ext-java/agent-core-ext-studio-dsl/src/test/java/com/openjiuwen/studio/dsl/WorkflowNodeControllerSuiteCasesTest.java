@@ -119,6 +119,7 @@ class WorkflowNodeControllerSuiteCasesTest {
      * @return result
      * @since 0.1.0
      */
+
     private Map<String, Object> hangResumeMessageEnd(
             String question, String msgTemplate, String endTemplate, String resumeQuery) {
         NodeSessionApi session = sessionWithState();
@@ -167,6 +168,7 @@ class WorkflowNodeControllerSuiteCasesTest {
      * @return result
      * @since 0.1.0
      */
+
     private Map<String, Object> hangResumeEnd(String question, String endTemplate, String resumeQuery) {
         NodeSessionApi session = sessionWithState();
         ComponentExecutable start =
@@ -200,6 +202,7 @@ class WorkflowNodeControllerSuiteCasesTest {
      * @return result
      * @since 0.1.0
      */
+
     private Map<String, Object> doubleQuestionerEnd() {
         ComponentExecutable start =
                 registry.create(AssembledNode.of("start", "jiuwen.start", Map.of()), StudioEngineTestSupport.context("wf"));

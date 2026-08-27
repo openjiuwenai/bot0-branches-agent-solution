@@ -104,6 +104,7 @@ public final class KnowledgeRetrievalNodeHandler implements NodeHandlerFactory {
          * @return result
          * @since 0.1.0
          */
+
         @Override
         public Iterator<Object> stream(Object inputs, NodeSessionApi session, ModelContext context) {
             Object out = invoke(inputs, session, context);

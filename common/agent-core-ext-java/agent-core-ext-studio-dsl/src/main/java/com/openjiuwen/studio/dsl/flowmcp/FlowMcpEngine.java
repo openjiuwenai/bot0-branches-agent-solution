@@ -33,14 +33,17 @@ import java.util.Map;
  */
 
 public final class FlowMcpEngine {
+
     /**
      * USER_FIELDS.
+     *
      * @since 0.1.0
      */
+
     public static final String USER_FIELDS = "userFields";
 
     /**
-     * Python {@code JIUWEN_RUNTIME_KWARGS}.
+     * * * Python {@code JIUWEN_RUNTIME_KWARGS}.
      */
     public static final String JIUWEN_RUNTIME_KWARGS = "_jiuwen_runtime_kwargs";
 
@@ -61,9 +64,11 @@ public final class FlowMcpEngine {
 
     /**
      * FlowMcpEngine.
+     *
      * @param nodeId nodeId
      * @since 0.1.0
      */
+
     public FlowMcpEngine(String nodeId) {
         this(nodeId, null);
     }
@@ -76,6 +81,7 @@ public final class FlowMcpEngine {
      * @return result
      * @since 0.1.0
      */
+
     public FlowMcpEngine(String nodeId, McpClient presetMcpClient) {
         this.nodeId = nodeId == null ? "mcp" : nodeId;
         this.presetMcpClient = presetMcpClient;
@@ -87,6 +93,7 @@ public final class FlowMcpEngine {
      * @param conf conf
      * @since 0.1.0
      */
+
     public void init(Map<String, Object> conf) {
         Map<String, Object> c = conf == null ? Map.of() : new LinkedHashMap<>(conf);
         validateConfigs(c);
@@ -141,6 +148,7 @@ public final class FlowMcpEngine {
      * @return result
      * @since 0.1.0
      */
+
     @SuppressWarnings("unchecked")
     public Map<String, Object> invoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         if (client == null) {
@@ -212,6 +220,7 @@ public final class FlowMcpEngine {
      * @return result
      * @since 0.1.0
      */
+
     @SuppressWarnings("unchecked")
     Map<String, Object> formatApiOutputs(Map<String, Object> outputs) {
         Object errorCodeObj = outputs.getOrDefault(ERR_CODE, FlowMcpStatusCode.WORKFLOW_MCP_EXECUTE_ERROR_CODE);
@@ -288,6 +297,7 @@ public final class FlowMcpEngine {
      * @return result
      * @since 0.1.0
      */
+
     Map<String, Object> formatApiInputs(Map<String, Object> inputs) {
         Map<String, McpToolParam> byName = new LinkedHashMap<>();
         for (McpToolParam p : toolParams) {
@@ -520,7 +530,7 @@ public final class FlowMcpEngine {
     }
         try {
             return session.getGlobalState(key);
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             return null;
         }
     }
@@ -532,6 +542,7 @@ public final class FlowMcpEngine {
      * @return result
      * @since 0.1.0
      */
+
     private static boolean isOlderVersion(Object arguments) {
         if (arguments == null) {
         return true;

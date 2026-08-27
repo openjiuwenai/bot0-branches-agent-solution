@@ -41,7 +41,7 @@ public final class FlowAgentToolLoader {
                 if (tool != null) {
                     tools.add(tool);
                 }
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                 // Python logs and continues
             }
         }
@@ -68,7 +68,7 @@ public final class FlowAgentToolLoader {
             if (tool instanceof Tool t) {
                 return t;
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // resource mgr may be uninitialized in unit tests
         }
         return null;

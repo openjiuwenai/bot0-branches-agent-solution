@@ -59,6 +59,7 @@ public final class FlowEndGeneratorSupport {
      * @return result
      * @since 0.1.0
      */
+
     public static Map<String, Object> processGeneratorValues(
             Map<String, Object> inputs, Map<String, String> outToIn, Consumer<Object> streamCallback) {
         if (inputs == null || inputs.isEmpty()) {

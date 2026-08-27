@@ -18,7 +18,7 @@ public final class TemplateRenderer {
     private static final Pattern DOLLAR = Pattern.compile("\\$\\{([^}]+)}");
 
     /**
-     * Studio / Python {@code {{key}}} placeholders (message / QA / end).
+     * * * Studio / Python {@code {{key}}} placeholders (message / QA / end).
      */
     private static final Pattern MUSTACHE = Pattern.compile("\\{\\{([^{}]+?)}}");
 

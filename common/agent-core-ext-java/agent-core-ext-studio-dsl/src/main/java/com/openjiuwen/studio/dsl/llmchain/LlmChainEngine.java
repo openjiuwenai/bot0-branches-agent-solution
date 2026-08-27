@@ -35,7 +35,7 @@ public final class LlmChainEngine {
     private static final String LLM_EXTRA_CONFIGS = "llm_extra_configs";
 
     /**
-     * Invoke + stream bridge.
+     * * * Invoke + stream bridge.
      */
     public interface ModelBridge {
         AssistantMessage invoke(List<BaseMessage> messages) throws Exception;
@@ -52,9 +52,11 @@ public final class LlmChainEngine {
 
     /**
      * LlmChainEngine.
+     *
      * @param nodeId nodeId
      * @since 0.1.0
      */
+
     public LlmChainEngine(String nodeId) {
         this.nodeId = nodeId;
         this.presetBridge = null;
@@ -62,11 +64,13 @@ public final class LlmChainEngine {
 
     /**
      * LlmChainEngine.
+     *
      * @param nodeId nodeId
      * @param config config
      * @param bridge bridge
      * @since 0.1.0
      */
+
     public LlmChainEngine(String nodeId, LlmChainConfig config, ModelBridge bridge) {
         this.nodeId = nodeId;
         this.config = config;
@@ -81,6 +85,7 @@ public final class LlmChainEngine {
      * @param conf conf
      * @since 0.1.0
      */
+
     public void init(Map<String, Object> conf) {
         this.config = LlmChainConfig.from(nodeId, conf);
         this.initialized = presetBridge != null;
@@ -101,6 +106,7 @@ public final class LlmChainEngine {
      * @return result
      * @since 0.1.0
      */
+
     public Map<String, Object> invoke(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         initializeIfNeeded(session);
@@ -143,6 +149,7 @@ public final class LlmChainEngine {
      * @return result
      * @since 0.1.0
      */
+
     public Iterator<Object> stream(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         initializeIfNeeded(session);
@@ -195,8 +202,10 @@ public final class LlmChainEngine {
 
         try {
             if (isEnabled) {
+
                 /**
                  * streamThinkingEnabled.
+                 *
                  * @param languageModelInputs languageModelInputs
                  * @param outputId outputId
                  * @param nodeComponentId nodeComponentId
@@ -204,10 +213,13 @@ public final class LlmChainEngine {
                  * @return result
                  * @since 0.1.0
                  */
+
                 return streamThinkingEnabled(languageModelInputs, outputId, nodeComponentId, session);
             }
+
             /**
              * streamRealTime.
+             *
              * @param languageModelInputs languageModelInputs
              * @param outputId outputId
              * @param nodeComponentId nodeComponentId
@@ -216,6 +228,7 @@ public final class LlmChainEngine {
              * @return result
              * @since 0.1.0
              */
+
             return streamRealTime(languageModelInputs, outputId, nodeComponentId, session, outputReasoning);
         } catch (NodeExecutionException e) {
             throw e;
@@ -348,7 +361,7 @@ public final class LlmChainEngine {
     }
 
     /**
-     * Lazy pull iterator — yields content frames as chunks arrive (Python {@code _stream_real_time}).
+     * * * Lazy pull iterator — yields content frames as chunks arrive (Python {@code _stream_real_time}).
      */
     private final class RealTimeStreamIterator implements Iterator<Object> {
         private final Iterator<AssistantMessageChunk> source;
@@ -550,6 +563,8 @@ public final class LlmChainEngine {
              * @param messages messages
              * @return result
              * @since 0.1.0
+             *
+             * @throws Exception when invocation fails
              */
 
             @Override
@@ -563,6 +578,8 @@ public final class LlmChainEngine {
              * @param messages messages
              * @return result
              * @since 0.1.0
+             *
+             * @throws Exception when invocation fails
              */
 
             @Override
@@ -627,7 +644,7 @@ public final class LlmChainEngine {
                     return out;
                 }
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
         return Map.of();
@@ -698,7 +715,7 @@ public final class LlmChainEngine {
             envelope.put("index", index);
             envelope.put("data", data);
             session.writeCustomStream(envelope);
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock session
         }
     }
@@ -709,7 +726,7 @@ public final class LlmChainEngine {
     }
         try {
             session.trace(data);
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }

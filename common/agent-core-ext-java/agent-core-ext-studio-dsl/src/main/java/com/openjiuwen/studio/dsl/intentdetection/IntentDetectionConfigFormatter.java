@@ -120,6 +120,7 @@ final class IntentDetectionConfigFormatter {
      * @return result
      * @since 0.1.0
      */
+
     static IntentDetectionConfig withDefaultClass(IntentDetectionConfig base, String defaultClass) {
         return new IntentDetectionConfig(
                 base.userPrompt(),

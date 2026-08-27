@@ -375,7 +375,9 @@ public final class DateUtilCompatibleParser {
      * Test hook: reset python availability cache.
      *
      * @since 0.1.0
+     *
      */
+
     public static void resetPythonAvailabilityCacheForTest() {
         pythonDateutilAvailable = null;
     }
@@ -384,7 +386,9 @@ public final class DateUtilCompatibleParser {
      * Test hook: force Java-only parsing path.
      *
      * @since 0.1.0
+     *
      */
+
     public static void disablePythonDateutilForTest() {
         pythonDateutilAvailable = false;
     }

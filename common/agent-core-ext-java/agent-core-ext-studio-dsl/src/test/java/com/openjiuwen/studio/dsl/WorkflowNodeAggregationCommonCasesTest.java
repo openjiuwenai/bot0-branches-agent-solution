@@ -40,7 +40,9 @@ class WorkflowNodeAggregationCommonCasesTest {
      * common_02: 1 group 1 param — first-non-null(param1).
      *
      * @since 0.1.0
+     *
      */
+
     @Test
     void common02_singleGroup_firstNonNull() {
         ComponentExecutable exec = registry.create(
@@ -61,7 +63,9 @@ class WorkflowNodeAggregationCommonCasesTest {
      * common_08: 2 groups × 2 params — both groups pick first non-null.
      *
      * @since 0.1.0
+     *
      */
+
     @Test
     void common08_twoGroups_firstNonNullBothAbc() {
         ComponentExecutable exec = registry.create(
@@ -99,7 +103,9 @@ class WorkflowNodeAggregationCommonCasesTest {
      * common_08 fallback: empty first param → second.
      *
      * @since 0.1.0
+     *
      */
+
     @Test
     void common08_fallbackToSecondParam() {
         ComponentExecutable exec = registry.create(

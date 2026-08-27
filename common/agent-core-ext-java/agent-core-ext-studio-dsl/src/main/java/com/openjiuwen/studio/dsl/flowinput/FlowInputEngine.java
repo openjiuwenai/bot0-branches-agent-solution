@@ -31,20 +31,29 @@ import java.util.Map;
  */
 
 public final class FlowInputEngine {
+
     /**
      * STATE_KEY.
+     *
      * @since 0.1.0
      */
+
     public static final String STATE_KEY = "flow_input_state";
+
     /**
      * USER_FIELDS.
+     *
      * @since 0.1.0
      */
+
     public static final String USER_FIELDS = FlowInputUtils.USER_FIELDS;
+
     /**
      * JIUWEN_FLOW_INPUT_TYPE.
+     *
      * @since 0.1.0
      */
+
     public static final String JIUWEN_FLOW_INPUT_TYPE = "jiuwen.input";
 
     private final String nodeId;
@@ -55,10 +64,12 @@ public final class FlowInputEngine {
 
     /**
      * FlowInputEngine.
+     *
      * @param nodeId nodeId
      * @param config config
      * @since 0.1.0
      */
+
     public FlowInputEngine(String nodeId, Map<String, Object> config) {
         this.nodeId = nodeId;
         this.config = config == null ? Map.of() : deepCopyMap(config);
@@ -306,6 +317,7 @@ public final class FlowInputEngine {
      * @return result
      * @since 0.1.0
      */
+
     private static Object sessionInteractOnly(NodeSessionApi session, String question) {
         if (session == null) {
         return null;
@@ -325,6 +337,7 @@ public final class FlowInputEngine {
      * @return result
      * @since 0.1.0
      */
+
     private static Object resolveReplyFromInputs(Map<String, Object> inputs) {
         Map<String, Object> uf = extractWorkingFields(inputs);
         if (uf.containsKey("response")) {
@@ -400,7 +413,7 @@ public final class FlowInputEngine {
                     return FlowInputState.deserialize(out);
                 }
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
         return new FlowInputState();
@@ -412,7 +425,7 @@ public final class FlowInputEngine {
     }
         try {
             session.updateState(Map.of(STATE_KEY, state.serialize()));
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }
@@ -429,7 +442,7 @@ public final class FlowInputEngine {
             frame.put("index", index);
             frame.put("data", data);
             session.writeCustomStream(frame);
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }

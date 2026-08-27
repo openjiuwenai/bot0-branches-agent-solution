@@ -16,10 +16,13 @@ import java.util.Map;
  */
 
 public final class FlowQaConfig {
+
     /**
      * TYPE.
+     *
      * @since 0.1.0
      */
+
     public static final String TYPE = "EI.qa";
 
     private final String name;

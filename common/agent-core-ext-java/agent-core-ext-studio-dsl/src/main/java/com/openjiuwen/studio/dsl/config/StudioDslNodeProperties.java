@@ -18,7 +18,7 @@ public final class StudioDslNodeProperties {
     private String pythonExecutor = "subprocess";
 
     /**
-     * Python LOCAL_CODE_EXEC_MODE analogue: inprocess|subprocess (default inprocess).
+     * * * Python LOCAL_CODE_EXEC_MODE analogue: inprocess|subprocess (default inprocess).
      */
     private String localExecMode = "inprocess";
     private String pythonInterpreter = "python3";

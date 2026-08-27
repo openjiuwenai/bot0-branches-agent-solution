@@ -11,40 +11,57 @@ package com.openjiuwen.studio.dsl.flowsubworkflow;
  */
 
 public final class SubWorkflowException extends RuntimeException {
+
     /**
      * CONFIG_VALIDATION_ERROR.
+     *
      * @since 0.1.0
      */
+
     public static final int CONFIG_VALIDATION_ERROR = 101160;
+
     /**
      * WORKFLOW_INSTANCE_NOT_FOUND.
+     *
      * @since 0.1.0
      */
+
     public static final int WORKFLOW_INSTANCE_NOT_FOUND = 101161;
+
     /**
      * EXECUTION_ERROR.
+     *
      * @since 0.1.0
      */
+
     public static final int EXECUTION_ERROR = 101162;
+
     /**
      * STREAM_ERROR.
+     *
      * @since 0.1.0
      */
+
     public static final int STREAM_ERROR = 101163;
+
     /**
      * EXECUTION_TIMEOUT.
+     *
      * @since 0.1.0
      */
+
     public static final int EXECUTION_TIMEOUT = 101164;
 
     private final int errorCode;
 
     /**
      * SubWorkflowException.
+     *
      * @param errorCode errorCode
      * @param message message
      * @since 0.1.0
      */
+
     public SubWorkflowException(int errorCode, String message) {
         super(message);
         this.errorCode = errorCode;
@@ -52,11 +69,13 @@ public final class SubWorkflowException extends RuntimeException {
 
     /**
      * SubWorkflowException.
+     *
      * @param errorCode errorCode
      * @param message message
      * @param cause cause
      * @since 0.1.0
      */
+
     public SubWorkflowException(int errorCode, String message, Throwable cause) {
         super(message, cause);
         this.errorCode = errorCode;

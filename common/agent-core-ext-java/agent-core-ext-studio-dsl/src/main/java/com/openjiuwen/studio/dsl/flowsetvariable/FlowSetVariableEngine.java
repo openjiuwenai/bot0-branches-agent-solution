@@ -24,40 +24,52 @@ import java.util.Map;
  */
 
 public final class FlowSetVariableEngine {
+
     /**
      * USER_FIELDS.
+     *
      * @since 0.1.0
      */
+
     public static final String USER_FIELDS = "userFields";
 
     /**
-     * Python {@code GLOBAL_REF_PREFIX}.
+     * * * Python {@code GLOBAL_REF_PREFIX}.
      */
     public static final String MEMORY_PREFIX = "MEMORY_VARIABLE.";
 
     /**
-     * Python {@code MEMORY_VAR_INDICATOR}.
+     * * * Python {@code MEMORY_VAR_INDICATOR}.
      */
     public static final String MEMORY_VAR_INDICATOR = "memory";
 
     /**
-     * Python {@code REDIS_GLOBAL_VALS_NAME}.
+     * * * Python {@code REDIS_GLOBAL_VALS_NAME}.
      */
     public static final String REDIS_GLOBAL_VALS_NAME = "global.vals";
+
     /**
      * SESSION_VAR_DEFS.
+     *
      * @since 0.1.0
      */
+
     public static final String SESSION_VAR_DEFS = "_session_var_defs";
+
     /**
      * REQUEST_KEY.
+     *
      * @since 0.1.0
      */
+
     public static final String REQUEST_KEY = "_REQUEST";
+
     /**
      * REQUEST_KEY_ALT.
+     *
      * @since 0.1.0
      */
+
     public static final String REQUEST_KEY_ALT = "_request";
     private static final long DEFAULT_CONVERSATION_TTL_SECONDS = 3L * 24 * 3600;
 
@@ -68,12 +80,14 @@ public final class FlowSetVariableEngine {
 
     /**
      * FlowSetVariableEngine.
+     *
      * @param config config
      * @param scope scope
      * @param workflowId workflowId
      * @param valsStore valsStore
      * @since 0.1.0
      */
+
     public FlowSetVariableEngine(
             FlowSetVariableConfig config,
             WorkflowVariableScope scope,
@@ -286,6 +300,7 @@ public final class FlowSetVariableEngine {
      * @return result
      * @since 0.1.0
      */
+
     static Object generateValue(Map<String, Object> vars, NodeSessionApi session, Object value) {
         return generateValue(vars, Map.of(), session, value);
     }
@@ -300,6 +315,7 @@ public final class FlowSetVariableEngine {
      * @return result
      * @since 0.1.0
      */
+
     static Object generateValue(
             Map<String, Object> vars, Map<String, Object> inputUserFields, NodeSessionApi session, Object value) {
         if (value instanceof String s && SessionUtils.isRefPath(s)) {
@@ -352,6 +368,7 @@ public final class FlowSetVariableEngine {
      * @return result
      * @since 0.1.0
      */
+
     @SuppressWarnings("unchecked")
     static Object generateOutput(String[] keys, Object value) {
         Object output = value;
@@ -409,13 +426,13 @@ public final class FlowSetVariableEngine {
             if (old != null) {
                 merged.putAll(old);
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // soft-fail like Python
         }
         merged.putAll(redisPatch);
         try {
             valsStore.setMap(key, merged, conversationTtlSeconds());
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // soft-fail
         }
     }
@@ -444,7 +461,7 @@ public final class FlowSetVariableEngine {
     }
         try {
             session.updateGlobalState(Map.copyOf(globalPatch));
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }
@@ -465,7 +482,7 @@ public final class FlowSetVariableEngine {
             }
             merged.putAll(requestPatch);
             session.updateGlobalState(Map.of(REQUEST_KEY, merged, REQUEST_KEY_ALT, merged));
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }
@@ -476,7 +493,7 @@ public final class FlowSetVariableEngine {
     }
         try {
             session.updateState(Map.copyOf(vars));
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }
@@ -493,7 +510,7 @@ public final class FlowSetVariableEngine {
                 m.forEach((k, v) -> out.put(String.valueOf(k), v));
                 return out;
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
         return Map.of();
@@ -518,7 +535,7 @@ public final class FlowSetVariableEngine {
                 if (s != null && !s.isBlank()) {
                     return s;
                 }
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                 // mock
             }
         }

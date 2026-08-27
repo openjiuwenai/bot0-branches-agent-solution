@@ -58,6 +58,7 @@ public final class KnowledgeBaseConfigProviders {
      * @param storage storage
      * @since 0.1.0
      */
+
     public static void setStorageProvider(KnowledgeStorageProvider storage) {
         storageProvider = storage;
     }
@@ -66,7 +67,9 @@ public final class KnowledgeBaseConfigProviders {
      * Resets provider to OBS default and clears storage + decryptor (tests / dev only).
      *
      * @since 0.1.0
+     *
      */
+
     public static void resetToDefaults() {
         provider = new ObsKnowledgeBaseConfigProvider();
         storageProvider = null;

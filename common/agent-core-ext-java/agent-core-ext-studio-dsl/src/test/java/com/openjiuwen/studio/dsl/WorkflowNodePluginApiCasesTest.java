@@ -46,7 +46,7 @@ class WorkflowNodePluginApiCasesTest {
             Map.of("errCode", 0, "errMessage", "success", "data", MOCK_WEATHER);
 
     /**
-     * Non-empty response schema → Python unwraps {@code data}.
+     * * * Non-empty response schema → Python unwraps {@code data}.
      */
     private static final List<Map<String, Object>> RESPONSE_SCHEMA =
             List.of(Map.of("name", "latitude", "description", "lat"));

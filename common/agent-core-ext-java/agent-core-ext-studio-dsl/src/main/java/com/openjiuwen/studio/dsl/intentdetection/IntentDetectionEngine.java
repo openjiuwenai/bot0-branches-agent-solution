@@ -34,7 +34,7 @@ public final class IntentDetectionEngine {
     private static final String ENABLE_KEY = "enable";
 
     /**
-     * Test-only LLM stub wired via constructor (mirrors Python patch).
+     * * * Test-only LLM stub wired via constructor (mirrors Python patch).
      */
     private final String nodeId;
     private final Map<String, Object> llmConf;
@@ -55,31 +55,39 @@ public final class IntentDetectionEngine {
 
     /**
      * IntentDetectionEngine.
+     *
      * @param nodeId nodeId
      * @param nodeConfigs nodeConfigs
      * @since 0.1.0
      */
+
     public IntentDetectionEngine(String nodeId, Map<String, Object> nodeConfigs) {
         this(nodeId, nodeConfigs, null, null);
     }
+
     /**
      * IntentDetectionEngine.
+     *
      * @param nodeId nodeId
      * @param nodeConfigs nodeConfigs
      * @param toolRegistry toolRegistry
      * @since 0.1.0
      */
+
     public IntentDetectionEngine(String nodeId, Map<String, Object> nodeConfigs, ToolRegistry toolRegistry) {
         this(nodeId, nodeConfigs, null, toolRegistry);
     }
+
     /**
      * IntentDetectionEngine.
+     *
      * @param nodeId nodeId
      * @param nodeConfigs nodeConfigs
      * @param modelInvoker modelInvoker
      * @param toolRegistry toolRegistry
      * @since 0.1.0
      */
+
     public IntentDetectionEngine(
             String nodeId,
             Map<String, Object> nodeConfigs,
@@ -478,7 +486,7 @@ public final class IntentDetectionEngine {
                 for (BaseMessage msg : context.getMessages()) {
                     messages.add(MessageHistorySupport.toHistoryTurn(msg));
                 }
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                 // Python logs and continues
             }
         }
@@ -497,7 +505,7 @@ public final class IntentDetectionEngine {
                         }
                     }
                 }
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                 // mock session
             }
         }
@@ -549,7 +557,7 @@ public final class IntentDetectionEngine {
     }
         try {
             session.trace(Map.of("performance_metric", Map.of("intent llm cost", durationMs)));
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock session
         }
     }
@@ -563,7 +571,7 @@ public final class IntentDetectionEngine {
             if (value != null) {
                 return value;
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock session
         }
         return null;
@@ -604,7 +612,7 @@ public final class IntentDetectionEngine {
                     return out;
                 }
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock session
         }
         return Map.of();

@@ -22,17 +22,17 @@ public enum FlowMcpStatusCode {
     WORKFLOW_MCP_OUTPUTS_TYPE_ERROR(101877, "FlowMcp outputs type error: {msg}");
 
     /**
-     * Align with Python StatusCode.WORKFLOW_MCP_EXECUTE_ERROR for outer catch.
+     * * * Align with Python StatusCode.WORKFLOW_MCP_EXECUTE_ERROR for outer catch.
      */
     public static final int WORKFLOW_MCP_EXECUTE_ERROR_CODE = 101873;
 
     /**
-     * Align with Python StatusCode.SUCCESS.
+     * * * Align with Python StatusCode.SUCCESS.
      */
     public static final int SUCCESS_CODE = 0;
 
     /**
-     * Align with Python StatusCode.WORKFLOW_API_EXECUTE_ERROR.
+     * * * Align with Python StatusCode.WORKFLOW_API_EXECUTE_ERROR.
      */
     public static final int WORKFLOW_API_EXECUTE_ERROR_CODE = 105000;
 

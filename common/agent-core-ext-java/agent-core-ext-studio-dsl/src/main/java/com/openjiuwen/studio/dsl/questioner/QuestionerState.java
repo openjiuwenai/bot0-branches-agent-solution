@@ -16,25 +16,37 @@ import java.util.Set;
  */
 
 public final class QuestionerState {
+
     /**
      * KEY.
+     *
      * @since 0.1.0
      */
+
     public static final String KEY = "questioner_state";
+
     /**
      * START.
+     *
      * @since 0.1.0
      */
+
     public static final String START = "start";
+
     /**
      * USER_INTERACT.
+     *
      * @since 0.1.0
      */
+
     public static final String USER_INTERACT = "user_interact";
+
     /**
      * END.
+     *
      * @since 0.1.0
      */
+
     public static final String END = "end";
 
     private String status = START;
@@ -169,7 +181,9 @@ public final class QuestionerState {
      * incrementResponseNum.
      *
      * @since 0.1.0
+     *
      */
+
     public void incrementResponseNum() {
         responseNum++;
     }

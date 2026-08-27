@@ -28,20 +28,29 @@ import java.util.Set;
  */
 
 public final class ParamOutputNodeHandler implements NodeHandlerFactory {
+
     /**
      * TYPE.
+     *
      * @since 0.1.0
      */
+
     public static final String TYPE = "EI.ParamOutput";
+
     /**
      * USER_FIELDS.
+     *
      * @since 0.1.0
      */
+
     public static final String USER_FIELDS = "userFields";
+
     /**
      * SYSTEM_FIELDS.
+     *
      * @since 0.1.0
      */
+
     public static final String SYSTEM_FIELDS = "systemFields";
 
     /**
@@ -89,6 +98,7 @@ public final class ParamOutputNodeHandler implements NodeHandlerFactory {
      * @return result
      * @since 0.1.0
      */
+
     public static Map<String, Object> passthrough(Object inputs) {
         Map<String, Object> result = new LinkedHashMap<>();
         if (inputs instanceof Map<?, ?> m) {

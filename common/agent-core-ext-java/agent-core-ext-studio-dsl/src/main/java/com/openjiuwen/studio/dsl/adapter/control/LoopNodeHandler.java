@@ -102,6 +102,8 @@ public final class LoopNodeHandler implements NodeHandlerFactory {
          * @param context context
          * @return result
          * @since 0.1.0
+         *
+         * @throws Exception when invocation fails
          */
 
         @Override

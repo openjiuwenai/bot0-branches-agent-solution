@@ -222,7 +222,7 @@ public final class KnowledgeRetrievalEngine {
         for (List<Map<String, Object>> group : groups.values()) {
             try {
                 all.addAll(searchWithFaqFallback(adapter, query, connection, group, retrievalParams));
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                 // Python logs and continues
             }
         }
@@ -401,7 +401,7 @@ public final class KnowledgeRetrievalEngine {
                         }
                     }
                 }
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                 // mock
             }
         }

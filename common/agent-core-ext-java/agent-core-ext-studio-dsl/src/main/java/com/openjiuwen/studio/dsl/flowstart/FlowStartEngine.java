@@ -32,12 +32,14 @@ public final class FlowStartEngine {
 
     /**
      * FlowStartEngine.
+     *
      * @param nodeId nodeId
      * @param config config
      * @param buildWorkflowId buildWorkflowId
      * @param valsStore valsStore
      * @since 0.1.0
      */
+
     public FlowStartEngine(
             String nodeId, FlowStartConfig config, String buildWorkflowId, ConversationValsStore valsStore) {
         this.config = config == null ? FlowStartConfig.fromNodeConfigs(Map.of(), nodeId) : config;
@@ -83,7 +85,7 @@ public final class FlowStartEngine {
             // Python set_outputs({userFields: {...memory}}); NodeSessionApi has no set_outputs — best-effort
             try {
                 session.updateState(Map.of("userFields", ufWithMemory));
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                 // soft
             }
             Map<String, Object> memoryGlobal = new LinkedHashMap<>();
@@ -134,7 +136,7 @@ public final class FlowStartEngine {
                 if (wid != null && !wid.isBlank()) {
                     return wid;
                 }
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                 // mock
             }
         }
@@ -161,7 +163,7 @@ public final class FlowStartEngine {
                 if (sid != null && !sid.isBlank()) {
                     return sid;
                 }
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                 // mock
             }
         }
@@ -319,6 +321,7 @@ public final class FlowStartEngine {
      * @return result
      * @since 0.1.0
      */
+
     static Map<String, Object> readRequestVars(NodeSessionApi session) {
         if (session == null) {
             return Map.of();
@@ -328,7 +331,7 @@ public final class FlowStartEngine {
             if (fromScope != null && !fromScope.isEmpty()) {
                 return fromScope;
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // soft
         }
         for (String key : List.of(SubRequestScope.REQUEST_KEY, SubRequestScope.REQUEST_KEY_ALT, "REQUEST_VARIABLES")) {
@@ -363,7 +366,7 @@ public final class FlowStartEngine {
             if (state instanceof Map<?, ?> m2) {
                 return FlowStartAssignmentSupport.stringKeyed(m2);
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // soft
         }
         return Map.of();

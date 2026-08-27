@@ -353,7 +353,7 @@ final class LlmChainPrompt {
         if (memoryMsg == null && session != null) {
             try {
                 memoryMsg = session.getGlobalState(MEMORY_MESSAGE);
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                 // mock
             }
         }
@@ -369,7 +369,7 @@ final class LlmChainPrompt {
                         }
                     }
                 }
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                 // mock
             }
         }
@@ -555,7 +555,7 @@ final class LlmChainPrompt {
                 return;
             }
             // No Java retrieve_memory_prompt port — soft no-op (parity with failed retrieve).
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // soft-fail
         }
     }

@@ -46,7 +46,9 @@ public final class SharedJedisPool {
      * Test hook — clear memoized client.
      *
      * @since 0.1.0
+     *
      */
+
     static void resetForTests() {
         synchronized (SharedJedisPool.class) {
             cached = null;

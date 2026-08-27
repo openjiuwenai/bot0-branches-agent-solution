@@ -177,6 +177,7 @@ public final class ExtractorConfig {
      * @return result
      * @since 0.1.0
      */
+
     public Boolean inputComplement() {
         return inputComplement;
     }
@@ -187,6 +188,7 @@ public final class ExtractorConfig {
      * @return result
      * @since 0.1.0
      */
+
     public Boolean extractFieldsFromResponse() {
         return extractFieldsFromResponse;
     }

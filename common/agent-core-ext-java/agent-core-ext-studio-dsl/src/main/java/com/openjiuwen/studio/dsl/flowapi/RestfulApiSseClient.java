@@ -35,7 +35,7 @@ import java.util.NoSuchElementException;
 public final class RestfulApiSseClient {
 
     /**
-     * Python {@code DATA_PREFIX}.
+     * * * Python {@code DATA_PREFIX}.
      */
     public static final String DATA_PREFIX = "data:";
 
@@ -60,6 +60,7 @@ public final class RestfulApiSseClient {
      * @return result
      * @since 0.1.0
      */
+
     public static Iterator<Object> parseSseDataLines(InputStream in, long deadlineMs) {
         long deadlineNanos = deadlineMs > 0 ? System.nanoTime() + deadlineMs * 1_000_000L : 0L;
         BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));

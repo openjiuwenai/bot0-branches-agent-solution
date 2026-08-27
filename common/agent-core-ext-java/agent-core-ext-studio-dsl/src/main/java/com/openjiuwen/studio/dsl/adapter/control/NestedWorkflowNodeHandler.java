@@ -40,6 +40,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Collections;
 
 /**
  * jiuwen.subWorkflow — strict 1:1 with Python {@code sub_workflow.py} ({@code SubWorkflow}).
@@ -56,9 +57,11 @@ public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
 
     /**
      * NestedWorkflowNodeHandler.
+     *
      * @param registry registry
      * @since 0.1.0
      */
+
     public NestedWorkflowNodeHandler(NodeTypeRegistry registry) {
         this.registry = registry;
     }
@@ -158,6 +161,7 @@ public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
          * @return result
          * @since 0.1.0
          */
+
         public SubWorkflowComponent coreComponent() {
             return assembled.component();
         }
@@ -168,6 +172,7 @@ public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
          * @return result
          * @since 0.1.0
          */
+
         public FlowSubWorkflowEngine engine() {
             return engine;
         }
@@ -673,7 +678,7 @@ public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
             try {
                 Iterator<Object> it = exec.stream(inputs, session, context);
                 if (it == null || !it.hasNext()) {
-                    return null;
+                    return Collections.emptyIterator();
                 }
                 List<Object> buf = new ArrayList<>();
                 buf.add(it.next());
@@ -684,12 +689,12 @@ public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
             } catch (RuntimeException e) {
                 String msg = e.getMessage() == null ? "" : e.getMessage();
                 if (msg.contains("missing required method: stream") || msg.contains("stream()")) {
-                    return null;
+                    return Collections.emptyIterator();
                 }
                 if (e instanceof NodeExecutionException) {
                     throw e;
                 }
-                return null;
+                return Collections.emptyIterator();
             }
         }
 
@@ -747,7 +752,7 @@ public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> fm = (Map<String, Object>) frame;
                 session.writeCustomStream(fm);
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                 // mock
             }
         }

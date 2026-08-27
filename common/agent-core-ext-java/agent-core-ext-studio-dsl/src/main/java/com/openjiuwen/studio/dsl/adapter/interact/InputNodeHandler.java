@@ -28,7 +28,7 @@ import java.util.Set;
 public final class InputNodeHandler implements NodeHandlerFactory {
 
     /**
-     * Python FLOW_INPUT_STATE_KEY.
+     * * * Python FLOW_INPUT_STATE_KEY.
      */
     public static final String STATE_KEY = FlowInputEngine.STATE_KEY;
 

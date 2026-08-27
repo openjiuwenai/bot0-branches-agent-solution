@@ -43,36 +43,53 @@ import java.util.Map;
  */
 
 public final class FlowApiEngine {
+
     /**
      * USER_FIELDS.
+     *
      * @since 0.1.0
      */
+
     public static final String USER_FIELDS = "userFields";
+
     /**
      * EXCEPTION_ENABLE.
+     *
      * @since 0.1.0
      */
+
     public static final String EXCEPTION_ENABLE = "exceptionEnable";
+
     /**
      * EXCEPTION_SUPPRESSION.
+     *
      * @since 0.1.0
      */
+
     public static final String EXCEPTION_SUPPRESSION = "exceptionSuppression";
+
     /**
      * OLD_IR_PLUGIN_RESPONSE.
+     *
      * @since 0.1.0
      */
+
     public static final String OLD_IR_PLUGIN_RESPONSE = "raw_output";
 
     /**
      * PLUGIN_PARAM_MISS.
+     *
      * @since 0.1.0
      */
+
     public static final String PLUGIN_PARAM_MISS = "plugin_param_miss";
+
     /**
      * PLUGIN_CALL_CONFIRM.
+     *
      * @since 0.1.0
      */
+
     public static final String PLUGIN_CALL_CONFIRM = "plugin_call_confirm";
 
     /**
@@ -87,7 +104,7 @@ public final class FlowApiEngine {
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
     /**
-     * Test stub for ainvoke/astream (mirrors patching RestfulApiToolNew).
+     * * * Test stub for ainvoke/astream (mirrors patching RestfulApiToolNew).
      */
     public interface TestBridge {
         Map<String, Object> ainvoke(String apiId, Map<String, Object> inputs, Map<String, String> headers);
@@ -114,18 +131,23 @@ public final class FlowApiEngine {
 
     /**
      * FlowApiEngine.
+     *
      * @param nodeId nodeId
      * @since 0.1.0
      */
+
     public FlowApiEngine(String nodeId) {
         this(nodeId, null);
     }
+
     /**
      * FlowApiEngine.
+     *
      * @param nodeId nodeId
      * @param bridge bridge
      * @since 0.1.0
      */
+
     public FlowApiEngine(String nodeId, TestBridge bridge) {
         this.nodeId = nodeId == null ? "plugin" : nodeId;
         this.presetBridge = bridge;
@@ -148,6 +170,7 @@ public final class FlowApiEngine {
      * @param conf conf
      * @since 0.1.0
      */
+
     @SuppressWarnings("unchecked")
     public void init(Map<String, Object> conf) {
         Map<String, Object> c = conf == null ? Map.of() : new LinkedHashMap<>(conf);
@@ -229,6 +252,7 @@ public final class FlowApiEngine {
      * @return result
      * @since 0.1.0
      */
+
     @SuppressWarnings("unchecked")
     public Map<String, Object> invoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         try {
@@ -281,6 +305,7 @@ public final class FlowApiEngine {
      * @return result
      * @since 0.1.0
      */
+
     public Iterator<Object> stream(Object inputs, NodeSessionApi session, ModelContext context) {
         List<Object> frames = new ArrayList<>();
         try {
@@ -366,13 +391,17 @@ public final class FlowApiEngine {
      * @return result
      * @since 0.1.0
      */
+
     public Map<String, Object> formatApiOutputs(Object outputs) {
+
         /**
          * formatApiOutputs.
+         *
          * @param outputs outputs
          * @return result
          * @since 0.1.0
          */
+
         return formatApiOutputs(outputs, !response.isEmpty());
     }
 
@@ -383,6 +412,7 @@ public final class FlowApiEngine {
      * @return result
      * @since 0.1.0
      */
+
     public static Map<String, Object> formatApiOutputsStatic(Object outputs) {
         FlowApiEngine tmp = new FlowApiEngine("plugin");
         boolean hasResponse = false;
@@ -459,12 +489,16 @@ public final class FlowApiEngine {
      * @return result
      * @since 0.1.0
      */
+
     public Map<String, String> getAuthToken() {
+
         /**
          * getAuthToken.
+         *
          * @return result
          * @since 0.1.0
          */
+
         return getAuthToken(Map.of());
     }
 
@@ -581,12 +615,15 @@ public final class FlowApiEngine {
             return bridge.ainvoke(apiId, inputs, headers);
         }
         if (mockResponse != null) {
+
             /**
              * asMap.
+             *
              * @param mockResponse mockResponse
              * @return result
              * @since 0.1.0
              */
+
             return asMap(mockResponse);
         }
         if (apiId != null && !apiId.isBlank() && toolRegistry != null) {
@@ -601,21 +638,27 @@ public final class FlowApiEngine {
                 kwargs.put("runtime_auth", Map.of("headers", headers));
             }
             Object raw = tool.invoke(inputs, kwargs);
+
             /**
              * asMap.
+             *
              * @param raw raw
              * @return result
              * @since 0.1.0
              */
+
             return asMap(raw);
         }
+
         /**
          * invokeHttp.
+         *
          * @param inputs inputs
          * @param headers headers
          * @return result
          * @since 0.1.0
          */
+
         return invokeHttp(inputs, headers);
     }
 
@@ -648,11 +691,13 @@ public final class FlowApiEngine {
         // IR HTTP SSE — 1:1 RestfulApiToolNew.astream (data: lines)
         /**
          * streamHttpSse.
+         *
          * @param inputs inputs
          * @param headers headers
          * @return result
          * @since 0.1.0
          */
+
         return streamHttpSse(inputs, headers);
     }
 
@@ -978,7 +1023,7 @@ public final class FlowApiEngine {
     }
         try {
             return session.getGlobalState(key);
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             return null;
         }
     }
@@ -1042,6 +1087,7 @@ public final class FlowApiEngine {
      * @return result
      * @since 0.1.0
      */
+
     public record WorkflowMetadata(String nodeId, String nodeType, String nodeName) {
         static final WorkflowMetadata EMPTY = new WorkflowMetadata("", "", "");
 

@@ -94,7 +94,9 @@ public final class KerberosAuth {
      * clear cached subjects (tests).
      *
      * @since 0.1.0
+     *
      */
+
     public static void clearCache() {
         SUBJECT_CACHE.clear();
     }

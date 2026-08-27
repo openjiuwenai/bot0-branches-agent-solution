@@ -20,10 +20,13 @@ import java.util.Map;
  */
 
 public final class FlowInputUtils {
+
     /**
      * USER_FIELDS.
+     *
      * @since 0.1.0
      */
+
     public static final String USER_FIELDS = "userFields";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -308,6 +311,7 @@ public final class FlowInputUtils {
      * @return result
      * @since 0.1.0
      */
+
     private static boolean isPythonFalsy(Object value) {
         if (value == null) {
         return true;

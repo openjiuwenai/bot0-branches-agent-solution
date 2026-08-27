@@ -25,6 +25,7 @@ public final class CustomerHeaderInject {
      * @param on on
      * @since 0.1.0
      */
+
     public static void setEnabled(boolean on) {
         enabled = on;
     }

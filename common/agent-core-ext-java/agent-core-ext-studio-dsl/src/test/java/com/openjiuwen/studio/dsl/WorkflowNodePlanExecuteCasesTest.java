@@ -166,6 +166,7 @@ class WorkflowNodePlanExecuteCasesTest {
      * @return result
      * @since 0.1.0
      */
+
     private static Map<String, Object> mergeInvoke(
             Map<String, Object> current, ComponentExecutable exec, NodeSessionApi session) {
         return WorkflowAssemblyBridge.mergeLinearStep(current, asMap(exec.invoke(current, session, null)), null);

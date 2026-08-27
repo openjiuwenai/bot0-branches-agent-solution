@@ -18,12 +18,12 @@ import java.util.Objects;
 public final class WorkflowAbortException extends RuntimeException {
 
     /**
-     * Python {@code WORKFLOW_EXCEPTION_END_ERROR[0]}.
+     * * * Python {@code WORKFLOW_EXCEPTION_END_ERROR[0]}.
      */
     public static final int ERROR_CODE = 101924;
 
     /**
-     * Python {@code WORKFLOW_EXCEPTION_END_ERROR[1]}.
+     * * * Python {@code WORKFLOW_EXCEPTION_END_ERROR[1]}.
      */
     public static final String ERROR_MESSAGE =
             "The workflow anomaly termination component terminates execution";
@@ -35,12 +35,14 @@ public final class WorkflowAbortException extends RuntimeException {
 
     /**
      * WorkflowAbortException.
+     *
      * @param data data
      * @param nodeId nodeId
      * @param nodeName nodeName
      * @param nodeType nodeType
      * @since 0.1.0
      */
+
     public WorkflowAbortException(
             Map<String, Object> data, String nodeId, String nodeName, String nodeType) {
         super(ERROR_MESSAGE);

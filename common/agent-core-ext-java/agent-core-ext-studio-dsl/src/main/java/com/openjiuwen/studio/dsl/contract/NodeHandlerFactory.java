@@ -49,11 +49,14 @@ public interface NodeHandlerFactory {
         if (irType == null) {
         return false;
     }
+
         /**
          * canonicalType.
+         *
          * @return result
          * @since 0.1.0
          */
+
         return canonicalType().equals(irType) || aliases().contains(irType);
     }
 

@@ -119,6 +119,7 @@ public final class StudioEngineTestSupport {
      * @return result
      * @since 0.1.0
      */
+
     public static NodeBuildContext withCurrentOverrides(NodeBuildContext ctx) {
         StudioEngineTestOverrides o = OVERRIDES.get();
         return o == null || ctx == null ? ctx : ctx.withTestOverrides(o);
@@ -338,12 +339,15 @@ public final class StudioEngineTestSupport {
 
     @FunctionalInterface
     private interface OverrideBridge<T> {
+
         /**
          * get.
+         *
          * @param overrides overrides
          * @return result
          * @since 0.1.0
          */
+
         T get(StudioEngineTestOverrides overrides);
     }
 

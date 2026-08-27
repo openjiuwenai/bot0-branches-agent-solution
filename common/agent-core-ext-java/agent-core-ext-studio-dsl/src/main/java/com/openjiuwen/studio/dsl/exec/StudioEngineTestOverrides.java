@@ -132,6 +132,12 @@ public final class StudioEngineTestOverrides {
      *
      * @since 0.1.0
      */
+
+    /**
+     * Builder.
+     *
+     * @since 0.1.0
+     */
     public static final class Builder {
         private LlmChainEngine.ModelBridge llmBridge;
         private IntentDetectionLlmDetector.ModelInvoker intentInvoker;

@@ -17,34 +17,48 @@ import java.util.Map;
  */
 
 public final class FlowExceptionEngine {
+
     /**
      * USER_FIELDS.
+     *
      * @since 0.1.0
      */
+
     public static final String USER_FIELDS = "userFields";
+
     /**
      * WORKFLOW_EXCEPTION.
+     *
      * @since 0.1.0
      */
+
     public static final String WORKFLOW_EXCEPTION = "workflow_exception";
+
     /**
      * ABORT_FLAG.
+     *
      * @since 0.1.0
      */
+
     public static final String ABORT_FLAG = "__abort__";
+
     /**
      * EXCEPTION_NODE_ID_KEY.
+     *
      * @since 0.1.0
      */
+
     public static final String EXCEPTION_NODE_ID_KEY = "jiuwen_exception_node_id";
 
     private final FlowExceptionConfig config;
 
     /**
      * FlowExceptionEngine.
+     *
      * @param config config
      * @since 0.1.0
      */
+
     public FlowExceptionEngine(FlowExceptionConfig config) {
         this.config = config;
     }
@@ -164,7 +178,7 @@ public final class FlowExceptionEngine {
     }
         try {
             session.updateGlobalState(Map.of(ABORT_FLAG, true));
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }
@@ -179,7 +193,7 @@ public final class FlowExceptionEngine {
             frame.put("index", 0);
             frame.put("data", data);
             session.writeCustomStream(frame);
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }
@@ -190,7 +204,7 @@ public final class FlowExceptionEngine {
     }
         try {
             session.trace(data);
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock / API optional
         }
     }

@@ -59,6 +59,7 @@ public final class MessageHistorySupport {
      * @return result
      * @since 0.1.0
      */
+
     public static Map<String, Object> toHistoryTurn(BaseMessage msg) {
         Map<String, Object> turn = new LinkedHashMap<>();
         turn.put("role", msg.getRole() == null ? "" : msg.getRole());

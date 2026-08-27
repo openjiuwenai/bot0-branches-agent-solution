@@ -95,31 +95,39 @@ public final class IntentDetectionLlmDetector {
 
     /**
      * IntentDetectionLlmDetector.
+     *
      * @param nodeId nodeId
      * @param config config
      * @since 0.1.0
      */
+
     public IntentDetectionLlmDetector(String nodeId, IntentDetectionConfig config) {
         this(nodeId, config, null, Map.of());
     }
+
     /**
      * IntentDetectionLlmDetector.
+     *
      * @param nodeId nodeId
      * @param config config
      * @param invoker invoker
      * @since 0.1.0
      */
+
     public IntentDetectionLlmDetector(String nodeId, IntentDetectionConfig config, ModelInvoker invoker) {
         this(nodeId, config, invoker, Map.of());
     }
+
     /**
      * IntentDetectionLlmDetector.
+     *
      * @param nodeId nodeId
      * @param config config
      * @param invoker invoker
      * @param modelMap modelMap
      * @since 0.1.0
      */
+
     public IntentDetectionLlmDetector(
             String nodeId, IntentDetectionConfig config, ModelInvoker invoker, Map<String, Object> modelMap) {
         this.nodeId = nodeId;
@@ -168,6 +176,7 @@ public final class IntentDetectionLlmDetector {
      * @return result
      * @since 0.1.0
      */
+
     public String invokeLlm(
             String input,
             String chatHistory,
@@ -216,6 +225,7 @@ public final class IntentDetectionLlmDetector {
      * @return result
      * @since 0.1.0
      */
+
     public DetectionResult detect(
             String input,
             String chatHistory,
@@ -347,7 +357,7 @@ public final class IntentDetectionLlmDetector {
             if (memoryMsg instanceof BaseMessage baseMessage) {
                 messages.add(baseMessage);
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock session
         }
     }
@@ -405,7 +415,7 @@ public final class IntentDetectionLlmDetector {
     }
         try {
             session.trace(data);
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock session
         }
     }

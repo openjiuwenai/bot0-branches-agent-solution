@@ -35,6 +35,7 @@ public final class OpenJiuwenKBAdapter implements KBServiceAdapter {
      * @param d d
      * @since 0.1.0
      */
+
     public static void setSearchDelegate(SearchDelegate d) {
         delegate = d;
     }

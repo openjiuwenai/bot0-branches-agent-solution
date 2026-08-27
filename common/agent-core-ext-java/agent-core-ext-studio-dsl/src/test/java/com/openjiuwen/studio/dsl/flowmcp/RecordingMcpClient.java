@@ -30,10 +30,12 @@ public final class RecordingMcpClient implements McpClient {
 
     /**
      * RecordingMcpClient.
+     *
      * @param tools tools
      * @param callHandler callHandler
      * @since 0.1.0
      */
+
     public RecordingMcpClient(List<McpToolCard> tools, BiFunction<String, Map<String, Object>, Object> callHandler) {
         this.tools = tools == null ? List.of() : List.copyOf(tools);
         this.callHandler = callHandler;

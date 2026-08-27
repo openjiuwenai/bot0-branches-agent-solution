@@ -39,15 +39,18 @@ import java.util.Map;
  */
 
 public final class FlowAgentEngine {
+
     /**
      * USER_FIELDS.
+     *
      * @since 0.1.0
      */
+
     public static final String USER_FIELDS = "userFields";
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /**
-     * Test / host stub for ReAct invoke+stream (mirrors patching ReActAgent).
+     * * * Test / host stub for ReAct invoke+stream (mirrors patching ReActAgent).
      */
     public interface ReactBridge {
         Map<String, Object> invoke(Map<String, Object> mappedInputs) throws IOException, InterruptedException;
@@ -67,9 +70,11 @@ public final class FlowAgentEngine {
 
     /**
      * FlowAgentEngine.
+     *
      * @param nodeId nodeId
      * @since 0.1.0
      */
+
     public FlowAgentEngine(String nodeId) {
         this.nodeId = nodeId == null ? "agent" : nodeId;
         this.presetBridge = null;
@@ -77,11 +82,13 @@ public final class FlowAgentEngine {
 
     /**
      * FlowAgentEngine.
+     *
      * @param nodeId nodeId
      * @param config config
      * @param bridge bridge
      * @since 0.1.0
      */
+
     public FlowAgentEngine(String nodeId, FlowAgentConfig config, ReactBridge bridge) {
         this.nodeId = nodeId;
         this.config = config;
@@ -97,6 +104,7 @@ public final class FlowAgentEngine {
      * @param conf conf
      * @since 0.1.0
      */
+
     public void init(Map<String, Object> conf) {
         this.config = FlowAgentConfig.from(nodeId, conf);
         this.initialized = presetBridge != null;
@@ -123,6 +131,7 @@ public final class FlowAgentEngine {
      * @return result
      * @since 0.1.0
      */
+
     public FlowAgentEngine addTool(Tool tool) {
         if (tool != null) {
         tools.add(tool);
@@ -137,6 +146,7 @@ public final class FlowAgentEngine {
      * @return result
      * @since 0.1.0
      */
+
     public FlowAgentEngine addTools(List<Tool> more) {
         if (more != null) {
         tools.addAll(more);
@@ -186,6 +196,7 @@ public final class FlowAgentEngine {
      * @return result
      * @since 0.1.0
      */
+
     public Map<String, Object> invoke(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         ensureInitialized();
@@ -194,12 +205,15 @@ public final class FlowAgentEngine {
             Map<String, Object> result = bridge != null
                     ? bridge.invoke(mapped)
                     : asMap(reactAgent.invoke(mapped, toSession(session)));
+
             /**
              * formatInvokeOutput.
+             *
              * @param result result
              * @return result
              * @since 0.1.0
              */
+
             return formatInvokeOutput(result);
         } catch (RuntimeException | IOException | InterruptedException e) {
             Map<String, Object> err = new LinkedHashMap<>();
@@ -218,6 +232,7 @@ public final class FlowAgentEngine {
      * @return result
      * @since 0.1.0
      */
+
     public Iterator<Object> stream(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         ensureInitialized();
@@ -247,6 +262,7 @@ public final class FlowAgentEngine {
      * @return result
      * @since 0.1.0
      */
+
     public Map<String, Object> collect(
             Object inputs, NodeSessionApi session, ModelContext context) {
         ensureInitialized();
@@ -265,12 +281,15 @@ public final class FlowAgentEngine {
             Object result = bridge != null
                     ? bridge.invoke(mapped)
                     : reactAgent.invoke(mapped, toSession(session));
+
             /**
              * asMap.
+             *
              * @param result result
              * @return result
              * @since 0.1.0
              */
+
             return asMap(result);
         } catch (RuntimeException | IOException | InterruptedException e) {
             Map<String, Object> err = new LinkedHashMap<>();
@@ -391,7 +410,7 @@ public final class FlowAgentEngine {
                 } catch (RuntimeException ignored) {
                     // soft-fail like Python
                 }
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                 // soft-fail
             }
         }

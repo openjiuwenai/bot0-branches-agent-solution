@@ -15,20 +15,29 @@ import java.util.Objects;
  */
 
 public final class FlowInputState {
+
     /**
      * START.
+     *
      * @since 0.1.0
      */
+
     public static final String START = "start";
+
     /**
      * USER_INTERACT.
+     *
      * @since 0.1.0
      */
+
     public static final String USER_INTERACT = "user_interact";
+
     /**
      * END.
+     *
      * @since 0.1.0
      */
+
     public static final String END = "end";
 
     private String status;
@@ -36,17 +45,24 @@ public final class FlowInputState {
 
     /**
      * FlowInputState.
+     *
      * @since 0.1.0
+     *
+     * @return result
      */
+
     public FlowInputState() {
         this(START, "");
     }
+
     /**
      * FlowInputState.
+     *
      * @param status status
      * @param question question
      * @since 0.1.0
      */
+
     public FlowInputState(String status, String question) {
         this.status = status == null ? START : status;
         this.question = question == null ? "" : question;

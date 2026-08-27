@@ -676,7 +676,7 @@ public final class EndNodeHandler implements NodeHandlerFactory {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> fm = (Map<String, Object>) frame;
                 session.writeCustomStream(fm);
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                 // mock
             }
         }

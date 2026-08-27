@@ -14,25 +14,37 @@ import java.util.Map;
  */
 
 public final class ComplexIntentState {
+
     /**
      * START.
+     *
      * @since 0.1.0
      */
+
     public static final String START = "START";
+
     /**
      * END.
+     *
      * @since 0.1.0
      */
+
     public static final String END = "END";
+
     /**
      * USER_INTERACT.
+     *
      * @since 0.1.0
      */
+
     public static final String USER_INTERACT = "USER_INTERACT";
+
     /**
      * STATE_KEY.
+     *
      * @since 0.1.0
      */
+
     public static final String STATE_KEY = "complex_intent_state";
 
     private String status = START;

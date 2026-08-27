@@ -25,7 +25,7 @@ import java.util.Set;
 public final class SessionStateIsolator {
 
     /**
-     * Align with Python {@code CHILD_INTERRUPT_STATE_KEYS}.
+     * * * Align with Python {@code CHILD_INTERRUPT_STATE_KEYS}.
      */
     public static final Set<String> CHILD_INTERRUPT_STATE_KEYS =
             Set.of("questioner_state", "flow_qa_state", "flow_input_state");

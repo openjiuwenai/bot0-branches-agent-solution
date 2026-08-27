@@ -413,7 +413,7 @@ final class StudioLoopGroupAssembler {
                     if (v != null) {
                         merged.put(k, v);
                     }
-                } catch (RuntimeException ignored) {
+                } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                     // soft
                 }
             }
@@ -437,7 +437,7 @@ final class StudioLoopGroupAssembler {
     }
 
     /**
-     * IR {@code breakCondition} as core {@link LoopBreakComponent}.
+     * * * IR {@code breakCondition} as core {@link LoopBreakComponent}.
      */
     static final class StudioLoopBreakAdapter extends LoopBreakComponent {
         private final Object breakCond;

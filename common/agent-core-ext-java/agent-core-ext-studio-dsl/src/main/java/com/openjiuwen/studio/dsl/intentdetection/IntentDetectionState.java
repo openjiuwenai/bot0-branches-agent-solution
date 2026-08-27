@@ -13,7 +13,7 @@ package com.openjiuwen.studio.dsl.intentdetection;
 public final class IntentDetectionState {
 
     /**
-     * Python {@code ExecutionStatus}.
+     * * * Python {@code ExecutionStatus}.
      */
     public enum ExecutionStatus {
         START,
@@ -51,6 +51,7 @@ public final class IntentDetectionState {
      * @return result
      * @since 0.1.0
      */
+
     public IntentDetectionState copy() {
         IntentDetectionState copy = new IntentDetectionState();
         copy.status = this.status;

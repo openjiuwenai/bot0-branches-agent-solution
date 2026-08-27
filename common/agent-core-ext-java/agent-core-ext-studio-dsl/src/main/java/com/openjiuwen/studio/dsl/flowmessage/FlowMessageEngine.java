@@ -25,29 +25,41 @@ import java.util.Map;
  */
 
 public final class FlowMessageEngine {
+
     /**
      * MESSAGE_OUTPUTS_KEY.
+     *
      * @since 0.1.0
      */
+
     public static final String MESSAGE_OUTPUTS_KEY = "message_outputs";
+
     /**
      * USER_FIELDS.
+     *
      * @since 0.1.0
      */
+
     public static final String USER_FIELDS = "userFields";
+
     /**
      * NODE_TYPE.
+     *
      * @since 0.1.0
      */
+
     public static final String NODE_TYPE = "message";
+
     /**
      * JIUWEN_MESSAGE_TYPE.
+     *
      * @since 0.1.0
      */
+
     public static final String JIUWEN_MESSAGE_TYPE = "jiuwen.message";
 
     /**
-     * Python {@code MESSAGE_NODE_STREAM}.
+     * * * Python {@code MESSAGE_NODE_STREAM}.
      */
     public static final String MESSAGE_NODE_STREAM = "message node stream";
 
@@ -59,10 +71,12 @@ public final class FlowMessageEngine {
 
     /**
      * FlowMessageEngine.
+     *
      * @param nodeId nodeId
      * @param config config
      * @since 0.1.0
      */
+
     public FlowMessageEngine(String nodeId, FlowMessageConfig config) {
         this.nodeId = nodeId;
         this.config = config;
@@ -241,13 +255,13 @@ public final class FlowMessageEngine {
                 scope.put("host_workflow_id", wf);
                 scope.put("root_workflow_id", wf);
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
         try {
             Object exec = session.getExecutableId();
             scope.put("executable_id", exec != null ? String.valueOf(exec) : nodeId);
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             scope.put("executable_id", nodeId);
         }
         scope.putIfAbsent("workflow_nesting_depth", 0);
@@ -266,7 +280,7 @@ public final class FlowMessageEngine {
             }
             list.add(record);
             session.updateGlobalState(Map.of(MESSAGE_OUTPUTS_KEY, list));
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }
@@ -327,7 +341,7 @@ public final class FlowMessageEngine {
     }
         try {
             session.writeCustomStream((Map<String, Object>) frame);
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }

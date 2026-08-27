@@ -23,15 +23,21 @@ import java.util.regex.Pattern;
  */
 
 public final class FlowEndEngine {
+
     /**
      * OUTPUT_PREFIX.
+     *
      * @since 0.1.0
      */
+
     public static final String OUTPUT_PREFIX = "#end_";
+
     /**
      * SPLIT_DELIMITER.
+     *
      * @since 0.1.0
      */
+
     public static final String SPLIT_DELIMITER = "\u0001";
 
     /** @deprecated use {@link #scopedKey(String, String)} — kept for tests referencing raw suffix */
@@ -49,7 +55,7 @@ public final class FlowEndEngine {
     private static final Map<MixKey, FlowEndMixCoordinator> MIX_BY_SESSION_NODE = new ConcurrentHashMap<>();
 
     /**
-     * Python {@code _TEMPLATE_SPLIT_PATTERN}.
+     * * * Python {@code _TEMPLATE_SPLIT_PATTERN}.
      */
     public static final Pattern TEMPLATE_SPLIT_PATTERN = Pattern.compile("(\\{\\{[^{}]*?\\}\\})");
 
@@ -163,6 +169,7 @@ public final class FlowEndEngine {
      * @return result
      * @since 0.1.0
      */
+
     public static FlowEndMixCoordinator mixCoordinator(NodeSessionApi session, String nodeId) {
         if (session == null) {
         return new FlowEndMixCoordinator();
@@ -192,7 +199,7 @@ public final class FlowEndEngine {
         try {
             Object v = session.getState(key);
             return Boolean.TRUE.equals(v) || "true".equalsIgnoreCase(String.valueOf(v));
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             return false;
         }
     }
@@ -203,7 +210,7 @@ public final class FlowEndEngine {
     }
         try {
             session.updateState(Map.of(key, true));
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }
@@ -295,6 +302,7 @@ public final class FlowEndEngine {
      * @return result
      * @since 0.1.0
      */
+
     public static List<String> templateParts(String responseTemplate) {
         if (responseTemplate == null || responseTemplate.isEmpty()) {
         return List.of();
@@ -309,6 +317,7 @@ public final class FlowEndEngine {
      * @return result
      * @since 0.1.0
      */
+
     public static boolean shouldEmitStartMarker(String responseTemplate) {
         List<String> parts = templateParts(responseTemplate);
         return !parts.isEmpty() && parts.get(0).isEmpty();
@@ -321,6 +330,7 @@ public final class FlowEndEngine {
      * @return result
      * @since 0.1.0
      */
+
     public static boolean shouldEmitEndMarker(String responseTemplate) {
         List<String> parts = templateParts(responseTemplate);
         return !parts.isEmpty() && parts.get(parts.size() - 1).isEmpty();
@@ -333,6 +343,7 @@ public final class FlowEndEngine {
      * @return result
      * @since 0.1.0
      */
+
     public static String queryOf(NodeSessionApi session) {
         if (session == null) {
         return "";
@@ -340,7 +351,7 @@ public final class FlowEndEngine {
         try {
             Object q = session.getGlobalState("query");
             return q == null ? "" : String.valueOf(q);
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             return "";
         }
     }
@@ -355,6 +366,7 @@ public final class FlowEndEngine {
      * @return result
      * @since 0.1.0
      */
+
     public static Map<String, Object> buildUserFields(
             Map<String, Object> inputs, Map<String, Object> outputs, String query, boolean endInterrupt) {
         Map<String, Object> userOut = new LinkedHashMap<>(inputs == null ? Map.of() : inputs);
@@ -469,7 +481,7 @@ public final class FlowEndEngine {
             session.writeCustomStream(
                     Map.of("type", StudioStreamFrames.MESSAGE_NODE_END, "index", 1, "data", withThink));
             StudioStreamFrames.emitWorkflowEnd(session, withoutThink);
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }

@@ -33,67 +33,101 @@ import java.util.Set;
  */
 
 public final class FlowSubWorkflowEngine {
+
     /**
      * USER_FIELDS.
+     *
      * @since 0.1.0
      */
+
     public static final String USER_FIELDS = "userFields";
+
     /**
      * SYSTEM_FIELDS.
+     *
      * @since 0.1.0
      */
+
     public static final String SYSTEM_FIELDS = "systemFields";
+
     /**
      * PRE_DEFINE_FIELDS.
+     *
      * @since 0.1.0
      */
+
     public static final String PRE_DEFINE_FIELDS = "preDefineFields";
+
     /**
      * GLOBAL_VARIABLES.
+     *
      * @since 0.1.0
      */
+
     public static final String GLOBAL_VARIABLES = "global_variables";
+
     /**
      * REQUEST_VARIABLES.
+     *
      * @since 0.1.0
      */
+
     public static final String REQUEST_VARIABLES = "_request";
+
     /**
      * MESSAGE_NODE_END.
+     *
      * @since 0.1.0
      */
+
     public static final String MESSAGE_NODE_END = "message_end";
+
     /**
      * GLOBAL_REF_PREFIX.
+     *
      * @since 0.1.0
      */
+
     public static final String GLOBAL_REF_PREFIX = "MEMORY_VARIABLE.";
+
     /**
      * INTERACTION.
+     *
      * @since 0.1.0
      */
+
     public static final String INTERACTION = "interaction";
 
     /**
      * DEFAULT_SUB_WORKFLOW_TIMEOUT.
+     *
      * @since 0.1.0
      */
+
     public static final int DEFAULT_SUB_WORKFLOW_TIMEOUT = 300;
+
     /**
      * DEFAULT_STREAM_FRAME_TIMEOUT.
+     *
      * @since 0.1.0
      */
+
     public static final int DEFAULT_STREAM_FRAME_TIMEOUT = 120;
+
     /**
      * DEFAULT_FIRST_FRAME_TIMEOUT.
+     *
      * @since 0.1.0
      */
+
     public static final int DEFAULT_FIRST_FRAME_TIMEOUT = 10;
 
     /**
      * CHILD_INTERRUPT_STATE_KEYS.
+     *
      * @since 0.1.0
      */
+
     public static final Set<String> CHILD_INTERRUPT_STATE_KEYS =
             SessionStateIsolator.CHILD_INTERRUPT_STATE_KEYS;
 
@@ -107,9 +141,11 @@ public final class FlowSubWorkflowEngine {
 
     /**
      * FlowSubWorkflowEngine.
+     *
      * @param config config
      * @since 0.1.0
      */
+
     public FlowSubWorkflowEngine(FlowSubWorkflowConfig config) {
         this.config = config == null
                 ? FlowSubWorkflowConfig.fromNodeConfigs("", Map.of())
@@ -263,6 +299,7 @@ public final class FlowSubWorkflowEngine {
      * @return result
      * @since 0.1.0
      */
+
     public Map<String, Object> buildInvokeParams(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         Map<String, Object> systemFields = mapOf(inputs.get(SYSTEM_FIELDS));
@@ -291,7 +328,7 @@ public final class FlowSubWorkflowEngine {
         if (context != null && query != null && !query.isEmpty()) {
             try {
                 context.addMessages(new UserMessage(query));
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                 // ModelContext may be mock / read-only
             }
             try {
@@ -306,7 +343,7 @@ public final class FlowSubWorkflowEngine {
                         conversationHistory.add(dump);
                     }
                 }
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                 // soft
             }
         }
@@ -414,6 +451,7 @@ public final class FlowSubWorkflowEngine {
      * @return result
      * @since 0.1.0
      */
+
     public Map<String, Object> packageSuccess(
             String responseContent, Map<String, Object> userFields, Map<String, Object> memory) {
         nodeState.setStatus(SubWorkflowExecutionStatus.END);
@@ -437,6 +475,7 @@ public final class FlowSubWorkflowEngine {
      * @return result
      * @since 0.1.0
      */
+
     public Map<String, Object> packageSoftHang(Map<String, Object> childUf, int nestingDepth) {
         nodeState.setStatus(SubWorkflowExecutionStatus.USER_INTERACT);
         lastChildCompleted = false;
@@ -484,6 +523,7 @@ public final class FlowSubWorkflowEngine {
      * @return result
      * @since 0.1.0
      */
+
     public ParsedChildResult parseNormalChildInvokeResult(Map<String, Object> result) {
         String responseContent = stringOrEmpty(result.get("answer"));
         Map<String, Object> userFields = mapOf(result.get("user_fields"));
@@ -575,6 +615,7 @@ public final class FlowSubWorkflowEngine {
      * @return result
      * @since 0.1.0
      */
+
     public static boolean isResumedAnswer(Map<String, Object> uf) {
         if (uf == null || uf.isEmpty()) {
         return false;
@@ -654,7 +695,7 @@ public final class FlowSubWorkflowEngine {
                     return found;
                 }
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
         try {
@@ -675,7 +716,7 @@ public final class FlowSubWorkflowEngine {
                     }
                 }
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
         return null;
@@ -836,7 +877,7 @@ public final class FlowSubWorkflowEngine {
             if (normalized != null) {
                 return normalized;
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
         try {
@@ -847,7 +888,7 @@ public final class FlowSubWorkflowEngine {
                     return nested;
                 }
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
         return null;
@@ -897,6 +938,7 @@ public final class FlowSubWorkflowEngine {
      * @return result
      * @since 0.1.0
      */
+
     public StreamChunkAction processStreamChunk(Object chunk) {
         if (chunk instanceof Map<?, ?> m) {
             Map<String, Object> frame = castMap(m);
@@ -975,7 +1017,7 @@ public final class FlowSubWorkflowEngine {
                 if (val == null) {
                     val = session.getGlobalState(varName);
                 }
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                 // mock
             }
             updated.put(varName, val);
@@ -1019,7 +1061,7 @@ public final class FlowSubWorkflowEngine {
             outputs.put(USER_FIELDS, userFields == null ? Map.of() : userFields);
             data.put("interrupt_outputs", outputs);
             session.trace(data);
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // soft like Python
         }
     }
@@ -1079,7 +1121,7 @@ public final class FlowSubWorkflowEngine {
             if (v != null) {
                 return Integer.parseInt(String.valueOf(v));
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
         return null;
@@ -1095,7 +1137,7 @@ public final class FlowSubWorkflowEngine {
             if (raw instanceof Map<?, ?> m) {
                 m.forEach((k, v) -> out.put(String.valueOf(k), v));
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
         // also fold REQUEST as globals baseline

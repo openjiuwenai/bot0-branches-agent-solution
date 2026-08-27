@@ -33,15 +33,21 @@ import java.util.Map;
 
 public final class FlowCodeEngine {
     private static final Logger LOG = Logger.getLogger(FlowCodeEngine.class.getName());
+
     /**
      * USER_FIELDS.
+     *
      * @since 0.1.0
      */
+
     public static final String USER_FIELDS = "userFields";
+
     /**
      * JIUWEN_CODE_TYPE.
+     *
      * @since 0.1.0
      */
+
     public static final String JIUWEN_CODE_TYPE = "jiuwen.code";
 
     private final String nodeId;
@@ -56,9 +62,11 @@ public final class FlowCodeEngine {
 
     /**
      * FlowCodeEngine.
+     *
      * @param nodeId nodeId
      * @since 0.1.0
      */
+
     public FlowCodeEngine(String nodeId) {
         this.nodeId = nodeId == null ? "code" : nodeId;
     }
@@ -236,6 +244,7 @@ public final class FlowCodeEngine {
      * @return result
      * @since 0.1.0
      */
+
     public Iterator<Object> stream(Object inputs, NodeSessionApi session, ModelContext context) {
         Map<String, Object> in = asMap(inputs);
         Map<String, Object> result = invoke(in, session, context);
@@ -305,6 +314,7 @@ public final class FlowCodeEngine {
      * @return result
      * @since 0.1.0
      */
+
     private static String functionLogOf(PythonExecResult result) {
         if (result == null) {
         return "";
@@ -322,7 +332,7 @@ public final class FlowCodeEngine {
     }
         try {
             session.trace(data);
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // Python soft-fails function_log / code_info
         }
     }

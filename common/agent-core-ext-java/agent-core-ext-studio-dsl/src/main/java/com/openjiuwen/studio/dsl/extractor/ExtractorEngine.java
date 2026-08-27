@@ -37,9 +37,11 @@ public final class ExtractorEngine {
 
     /**
      * ExtractorEngine.
+     *
      * @param nodeId nodeId
      * @since 0.1.0
      */
+
     public ExtractorEngine(String nodeId) {
         this.nodeId = nodeId;
         this.presetInvoker = null;
@@ -54,6 +56,7 @@ public final class ExtractorEngine {
      * @return result
      * @since 0.1.0
      */
+
     public ExtractorEngine(String nodeId, ExtractorConfig config, ExtractorLlmExtractor.ModelInvoker invoker) {
         this.nodeId = nodeId;
         this.presetInvoker = invoker;
@@ -67,6 +70,7 @@ public final class ExtractorEngine {
      * @param session session
      * @since 0.1.0
      */
+
     public void init(Map<String, Object> conf, NodeSessionApi session) {
         init(conf, session, presetInvoker);
     }
@@ -89,6 +93,7 @@ public final class ExtractorEngine {
      * @return result
      * @since 0.1.0
      */
+
     public Map<String, Object> invoke(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         if (llmExtractor == null) {
@@ -169,6 +174,7 @@ public final class ExtractorEngine {
      * @return result
      * @since 0.1.0
      */
+
     private Map<String, Object> filterToKnownFields(Map<String, Object> extracted) {
         Map<String, Object> out = new LinkedHashMap<>();
         extracted.forEach((k, v) -> {
@@ -194,7 +200,7 @@ public final class ExtractorEngine {
                     return out;
                 }
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // test / mock session
         }
         return Map.of();
@@ -208,6 +214,7 @@ public final class ExtractorEngine {
      * @return result
      * @since 0.1.0
      */
+
     private List<Map<String, Object>> getLatestChatHistory(ModelContext context, Integer k) {
         Integer effectiveK = k;
         if (!config.withChatHistory()) {
@@ -244,7 +251,7 @@ public final class ExtractorEngine {
     }
         try {
             session.trace(Map.of("user", user == null ? "" : user));
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock session
         }
     }

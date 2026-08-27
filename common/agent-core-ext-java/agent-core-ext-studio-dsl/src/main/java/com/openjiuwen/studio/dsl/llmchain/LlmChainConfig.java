@@ -187,6 +187,7 @@ public final class LlmChainConfig {
      * @return result
      * @since 0.1.0
      */
+
     public String thinkingTypeOrNull() {
         Map<String, Object> thinking = mapOf(hyperParameters().get("thinking"));
         String type = str(thinking.get("type"));

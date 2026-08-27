@@ -123,6 +123,7 @@ public final class IrToMcpServerConfig {
      * @return result
      * @since 0.1.0
      */
+
     static Map<String, String> extendHeaders(Map<String, String> headers, Map<String, Object> ir) {
         return headers;
     }
@@ -220,6 +221,7 @@ public final class IrToMcpServerConfig {
      * @return result
      * @since 0.1.0
      */
+
     public record Converted(McpServerConfig config, List<McpToolParam> toolParams, String transportType) {
         }
     }

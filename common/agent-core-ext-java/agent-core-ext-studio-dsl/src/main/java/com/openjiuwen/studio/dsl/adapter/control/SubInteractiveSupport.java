@@ -56,6 +56,7 @@ final class SubInteractiveSupport {
      * @return result
      * @since 0.1.0
      */
+
     static Object prepareChildPayload(Map<String, Object> preparedDict, NodeSessionApi session, Object originalInputs) {
         if (!shouldResume(session, originalInputs) && !shouldResume(session, preparedDict)) {
         return preparedDict;
@@ -104,6 +105,7 @@ final class SubInteractiveSupport {
      * @return result
      * @since 0.1.0
      */
+
     static Map<String, Object> unwrapForLinear(Object childPayload, Map<String, Object> preparedDict) {
         if (!(childPayload instanceof InteractiveInput ii)) {
             if (childPayload instanceof Map<?, ?> m) {
@@ -212,7 +214,7 @@ final class SubInteractiveSupport {
             if (normalized != null) {
                 return normalized;
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
         try {
@@ -229,7 +231,7 @@ final class SubInteractiveSupport {
                     }
                 }
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
         return null;

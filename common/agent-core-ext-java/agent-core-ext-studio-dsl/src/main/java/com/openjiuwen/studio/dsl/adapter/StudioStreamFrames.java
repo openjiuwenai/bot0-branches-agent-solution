@@ -16,20 +16,29 @@ import java.util.Map;
  */
 
 public final class StudioStreamFrames {
+
     /**
      * PARTIAL_CONTENT.
+     *
      * @since 0.1.0
      */
+
     public static final String PARTIAL_CONTENT = "partial_content";
+
     /**
      * MESSAGE_NODE_END.
+     *
      * @since 0.1.0
      */
+
     public static final String MESSAGE_NODE_END = "message_end";
+
     /**
      * WORKFLOW_END.
+     *
      * @since 0.1.0
      */
+
     public static final String WORKFLOW_END = "workflow_end";
 
     private StudioStreamFrames() {}
@@ -48,7 +57,7 @@ public final class StudioStreamFrames {
         try {
             session.writeCustomStream(frame(PARTIAL_CONTENT, 0, data));
             session.writeCustomStream(frame(MESSAGE_NODE_END, 1, data));
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock session
         }
     }
@@ -66,7 +75,7 @@ public final class StudioStreamFrames {
     }
         try {
             session.writeCustomStream(frame(WORKFLOW_END, 2, data));
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }

@@ -19,10 +19,13 @@ import java.util.Map;
  */
 
 public final class ComplexIntentDetectionConfig {
+
     /**
      * TYPE.
+     *
      * @since 0.1.0
      */
+
     public static final String TYPE = "EI.ComplexIntentDetection";
 
     private final String subNodeId;
@@ -112,6 +115,7 @@ public final class ComplexIntentDetectionConfig {
      * @return result
      * @since 0.1.0
      */
+
     public Map<String, Object> toIntentDetectionConfigs() {
         Map<String, Object> intent = new LinkedHashMap<>(rawConfigs);
         if (!intent.containsKey("branches")) {

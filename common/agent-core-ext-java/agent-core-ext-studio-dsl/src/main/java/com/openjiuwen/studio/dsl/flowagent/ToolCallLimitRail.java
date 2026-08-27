@@ -29,9 +29,11 @@ public final class ToolCallLimitRail extends AgentRail {
 
     /**
      * ToolCallLimitRail.
+     *
      * @param maxToolCallRounds maxToolCallRounds
      * @since 0.1.0
      */
+
     public ToolCallLimitRail(int maxToolCallRounds) {
         this.maxToolCallRounds = maxToolCallRounds;
     }

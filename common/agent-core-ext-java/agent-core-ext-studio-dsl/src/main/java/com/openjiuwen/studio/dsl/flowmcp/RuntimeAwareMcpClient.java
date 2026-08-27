@@ -45,6 +45,8 @@ final class RuntimeAwareMcpClient implements McpClient {
      * @param timeout timeout
      * @return result
      * @since 0.1.0
+     *
+     * @throws Exception when invocation fails
      */
 
     @Override
@@ -58,6 +60,8 @@ final class RuntimeAwareMcpClient implements McpClient {
      * @param timeout timeout
      * @return result
      * @since 0.1.0
+     *
+     * @throws Exception when invocation fails
      */
 
     @Override
@@ -71,6 +75,8 @@ final class RuntimeAwareMcpClient implements McpClient {
      * @param timeout timeout
      * @return result
      * @since 0.1.0
+     *
+     * @throws Exception when invocation fails
      */
 
     @Override
@@ -86,6 +92,8 @@ final class RuntimeAwareMcpClient implements McpClient {
      * @param timeout timeout
      * @return result
      * @since 0.1.0
+     *
+     * @throws Exception when invocation fails
      */
 
     @Override
@@ -116,6 +124,8 @@ final class RuntimeAwareMcpClient implements McpClient {
      * @param timeout timeout
      * @return result
      * @since 0.1.0
+     *
+     * @throws Exception when invocation fails
      */
 
     @Override

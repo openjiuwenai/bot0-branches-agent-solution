@@ -29,7 +29,7 @@ public final class IntentFaqMatcher {
     private static final String DEFAULT_CLASS_CATE = "content";
 
     /**
-     * Python module constant {@code SEARCH_TYPE} (extension {@code intent_detection.py}).
+     * * * Python module constant {@code SEARCH_TYPE} (extension {@code intent_detection.py}).
      */
     private static final String SEARCH_TYPE = "faq";
 
@@ -97,6 +97,7 @@ public final class IntentFaqMatcher {
      * @return result
      * @since 0.1.0
      */
+
     static List<Map<String, Object>> anaylsSearch(IntentDetectionConfig config, Map<String, Object> searchData) {
         List<Map<String, Object>> res = new ArrayList<>();
         try {
@@ -117,7 +118,7 @@ public final class IntentFaqMatcher {
                     res.add(add);
                 }
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // Python soft-fails
         }
         return res;
@@ -131,6 +132,7 @@ public final class IntentFaqMatcher {
      * @return result
      * @since 0.1.0
      */
+
     static String docSearch(IntentDetectionConfig config, Map<String, Object> searchData) {
         String res = "";
         try {

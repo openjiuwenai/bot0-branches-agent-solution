@@ -267,6 +267,7 @@ public final class ConditionEvaluator {
      * @return result
      * @since 0.1.0
      */
+
     private static boolean membership(Object container, Object member) {
         if (container instanceof List<?> list) {
             String ms = stringify(member);

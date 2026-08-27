@@ -21,10 +21,13 @@ import java.util.Map;
  */
 
 public final class FlowAggregateEngine {
+
     /**
      * USER_FIELDS.
+     *
      * @since 0.1.0
      */
+
     public static final String USER_FIELDS = "userFields";
 
     private final String nodeId;
@@ -32,10 +35,12 @@ public final class FlowAggregateEngine {
 
     /**
      * FlowAggregateEngine.
+     *
      * @param nodeId nodeId
      * @param config config
      * @since 0.1.0
      */
+
     public FlowAggregateEngine(String nodeId, FlowAggregateConfig config) {
         this.nodeId = nodeId == null ? "aggregate" : nodeId;
         this.config = config;
@@ -91,6 +96,7 @@ public final class FlowAggregateEngine {
      * @return result
      * @since 0.1.0
      */
+
     public static Map<String, Object> extractUser(Map<String, Object> inputs) {
         if (inputs == null) {
             return Map.of();
@@ -111,6 +117,7 @@ public final class FlowAggregateEngine {
      * @return result
      * @since 0.1.0
      */
+
     public static Object firstNonEmpty(List<Object> lst) {
         if (lst == null || lst.isEmpty()) {
         return null;
@@ -133,6 +140,7 @@ public final class FlowAggregateEngine {
      * @param lst lst
      * @since 0.1.0
      */
+
     void validateParamType(List<Object> lst) {
         if (lst == null || lst.isEmpty()) {
         return;
@@ -165,6 +173,7 @@ public final class FlowAggregateEngine {
      * @param lst lst
      * @since 0.1.0
      */
+
     @SuppressWarnings("unchecked")
     void validateDictValueTypes(List<Object> lst) {
         Map<?, ?> template = (Map<?, ?>) lst.get(0);
@@ -196,6 +205,7 @@ public final class FlowAggregateEngine {
      * @return result
      * @since 0.1.0
      */
+
     @SuppressWarnings("unchecked")
     static Map<String, Object> resolveStreamInputs(Map<String, Object> inputs) {
         if (inputs == null) {

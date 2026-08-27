@@ -30,6 +30,7 @@ public final class ExtractorConfigValidator {
      * @param rawConfigs rawConfigs
      * @since 0.1.0
      */
+
     public static void checkConfig(String nodeId, Map<String, Object> rawConfigs) {
         Map<String, Object> conf = camelKeysToSnake(rawConfigs == null ? Map.of() : rawConfigs);
         String error = matchErrorConfig(conf);
@@ -39,7 +40,7 @@ public final class ExtractorConfigValidator {
     }
 
     /**
-     * * @return error message when illegal, {@code null} when valid
+     * * * * @return error message when illegal, {@code null} when valid
      */
     static String matchErrorConfig(Map<String, Object> conf) {
         Map<String, Object> model = modelOf(conf.get("model"));

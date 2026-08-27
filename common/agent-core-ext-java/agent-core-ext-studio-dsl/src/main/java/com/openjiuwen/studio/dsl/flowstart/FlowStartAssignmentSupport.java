@@ -18,50 +18,77 @@ import java.util.Set;
  */
 
 public final class FlowStartAssignmentSupport {
+
     /**
      * USER_FIELDS.
+     *
      * @since 0.1.0
      */
+
     public static final String USER_FIELDS = "userFields";
+
     /**
      * SYSTEM_FIELDS.
+     *
      * @since 0.1.0
      */
+
     public static final String SYSTEM_FIELDS = "systemFields";
+
     /**
      * PRE_DEFINED_FIELDS.
+     *
      * @since 0.1.0
      */
+
     public static final String PRE_DEFINED_FIELDS = "preDefinedFields";
+
     /**
      * MEMORY.
+     *
      * @since 0.1.0
      */
+
     public static final String MEMORY = "memory";
+
     /**
      * ASSIGNMENT.
+     *
      * @since 0.1.0
      */
+
     public static final String ASSIGNMENT = "assignment";
+
     /**
      * ASSIGNMENT_SESSION.
+     *
      * @since 0.1.0
      */
+
     public static final String ASSIGNMENT_SESSION = "session";
+
     /**
      * ASSIGNMENT_PERMANENT.
+     *
      * @since 0.1.0
      */
+
     public static final String ASSIGNMENT_PERMANENT = "permanent";
+
     /**
      * REDIS_GLOBAL_VALS_NAME.
+     *
      * @since 0.1.0
      */
+
     public static final String REDIS_GLOBAL_VALS_NAME = "global.vals";
+
     /**
      * DEFAULT_CONVERSATION_VARIABLE_TTL_SECONDS.
+     *
      * @since 0.1.0
      */
+
     public static final long DEFAULT_CONVERSATION_VARIABLE_TTL_SECONDS = 3L * 24 * 3600;
 
     private FlowStartAssignmentSupport() {}

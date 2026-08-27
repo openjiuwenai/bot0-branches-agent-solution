@@ -26,6 +26,7 @@ public final class FlowEndConfig {
 
     /**
      * FlowEndConfig.
+     *
      * @param responseTemplate responseTemplate
      * @param enableStructMessage enableStructMessage
      * @param structOutputTemplate structOutputTemplate
@@ -36,6 +37,7 @@ public final class FlowEndConfig {
      * @param raw raw
      * @since 0.1.0
      */
+
     public FlowEndConfig(
             String responseTemplate,
             boolean enableStructMessage,

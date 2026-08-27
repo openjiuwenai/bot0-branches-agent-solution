@@ -45,7 +45,9 @@ public final class KnowledgeRequestContext {
      * clear thread-local headers (tests).
      *
      * @since 0.1.0
+     *
      */
+
     public static void clear() {
         HEADERS.remove();
     }

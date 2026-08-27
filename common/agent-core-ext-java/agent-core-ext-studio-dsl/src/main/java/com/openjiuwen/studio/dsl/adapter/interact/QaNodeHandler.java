@@ -27,7 +27,7 @@ import java.util.Set;
 public final class QaNodeHandler implements NodeHandlerFactory {
 
     /**
-     * Exposed for {@link com.openjiuwen.studio.dsl.util.SessionStateIsolator}.
+     * * * Exposed for {@link com.openjiuwen.studio.dsl.util.SessionStateIsolator}.
      */
     public static final String STATE_KEY = FlowQaEngine.STATE_KEY;
 

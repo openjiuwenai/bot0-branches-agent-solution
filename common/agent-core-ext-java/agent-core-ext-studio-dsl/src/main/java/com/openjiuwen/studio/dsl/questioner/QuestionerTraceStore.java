@@ -32,10 +32,13 @@ import java.util.Map;
  */
 
 public final class QuestionerTraceStore {
+
     /**
      * KEY_PREFIX.
+     *
      * @since 0.1.0
      */
+
     public static final String KEY_PREFIX = "agentBuilder:questioner:trace";
     private static final Logger LOG = Logger.getLogger(QuestionerTraceStore.class.getName());
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -55,6 +58,7 @@ public final class QuestionerTraceStore {
      * @param jedis jedis
      * @since 0.1.0
      */
+
     public static void setJedis(JedisPooled jedis) {
         jedisOverride = jedis;
     }
@@ -63,7 +67,9 @@ public final class QuestionerTraceStore {
      * Clear in-memory traces (tests).
      *
      * @since 0.1.0
+     *
      */
+
     public static void clearMemory() {
         MEMORY.clear();
     }
@@ -186,6 +192,7 @@ public final class QuestionerTraceStore {
      * @param session session
      * @since 0.1.0
      */
+
     public static void recoverToSession(String sessionId, String componentId, NodeSessionApi session) {
         if (session == null) {
         return;

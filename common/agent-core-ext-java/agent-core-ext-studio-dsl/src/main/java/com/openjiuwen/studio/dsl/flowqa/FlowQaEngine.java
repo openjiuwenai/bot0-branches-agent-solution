@@ -28,15 +28,21 @@ import java.util.regex.Pattern;
  */
 
 public final class FlowQaEngine {
+
     /**
      * STATE_KEY.
+     *
      * @since 0.1.0
      */
+
     public static final String STATE_KEY = "flow_qa_state";
+
     /**
      * USER_FIELDS.
+     *
      * @since 0.1.0
      */
+
     public static final String USER_FIELDS = "userFields";
 
     private static final Pattern PLACEHOLDER_SPLIT = Pattern.compile("(\\{\\{.*?\\}\\})");
@@ -46,10 +52,12 @@ public final class FlowQaEngine {
 
     /**
      * FlowQaEngine.
+     *
      * @param nodeId nodeId
      * @param config config
      * @since 0.1.0
      */
+
     public FlowQaEngine(String nodeId, FlowQaConfig config) {
         this.nodeId = nodeId == null ? "qa" : nodeId;
         this.config = config == null ? FlowQaConfig.from(Map.of()) : config;
@@ -88,6 +96,7 @@ public final class FlowQaEngine {
      * @return result
      * @since 0.1.0
      */
+
     public Map<String, Object> invoke(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         try {
@@ -214,6 +223,7 @@ public final class FlowQaEngine {
      * @return result
      * @since 0.1.0
      */
+
     String processValuesOfDict(String originTemplate, Map<String, Object> inputs) {
         if (originTemplate == null) {
         return "";
@@ -280,7 +290,7 @@ public final class FlowQaEngine {
                     Map.of("type", StudioStreamFrames.PARTIAL_CONTENT, "index", 0, "data", streamRelated));
             session.writeCustomStream(
                     Map.of("type", StudioStreamFrames.MESSAGE_NODE_END, "index", 1, "data", endStream));
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }
@@ -407,7 +417,7 @@ public final class FlowQaEngine {
                     return out;
                 }
             }
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
         return Map.of("status", "start");
@@ -419,7 +429,7 @@ public final class FlowQaEngine {
     }
         try {
             session.updateState(Map.of(STATE_KEY, state));
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | ClassCastException | NullPointerException | IllegalArgumentException | IndexOutOfBoundsException ignored) {
             // mock
         }
     }
