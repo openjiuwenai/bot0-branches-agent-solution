@@ -4,7 +4,6 @@ Studio 低码 DSL 的节点执行 SDK（FEAT-031）：把宿主已组装的 `Ass
 
 类库，非独立应用。不负责 DSL/IR 加载、HTTP 入口、边调度或完整编排（由宿主 runtime / 装配方承接，装配方文档待建）。无 ServiceLoader，内置节点不可被覆盖。
 
-更细的包结构与文件索引见 [MODULE-GUIDE.md](./MODULE-GUIDE.md)。
 
 ## 依赖与构建
 
