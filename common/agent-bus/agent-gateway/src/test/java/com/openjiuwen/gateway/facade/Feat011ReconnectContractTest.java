@@ -6,6 +6,7 @@ package com.openjiuwen.gateway.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.openjiuwen.gateway.direct.FakeAgentRuntimeClient;
@@ -203,5 +204,25 @@ class Feat011ReconnectContractTest {
         assertThat(runtime.lastEndpoint())
                 .as("same-tenant GetTask must forward to the owning runtime")
                 .isEqualTo("http://rt-A:8000");
+    }
+
+    /**
+     * §7.3 / T05: a sticky HIT but resolve failure (RDC cannot resolve the route handle) MUST
+     * surface as an A-class 503 + flat {@code GatewayError{code=ROUTE_RESOLVE_FAILED}} via the
+     * global handler — NOT swallowed as a 200 + bare message. The error body must carry the
+     * stable code (and a traceId), so the client can retry / fall back to GetTask.
+     */
+    @Test
+    void subscribeToTaskResolveFailureMustReturn503() throws Exception {
+        tenantACreatesTaskX();
+        rdc.setResolved(null); // resolveRouteHandle throws RouteResolutionException → A-class 503
+
+        mvc.perform(post("/a2a").contentType(MediaType.APPLICATION_JSON)
+                .header("Authorization", "Bearer token-a")
+                .header("Accept", "text/event-stream").content(SUBSCRIBE_TASK_X))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("ROUTE_RESOLVE_FAILED"))
+                .andExpect(jsonPath("$.traceId").isNotEmpty())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("resolve")));
     }
 }

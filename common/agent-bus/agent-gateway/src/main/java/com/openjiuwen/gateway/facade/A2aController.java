@@ -210,11 +210,13 @@ public class A2aController {
             response.setCharacterEncoding("UTF-8");
             sseBridge.writeSse(response.getOutputStream(), frames);
         } catch (GovernanceException ex) {
-            // Runtime rejected the subscription with a JSON-RPC error (HTTP 200 + a non-SSE body,
-            // e.g. SubscribeToTask on a terminal task → -32004). Surface the runtime's error body
-            // verbatim — unify with the BUS path, which folds the runtime's failure to -32004.
-            return Optional.of(ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON)
-                    .body(ex.getMessage()));
+            // A 类 (ROUTE_RESOLVE_FAILED / FORWARD_FAILED 等) 与 RUNTIME_JSONRPC_ERROR (B 类透传,
+            // httpStatus=OK) 都由全局处理器按 ex.httpStatus() + code() 产出正确表面：前者非 2xx +
+            // flat GatewayError, 后者 HTTP 200 + flat GatewayError (verbatim runtime body 作 message)。
+            // 不再就地吞为裸 message — 那会丢 code/traceId 且把 A 类 (应 503) 错位为 200。与
+            // forwardResume/forwardCreate/forwardStreaming 的 setTraceId+rethrow 风格一致。
+            ex.setTraceId(context.traceId());
+            throw ex;
         } catch (IOException ex) {
             // SSE disconnected (client/runtime) — response committed; log + close, no rethrow
             // (no G4 to abort — SubscribeToTask is read-only). SseBridge logged the bridge release.
