@@ -6,7 +6,9 @@ package com.openjiuwen.service.adapters.agentcore.ext.middleware.otel;
 
 import io.opentelemetry.api.trace.Span;
 
+import java.util.Comparator;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -37,6 +39,37 @@ public final class HttpContextBridge {
      */
     public Entry get(String conversationId) {
         return entries.get(conversationId);
+    }
+
+    /**
+     * Finds the bridge entry for a (possibly combined) context id: exact match first,
+     * then longest-prefix match (batch member contextIds append suffixes to the
+     * conversation id).
+     *
+     * @param contextId bare or combined context id
+     * @return matched key and entry, or empty
+     */
+    public Optional<Match> find(String contextId) {
+        if (contextId == null || contextId.isBlank()) {
+            return Optional.empty();
+        }
+        Entry exact = entries.get(contextId);
+        if (exact != null) {
+            return Optional.of(new Match(contextId, exact));
+        }
+        return entries.entrySet().stream()
+                .filter(e -> contextId.startsWith(e.getKey() + "_"))
+                .max(Comparator.comparingInt(e -> e.getKey().length()))
+                .map(e -> new Match(e.getKey(), e.getValue()));
+    }
+
+    /**
+     * One prefix-matched bridge entry.
+     *
+     * @param conversationId the canonical conversation key
+     * @param entry          the bridge entry
+     */
+    public record Match(String conversationId, Entry entry) {
     }
 
     /**

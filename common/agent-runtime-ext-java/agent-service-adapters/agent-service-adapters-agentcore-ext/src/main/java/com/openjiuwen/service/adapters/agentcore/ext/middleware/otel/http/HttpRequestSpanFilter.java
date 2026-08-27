@@ -10,30 +10,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.HttpContextBridge;
 
 import io.opentelemetry.api.trace.Span;
-import io.opentelemetry.api.trace.SpanContext;
 import io.opentelemetry.api.trace.SpanKind;
-import io.opentelemetry.api.trace.TraceFlags;
-import io.opentelemetry.api.trace.TraceState;
 import io.opentelemetry.api.trace.Tracer;
-import io.opentelemetry.context.Context;
 import jakarta.servlet.AsyncEvent;
 import jakarta.servlet.AsyncListener;
 import jakarta.servlet.FilterChain;
-import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletException;
-import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
@@ -61,7 +51,8 @@ public class HttpRequestSpanFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        CachedBodyRequest wrapped = new CachedBodyRequest(request);
+        CachedBodyRequest wrapped = request instanceof CachedBodyRequest cached
+                ? cached : new CachedBodyRequest(request);
         String body = new String(wrapped.cachedBody(), StandardCharsets.UTF_8);
         Optional<String> parsedConversationId = parseConversationId(body);
         if (parsedConversationId.isEmpty()) {
@@ -73,7 +64,7 @@ public class HttpRequestSpanFilter extends OncePerRequestFilter {
 
         Span span = tracer.spanBuilder("http.request")
                 .setSpanKind(SpanKind.SERVER)
-                .setParent(extractParent(request))
+                .setParent(W3cTraceContextParser.parseToContext(request.getHeader("traceparent")))
                 .startSpan();
         span.setAttribute("http.request.method", request.getMethod());
         span.setAttribute("http.route", request.getRequestURI());
@@ -94,17 +85,17 @@ public class HttpRequestSpanFilter extends OncePerRequestFilter {
             request.getAsyncContext().addListener(new AsyncListener() {
                 @Override
                 public void onComplete(AsyncEvent event) {
-                    endSpan(span, response, conversationId);
+                    endSpan(span, response, conversationId, "complete");
                 }
 
                 @Override
                 public void onTimeout(AsyncEvent event) {
-                    endSpan(span, response, conversationId);
+                    endSpan(span, response, conversationId, "timeout");
                 }
 
                 @Override
                 public void onError(AsyncEvent event) {
-                    endSpan(span, response, conversationId);
+                    endSpan(span, response, conversationId, "error");
                 }
 
                 @Override
@@ -114,12 +105,16 @@ public class HttpRequestSpanFilter extends OncePerRequestFilter {
             });
             return;
         }
-        endSpan(span, response, conversationId);
+        endSpan(span, response, conversationId, "complete");
     }
 
-    private void endSpan(Span span, HttpServletResponse response, String conversationId) {
+    private void endSpan(Span span, HttpServletResponse response, String conversationId, String outcome) {
         try {
-            span.setAttribute("http.response.status_code", (long) response.getStatus());
+            long statusCode = (long) response.getStatus();
+            span.setAttribute("http.response.status_code", statusCode);
+            // 响应摘要（合法 JSON，合同口径：限模式——SSE 响应体流式写出不缓存，摘要含状态码与完成原因）
+            span.setAttribute("openjiuwen.http.response_summary",
+                    "{\"status\":" + statusCode + ",\"outcome\":\"" + outcome + "\"}");
         } catch (IllegalStateException | IllegalArgumentException | NullPointerException e) {
             LOGGER.warn("otel http span status write failed: {}", e.getClass().getSimpleName());
         } finally {
@@ -128,71 +123,6 @@ public class HttpRequestSpanFilter extends OncePerRequestFilter {
             // 出站父上下文暂存随会话收尾一并清理（详见 SessionFilteredAgentRail.afterInvoke 注释）
             com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.egress.EgressContextStash
                     .remove(conversationId);
-        }
-    }
-
-    private static Context extractParent(HttpServletRequest request) {
-        String traceparent = request.getHeader("traceparent");
-        if (traceparent == null) {
-            return Context.root();
-        }
-        String[] parts = traceparent.trim().split("-");
-        if (parts.length != 4) {
-            return Context.root();
-        }
-        try {
-            return Context.root().with(Span.wrap(SpanContext.createFromRemoteParent(
-                    parts[1], parts[2], TraceFlags.fromHex(parts[3], 0), TraceState.getDefault())));
-        } catch (IllegalArgumentException | NullPointerException | IllegalStateException e) {
-            LOGGER.warn("otel filter: illegal traceparent ignored");
-            return Context.root();
-        }
-    }
-
-    /**
-     * Request wrapper that caches the body once and replays it to downstream consumers.
-     */
-    private static final class CachedBodyRequest extends HttpServletRequestWrapper {
-        private final byte[] body;
-
-        CachedBodyRequest(HttpServletRequest request) throws IOException {
-            super(request);
-            this.body = request.getInputStream().readAllBytes();
-        }
-
-        byte[] cachedBody() {
-            return body;
-        }
-
-        @Override
-        public ServletInputStream getInputStream() {
-            ByteArrayInputStream in = new ByteArrayInputStream(body);
-            return new ServletInputStream() {
-                @Override
-                public boolean isFinished() {
-                    return in.available() == 0;
-                }
-
-                @Override
-                public boolean isReady() {
-                    return true;
-                }
-
-                @Override
-                public void setReadListener(ReadListener readListener) {
-                    // synchronous replay; listener not needed
-                }
-
-                @Override
-                public int read() {
-                    return in.read();
-                }
-            };
-        }
-
-        @Override
-        public BufferedReader getReader() {
-            return new BufferedReader(new InputStreamReader(getInputStream(), StandardCharsets.UTF_8));
         }
     }
 

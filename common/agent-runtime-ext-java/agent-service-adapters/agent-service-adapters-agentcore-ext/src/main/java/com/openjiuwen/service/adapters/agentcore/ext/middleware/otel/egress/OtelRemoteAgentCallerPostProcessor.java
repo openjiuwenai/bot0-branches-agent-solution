@@ -4,6 +4,7 @@
 
 package com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.egress;
 
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity.TraceContextCarrier;
 import com.openjiuwen.service.app.a2a.catalog.A2ARemoteAgentCardRegistry;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 
@@ -24,23 +25,28 @@ import org.springframework.core.Ordered;
 public class OtelRemoteAgentCallerPostProcessor implements BeanPostProcessor, Ordered {
     private final Tracer tracer;
     private final ObjectProvider<A2ARemoteAgentCardRegistry> registryProvider;
+    private final ObjectProvider<TraceContextCarrier> carrierProvider;
 
     /**
      * Creates the post processor.
      *
      * @param tracer           tracer for dispatch spans
      * @param registryProvider remote agent card registry provider (for sub_agent_url)
+     * @param carrierProvider  trace context carrier provider (for parent_run_id injection)
      */
     public OtelRemoteAgentCallerPostProcessor(Tracer tracer,
-                                              ObjectProvider<A2ARemoteAgentCardRegistry> registryProvider) {
+                                              ObjectProvider<A2ARemoteAgentCardRegistry> registryProvider,
+                                              ObjectProvider<TraceContextCarrier> carrierProvider) {
         this.tracer = tracer;
         this.registryProvider = registryProvider;
+        this.carrierProvider = carrierProvider;
     }
 
     @Override
     public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
         if (bean instanceof RemoteAgentCaller caller && !(bean instanceof OtelRemoteAgentCallerDecorator)) {
-            return new OtelRemoteAgentCallerDecorator(caller, tracer, registryProvider.getIfAvailable());
+            return new OtelRemoteAgentCallerDecorator(caller, tracer, registryProvider.getIfAvailable(),
+                    carrierProvider.getIfAvailable());
         }
         return bean;
     }

@@ -7,8 +7,11 @@ package com.openjiuwen.service.adapters.agentcore.ext.middleware.otel;
 import com.openjiuwen.core.session.Session;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.AgentRail;
+import com.openjiuwen.core.singleagent.rail.InvokeInputs;
+import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
 import com.openjiuwen.extensions.tracerotel.OtelRail;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.egress.EgressContextStash;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.audit.AuditEventBridge;
 
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Context;
@@ -41,6 +44,7 @@ public class SessionFilteredAgentRail extends AgentRail {
     private final OtelRail delegate;
     private final Span httpSpan;
     private Scope bridgeScope;
+    private volatile String pendingQuery;
 
     public SessionFilteredAgentRail(String conversationId, OtelRail delegate, Span httpSpan) {
         this.conversationId = conversationId;
@@ -57,6 +61,9 @@ public class SessionFilteredAgentRail extends AgentRail {
             if (httpSpan != null) {
                 bridgeScope = httpSpan.storeInContext(Context.root()).makeCurrent();
             }
+            if (ctx.getInputs() instanceof InvokeInputs inputs) {
+                pendingQuery = inputs.getQuery();
+            }
             delegate.beforeInvoke(ctx);
         });
     }
@@ -69,6 +76,7 @@ public class SessionFilteredAgentRail extends AgentRail {
                 bridgeScope.close();
                 bridgeScope = null;
             }
+            auditExchange(ctx);
         });
         // 注意：不在此清理 EgressContextStash——中断型委托（a2a_delegate）的出站发生在
         // 本次 invoke 结束之后（orchestrator/coordinator 驱动），此时清理会丢失父上下文。
@@ -103,11 +111,58 @@ public class SessionFilteredAgentRail extends AgentRail {
     @Override
     public void afterToolCall(AgentCallbackContext ctx) {
         safe(ctx, () -> delegate.afterToolCall(ctx));
+        auditTool(ctx, "finish");
     }
 
     @Override
     public void onToolException(AgentCallbackContext ctx) {
         safe(ctx, () -> delegate.onToolException(ctx));
+        auditTool(ctx, "error");
+    }
+
+    // 审计问答摘要：bridge 未注册（trajectory 未启用）时 no-op；rail 按请求绑定，实例字段安全
+    private void auditExchange(AgentCallbackContext ctx) {
+        try {
+            Session session = ctx.getSession();
+            if (session == null || session.getSessionId() == null
+                    || !(ctx.getInputs() instanceof InvokeInputs inputs)) {
+                return;
+            }
+            Object result = inputs.getResult();
+            AuditEventBridge.recordExchange(session.getSessionId(), pendingQuery,
+                    result != null ? String.valueOf(result) : "");
+        } catch (IllegalStateException | NullPointerException | ClassCastException e) {
+            LOGGER.warn("audit exchange event failed: {}", e.getClass().getSimpleName());
+        }
+    }
+
+    // 审计工具事件：rail 无耗时来源，elapsedMs 取 0（不虚报）；未启用 trajectory 时桥为 no-op
+    private void auditTool(AgentCallbackContext ctx, String status) {
+        try {
+            // 与委托一致先判会话匹配——共享 agent 上每个 rail 都会收到全部会话的回调，
+            // 不匹配直接跳过（否则一次工具调用被 N 个绑定 rail 重复记录）
+            if (!matches(ctx)) {
+                return;
+            }
+            Session session = ctx.getSession();
+            if (session == null || session.getSessionId() == null
+                    || !(ctx.getInputs() instanceof ToolCallInputs inputs)) {
+                return;
+            }
+            AuditEventBridge.recordToolCall(session.getSessionId(), inputs.getToolName(), status, 0L);
+            AuditEventBridge.recordToolDecision(session.getSessionId(), inputs.getToolName(), status, 0L,
+                    summarize(inputs.getToolArgs()));
+        } catch (IllegalStateException | NullPointerException | ClassCastException e) {
+            LOGGER.warn("audit tool event failed: {}", e.getClass().getSimpleName());
+        }
+    }
+
+    private static String summarize(Object args) {
+        if (args == null) {
+            return "";
+        }
+        String text = String.valueOf(args);
+        return text.length() <= 200 ? text : text.substring(0, 200);
     }
 
     private void safe(AgentCallbackContext ctx, Runnable action) {
