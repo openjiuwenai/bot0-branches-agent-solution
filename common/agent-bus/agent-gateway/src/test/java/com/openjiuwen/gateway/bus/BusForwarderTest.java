@@ -187,7 +187,7 @@ class BusForwarderTest {
         feed.inject(AgentBusEventType.INVOCATION_ACCEPTED, "task-7", null);
         feed.inject(AgentBusEventType.INVOCATION_RESPONSE, null, null);
         forwarder.forwardSync(ctx("agent-1", "m-sticky"));
-        assertThat(sticky.find("task-7")).contains("h1");
+        assertThat(sticky.find("T1", "task-7")).contains("h1");
     }
 
     @Test
@@ -199,7 +199,7 @@ class BusForwarderTest {
         feed.inject(AgentBusEventType.INVOCATION_INPUT_REQUIRED, "ti-1", null);
         var resp = forwarder.forwardSync(ctx("agent-1", "m-ir-sticky"));
         assertThat(resp.getBody()).contains("INPUT_REQUIRED").contains("ti-1");
-        assertThat(sticky.find("ti-1")).contains("h1");
+        assertThat(sticky.find("T1", "ti-1")).contains("h1");
     }
 
     private GovernanceContext queryCtx(String taskId) {
@@ -212,16 +212,17 @@ class BusForwarderTest {
     }
 
     @Test
-    void forwardQueryStickyMissReturnsContinuationFailed() {
-        // S6-2 (BUS): a GetTask for a taskId with no sticky owner → CONTINUATION_FAILED, mirroring
-        // DIRECT routeGet. Must NOT fall back to default-agent RDC + bus-forward to a random runtime
-        // (which returns FAILED/TASK_NOT_FOUND and is multi-runtime-incorrect).
+    void forwardQueryStickyMissReturnsTaskNotFound() {
+        // S6-2 (BUS): a GetTask for a taskId with no sticky owner → TASK_NOT_FOUND (§8.1 #8 —
+        // cross-tenant / unknown → TaskNotFound at the Gateway layer, mirroring DIRECT routeGet).
+        // Must NOT fall back to default-agent RDC + bus-forward to a random runtime (which returns
+        // FAILED/TASK_NOT_FOUND and is multi-runtime-incorrect).
         rdc.setCandidates(List.of(new AgentCardRoute("h-default", "svc-default")));
         forwarder.setSingleResponseWindowMillis(50L); // keep the old (bus-forward) poll fast while RED
         Throwable thrown = catchThrowable(() -> forwarder.forwardQuery(queryCtx("ghost")));
         assertThat(thrown).isInstanceOf(MethodResultException.class);
         if (thrown instanceof MethodResultException mre) {
-            assertThat(mre.errorCode()).isEqualTo(ErrorCodes.CONTINUATION_FAILED);
+            assertThat(mre.errorCode()).isEqualTo(ErrorCodes.TASK_NOT_FOUND);
         }
         assertThat(outbox.enqueued()).isEmpty(); // sticky checked before enqueue — nothing forwarded
     }
@@ -230,7 +231,7 @@ class BusForwarderTest {
     void forwardQueryStickyHitForwardsToOwnerRuntime() {
         // S6-1 (BUS): a GetTask for a known taskId routes the query to the STICKY OWNER runtime
         // (routeHandle + targetServiceId bound at create), not a default-agent runtime picked from RDC.
-        sticky.put("task-7", "h-owner", "svc-owner");
+        sticky.put("T1", "task-7", "h-owner", "svc-owner");
         rdc.setCandidates(List.of(new AgentCardRoute("h-default", "svc-default"))); // old path would pick this
         feed.inject(AgentBusEventType.INVOCATION_RESPONSE, null, null);
         forwarder.forwardQuery(queryCtx("task-7"));
@@ -239,17 +240,18 @@ class BusForwarderTest {
     }
 
     @Test
-    void forwardSubscribeStickyMissReturnsContinuationFailed() {
-        // S8-3 (BUS): a SubscribeToTask for a taskId with no sticky owner → CONTINUATION_FAILED,
-        // mirroring DIRECT routeSubscribe + forwardQuery. Must NOT default-agent-bus-forward to a
-        // random runtime (which times out → STREAM_NOT_AVAILABLE, multi-runtime-incorrect).
+    void forwardSubscribeStickyMissReturnsTaskNotFound() {
+        // S8-3 (BUS): a SubscribeToTask for a taskId with no sticky owner → TASK_NOT_FOUND (§8.1 #8
+        // — cross-tenant / unknown → TaskNotFound at the Gateway layer, mirroring DIRECT
+        // routeSubscribe + forwardQuery). Must NOT default-agent-bus-forward to a random runtime
+        // (which times out → STREAM_NOT_AVAILABLE, multi-runtime-incorrect).
         rdc.setCandidates(List.of(new AgentCardRoute("h-default", "svc-default")));
         forwarder.setSingleResponseWindowMillis(50L);
         Throwable thrown = catchThrowable(() ->
                 forwarder.forwardSubscribe(queryCtx("ghost"), null, new com.openjiuwen.gateway.sse.SseBridge()));
         assertThat(thrown).isInstanceOf(MethodResultException.class);
         if (thrown instanceof MethodResultException mre) {
-            assertThat(mre.errorCode()).isEqualTo(ErrorCodes.CONTINUATION_FAILED);
+            assertThat(mre.errorCode()).isEqualTo(ErrorCodes.TASK_NOT_FOUND);
         }
         assertThat(outbox.enqueued()).isEmpty();
     }

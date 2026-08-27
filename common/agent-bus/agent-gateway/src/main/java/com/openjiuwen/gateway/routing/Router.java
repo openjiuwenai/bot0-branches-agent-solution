@@ -87,7 +87,7 @@ public class Router {
         String outbound = injectTenantId(ctx.rawBody(), ctx.tenantId());
         String response = runtime.invokeSync(resolved.endpointUrl(), outbound);
         extractTaskId(response).filter(s -> !s.isBlank()).ifPresent(
-                taskId -> stickyIndex.put(taskId, chosen.routeHandle(), chosen.targetServiceId()));
+                taskId -> stickyIndex.put(ctx.tenantId(), taskId, chosen.routeHandle(), chosen.targetServiceId()));
         return response;
     }
 
@@ -133,7 +133,7 @@ public class Router {
                         .filter(s -> !s.isBlank())
                         .ifPresent(taskId -> {
                             if (stickyWritten.compareAndSet(false, true)) {
-                                stickyIndex.put(taskId, chosen.routeHandle(), chosen.targetServiceId());
+                                stickyIndex.put(ctx.tenantId(), taskId, chosen.routeHandle(), chosen.targetServiceId());
                             }
                         });
             }
@@ -154,7 +154,7 @@ public class Router {
      */
     public Stream<String> routeResumeStream(GovernanceContext ctx) {
         String taskId = ctx.taskId();
-        String routeHandle = stickyIndex.find(taskId)
+        String routeHandle = stickyIndex.find(ctx.tenantId(), taskId)
                 .orElseThrow(() -> new MethodResultException(ErrorCodes.CONTINUATION_FAILED,
                         "no sticky owner for task " + taskId, null));
         ResolvedRoute resolved;
@@ -179,7 +179,7 @@ public class Router {
      */
     public String routeResume(GovernanceContext ctx) {
         String taskId = ctx.taskId();
-        String routeHandle = stickyIndex.find(taskId)
+        String routeHandle = stickyIndex.find(ctx.tenantId(), taskId)
                 .orElseThrow(() -> new MethodResultException(ErrorCodes.CONTINUATION_FAILED,
                         "no sticky owner for task " + taskId, null));
         ResolvedRoute resolved;
@@ -204,8 +204,8 @@ public class Router {
      */
     public String routeGet(GovernanceContext ctx) {
         String taskId = ctx.taskId();
-        String routeHandle = stickyIndex.find(taskId)
-                .orElseThrow(() -> new MethodResultException(ErrorCodes.CONTINUATION_FAILED,
+        String routeHandle = stickyIndex.find(ctx.tenantId(), taskId)
+                .orElseThrow(() -> new MethodResultException(ErrorCodes.TASK_NOT_FOUND,
                         "no sticky owner for task " + taskId, null));
         ResolvedRoute resolved;
         try {
@@ -227,8 +227,8 @@ public class Router {
      */
     public Stream<String> routeSubscribe(GovernanceContext ctx) {
         String taskId = ctx.taskId();
-        String routeHandle = stickyIndex.find(taskId)
-                .orElseThrow(() -> new MethodResultException(ErrorCodes.CONTINUATION_FAILED,
+        String routeHandle = stickyIndex.find(ctx.tenantId(), taskId)
+                .orElseThrow(() -> new MethodResultException(ErrorCodes.TASK_NOT_FOUND,
                         "no sticky owner for task " + taskId, null));
         ResolvedRoute resolved;
         try {

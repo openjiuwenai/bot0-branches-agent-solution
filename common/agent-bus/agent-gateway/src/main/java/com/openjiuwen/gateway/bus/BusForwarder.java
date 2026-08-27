@@ -157,9 +157,10 @@ public class BusForwarder {
         // create), not a default-agent runtime picked from RDC. A GetTask body carries only params.id
         // (no agentId), so without the sticky binding the gateway cannot know which runtime owns the
         // task — a default-agent fallback would query the wrong runtime (spurious TASK_NOT_FOUND) and
-        // diverge from DIRECT routeGet. A sticky miss → CONTINUATION_FAILED (definite, not UNKNOWN).
-        StickyIndex.Owner owner = stickyIndex.findOwner(ctx.taskId())
-                .orElseThrow(() -> new MethodResultException(ErrorCodes.CONTINUATION_FAILED,
+        // diverge from DIRECT routeGet. A sticky miss (incl. cross-tenant) → TASK_NOT_FOUND (§8.1 #8,
+        // definite, not UNKNOWN).
+        StickyIndex.Owner owner = stickyIndex.findOwner(ctx.tenantId(), ctx.taskId())
+                .orElseThrow(() -> new MethodResultException(ErrorCodes.TASK_NOT_FOUND,
                         "no sticky owner for task " + ctx.taskId(), null));
         ForwardingEnvelope env = control.forwardQuery(ctx, owner.routeHandle(), owner.targetServiceId(),
                 sourceServiceId, System.currentTimeMillis() + 30000);
@@ -219,10 +220,10 @@ public class BusForwarder {
         // bound at create), not a default-agent runtime picked from RDC. SubscribeToTask carries only
         // params.id (no agentId), so without the sticky binding the gateway cannot know which runtime
         // owns the task — a default-agent fallback would query the wrong runtime (no STREAM_READY →
-        // STREAM_NOT_AVAILABLE) and diverge from DIRECT routeSubscribe. A sticky miss →
-        // CONTINUATION_FAILED (definite, not a STREAM_NOT_AVAILABLE timeout).
-        StickyIndex.Owner owner = stickyIndex.findOwner(ctx.taskId())
-                .orElseThrow(() -> new MethodResultException(ErrorCodes.CONTINUATION_FAILED,
+        // STREAM_NOT_AVAILABLE) and diverge from DIRECT routeSubscribe. A sticky miss (incl.
+        // cross-tenant) → TASK_NOT_FOUND (§8.1 #8, definite, not a STREAM_NOT_AVAILABLE timeout).
+        StickyIndex.Owner owner = stickyIndex.findOwner(ctx.tenantId(), ctx.taskId())
+                .orElseThrow(() -> new MethodResultException(ErrorCodes.TASK_NOT_FOUND,
                         "no sticky owner for task " + ctx.taskId(), null));
         ForwardingEnvelope env = control.forwardSubscribe(ctx, owner.routeHandle(), owner.targetServiceId(),
                 sourceServiceId, System.currentTimeMillis() + 30000);
@@ -390,7 +391,7 @@ public class BusForwarder {
         // "response" arrives as projections; any taskId-bearing projection (ACCEPTED /
         // INPUT_REQUIRED / RESPONSE / TERMINAL) binds the owner so a later resume re-routes to it.
         if (event.taskId() != null && !event.taskId().isBlank()) {
-            stickyIndex.put(event.taskId(), chosen.routeHandle(), chosen.targetServiceId());
+            stickyIndex.put(ctx.tenantId(), event.taskId(), chosen.routeHandle(), chosen.targetServiceId());
         }
         InvocationResponseStatus folded = FiveStateFolder.fold(event.eventType());
         if (folded == InvocationResponseStatus.ACCEPTED_WITH_TASK) {
@@ -496,7 +497,7 @@ public class BusForwarder {
             // P-13: bind taskId -> chosen routeHandle on the first taskId-bearing projection (mirrors
             // DIRECT Router.routeStream, which writes sticky on the first taskId frame).
             if (event.taskId() != null && !event.taskId().isBlank()) {
-                stickyIndex.put(event.taskId(), chosen.routeHandle(), chosen.targetServiceId());
+                stickyIndex.put(ctx.tenantId(), event.taskId(), chosen.routeHandle(), chosen.targetServiceId());
             }
             InvocationResponseStatus folded = FiveStateFolder.fold(event.eventType());
             if (folded == InvocationResponseStatus.ACCEPTED_WITH_TASK) {

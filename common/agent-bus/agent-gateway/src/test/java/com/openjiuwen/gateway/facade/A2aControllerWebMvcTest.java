@@ -324,7 +324,7 @@ class A2aControllerWebMvcTest {
         // authoritative tenant injected into the forwarded body
         assertThat(runtime.lastBody()).contains("\"tenant\":\"tenant-1\"");
         // sticky bound; no routeHandle leaked to the client response
-        assertThat(sticky.find("task-9")).contains("h1");
+        assertThat(sticky.find("tenant-1", "task-9")).contains("h1");
     }
 
     @Test
@@ -369,7 +369,7 @@ class A2aControllerWebMvcTest {
                 .andExpect(result -> assertThat(result.getResponse().getContentAsString())
                         .contains("event: jsonrpc", "data: {\"result\":{\"id\":\"task-s\"}}"));
         // sticky bound from the first streaming frame carrying a taskId
-        assertThat(sticky.find("task-s")).contains("h1");
+        assertThat(sticky.find("tenant-1", "task-s")).contains("h1");
     }
 
     @Test
@@ -449,7 +449,7 @@ class A2aControllerWebMvcTest {
 
     @Test
     void resumeReachesStickyOwnerWithoutSearch() throws Exception {
-        sticky.put("task-1", "h1", "svc-rt");
+        sticky.put("tenant-1", "task-1", "h1", "svc-rt");
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
                         .contentType(MediaType.APPLICATION_JSON).content(RESUME_BODY))
                 .andExpect(status().isOk())
@@ -473,7 +473,7 @@ class A2aControllerWebMvcTest {
 
     @Test
     void continueInputReachesOriginalOwner() throws Exception {
-        sticky.put("task-ci", "h1", "svc-rt");
+        sticky.put("tenant-1", "task-ci", "h1", "svc-rt");
         runtime.setResponse(
                 "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"result\":{\"id\":\"task-ci\",\"status\":\"working\"}}");
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
@@ -485,7 +485,7 @@ class A2aControllerWebMvcTest {
 
     @Test
     void continueInputTerminalStateIsPassedThroughNotNewCreate() throws Exception {
-        sticky.put("task-ci", "h1", "svc-rt");
+        sticky.put("tenant-1", "task-ci", "h1", "svc-rt");
         runtime.setResponse("{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"error\":{\"code\":-32004,\"message\":\"terminal\"}}");
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
                         .contentType(MediaType.APPLICATION_JSON).content(CONTINUE_INPUT_BODY))
@@ -497,7 +497,7 @@ class A2aControllerWebMvcTest {
     void subscribeToTaskReturnsSseWithEventStreamContentType() throws Exception {
         // issue 137: SubscribeToTask DIRECT path must set Content-Type: text/event-stream
         // (other streaming paths do; handleSubscribeToTask previously omitted it).
-        sticky.put("task-sub", "h1", "svc-rt");
+        sticky.put("tenant-1", "task-sub", "h1", "svc-rt");
         rdc.setResolved(new ResolvedRoute("http://rt:8000"));
         runtime.setFrames(List.of("{\"result\":{\"id\":\"task-sub\"}}", "{\"result\":{\"status\":\"working\"}}"));
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")

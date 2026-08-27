@@ -16,10 +16,17 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Gateway-internal {@code taskId -> routeHandle} index (FEAT-011 L2 §4.4 P4 / §5).
- * Written by the create path on first taskId, read (only) by the resume / GetTask /
- * SubscribeToTask path to route back to the original Task owner. NOT a RDC query
- * and NOT exposed to the client.
+ * Gateway-internal {@code (tenantId, taskId) -> routeHandle} index (FEAT-011 L2 §4.4 P4 / §5,
+ * §8.1 #1/#8 — composite key MUST at Gateway). Written by the create path on first taskId, read
+ * (only) by the resume / GetTask / SubscribeToTask path to route back to the original Task owner.
+ * NOT a RDC query and NOT exposed to the client.
+ *
+ * <p><b>Composite key (§8.1 #1).</b> The key is {@code (tenantId, taskId)}, NOT a bare {@code taskId}.
+ * A query from tenant-B for a task owned by tenant-A misses (different key), so the binding is
+ * never returned to the wrong tenant and the runtime is never called — cross-tenant isolation is
+ * discharged at the Gateway layer (§8.1 #8: cross-tenant → {@code TASK_NOT_FOUND}, not relying on
+ * downstream). The composite key also survives same-taskId collisions across tenants (each
+ * tenant's task is a distinct entry).
  *
  * <p>v0830: adds TTL + periodic cleanup (supplement info 1). Entries expire after
  * {@code gateway.routing.sticky-ttl-ms} (default 1h); a background sweeper evicts
@@ -27,13 +34,14 @@ import java.util.concurrent.TimeUnit;
  * 5min) to avoid unbounded growth in long-running processes.
  *
  * <p>In-memory single-process (decision D4); multi-instance Gateway would need
- * shared storage (Redis) — deliberately out of v0830 scope.
+ * shared storage (Redis) — deliberately out of v0830 scope (cross-REPLICA sharing is
+ * a separate concern from the cross-TENANT composite key, which is in-scope §8.1 #1).
  *
  * @since 0.1.0
  */
 @Component
 public class StickyIndex {
-    private final ConcurrentHashMap<String, Entry> index = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Key, Entry> index = new ConcurrentHashMap<>();
     private final long ttlMillis;
     private final ScheduledExecutorService sweeper;
 
@@ -74,45 +82,51 @@ public class StickyIndex {
      * route a query to the owner over the bus without re-resolving by agentId (a GetTask body
      * carries only {@code params.id}, no agentId).
      *
+     * @param tenantId       authoritative caller tenant (G2) — the Task owner tenant
      * @param taskId         runtime task id
      * @param routeHandle    opaque route handle of the owning instance
      * @param targetServiceId owning instance's target service id (for BUS query routing)
      */
-    public void put(String taskId, String routeHandle, String targetServiceId) {
-        index.put(taskId, new Entry(routeHandle, targetServiceId, System.currentTimeMillis() + ttlMillis));
+    public void put(String tenantId, String taskId, String routeHandle, String targetServiceId) {
+        index.put(new Key(tenantId, taskId),
+                new Entry(routeHandle, targetServiceId, System.currentTimeMillis() + ttlMillis));
     }
 
     /**
      * Look up the owning route handle for a task (resume / GetTask / SubscribeToTask
-     * path, read-only). Returns empty if unknown or expired (lazy expiry on read).
+     * path, read-only). Returns empty if unknown, expired, OR the (tenantId, taskId) pair does not
+     * match a binding — a cross-tenant query for another tenant's task misses (§8.1 #1/#8).
      *
-     * @param taskId runtime task id
-     * @return the bound route handle, or empty if unknown / expired
+     * @param tenantId authoritative caller tenant (G2)
+     * @param taskId   runtime task id
+     * @return the bound route handle, or empty if unknown / expired / cross-tenant
      */
-    public Optional<String> find(String taskId) {
-        return lookup(taskId).map(Entry::routeHandle);
+    public Optional<String> find(String tenantId, String taskId) {
+        return lookup(tenantId, taskId).map(Entry::routeHandle);
     }
 
     /**
      * Look up the owning route handle AND target service id for a task (BUS GetTask path —
      * a query carries no agentId, so the owner's target service id must come from the binding
-     * written at create time, not a default-agent RDC re-search). Returns empty if unknown or
-     * expired (lazy expiry on read).
+     * written at create time, not a default-agent RDC re-search). Returns empty if unknown, expired,
+     * OR cross-tenant (§8.1 #1/#8).
      *
-     * @param taskId runtime task id
-     * @return the bound owner (route handle + target service id), or empty if unknown / expired
+     * @param tenantId authoritative caller tenant (G2)
+     * @param taskId   runtime task id
+     * @return the bound owner (route handle + target service id), or empty if unknown / expired / cross-tenant
      */
-    public Optional<Owner> findOwner(String taskId) {
-        return lookup(taskId).map(e -> new Owner(e.routeHandle(), e.targetServiceId()));
+    public Optional<Owner> findOwner(String tenantId, String taskId) {
+        return lookup(tenantId, taskId).map(e -> new Owner(e.routeHandle(), e.targetServiceId()));
     }
 
-    private Optional<Entry> lookup(String taskId) {
-        Entry e = index.get(taskId);
+    private Optional<Entry> lookup(String tenantId, String taskId) {
+        Key key = new Key(tenantId, taskId);
+        Entry e = index.get(key);
         if (e == null) {
             return Optional.empty();
         }
         if (e.expireAt() < System.currentTimeMillis()) {
-            index.remove(taskId, e);
+            index.remove(key, e);
             return Optional.empty();
         }
         return Optional.of(e);
@@ -130,9 +144,9 @@ public class StickyIndex {
      */
     private void evictExpired() {
         long now = System.currentTimeMillis();
-        Iterator<Map.Entry<String, Entry>> it = index.entrySet().iterator();
+        Iterator<Map.Entry<Key, Entry>> it = index.entrySet().iterator();
         while (it.hasNext()) {
-            Map.Entry<String, Entry> en = it.next();
+            Map.Entry<Key, Entry> en = it.next();
             if (en.getValue().expireAt() < now) {
                 it.remove();
             }
@@ -140,6 +154,13 @@ public class StickyIndex {
     }
 
     record Entry(String routeHandle, String targetServiceId, long expireAt) {
+    }
+
+    /**
+     * Composite sticky key (FEAT-011 §8.1 #1): {@code tenantId + taskId}. The tenant dimension
+     * prevents cross-tenant leakage and survives same-taskId collisions across tenants.
+     */
+    record Key(String tenantId, String taskId) {
     }
 
     /** Owning instance binding for a BUS query (route handle + target service id). */

@@ -122,7 +122,7 @@ class BusStreamingAndResumeTest {
         runtime.setFrames(List.of("{\"result\":{\"id\":\"task-s\",\"status\":\"working\"}}"));
         MockHttpServletResponse mockResponse = new MockHttpServletResponse();
         forwarder().forwardStreaming(createCtx("agent-1", "ms-sticky"), mockResponse, sseBridge);
-        assertThat(sticky.find("task-s")).contains("h1");
+        assertThat(sticky.find("T1", "task-s")).contains("h1");
     }
 
     @Test
@@ -249,29 +249,29 @@ class BusStreamingAndResumeTest {
     @Test
     void b6_stickyMissNotS5() {
         sticky.clear();
-        assertThat(sticky.find("ghost")).isEmpty();
+        assertThat(sticky.find("T1", "ghost")).isEmpty();
     }
 
     @Test
     void b7_resumeEnvelopeCarriesTaskId() {
-        sticky.put("task-7", "h1", "svc-rt");
+        sticky.put("T1", "task-7", "h1", "svc-rt");
         rdc.setCandidates(List.of());
         g4.check("T1", "m-r1", "fp");
         feed.inject(AgentBusEventType.INVOCATION_RESPONSE, null, null);
-        assertThat(sticky.find("task-7")).contains("h1");
+        assertThat(sticky.find("T1", "task-7")).contains("h1");
     }
 
     @Test
     void b7_resumeNoSearchUsesStickyRoute() {
-        sticky.put("task-7", "h1", "svc-rt");
-        assertThat(sticky.find("task-7")).isPresent();
-        sticky.put("task-7", "h1", "svc-rt");
-        assertThat(sticky.find("task-7")).hasValue("h1");
+        sticky.put("T1", "task-7", "h1", "svc-rt");
+        assertThat(sticky.find("T1", "task-7")).isPresent();
+        sticky.put("T1", "task-7", "h1", "svc-rt");
+        assertThat(sticky.find("T1", "task-7")).hasValue("h1");
     }
 
     @Test
     void b7_resumeNoRouteRefExplicitFail() {
-        assertThat(sticky.find("ghost")).isEmpty();
+        assertThat(sticky.find("T1", "ghost")).isEmpty();
     }
 
     @Test
@@ -282,8 +282,8 @@ class BusStreamingAndResumeTest {
 
     @Test
     void b8_continueInputWireSameAsResume() {
-        sticky.put("task-ci", "h1", "svc-rt");
-        assertThat(sticky.find("task-ci")).contains("h1");
+        sticky.put("T1", "task-ci", "h1", "svc-rt");
+        assertThat(sticky.find("T1", "task-ci")).contains("h1");
     }
 
     @Test
@@ -306,7 +306,7 @@ class BusStreamingAndResumeTest {
         feed.inject(AgentBusEventType.INVOCATION_INPUT_REQUIRED, "ti-resume", null);
         var createResp = forwarder().forwardSync(createCtx("agent-1", "m-resume"));
         assertThat(createResp.getBody()).contains("INPUT_REQUIRED").contains("ti-resume");
-        assertThat(sticky.find("ti-resume")).contains("h1");
+        assertThat(sticky.find("T1", "ti-resume")).contains("h1");
         // DIRECT resume reads the sticky binding (read-only, no re-search) and reaches the owner.
         runtime.setResponse("{\"result\":{\"id\":\"ti-resume\",\"status\":{\"state\":\"completed\"}}}");
         Router router = new Router(rdc, runtime, sticky);

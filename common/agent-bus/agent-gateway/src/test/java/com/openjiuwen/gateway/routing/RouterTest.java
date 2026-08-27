@@ -56,7 +56,7 @@ class RouterTest {
         assertThat(runtime.lastEndpoint()).isEqualTo(ENDPOINT);
         assertThat(runtime.lastBody()).contains("\"tenant\":\"tenant-1\"");
         // sticky bound taskId -> the single candidate's handle
-        assertThat(sticky.find("task-7")).contains("h1");
+        assertThat(sticky.find("tenant-1", "task-7")).contains("h1");
     }
 
     @Test
@@ -66,8 +66,8 @@ class RouterTest {
         runtime.setResponse(TASK_BODY);
         router.routeCreate(createCtx("agent-9"));
         // weighted selection: either "first" or "second" (not always first)
-        assertThat(sticky.find("task-7")).isPresent();
-        assertThat(sticky.find("task-7").orElseThrow()).isIn("first", "second");
+        assertThat(sticky.find("tenant-1", "task-7")).isPresent();
+        assertThat(sticky.find("tenant-1", "task-7").orElseThrow()).isIn("first", "second");
     }
 
     @Test
@@ -165,7 +165,7 @@ class RouterTest {
         rdc.setResolved(new ResolvedRoute(ENDPOINT));
         runtime.setResponse("{\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"result\":{\"status\":\"accepted\"}}");
         router.routeCreate(createCtx("agent-9"));
-        assertThat(sticky.find("task-7")).isEmpty();
+        assertThat(sticky.find("tenant-1", "task-7")).isEmpty();
     }
 
     @Test
@@ -180,7 +180,7 @@ class RouterTest {
                 "{\"result\":{\"id\":\"task-stream\"}}",
                 "{\"result\":{\"status\":\"working\"}}");
         // sticky bound from the first frame carrying a taskId
-        assertThat(sticky.find("task-stream")).contains("h1");
+        assertThat(sticky.find("tenant-1", "task-stream")).contains("h1");
     }
 
     @Test
@@ -192,7 +192,7 @@ class RouterTest {
                 "{\"jsonrpc\":\"2.0\",\"result\":{\"kind\":\"status-update\",\"taskId\":\"task-a2a\","
                         + "\"status\":{\"state\":\"TASK_STATE_WORKING\"}}}"));
         router.routeStream(createCtx("agent-9")).toList();
-        assertThat(sticky.find("task-a2a")).contains("h1");
+        assertThat(sticky.find("tenant-1", "task-a2a")).contains("h1");
     }
 
     private static GovernanceContext resumeCtx(String taskId) {
@@ -205,7 +205,7 @@ class RouterTest {
 
     @Test
     void resumeReachesStickyOwnerWithoutSearch() {
-        sticky.put("task-7", "h1", "svc-rt");
+        sticky.put("tenant-1", "task-7", "h1", "svc-rt");
         rdc.setResolved(new ResolvedRoute(ENDPOINT));
         runtime.setResponse(TASK_BODY);
         String resp = router.routeResume(resumeCtx("task-7"));
@@ -227,7 +227,7 @@ class RouterTest {
 
     @Test
     void resumePassesThroughRuntimeAssociationError() {
-        sticky.put("task-7", "h1", "svc-rt");
+        sticky.put("tenant-1", "task-7", "h1", "svc-rt");
         rdc.setResolved(new ResolvedRoute(ENDPOINT));
         runtime.setResponse("{\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"error\":{\"code\":-32001,"
                 + "\"message\":\"Task not found\"}}");
