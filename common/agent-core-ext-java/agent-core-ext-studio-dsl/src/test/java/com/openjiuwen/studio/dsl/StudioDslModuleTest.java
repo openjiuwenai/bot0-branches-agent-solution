@@ -4,7 +4,6 @@
 
 package com.openjiuwen.studio.dsl;
 
-import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
@@ -21,6 +20,7 @@ import com.openjiuwen.studio.dsl.llmchain.LlmChainEngine;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.AssembledWorkflow;
 import com.openjiuwen.studio.dsl.testsupport.LinearWorkflowTestSupport;
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 
 import org.junit.jupiter.api.Test;
 
@@ -35,6 +35,7 @@ import java.util.Map;
  *
  * @since 2026-08-17
  */
+
 class StudioDslModuleTest {
     private static Map<String, Object> llmConf() {
         Map<String, Object> conf = new LinkedHashMap<>();
@@ -112,10 +113,27 @@ class StudioDslModuleTest {
                         AssembledNode.of("llm", "jiuwen.llm", llmConf()),
                         AssembledNode.of("e", "jiuwen.end", Map.of())));
         StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
+
+            /**
+             * invoke.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
                 return new AssistantMessage("ok");
             }
+
+            /**
+             * stream.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
 
             @Override
             public Iterator<AssistantMessageChunk> stream(List<BaseMessage> messages) {

@@ -12,10 +12,14 @@ import java.util.List;
  *
  * @since 2026-08-17
  */
+
 public final class StudioDslNodeProperties {
     private int maxNestingDepth = 5;
     private String pythonExecutor = "subprocess";
-    /** Python LOCAL_CODE_EXEC_MODE analogue: inprocess|subprocess (default inprocess). */
+
+    /**
+     * Python LOCAL_CODE_EXEC_MODE analogue: inprocess|subprocess (default inprocess).
+     */
     private String localExecMode = "inprocess";
     private String pythonInterpreter = "python3";
     private long pythonDefaultTimeoutMs = 30_000L;
@@ -30,6 +34,7 @@ public final class StudioDslNodeProperties {
      *
      * @return result
      */
+
     public int getMaxNestingDepth() {
         return maxNestingDepth;
     }
@@ -39,6 +44,7 @@ public final class StudioDslNodeProperties {
      *
      * @param maxNestingDepth maxNestingDepth
      */
+
     public void setMaxNestingDepth(int maxNestingDepth) {
         this.maxNestingDepth = maxNestingDepth;
     }
@@ -48,6 +54,7 @@ public final class StudioDslNodeProperties {
      *
      * @return result
      */
+
     public String getPythonExecutor() {
         return pythonExecutor;
     }
@@ -57,6 +64,7 @@ public final class StudioDslNodeProperties {
      *
      * @param pythonExecutor pythonExecutor
      */
+
     public void setPythonExecutor(String pythonExecutor) {
         this.pythonExecutor = pythonExecutor;
     }
@@ -66,6 +74,7 @@ public final class StudioDslNodeProperties {
      *
      * @return inprocess|subprocess
      */
+
     public String getLocalExecMode() {
         return localExecMode;
     }
@@ -75,6 +84,7 @@ public final class StudioDslNodeProperties {
      *
      * @param localExecMode localExecMode
      */
+
     public void setLocalExecMode(String localExecMode) {
         this.localExecMode = localExecMode;
     }
@@ -84,6 +94,7 @@ public final class StudioDslNodeProperties {
      *
      * @return result
      */
+
     public String getPythonInterpreter() {
         return pythonInterpreter;
     }
@@ -93,6 +104,7 @@ public final class StudioDslNodeProperties {
      *
      * @param pythonInterpreter pythonInterpreter
      */
+
     public void setPythonInterpreter(String pythonInterpreter) {
         this.pythonInterpreter = pythonInterpreter;
     }
@@ -102,6 +114,7 @@ public final class StudioDslNodeProperties {
      *
      * @return result
      */
+
     public long getPythonDefaultTimeoutMs() {
         return pythonDefaultTimeoutMs;
     }
@@ -111,6 +124,7 @@ public final class StudioDslNodeProperties {
      *
      * @param pythonDefaultTimeoutMs pythonDefaultTimeoutMs
      */
+
     public void setPythonDefaultTimeoutMs(long pythonDefaultTimeoutMs) {
         this.pythonDefaultTimeoutMs = pythonDefaultTimeoutMs;
     }
@@ -120,6 +134,7 @@ public final class StudioDslNodeProperties {
      *
      * @return result
      */
+
     public String getPythonWorkdirRoot() {
         return pythonWorkdirRoot;
     }
@@ -129,6 +144,7 @@ public final class StudioDslNodeProperties {
      *
      * @param pythonWorkdirRoot pythonWorkdirRoot
      */
+
     public void setPythonWorkdirRoot(String pythonWorkdirRoot) {
         this.pythonWorkdirRoot = pythonWorkdirRoot;
     }
@@ -138,6 +154,7 @@ public final class StudioDslNodeProperties {
      *
      * @return result
      */
+
     public boolean isPythonInheritEnv() {
         return pythonInheritEnv;
     }
@@ -147,6 +164,7 @@ public final class StudioDslNodeProperties {
      *
      * @param pythonInheritEnv pythonInheritEnv
      */
+
     public void setPythonInheritEnv(boolean pythonInheritEnv) {
         this.pythonInheritEnv = pythonInheritEnv;
     }
@@ -156,6 +174,7 @@ public final class StudioDslNodeProperties {
      *
      * @return result
      */
+
     public List<String> getPythonEnvWhitelist() {
         return pythonEnvWhitelist;
     }
@@ -165,6 +184,7 @@ public final class StudioDslNodeProperties {
      *
      * @param pythonEnvWhitelist pythonEnvWhitelist
      */
+
     public void setPythonEnvWhitelist(List<String> pythonEnvWhitelist) {
         this.pythonEnvWhitelist =
                 pythonEnvWhitelist == null ? new ArrayList<>() : new ArrayList<>(pythonEnvWhitelist);
@@ -175,6 +195,7 @@ public final class StudioDslNodeProperties {
      *
      * @return result
      */
+
     public String getUnsupportedModalityPolicy() {
         return unsupportedModalityPolicy;
     }
@@ -184,6 +205,7 @@ public final class StudioDslNodeProperties {
      *
      * @param unsupportedModalityPolicy unsupportedModalityPolicy
      */
+
     public void setUnsupportedModalityPolicy(String unsupportedModalityPolicy) {
         this.unsupportedModalityPolicy = unsupportedModalityPolicy;
     }
@@ -193,6 +215,7 @@ public final class StudioDslNodeProperties {
      *
      * @return result
      */
+
     public String getVariablesScope() {
         return variablesScope;
     }
@@ -202,6 +225,7 @@ public final class StudioDslNodeProperties {
      *
      * @param variablesScope variablesScope
      */
+
     public void setVariablesScope(String variablesScope) {
         this.variablesScope = variablesScope;
     }

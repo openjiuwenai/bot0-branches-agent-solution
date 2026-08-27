@@ -25,6 +25,7 @@ import java.util.Map;
  *
  * @since 2026-08-17
  */
+
 class NodeTypeRegistryTest {
     @Test
     void builtins_coverTwentyOnePlusEiCanonicalTypes() {

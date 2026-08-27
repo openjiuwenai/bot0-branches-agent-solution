@@ -34,6 +34,7 @@ import com.openjiuwen.studio.dsl.adapter.model.LlmNodeHandler;
  *
  * @since 2026-08-17
  */
+
 public final class BuiltinNodeBootstrap {
     private BuiltinNodeBootstrap() {}
 
@@ -42,6 +43,7 @@ public final class BuiltinNodeBootstrap {
      *
      * @param registry registry
      */
+
     public static void registerAll(NodeTypeRegistry registry) {
         registry.register(new StartNodeHandler());
         registry.register(new EndNodeHandler());

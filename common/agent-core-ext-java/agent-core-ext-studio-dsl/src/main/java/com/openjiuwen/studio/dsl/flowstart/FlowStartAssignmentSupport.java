@@ -16,6 +16,7 @@ import java.util.Set;
  *
  * @since 2026-08-25
  */
+
 public final class FlowStartAssignmentSupport {
     public static final String USER_FIELDS = "userFields";
     public static final String SYSTEM_FIELDS = "systemFields";
@@ -28,6 +29,13 @@ public final class FlowStartAssignmentSupport {
     public static final long DEFAULT_CONVERSATION_VARIABLE_TTL_SECONDS = 3L * 24 * 3600;
 
     private FlowStartAssignmentSupport() {}
+
+    /**
+     * conversationTtlSeconds.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public static long conversationTtlSeconds() {
         String env = System.getenv("CONVERSATION_VARIABLE_STORE_TIME");
@@ -44,15 +52,32 @@ public final class FlowStartAssignmentSupport {
         }
     }
 
+    /**
+     * redisKey.
+     *
+     * @param workflowId workflowId
+     * @param conversationId conversationId
+     * @return result
+     * @since 0.1.0
+     */
+
     public static String redisKey(String workflowId, String conversationId) {
         return REDIS_GLOBAL_VALS_NAME + "." + workflowId + "." + conversationId;
     }
 
+    /**
+     * assignmentInputs.
+     *
+     * @param configs configs
+     * @return result
+     * @since 0.1.0
+     */
+
     @SuppressWarnings("unchecked")
     public static Object assignmentInputs(Map<String, Object> configs) {
         if (configs == null || !configs.containsKey(PRE_DEFINED_FIELDS)) {
-            return List.of();
-        }
+        return List.of();
+    }
         Object pre = configs.get(PRE_DEFINED_FIELDS);
         if (!(pre instanceof Map<?, ?> preMap)) {
             return List.of();
@@ -100,6 +125,14 @@ public final class FlowStartAssignmentSupport {
         return result;
     }
 
+    /**
+     * predefinedMemoryKeys.
+     *
+     * @param assignmentInputs assignmentInputs
+     * @return result
+     * @since 0.1.0
+     */
+
     public static Set<String> predefinedMemoryKeys(Object assignmentInputs) {
         Set<String> keys = new LinkedHashSet<>();
         if (!(assignmentInputs instanceof List<?> list)) {
@@ -126,16 +159,25 @@ public final class FlowStartAssignmentSupport {
         return keys;
     }
 
+    /**
+     * transformType.
+     *
+     * @param dataType dataType
+     * @param dataValue dataValue
+     * @return result
+     * @since 0.1.0
+     */
+
     public static Object transformType(String dataType, Object dataValue) {
         if (!"string".equals(dataType) && (dataValue == null || "".equals(dataValue))) {
-            return null;
-        }
+        return null;
+    }
         try {
             return switch (dataType) {
                 case "integer" -> {
                     if (dataValue instanceof Boolean b) {
-                        yield b ? 1 : 0;
-                    }
+                yield b ? 1 : 0;
+            }
                     yield dataValue instanceof Number n
                             ? n.intValue()
                             : Integer.parseInt(String.valueOf(dataValue));
@@ -182,6 +224,14 @@ public final class FlowStartAssignmentSupport {
             return dataValue;
         }
     }
+
+    /**
+     * validateRequired.
+     *
+     * @param configs configs
+     * @param inputs inputs
+     * @since 0.1.0
+     */
 
     public static void validateRequired(Map<String, Object> configs, Map<String, Object> inputs) {
         List<String> missing = new ArrayList<>();

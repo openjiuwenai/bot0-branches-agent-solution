@@ -12,6 +12,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class ExtractorConfig {
     private final String modelName;
     private final String modelType;
@@ -62,34 +63,83 @@ public final class ExtractorConfig {
         this.rawConfigs = rawConfigs == null ? Map.of() : Map.copyOf(rawConfigs);
     }
 
+    /**
+     * fromNodeConfigs.
+     *
+     * @param configs configs
+     * @return result
+     * @since 0.1.0
+     */
+
     public static ExtractorConfig fromNodeConfigs(Map<String, Object> configs) {
         return ExtractorConfigFormatter.format(configs == null ? Map.of() : configs);
     }
+
+    /**
+     * modelName.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String modelName() {
         return modelName;
     }
 
+    /**
+     * modelType.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String modelType() {
         return modelType;
     }
+
+    /**
+     * withChatHistory.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean withChatHistory() {
         return withChatHistory;
     }
 
+    /**
+     * chatHistoryMaxRounds.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public int chatHistoryMaxRounds() {
         return chatHistoryMaxRounds;
     }
+
+    /**
+     * extraPromptForFieldsExtraction.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String extraPromptForFieldsExtraction() {
         return extraPromptForFieldsExtraction;
     }
 
+    /**
+     * questionContent.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String questionContent() {
         return questionContent;
     }
-
     public Map<String, String> cnFieldsName() {
         return cnFieldsName;
     }
@@ -110,20 +160,36 @@ public final class ExtractorConfig {
         return promptTemplate;
     }
 
+    /**
+     * exampleContent.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String exampleContent() {
         return exampleContent;
     }
 
-    /** Python {@code input_complement} — validated at init; no runtime rail in extension extractor. */
+    /**
+     * Python {@code input_complement} — validated at init; no runtime rail in extension extractor.
+     *
+     * @return result
+     * @since 0.1.0
+     */
     public Boolean inputComplement() {
         return inputComplement;
     }
 
-    /** Python {@code extract_fields_from_response} — validated at init; unused at runtime in extension extractor. */
+    /**
+     * Python {@code extract_fields_from_response} — validated at init; unused at runtime in extension extractor.
+     *
+     * @return result
+     * @since 0.1.0
+     */
     public Boolean extractFieldsFromResponse() {
         return extractFieldsFromResponse;
     }
-
     public Map<String, Object> rawConfigs() {
         return rawConfigs;
     }

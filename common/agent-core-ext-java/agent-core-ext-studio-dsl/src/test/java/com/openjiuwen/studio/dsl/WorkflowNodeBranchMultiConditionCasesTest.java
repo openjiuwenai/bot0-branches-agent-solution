@@ -24,6 +24,7 @@ import java.util.Map;
  *
  * @since 2026-08-25
  */
+
 class WorkflowNodeBranchMultiConditionCasesTest {
     private static final String BRANCH2_AND =
             "(length(${query}) > 1) "
@@ -43,7 +44,6 @@ class WorkflowNodeBranchMultiConditionCasesTest {
     void setUp() {
         registry = NodeTypeRegistry.createWithBuiltins();
     }
-
     @SuppressWarnings("unchecked")
     private static Map<String, Object> invokeBranch(ComponentExecutable exec, Map<String, Object> userFields) {
         return (Map<String, Object>) exec.invoke(Map.of("userFields", userFields), null, null);

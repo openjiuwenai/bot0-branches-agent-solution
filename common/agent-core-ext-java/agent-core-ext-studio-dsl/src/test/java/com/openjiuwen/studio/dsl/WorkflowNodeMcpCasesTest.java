@@ -31,6 +31,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 class WorkflowNodeMcpCasesTest {
     private static final List<Map<String, Object>> MOCK_CONTENT =
             List.of(Map.of("type", "text", "text", "mock mcp response"));
@@ -47,7 +48,6 @@ class WorkflowNodeMcpCasesTest {
     void tearDown() {
         StudioEngineTestSupport.clear();
     }
-
     @SuppressWarnings("unchecked")
     private static Map<String, Object> uf(Object invokeOut) {
         Map<String, Object> out = (Map<String, Object>) invokeOut;

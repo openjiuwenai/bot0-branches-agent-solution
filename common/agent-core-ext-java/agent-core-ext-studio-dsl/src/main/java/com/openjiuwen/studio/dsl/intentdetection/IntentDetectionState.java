@@ -9,8 +9,12 @@ package com.openjiuwen.studio.dsl.intentdetection;
  *
  * @since 2026-08-26
  */
+
 public final class IntentDetectionState {
-    /** Python {@code ExecutionStatus}. */
+
+    /**
+     * Python {@code ExecutionStatus}.
+     */
     public enum ExecutionStatus {
         START,
         END,
@@ -19,15 +23,34 @@ public final class IntentDetectionState {
 
     private ExecutionStatus status = ExecutionStatus.START;
 
+    /**
+     * status.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public ExecutionStatus status() {
         return status;
     }
+
+    /**
+     * setStatus.
+     *
+     * @param status status
+     * @since 0.1.0
+     */
 
     public void setStatus(ExecutionStatus status) {
         this.status = status == null ? ExecutionStatus.START : status;
     }
 
-    /** Deep copy for {@code load_state}. */
+    /**
+     * Deep copy for {@code load_state}.
+     *
+     * @return result
+     * @since 0.1.0
+     */
     public IntentDetectionState copy() {
         IntentDetectionState copy = new IntentDetectionState();
         copy.status = this.status;

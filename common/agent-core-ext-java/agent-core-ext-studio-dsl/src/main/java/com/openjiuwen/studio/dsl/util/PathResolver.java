@@ -12,6 +12,7 @@ import java.util.Optional;
  *
  * @since 2026-08-17
  */
+
 public final class PathResolver {
     private PathResolver() {}
 
@@ -22,11 +23,12 @@ public final class PathResolver {
      * @param path path
      * @return value when present
      */
+
     @SuppressWarnings("unchecked")
     public static Optional<Object> get(Map<String, Object> root, String path) {
         if (root == null || path == null || path.isBlank()) {
-            return Optional.empty();
-        }
+        return Optional.empty();
+    }
         Object cur = root;
         for (String p : path.split("\\.")) {
             if (!(cur instanceof Map<?, ?> m)) {

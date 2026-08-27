@@ -11,6 +11,7 @@ import java.util.Map;
  *
  * @since 2026-08-17
  */
+
 public final class PythonExecResult {
     private final Map<String, Object> outputs;
     private final String stdout;
@@ -25,6 +26,7 @@ public final class PythonExecResult {
      * @param stderr stderr
      * @param exitCode exitCode
      */
+
     public PythonExecResult(Map<String, Object> outputs, String stdout, String stderr, int exitCode) {
         this.outputs = outputs;
         this.stdout = stdout;
@@ -37,6 +39,7 @@ public final class PythonExecResult {
      *
      * @return result
      */
+
     public Map<String, Object> outputs() {
         return outputs;
     }
@@ -46,6 +49,7 @@ public final class PythonExecResult {
      *
      * @return result
      */
+
     public String stdout() {
         return stdout;
     }
@@ -55,6 +59,7 @@ public final class PythonExecResult {
      *
      * @return result
      */
+
     public String stderr() {
         return stderr;
     }
@@ -64,6 +69,7 @@ public final class PythonExecResult {
      *
      * @return result
      */
+
     public int exitCode() {
         return exitCode;
     }

@@ -12,7 +12,9 @@ import java.util.Map;
  *
  * @since 2026-08-25
  */
+
 public interface KBServiceAdapter {
+
     /**
      * search.
      *
@@ -22,6 +24,7 @@ public interface KBServiceAdapter {
      * @param retrievalParams retrievalParams
      * @return hits
      */
+
     List<KBSearchResult> search(
             String query,
             Map<String, Object> connectionConfig,

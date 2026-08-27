@@ -14,6 +14,7 @@ import java.util.Map;
  *
  * @since 2026-08-17
  */
+
 public final class WorkflowVariableScope {
     private final Map<String, Object> vars = new LinkedHashMap<>();
     private boolean closed;
@@ -24,6 +25,7 @@ public final class WorkflowVariableScope {
      * @param key key
      * @param value value
      */
+
     public synchronized void put(String key, Object value) {
         ensureOpen();
         vars.put(key, value);
@@ -34,6 +36,7 @@ public final class WorkflowVariableScope {
      *
      * @param more more
      */
+
     public synchronized void putAll(Map<String, Object> more) {
         ensureOpen();
         if (more != null) {
@@ -47,6 +50,7 @@ public final class WorkflowVariableScope {
      * @param key key
      * @return result
      */
+
     public synchronized Object get(String key) {
         ensureOpen();
         return vars.get(key);
@@ -57,13 +61,16 @@ public final class WorkflowVariableScope {
      *
      * @return result
      */
+
     public synchronized Map<String, Object> snapshot() {
         ensureOpen();
         return Collections.unmodifiableMap(new LinkedHashMap<>(vars));
     }
 
     /**
-     * Workflow execution ended — variables must not remain readable (L2 §3.7).
+     * * Workflow execution ended — variables must not remain readable (L2 §3.7).
+     *
+     * @since 0.1.0
      */
     public synchronized void close() {
         vars.clear();
@@ -75,13 +82,13 @@ public final class WorkflowVariableScope {
      *
      * @return result
      */
+
     public synchronized boolean isClosed() {
         return closed;
     }
-
     private void ensureOpen() {
         if (closed) {
-            throw new IllegalStateException("WorkflowVariableScope closed after workflow execution ended");
-        }
+        throw new IllegalStateException("WorkflowVariableScope closed after workflow execution ended");
+    }
     }
 }

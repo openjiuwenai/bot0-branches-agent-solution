@@ -10,13 +10,13 @@ import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.BranchRouter;
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.adapter.AbstractStudioNode;
+import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
+import com.openjiuwen.studio.dsl.contract.ToolRegistry;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.intentdetection.IntentDetectionEngine;
 import com.openjiuwen.studio.dsl.intentdetection.IntentDetectionLlmDetector;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
-import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
-import com.openjiuwen.studio.dsl.contract.ToolRegistry;
 
 import java.util.Map;
 import java.util.Set;
@@ -26,22 +26,46 @@ import java.util.Set;
  *
  * @since 2026-08-17
  */
+
 public final class IntentDetectionNodeHandler implements NodeHandlerFactory {
+
+    /**
+     * canonicalType.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public String canonicalType() {
         return "jiuwen.intentDetection";
     }
+
+    /**
+     * aliases.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
 
+    /**
+     * create.
+     *
+     * @param node node
+     * @param ctx ctx
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         return new IntentExecutable(node, ctx);
     }
-
     static final class IntentExecutable extends AbstractStudioNode {
         private final IntentDetectionEngine engine;
 
@@ -61,19 +85,54 @@ public final class IntentDetectionNodeHandler implements NodeHandlerFactory {
             return engine;
         }
 
+        /**
+         * addBranch.
+         *
+         * @param condition condition
+         * @param target target
+         * @param branchId branchId
+         * @since 0.1.0
+         */
+
         public void addBranch(Object condition, Object target, String branchId) {
             engine.addBranch(condition, target, branchId);
         }
 
+        /**
+         * router.
+         *
+         * @return result
+         * @since 0.1.0
+         */
+
         public BranchRouter router() {
             return engine.router();
         }
+
+        /**
+         * addComponent.
+         *
+         * @param graph graph
+         * @param nodeId nodeId
+         * @param waitForAll waitForAll
+         * @since 0.1.0
+         */
 
         @Override
         public void addComponent(Graph graph, String nodeId, boolean waitForAll) {
             graph.addNode(nodeId, this, waitForAll);
             graph.addConditionalEdges(nodeId, engine.router());
         }
+
+        /**
+         * doInvoke.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
 
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {

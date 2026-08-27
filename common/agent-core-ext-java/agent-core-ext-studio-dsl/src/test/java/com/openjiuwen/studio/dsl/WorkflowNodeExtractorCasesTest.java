@@ -4,7 +4,6 @@
 
 package com.openjiuwen.studio.dsl;
 
-import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.core.context.ModelContext;
@@ -17,6 +16,7 @@ import com.openjiuwen.studio.dsl.model.AssembledWorkflow;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 import com.openjiuwen.studio.dsl.testsupport.LinearWorkflowTestSupport;
 import com.openjiuwen.studio.dsl.testsupport.StubModelContext;
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +31,7 @@ import java.util.Map;
  *
  * @since 2026-08-25
  */
+
 class WorkflowNodeExtractorCasesTest {
     private static final String USER_INPUT = "我要坐飞机去上海参加会议";
     private static final String MOCK_LLM_JSON = "{\"location\": \"上海\", \"traveltool\": \"飞机\"}";
@@ -47,7 +48,6 @@ class WorkflowNodeExtractorCasesTest {
     void tearDown() {
         StudioEngineTestSupport.clear();
     }
-
     static Map<String, Object> standardExtractorConfig() {
         return Map.of(
                 "model",
@@ -81,7 +81,6 @@ class WorkflowNodeExtractorCasesTest {
     private static ModelContext contextWithUserInput(String text) {
         return new StubModelContext(new UserMessage(text));
     }
-
     @SuppressWarnings("unchecked")
     private static Map<String, Object> uf(Object invokeOut) {
         Map<String, Object> out = (Map<String, Object>) invokeOut;

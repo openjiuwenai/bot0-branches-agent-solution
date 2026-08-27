@@ -20,6 +20,7 @@ import java.util.logging.Logger;
  *
  * @since 2026-08-25
  */
+
 public final class PythonCodeRunners {
     private static final Logger LOG = Logger.getLogger(PythonCodeRunners.class.getName());
     private static volatile PythonCodeExecutor sandboxExecutor;
@@ -31,6 +32,7 @@ public final class PythonCodeRunners {
      *
      * @param executor executor (null clears)
      */
+
     public static void setSandboxExecutor(PythonCodeExecutor executor) {
         sandboxExecutor = executor;
     }
@@ -43,6 +45,7 @@ public final class PythonCodeRunners {
      * @param fallbackSubprocess usually ctx.pythonExecutor()
      * @return result
      */
+
     public static PythonCodeExecutor resolve(
             String execEnv, String localExecMode, PythonCodeExecutor fallbackSubprocess) {
         String env = normalizeExecEnv(execEnv);
@@ -71,6 +74,7 @@ public final class PythonCodeRunners {
      * @param fallbackSubprocess fallback
      * @return result
      */
+
     public static PythonCodeExecutor resolveLocal(
             String localExecMode, PythonCodeExecutor fallbackSubprocess) {
         String mode = localExecMode == null || localExecMode.isBlank()
@@ -88,6 +92,7 @@ public final class PythonCodeRunners {
      *
      * @return strict mode enabled
      */
+
     public static boolean isSandboxStrict() {
         String env = System.getenv("STUDIO_DSL_SANDBOX_STRICT");
         if (env == null || env.isBlank()) {
@@ -105,6 +110,7 @@ public final class PythonCodeRunners {
      *
      * @return result
      */
+
     public static String defaultLocalExecMode() {
         String env = System.getenv("LOCAL_CODE_EXEC_MODE");
         if (env == null || env.isBlank()) {
@@ -122,10 +128,11 @@ public final class PythonCodeRunners {
      * @param execEnv execEnv
      * @return local|sandbox
      */
+
     public static String normalizeExecEnv(String execEnv) {
         if (execEnv == null || execEnv.isBlank()) {
-            return "local";
-        }
+        return "local";
+    }
         String env = execEnv.trim().toLowerCase();
         if ("local".equals(env) || "sandbox".equals(env)) {
             return env;

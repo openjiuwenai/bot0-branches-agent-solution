@@ -17,6 +17,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class ComplexIntentDetectionConfig {
     public static final String TYPE = "EI.ComplexIntentDetection";
 
@@ -63,6 +64,15 @@ public final class ComplexIntentDetectionConfig {
         this.rawConfigs = rawConfigs;
     }
 
+    /**
+     * from.
+     *
+     * @param nodeId nodeId
+     * @param conf conf
+     * @return result
+     * @since 0.1.0
+     */
+
     public static ComplexIntentDetectionConfig from(String nodeId, Map<String, Object> conf) {
         Map<String, Object> c = conf == null ? Map.of() : conf;
         List<Map<String, Object>> branches = listOfMaps(c.get("branches"));
@@ -92,7 +102,12 @@ public final class ComplexIntentDetectionConfig {
                 new LinkedHashMap<>(c));
     }
 
-    /** IntentDetection-facing config (Python {@code _init_intent_detection}). */
+    /**
+     * IntentDetection-facing config (Python {@code _init_intent_detection}).
+     *
+     * @return result
+     * @since 0.1.0
+     */
     public Map<String, Object> toIntentDetectionConfigs() {
         Map<String, Object> intent = new LinkedHashMap<>(rawConfigs);
         if (!intent.containsKey("branches")) {
@@ -129,10 +144,16 @@ public final class ComplexIntentDetectionConfig {
         return intent;
     }
 
+    /**
+     * subNodeId.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String subNodeId() {
         return subNodeId;
     }
-
     public List<Map<String, Object>> branches() {
         return branches;
     }
@@ -141,29 +162,34 @@ public final class ComplexIntentDetectionConfig {
         return groups;
     }
 
+    /**
+     * aggMode.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String aggMode() {
         return aggMode;
     }
-
     public Map<String, Object> rawConfigs() {
         return rawConfigs;
     }
 
     private static Object first(Map<String, Object> c, String a, String b) {
         if (c.containsKey(a) && c.get(a) != null) {
-            return c.get(a);
-        }
+        return c.get(a);
+    }
         return c.get(b);
     }
 
     private static String str(Object v, String d) {
         return v == null ? d : String.valueOf(v);
     }
-
     private static boolean bool(Object v, boolean d) {
         if (v == null) {
-            return d;
-        }
+        return d;
+    }
         if (v instanceof Boolean b) {
             return b;
         }
@@ -172,8 +198,8 @@ public final class ComplexIntentDetectionConfig {
 
     private static int intVal(Object v, int d) {
         if (v instanceof Number n) {
-            return n.intValue();
-        }
+        return n.intValue();
+    }
         if (v == null) {
             return d;
         }
@@ -186,8 +212,8 @@ public final class ComplexIntentDetectionConfig {
 
     private static double doubleVal(Object v, double d) {
         if (v instanceof Number n) {
-            return n.doubleValue();
-        }
+        return n.doubleValue();
+    }
         if (v == null) {
             return d;
         }

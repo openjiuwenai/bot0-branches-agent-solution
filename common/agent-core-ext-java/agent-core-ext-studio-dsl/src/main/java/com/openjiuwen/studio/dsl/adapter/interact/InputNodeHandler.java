@@ -24,25 +24,51 @@ import java.util.Set;
  *
  * @since 2026-08-17
  */
+
 public final class InputNodeHandler implements NodeHandlerFactory {
-    /** Python FLOW_INPUT_STATE_KEY. */
+
+    /**
+     * Python FLOW_INPUT_STATE_KEY.
+     */
     public static final String STATE_KEY = FlowInputEngine.STATE_KEY;
+
+    /**
+     * canonicalType.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public String canonicalType() {
         return "jiuwen.input";
     }
 
+    /**
+     * aliases.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public Set<String> aliases() {
         return Set.of("jiuwen.flowInput");
     }
 
+    /**
+     * create.
+     *
+     * @param node node
+     * @param ctx ctx
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         return new InputExecutable(node);
     }
-
     static final class InputExecutable extends AbstractStudioNode {
         private final FlowInputEngine engine;
 
@@ -55,11 +81,31 @@ public final class InputNodeHandler implements NodeHandlerFactory {
             this.engine = new FlowInputEngine(node.id(), conf);
         }
 
+        /**
+         * doInvoke.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
+
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
             Map<String, Object> out = engine.invoke(inputs, session);
             return NodePayload.ofFields(out);
         }
+
+        /**
+         * stream.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
 
         @Override
         public Iterator<Object> stream(Object inputs, NodeSessionApi session, ModelContext context) {

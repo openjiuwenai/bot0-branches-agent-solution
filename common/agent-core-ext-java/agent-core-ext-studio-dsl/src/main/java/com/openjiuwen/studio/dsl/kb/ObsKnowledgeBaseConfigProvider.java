@@ -7,21 +7,23 @@ package com.openjiuwen.studio.dsl.kb;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.studio.dsl.contract.KnowledgeBaseConfigProvider;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * OBS-backed KB config loader (Python {@code OBSKnowledgeBaseConfigProvider}).
  *
  * @since 2026-08-26
  */
+
 public final class ObsKnowledgeBaseConfigProvider implements KnowledgeBaseConfigProvider {
     static final Set<String> SECRET_PARAM_CODES =
             Set.of("apiKey", "APIKey", "AppCode", "password", "authorization");
@@ -92,13 +94,16 @@ public final class ObsKnowledgeBaseConfigProvider implements KnowledgeBaseConfig
             return parseConnection(cached);
         }
         String objectKey = CONNECTION_PATH.formatted(connectionId);
+        String content = readStorageContent(objectKey, "connection_id=" + connectionId);
+        if (content == null) {
+            return null;
+        }
         try {
-            String content = KnowledgeBaseConfigProviders.storage().getContent(objectKey);
             Map<String, Object> data = MAPPER.readValue(content, Map.class);
             setCached(cacheKey, data);
             return parseConnection(data);
-        } catch (Exception e) {
-            LOG.log(Level.WARNING, "Failed to load connection file from OBS: connection_id=" + connectionId, e);
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "Failed to parse connection file from OBS: connection_id=" + connectionId, e);
             return null;
         }
     }
@@ -111,13 +116,25 @@ public final class ObsKnowledgeBaseConfigProvider implements KnowledgeBaseConfig
             return parseKbReference(cached);
         }
         String objectKey = KB_PATH.formatted(knowledgeBaseId);
+        String content = readStorageContent(objectKey, "kb_id=" + knowledgeBaseId);
+        if (content == null) {
+            return null;
+        }
         try {
-            String content = KnowledgeBaseConfigProviders.storage().getContent(objectKey);
             Map<String, Object> data = MAPPER.readValue(content, Map.class);
             setCached(cacheKey, data);
             return parseKbReference(data);
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "Failed to parse KB file from OBS: kb_id=" + knowledgeBaseId, e);
+            return null;
+        }
+    }
+
+    private String readStorageContent(String objectKey, String logContext) {
+        try {
+            return KnowledgeBaseConfigProviders.storage().getContent(objectKey);
         } catch (Exception e) {
-            LOG.log(Level.WARNING, "Failed to load KB file from OBS: kb_id=" + knowledgeBaseId, e);
+            LOG.log(Level.WARNING, "Failed to load file from OBS: " + logContext, e);
             return null;
         }
     }
@@ -183,8 +200,8 @@ public final class ObsKnowledgeBaseConfigProvider implements KnowledgeBaseConfig
 
     static void mergeAuthHeaders(Map<String, Object> connection) {
         if (!KbHttp.str(connection.get("authorization")).isBlank()) {
-            return;
-        }
+        return;
+    }
         String connector = KbHttp.str(connection.get("connector_type")).toLowerCase();
         if (!(connector.startsWith("lakesearch") || "custom".equals(connector) || connector.isBlank())) {
             return;
@@ -214,6 +231,6 @@ public final class ObsKnowledgeBaseConfigProvider implements KnowledgeBaseConfig
     private void setCached(String key, Map<String, Object> value) {
         cache.put(key, new CachedEntry(new LinkedHashMap<>(value), System.currentTimeMillis()));
     }
-
-    private record CachedEntry(Map<String, Object> value, long ts) {}
-}
+    private record CachedEntry(Map<String, Object> value, long ts) {
+        }
+    }

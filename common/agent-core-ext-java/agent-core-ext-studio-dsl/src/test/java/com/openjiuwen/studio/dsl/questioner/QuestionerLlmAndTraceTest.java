@@ -6,27 +6,27 @@ package com.openjiuwen.studio.dsl.questioner;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.internal.NodeSession;
 import com.openjiuwen.core.session.internal.WorkflowSession;
+import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.state.InMemoryState;
 import com.openjiuwen.studio.dsl.rails.formatters.DateUtilCompatibleParser;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * LLM extract / reflection / Redis TraceStore parity for Questioner.
  *
  * @since 2026-08-26
  */
-class QuestionerLlmAndTraceTest {
 
+class QuestionerLlmAndTraceTest {
     @AfterEach
     void tearDown() {
         QuestionerTraceStore.clearMemory();

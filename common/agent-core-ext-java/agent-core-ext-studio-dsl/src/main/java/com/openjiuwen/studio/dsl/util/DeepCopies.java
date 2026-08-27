@@ -14,6 +14,7 @@ import java.util.Map;
  *
  * @since 2026-08-17
  */
+
 public final class DeepCopies {
     private DeepCopies() {}
 
@@ -23,11 +24,12 @@ public final class DeepCopies {
      * @param in in
      * @return result
      */
+
     @SuppressWarnings("unchecked")
     public static Map<String, Object> map(Map<String, Object> in) {
         if (in == null) {
-            return new LinkedHashMap<>();
-        }
+        return new LinkedHashMap<>();
+    }
         Map<String, Object> out = new LinkedHashMap<>();
         for (Map.Entry<String, Object> e : in.entrySet()) {
             out.put(e.getKey(), value(e.getValue()));
@@ -41,6 +43,7 @@ public final class DeepCopies {
      * @param v v
      * @return result
      */
+
     @SuppressWarnings("unchecked")
     public static Object value(Object v) {
         if (v instanceof Map<?, ?> m) {

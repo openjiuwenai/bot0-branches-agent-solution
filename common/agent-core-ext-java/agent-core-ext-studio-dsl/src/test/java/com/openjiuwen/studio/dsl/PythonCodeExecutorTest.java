@@ -15,15 +15,15 @@ import com.openjiuwen.studio.dsl.python.PythonExecResult;
 import com.openjiuwen.studio.dsl.python.SubprocessPythonCodeExecutor;
 
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.TimeUnit;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
@@ -31,6 +31,7 @@ import java.util.stream.Stream;
  *
  * @since 2026-08-17
  */
+
 class PythonCodeExecutorTest {
     private static boolean pythonAvailable;
 
@@ -154,7 +155,6 @@ class PythonCodeExecutorTest {
     private static PythonExecRequest request(String nodeId, String script, Path workdirRoot) {
         return request(nodeId, script, workdirRoot, 10_000L);
     }
-
     private static PythonExecRequest request(String nodeId, String script, Path workdirRoot, long timeoutMs) {
         return new PythonExecRequest(
                 nodeId,

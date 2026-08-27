@@ -14,6 +14,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class StructInputSchemas {
     private StructInputSchemas() {}
 
@@ -51,11 +52,20 @@ public final class StructInputSchemas {
         return normalized;
     }
 
+    /**
+     * normalizeWithSchema.
+     *
+     * @param value value
+     * @param schema schema
+     * @return result
+     * @since 0.1.0
+     */
+
     @SuppressWarnings("unchecked")
     public static Object normalizeWithSchema(Object value, Map<String, Object> schema) {
         if (schema == null || schema.isEmpty()) {
-            return value;
-        }
+        return value;
+    }
         if (value == null) {
             if (isObjectSchema(schema) || isArraySchema(schema)) {
                 return value;
@@ -171,7 +181,6 @@ public final class StructInputSchemas {
     static boolean isArraySchema(Map<String, Object> schema) {
         return "array".equals(schemaType(schema));
     }
-
     static Object schemaDefault(Map<String, Object> schema) {
         Object value = schema.get("value");
         if (value instanceof Map<?, ?> vm && vm.containsKey("default")) {
@@ -191,8 +200,8 @@ public final class StructInputSchemas {
 
     static boolean hasStructSchema(Map<String, Object> schema) {
         if (isObjectSchema(schema)) {
-            return !objectSchemaFields(schema).isEmpty();
-        }
+        return !objectSchemaFields(schema).isEmpty();
+    }
         if (isArraySchema(schema)) {
             return arrayItemSchema(schema) != null;
         }

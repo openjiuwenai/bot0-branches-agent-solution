@@ -12,15 +12,27 @@ import com.openjiuwen.studio.dsl.rails.ValidateAction;
  *
  * @since 2026-08-25
  */
+
 public final class LengthLimitValidateAction extends ValidateAction {
+
     /**
      * LengthLimitValidateAction.
      *
      * @param config config
      */
+
     public LengthLimitValidateAction(ActionConfig config) {
         super(config);
     }
+
+    /**
+     * validateField.
+     *
+     * @param fieldName fieldName
+     * @param value value
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     protected ValidationResult validateField(String fieldName, Object value) {

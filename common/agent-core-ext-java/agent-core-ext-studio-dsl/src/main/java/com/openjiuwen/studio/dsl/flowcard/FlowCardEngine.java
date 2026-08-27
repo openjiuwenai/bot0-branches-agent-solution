@@ -9,9 +9,9 @@ import com.openjiuwen.studio.dsl.adapter.StudioStreamFrames;
 import com.openjiuwen.studio.dsl.flowstreamtransform.FlowStreamTransformEngine;
 import com.openjiuwen.studio.dsl.util.TemplateRenderer;
 
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.ZonedDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -23,6 +23,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class FlowCardEngine {
     public static final String CARD_OUTPUTS_KEY = "card_outputs";
     public static final String USER_FIELDS = "userFields";
@@ -46,6 +47,7 @@ public final class FlowCardEngine {
      * @param session session
      * @return map with at least {@code result}
      */
+
     public Map<String, Object> invoke(Map<String, Object> inputs, NodeSessionApi session) {
         try {
             Map<String, Object> uf = extractUserFields(inputs);
@@ -64,6 +66,7 @@ public final class FlowCardEngine {
      * @param session session
      * @return frame iterator
      */
+
     public Iterator<Object> stream(Map<String, Object> inputs, NodeSessionApi session) {
         List<Object> frames = new ArrayList<>();
         try {
@@ -109,6 +112,7 @@ public final class FlowCardEngine {
      * @param session session
      * @return invoke map
      */
+
     public Map<String, Object> collect(Object inputs, NodeSessionApi session) {
         Map<String, Object> resolved = FlowStreamTransformEngine.resolveStreamInputs(inputs);
         return invoke(resolved, session);
@@ -121,6 +125,7 @@ public final class FlowCardEngine {
      * @param session session
      * @return stream iterator
      */
+
     public Iterator<Object> transform(Object inputs, NodeSessionApi session) {
         Map<String, Object> resolved = FlowStreamTransformEngine.resolveStreamInputs(inputs);
         return stream(resolved, session);
@@ -158,10 +163,19 @@ public final class FlowCardEngine {
         }
     }
 
+    /**
+     * formatStructuredOutput.
+     *
+     * @param originOutput originOutput
+     * @param variables variables
+     * @return result
+     * @since 0.1.0
+     */
+
     public String formatStructuredOutput(String originOutput, Map<String, Object> variables) {
         if (!config.enableStructMessage() || config.structOutputTemplate().isBlank()) {
-            return originOutput;
-        }
+        return originOutput;
+    }
         try {
             Map<String, Object> all = new LinkedHashMap<>(variables == null ? Map.of() : variables);
             all.put("_NODE_OUTPUT", originOutput);
@@ -173,8 +187,8 @@ public final class FlowCardEngine {
 
     void collectCardOutput(String output, NodeSessionApi session) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             Object existing = session.getGlobalState(CARD_OUTPUTS_KEY);
             List<Object> list = new ArrayList<>();

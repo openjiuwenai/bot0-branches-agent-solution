@@ -4,7 +4,6 @@
 
 package com.openjiuwen.studio.dsl;
 
-import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
@@ -21,26 +20,28 @@ import com.openjiuwen.core.foundation.tool.Tool;
 import com.openjiuwen.core.foundation.tool.ToolCard;
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
-import com.openjiuwen.studio.dsl.support.InMemoryToolRegistry;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.llmchain.LlmChainEngine;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
+import com.openjiuwen.studio.dsl.support.InMemoryToolRegistry;
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * FeatGapFillTest for Studio DSL node-type extension (FEAT-031).
  *
  * @since 2026-08-17
  */
+
 class FeatGapFillTest {
     private static Map<String, Object> llmConf() {
         Map<String, Object> conf = new LinkedHashMap<>();
@@ -96,10 +97,29 @@ class FeatGapFillTest {
         InMemoryToolRegistry tools = new InMemoryToolRegistry();
         ToolCard card = ToolCard.builder().id("api-1").name("api-1").description("test").build();
         tools.register("api-1", new Tool(card) {
+
+            /**
+             * invoke.
+             *
+             * @param inputs inputs
+             * @param kwargs kwargs
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public Object invoke(Map<String, Object> inputs, Map<String, Object> kwargs) {
                 return Map.of("pluginOk", true, "echo", inputs.get("q"));
             }
+
+            /**
+             * stream.
+             *
+             * @param inputs inputs
+             * @param kwargs kwargs
+             * @return result
+             * @since 0.1.0
+             */
 
             @Override
             public Iterator<Object> stream(Map<String, Object> inputs, Map<String, Object> kwargs) {
@@ -172,8 +192,16 @@ class FeatGapFillTest {
                 new com.openjiuwen.studio.dsl.flowagent.FlowAgentEngine.ReactBridge() {
                     @Override
                     public Map<String, Object> invoke(Map<String, Object> mappedInputs) {
-                        return Map.of("output", "ok-" + mappedInputs.get("query"), "result_type", "answer");
-                    }
+        return Map.of("output", "ok-" + mappedInputs.get("query"), "result_type", "answer");
+    }
+
+                    /**
+                     * stream.
+                     *
+                     * @param mappedInputs mappedInputs
+                     * @return result
+                     * @since 0.1.0
+                     */
 
                     @Override
                     public java.util.Iterator<Object> stream(Map<String, Object> mappedInputs) {
@@ -255,10 +283,27 @@ class FeatGapFillTest {
     void llm_invokeWithStubBridge() {
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
         StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
+
+            /**
+             * invoke.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
                 return new AssistantMessage("seen");
             }
+
+            /**
+             * stream.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
 
             @Override
             public Iterator<AssistantMessageChunk> stream(List<BaseMessage> messages) {
@@ -281,7 +326,6 @@ class FeatGapFillTest {
             StudioEngineTestSupport.clear();
         }
     }
-
 
     @Test
     void branch_selectsAndExposesBranchId() {
@@ -306,17 +350,33 @@ class FeatGapFillTest {
         assertThat(out.get("branchId")).isEqualTo("yes");
     }
 
-
     @Test
     void llm_visionInjectsImageIntoLastUserMessage() {
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
         AtomicReference<List<BaseMessage>> captured = new AtomicReference<>();
         StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
+
+            /**
+             * invoke.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
                 captured.set(messages);
                 return new AssistantMessage("ok");
             }
+
+            /**
+             * stream.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
 
             @Override
             public Iterator<AssistantMessageChunk> stream(List<BaseMessage> messages) {

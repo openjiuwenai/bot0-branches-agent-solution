@@ -13,6 +13,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class KnowledgeRequestContext {
     private static final ThreadLocal<Map<String, String>> HEADERS = new ThreadLocal<>();
 
@@ -23,6 +24,7 @@ public final class KnowledgeRequestContext {
      *
      * @param headers request headers (case-insensitive keys normalized to lower)
      */
+
     public static void setHeaders(Map<String, String> headers) {
         if (headers == null || headers.isEmpty()) {
             HEADERS.remove();
@@ -39,11 +41,14 @@ public final class KnowledgeRequestContext {
         return h == null ? Map.of() : h;
     }
 
-    /** clear thread-local headers (tests). */
+    /**
+     * clear thread-local headers (tests).
+     *
+     * @since 0.1.0
+     */
     public static void clear() {
         HEADERS.remove();
     }
-
     static String authToken() {
         Map<String, String> h = headers();
         String t = h.get("x-auth-token");

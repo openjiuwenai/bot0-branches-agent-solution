@@ -6,14 +6,14 @@ package com.openjiuwen.studio.dsl.flowapi;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -31,8 +31,12 @@ import java.util.NoSuchElementException;
  *
  * @since 2026-08-26
  */
+
 public final class RestfulApiSseClient {
-    /** Python {@code DATA_PREFIX}. */
+
+    /**
+     * Python {@code DATA_PREFIX}.
+     */
     public static final String DATA_PREFIX = "data:";
 
     private RestfulApiSseClient() {}
@@ -43,12 +47,18 @@ public final class RestfulApiSseClient {
      * @param in response body
      * @return iterator of payloads (prefix stripped)
      */
+
     public static Iterator<Object> parseSseDataLines(InputStream in) {
         return parseSseDataLines(in, 0);
     }
 
     /**
-     * Parse SSE with optional wall-clock deadline (0 = no extra deadline beyond HttpRequest timeout).
+     * * Parse SSE with optional wall-clock deadline (0 = no extra deadline beyond HttpRequest timeout).
+     *
+     * @param in in
+     * @param deadlineMs deadlineMs
+     * @return result
+     * @since 0.1.0
      */
     public static Iterator<Object> parseSseDataLines(InputStream in, long deadlineMs) {
         long deadlineNanos = deadlineMs > 0 ? System.nanoTime() + deadlineMs * 1_000_000L : 0L;
@@ -56,17 +66,29 @@ public final class RestfulApiSseClient {
         return new Iterator<>() {
             private String next;
             private boolean primed;
+            private boolean closed;
+
+            private void closeReader() {
+                if (!closed) {
+                    closed = true;
+                    try {
+                        reader.close();
+                    } catch (IOException ignored) {
+                        // ignore
+                    }
+                }
+            }
 
             private void checkDeadline() {
                 if (deadlineNanos > 0 && System.nanoTime() > deadlineNanos) {
-                    throw new UncheckedIOException(new IOException("SSE read deadline exceeded"));
-                }
+                throw new UncheckedIOException(new IOException("SSE read deadline exceeded"));
+            }
             }
 
             private void prime() {
                 if (primed) {
-                    return;
-                }
+                return;
+            }
                 primed = true;
                 next = null;
                 try {
@@ -79,22 +101,40 @@ public final class RestfulApiSseClient {
                             return;
                         }
                     }
+                    closeReader();
                 } catch (IOException e) {
                     throw new UncheckedIOException(e);
                 }
             }
 
+            /**
+             * hasNext.
+             *
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public boolean hasNext() {
                 prime();
+                if (next == null) {
+                    closeReader();
+                }
                 return next != null;
             }
+
+            /**
+             * next.
+             *
+             * @return result
+             * @since 0.1.0
+             */
 
             @Override
             public Object next() {
                 if (!hasNext()) {
-                    throw new NoSuchElementException();
-                }
+                throw new NoSuchElementException();
+            }
                 String out = next;
                 next = null;
                 primed = false;
@@ -109,6 +149,7 @@ public final class RestfulApiSseClient {
      * @param body utf-8 SSE body
      * @return payloads
      */
+
     public static List<Object> parseSseDataLines(String body) {
         List<Object> out = new ArrayList<>();
         parseSseDataLines(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)))
@@ -127,6 +168,7 @@ public final class RestfulApiSseClient {
      * @return iterator of data-line payloads
      * @throws Exception on transport / non-2xx
      */
+
     public static Iterator<Object> stream(
             String url, String method, String body, Map<String, String> headers, long timeoutMs)
             throws Exception {
@@ -152,6 +194,14 @@ public final class RestfulApiSseClient {
         InputStream bodyStream = resp.body();
         Iterator<Object> inner = parseSseDataLines(bodyStream, timeoutMs);
         return new Iterator<>() {
+
+            /**
+             * hasNext.
+             *
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public boolean hasNext() {
                 try {
@@ -161,6 +211,13 @@ public final class RestfulApiSseClient {
                     throw e;
                 }
             }
+
+            /**
+             * next.
+             *
+             * @return result
+             * @since 0.1.0
+             */
 
             @Override
             public Object next() {

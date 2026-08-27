@@ -16,6 +16,7 @@ import java.util.regex.Pattern;
  *
  * @since 2026-08-25
  */
+
 public final class CommonDataFormatCheckAction extends ValidateAction {
     private static final Map<String, String> FORMAT_NAME_MAP = Map.ofEntries(
             Map.entry("银行卡号", "bank_card"),
@@ -36,8 +37,8 @@ public final class CommonDataFormatCheckAction extends ValidateAction {
             Map.entry("passport", Pattern.compile("^[A-Z0-9]{6,9}$")),
             Map.entry("url", Pattern.compile("^https?://[\\w\\-]+(\\.[\\w\\-]+)+[\\w\\-.,@?^=%&:/~+#]*$")),
             Map.entry("email", Pattern.compile("^[\\w.\\-]+@[\\w.\\-]+\\.\\w+$")),
-            Map.entry("ip_address", Pattern.compile("^(\\d{1,3}\\.){3}\\d{1,3}$")),
-            Map.entry("mac_address", Pattern.compile("^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$")),
+            Map.entry("ip_address", Pattern.compile("^(\\d{1,3}\\.) {3}\\d{1,3}$")),
+            Map.entry("mac_address", Pattern.compile("^([0-9A-Fa-f]{2}[:-]) {5}([0-9A-Fa-f]{2})$")),
             Map.entry("postal_code", Pattern.compile("^\\d{6}$")),
             Map.entry(
                     "uuid",
@@ -54,9 +55,19 @@ public final class CommonDataFormatCheckAction extends ValidateAction {
      *
      * @param config config
      */
+
     public CommonDataFormatCheckAction(ActionConfig config) {
         super(config);
     }
+
+    /**
+     * validateField.
+     *
+     * @param fieldName fieldName
+     * @param value value
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     protected ValidationResult validateField(String fieldName, Object value) {
@@ -78,8 +89,8 @@ public final class CommonDataFormatCheckAction extends ValidateAction {
 
     private static ValidationResult validateBase64Image(Object value) {
         if (!(value instanceof String s)) {
-            return ValidationResult.fail();
-        }
+        return ValidationResult.fail();
+    }
         String raw = s.contains(",") ? s.substring(s.indexOf(',') + 1) : s;
         try {
             Base64.getDecoder().decode(raw);

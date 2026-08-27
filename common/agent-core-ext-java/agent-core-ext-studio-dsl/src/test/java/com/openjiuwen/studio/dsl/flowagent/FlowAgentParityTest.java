@@ -4,28 +4,29 @@
 
 package com.openjiuwen.studio.dsl.flowagent;
 
-import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Parity tests vs Python {@code flow_agent.py} / {@code test_flow_agent*.py} (stub ReAct).
  *
  * @since 2026-08-26
  */
+
 class FlowAgentParityTest {
     private AtomicReference<Map<String, Object>> lastInputs;
 
@@ -39,6 +40,14 @@ class FlowAgentParityTest {
                 return Map.of("output", "Agent response", "result_type", "answer");
             }
 
+            /**
+             * stream.
+             *
+             * @param mappedInputs mappedInputs
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public Iterator<Object> stream(Map<String, Object> mappedInputs) {
                 lastInputs.set(new LinkedHashMap<>(mappedInputs));
@@ -51,7 +60,6 @@ class FlowAgentParityTest {
     void tearDown() {
         StudioEngineTestSupport.clear();
     }
-
     private static Map<String, Object> agentConf() {
         Map<String, Object> conf = new LinkedHashMap<>();
         conf.put("strategy_name", "ReAct");
@@ -123,6 +131,14 @@ class FlowAgentParityTest {
                             "result_type",
                             "answer");
                 }
+
+                /**
+                 * stream.
+                 *
+                 * @param mappedInputs mappedInputs
+                 * @return result
+                 * @since 0.1.0
+                 */
 
                 @Override
                 public Iterator<Object> stream(Map<String, Object> mappedInputs) {

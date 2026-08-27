@@ -29,6 +29,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 class FlowQaParityTest {
     private final NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
 

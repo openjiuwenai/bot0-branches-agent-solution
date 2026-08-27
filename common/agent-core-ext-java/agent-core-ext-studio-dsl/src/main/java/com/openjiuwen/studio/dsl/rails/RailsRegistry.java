@@ -11,17 +11,18 @@ import com.openjiuwen.studio.dsl.rails.validators.LengthLimitValidateAction;
 import com.openjiuwen.studio.dsl.rails.validators.NumberRangeValidateAction;
 import com.openjiuwen.studio.dsl.rails.validators.TimeParseAction;
 
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
 
 /**
  * Rails action registry + executor (Python {@code RailsRegistry} / {@code execute_rails}).
  *
  * @since 2026-08-25
  */
+
 public final class RailsRegistry {
     private static final RailsRegistry INSTANCE = new RailsRegistry();
 
@@ -41,6 +42,7 @@ public final class RailsRegistry {
      *
      * @return result
      */
+
     public static RailsRegistry getInstance() {
         return INSTANCE;
     }
@@ -51,6 +53,7 @@ public final class RailsRegistry {
      * @param name name
      * @param factory factory
      */
+
     public void register(String name, Function<ActionConfig, RailsAction> factory) {
         factories.put(name, factory);
     }
@@ -62,6 +65,7 @@ public final class RailsRegistry {
      * @param extraArgs extraArgs
      * @return result
      */
+
     public RailsAction createAction(String name, Map<String, Object> extraArgs) {
         Function<ActionConfig, RailsAction> f = factories.get(name);
         if (f == null) {
@@ -77,6 +81,7 @@ public final class RailsRegistry {
      * @param context context with arguments / user_input
      * @return updated arguments
      */
+
     @SuppressWarnings("unchecked")
     public static Map<String, Object> executeRails(Map<String, Object> railsConfig, Map<String, Object> context) {
         if (railsConfig == null || railsConfig.isEmpty()) {

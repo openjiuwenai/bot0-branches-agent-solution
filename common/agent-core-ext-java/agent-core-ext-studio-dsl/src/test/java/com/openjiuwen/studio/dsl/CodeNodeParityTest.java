@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.config.StudioDslNodeProperties;
+import com.openjiuwen.studio.dsl.contract.PythonCodeExecutor;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
@@ -19,7 +20,6 @@ import com.openjiuwen.studio.dsl.python.PythonCodeRunners;
 import com.openjiuwen.studio.dsl.python.SandboxPythonCodeExecutor;
 import com.openjiuwen.studio.dsl.python.SubprocessPythonCodeExecutor;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
-import com.openjiuwen.studio.dsl.contract.PythonCodeExecutor;
 import com.openjiuwen.studio.dsl.util.FlowCodeSchemaSupport;
 import com.openjiuwen.studio.dsl.util.TypeCoercer;
 
@@ -28,17 +28,18 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.TimeUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * P2 Code parity: runners / schema / blacklist (Python FlowCode).
  *
  * @since 2026-08-25
  */
+
 class CodeNodeParityTest {
     private static boolean pythonAvailable;
 

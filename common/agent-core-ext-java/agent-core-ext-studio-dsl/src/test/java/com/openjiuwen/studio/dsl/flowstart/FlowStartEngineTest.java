@@ -21,8 +21,8 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
-class FlowStartEngineTest {
 
+class FlowStartEngineTest {
     @Test
     void transformType_booleanMatchesPythonBool() {
         assertThat(FlowStartAssignmentSupport.transformType("boolean", "false")).isEqualTo(true);

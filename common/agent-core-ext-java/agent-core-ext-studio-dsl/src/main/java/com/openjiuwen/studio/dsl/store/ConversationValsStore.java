@@ -11,13 +11,16 @@ import java.util.Map;
  *
  * @since 2026-08-25
  */
+
 public interface ConversationValsStore {
+
     /**
      * Load JSON object map for key; empty map when missing or on soft failure.
      *
      * @param key key
      * @return result
      */
+
     Map<String, Object> getMap(String key);
 
     /**
@@ -27,5 +30,6 @@ public interface ConversationValsStore {
      * @param values values
      * @param ttlSeconds ttlSeconds
      */
+
     void setMap(String key, Map<String, Object> values, long ttlSeconds);
 }

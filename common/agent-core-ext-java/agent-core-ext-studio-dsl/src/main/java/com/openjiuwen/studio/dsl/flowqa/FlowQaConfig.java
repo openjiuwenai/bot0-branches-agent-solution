@@ -14,6 +14,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class FlowQaConfig {
     public static final String TYPE = "EI.qa";
 
@@ -47,6 +48,14 @@ public final class FlowQaConfig {
         this.indexKey = indexKey;
         this.structInputSchemas = structInputSchemas;
     }
+
+    /**
+     * from.
+     *
+     * @param conf conf
+     * @return result
+     * @since 0.1.0
+     */
 
     @SuppressWarnings("unchecked")
     public static FlowQaConfig from(Map<String, Object> conf) {
@@ -89,57 +98,111 @@ public final class FlowQaConfig {
                 schemas);
     }
 
+    /**
+     * name.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String name() {
         return name;
     }
+
+    /**
+     * needReply.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean needReply() {
         return needReply;
     }
 
+    /**
+     * qaStrategy.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String qaStrategy() {
         return qaStrategy;
     }
+
+    /**
+     * options.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public List<String> options() {
         return options;
     }
 
+    /**
+     * structOutputTemplate.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String structOutputTemplate() {
         return structOutputTemplate;
     }
+
+    /**
+     * enableStructMessage.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean enableStructMessage() {
         return enableStructMessage;
     }
 
+    /**
+     * enableHistory.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean enableHistory() {
         return enableHistory;
     }
 
+    /**
+     * indexKey.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String indexKey() {
         return indexKey;
     }
-
     public Map<String, Object> structInputSchemas() {
         return structInputSchemas;
     }
 
     private static Object first(Map<String, Object> c, String a, String b) {
         if (c.containsKey(a) && c.get(a) != null) {
-            return c.get(a);
-        }
+        return c.get(a);
+    }
         return c.get(b);
     }
 
     private static String str(Object v, String d) {
         return v == null ? d : String.valueOf(v);
     }
-
     private static boolean bool(Object v, boolean d) {
         if (v == null) {
-            return d;
-        }
+        return d;
+    }
         if (v instanceof Boolean b) {
             return b;
         }

@@ -9,13 +9,16 @@ package com.openjiuwen.studio.dsl.contract;
  *
  * @since 2026-08-26
  */
+
 @FunctionalInterface
 public interface SecretDecryptor {
+
     /**
      * decrypt.
      *
      * @param ciphertext ciphertext from OBS
      * @return plaintext secret
      */
+
     String decrypt(String ciphertext);
 }

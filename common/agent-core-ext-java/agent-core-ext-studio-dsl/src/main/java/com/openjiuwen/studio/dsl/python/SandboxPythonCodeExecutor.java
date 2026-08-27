@@ -4,9 +4,9 @@
 
 package com.openjiuwen.studio.dsl.python;
 
+import com.openjiuwen.studio.dsl.contract.PythonCodeExecutor;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
-import com.openjiuwen.studio.dsl.contract.PythonCodeExecutor;
 
 /**
  * Sandbox slot (Python {@code SandboxCodeRunner}). Fails until host sets
@@ -14,7 +14,17 @@ import com.openjiuwen.studio.dsl.contract.PythonCodeExecutor;
  *
  * @since 2026-08-25
  */
+
 public final class SandboxPythonCodeExecutor implements PythonCodeExecutor {
+
+    /**
+     * execute.
+     *
+     * @param request request
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public PythonExecResult execute(PythonExecRequest request) throws NodeExecutionException {
         throw new NodeExecutionException(

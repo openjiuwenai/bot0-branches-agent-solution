@@ -13,6 +13,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class FlowEndConfig {
     private final String responseTemplate;
     private final boolean enableStructMessage;
@@ -42,6 +43,15 @@ public final class FlowEndConfig {
         this.raw = raw == null ? Map.of() : Map.copyOf(raw);
     }
 
+    /**
+     * fromNodeConfigs.
+     *
+     * @param configs configs
+     * @param nodeId nodeId
+     * @return result
+     * @since 0.1.0
+     */
+
     public static FlowEndConfig fromNodeConfigs(Map<String, Object> configs, String nodeId) {
         Map<String, Object> c = configs == null ? Map.of() : configs;
         String template = firstNonBlank(c.get("responseTemplate"), c.get("template"), c.get("response"));
@@ -63,30 +73,71 @@ public final class FlowEndConfig {
                 new LinkedHashMap<>(c));
     }
 
+    /**
+     * responseTemplate.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String responseTemplate() {
         return responseTemplate;
     }
+
+    /**
+     * enableStructMessage.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean enableStructMessage() {
         return enableStructMessage;
     }
 
+    /**
+     * structOutputTemplate.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String structOutputTemplate() {
         return structOutputTemplate;
     }
+
+    /**
+     * outputMode.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String outputMode() {
         return outputMode;
     }
 
+    /**
+     * endInterrupt.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean endInterrupt() {
         return endInterrupt;
     }
 
+    /**
+     * nodeName.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String nodeName() {
         return nodeName;
     }
-
     public List<Map<String, Object>> userFieldsInputs() {
         return userFieldsInputs;
     }
@@ -98,8 +149,8 @@ public final class FlowEndConfig {
     private static String firstNonBlank(Object... vals) {
         for (Object v : vals) {
             if (v != null && !String.valueOf(v).isBlank()) {
-                return String.valueOf(v);
-            }
+        return String.valueOf(v);
+    }
         }
         return null;
     }

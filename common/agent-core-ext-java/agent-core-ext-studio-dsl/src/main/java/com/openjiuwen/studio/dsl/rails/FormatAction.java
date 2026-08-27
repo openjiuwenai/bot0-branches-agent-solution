@@ -12,12 +12,15 @@ import java.util.Map;
  *
  * @since 2026-08-25
  */
+
 public abstract class FormatAction extends RailsAction {
+
     /**
      * FormatAction.
      *
      * @param config config
      */
+
     protected FormatAction(ActionConfig config) {
         super(config);
     }
@@ -29,6 +32,7 @@ public abstract class FormatAction extends RailsAction {
      * @param value value
      * @return formatted
      */
+
     protected abstract Object formatField(String fieldName, Object value);
 
     @Override

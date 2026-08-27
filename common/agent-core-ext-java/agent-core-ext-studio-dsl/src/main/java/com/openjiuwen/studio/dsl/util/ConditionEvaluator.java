@@ -20,6 +20,7 @@ import java.util.regex.Pattern;
  *
  * @since 2026-08-17
  */
+
 public final class ConditionEvaluator {
     private static final Pattern IN_OP =
             Pattern.compile("^(.+?)\\s+not_in\\s+(.+)$", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
@@ -44,10 +45,11 @@ public final class ConditionEvaluator {
      * @param userFields userFields
      * @return true when the condition matches
      */
+
     public static boolean matches(Object condition, Map<String, Object> userFields) {
         if (condition == null) {
-            return true;
-        }
+        return true;
+    }
         if (condition instanceof Boolean b) {
             return b;
         }
@@ -146,16 +148,16 @@ public final class ConditionEvaluator {
     private static boolean matchAll(List<?> list, Map<String, Object> userFields) {
         for (Object c : list) {
             if (!matches(c, userFields)) {
-                return false;
-            }
+        return false;
+    }
         }
         return true;
     }
 
     private static Object resolveSide(Object side, Map<String, Object> uf) {
         if (side instanceof Map<?, ?> m) {
-            return resolveMapSide(m, uf);
-        }
+        return resolveMapSide(m, uf);
+    }
         if (side instanceof String s) {
             return resolveExprValue(s, uf);
         }
@@ -164,8 +166,8 @@ public final class ConditionEvaluator {
 
     private static Object resolveMapSide(Map<?, ?> m, Map<String, Object> uf) {
         if (m.containsKey("value")) {
-            return resolveValueSide(m, uf);
-        }
+        return resolveValueSide(m, uf);
+    }
         if (m.containsKey("variable")) {
             return PathResolver.get(uf, String.valueOf(m.get("variable"))).orElse(null);
         }
@@ -226,8 +228,8 @@ public final class ConditionEvaluator {
 
     private static int lengthOf(Object o) {
         if (o == null) {
-            return 0;
-        }
+        return 0;
+    }
         if (o instanceof List<?> list) {
             return list.size();
         }
@@ -257,7 +259,14 @@ public final class ConditionEvaluator {
         };
     }
 
-    /** {@code left in right} — membership in collection/map or substring in string container. */
+    /**
+     * {@code left in right} — membership in collection/map or substring in string container.
+     *
+     * @param container container
+     * @param member member
+     * @return result
+     * @since 0.1.0
+     */
     private static boolean membership(Object container, Object member) {
         if (container instanceof List<?> list) {
             String ms = stringify(member);
@@ -288,15 +297,15 @@ public final class ConditionEvaluator {
 
     private static String stringify(Object o) {
         if (o instanceof Optional<?> opt) {
-            return opt.map(String::valueOf).orElse("");
-        }
+        return opt.map(String::valueOf).orElse("");
+    }
         return o == null ? "" : String.valueOf(o);
     }
 
     private static String strip(String s) {
         if ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith("\"") && s.endsWith("\""))) {
-            return s.substring(1, s.length() - 1);
-        }
+        return s.substring(1, s.length() - 1);
+    }
         return s;
     }
 
@@ -335,7 +344,6 @@ public final class ConditionEvaluator {
     private static boolean containsTopLevel(String s, String op) {
         return !splitTopLevel(s, op).isEmpty() && splitTopLevel(s, op).size() > 1;
     }
-
     private static List<String> splitTopLevel(String s, String op) {
         List<String> parts = new ArrayList<>();
         int depth = 0;
@@ -391,8 +399,8 @@ public final class ConditionEvaluator {
 
     private static double toDouble(Object o) {
         if (o instanceof Number n) {
-            return n.doubleValue();
-        }
+        return n.doubleValue();
+    }
         return Double.parseDouble(String.valueOf(o));
     }
 }

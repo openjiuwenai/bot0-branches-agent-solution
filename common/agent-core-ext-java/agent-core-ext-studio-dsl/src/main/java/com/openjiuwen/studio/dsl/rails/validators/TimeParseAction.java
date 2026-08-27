@@ -6,12 +6,12 @@ package com.openjiuwen.studio.dsl.rails.validators;
 
 import com.openjiuwen.studio.dsl.rails.ActionConfig;
 import com.openjiuwen.studio.dsl.rails.FormatAction;
-import com.openjiuwen.studio.dsl.rails.ValidateAction;
 import com.openjiuwen.studio.dsl.rails.formatters.DateTimeFormatValidateAction;
+import com.openjiuwen.studio.dsl.rails.ValidateAction;
 
+import java.time.format.DateTimeFormatter;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -22,6 +22,7 @@ import java.util.regex.Pattern;
  *
  * @since 2026-08-25
  */
+
 public final class TimeParseAction extends FormatAction {
     private static final Pattern RELATIVE =
             Pattern.compile("^(今天|明天|后天|大后天)(?:\\s*(\\d{1,2})[点时:](\\d{0,2})?)?");
@@ -31,10 +32,10 @@ public final class TimeParseAction extends FormatAction {
      *
      * @param config config
      */
+
     public TimeParseAction(ActionConfig config) {
         super(config);
     }
-
     @Override
     public Map<String, Object> execute(Map<String, Object> context) {
         // parse_time applies to all argument values when format is global
@@ -48,6 +49,15 @@ public final class TimeParseAction extends FormatAction {
         return wrapArgs(out);
     }
 
+    /**
+     * formatField.
+     *
+     * @param fieldName fieldName
+     * @param value value
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     protected Object formatField(String fieldName, Object value) {
         String format = String.valueOf(extraArgs.getOrDefault("format", "%Y-%m-%d %H:%M"));
@@ -56,8 +66,8 @@ public final class TimeParseAction extends FormatAction {
 
     private static Object formatValue(Object value, String javaFmt) {
         if (!(value instanceof String s) || s.isBlank()) {
-            return value;
-        }
+        return value;
+    }
         String trimmed = s.trim();
         Matcher m = RELATIVE.matcher(trimmed);
         if (m.find()) {

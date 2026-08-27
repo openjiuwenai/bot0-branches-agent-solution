@@ -14,6 +14,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class FlowAggregateConfig {
     public static final String DEFAULT_MODE = "first-non-null";
 
@@ -27,16 +28,28 @@ public final class FlowAggregateConfig {
         this.raw = raw == null ? Map.of() : Map.copyOf(raw);
     }
 
+    /**
+     * fromNodeConfigs.
+     *
+     * @param configs configs
+     * @return result
+     * @since 0.1.0
+     */
+
     public static FlowAggregateConfig fromNodeConfigs(Map<String, Object> configs) {
         if (configs == null || configs.isEmpty()) {
-            throw new IllegalArgumentException("conf is required");
-        }
+        throw new IllegalArgumentException("conf is required");
+    }
         String mode = String.valueOf(configs.getOrDefault("mode", DEFAULT_MODE));
         return new FlowAggregateConfig(mode, groupsMap(configs.get("groups")), new LinkedHashMap<>(configs));
     }
 
     /**
-     * Python {@code AggregateConfig.groups_map}.
+     * * Python {@code AggregateConfig.groups_map}.
+     *
+     * @param raw raw
+     * @return result
+     * @since 0.1.0
      */
     @SuppressWarnings("unchecked")
     public static Map<String, List<String>> groupsMap(Object raw) {
@@ -93,10 +106,16 @@ public final class FlowAggregateConfig {
         return out;
     }
 
+    /**
+     * mode.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String mode() {
         return mode;
     }
-
     public Map<String, List<String>> groups() {
         return groups;
     }

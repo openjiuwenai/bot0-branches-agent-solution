@@ -8,13 +8,13 @@ import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.adapter.AbstractStudioNode;
+import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.extractor.ExtractorConfig;
 import com.openjiuwen.studio.dsl.extractor.ExtractorEngine;
 import com.openjiuwen.studio.dsl.extractor.ExtractorLlmExtractor;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
-import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -25,12 +25,15 @@ import java.util.Set;
  *
  * @since 2026-08-17
  */
+
 public final class ExtractorNodeHandler implements NodeHandlerFactory {
+
     /**
      * canonicalType.
      *
      * @return result
      */
+
     @Override
     public String canonicalType() {
         return "jiuwen.extractor";
@@ -41,6 +44,7 @@ public final class ExtractorNodeHandler implements NodeHandlerFactory {
      *
      * @return result
      */
+
     @Override
     public Set<String> aliases() {
         return Set.of("jiuwen.infoExtraction");
@@ -53,11 +57,11 @@ public final class ExtractorNodeHandler implements NodeHandlerFactory {
      * @param ctx ctx
      * @return result
      */
+
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         return new ExtractorExecutable(node, ctx);
     }
-
     static final class ExtractorExecutable extends AbstractStudioNode {
         private final ExtractorEngine engine;
         private final Map<String, Object> nodeConfigs;
@@ -84,6 +88,7 @@ public final class ExtractorNodeHandler implements NodeHandlerFactory {
          * @return result
          * @throws Exception when the call fails
          */
+
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context)
                 throws Exception {

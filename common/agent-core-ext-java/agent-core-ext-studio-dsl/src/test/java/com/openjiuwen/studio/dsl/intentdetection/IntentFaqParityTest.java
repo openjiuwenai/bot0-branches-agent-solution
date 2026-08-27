@@ -10,26 +10,27 @@ import com.openjiuwen.core.foundation.llm.schema.BaseMessage;
 import com.openjiuwen.core.foundation.llm.schema.UserMessage;
 import com.openjiuwen.core.foundation.tool.Tool;
 import com.openjiuwen.core.foundation.tool.ToolCard;
-import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.internal.NodeSession;
 import com.openjiuwen.core.session.internal.WorkflowSession;
+import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.state.InMemoryState;
 import com.openjiuwen.studio.dsl.support.InMemoryToolRegistry;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * FAQ kg path for {@code jiuwen.intentDetection} (Python {@code get_faq_result}).
  *
  * @since 2026-08-26
  */
+
 class IntentFaqParityTest {
     private static Map<String, Object> faqConfigs(String apiId, String scope) {
         Map<String, Object> configs = new LinkedHashMap<>();
@@ -53,6 +54,16 @@ class IntentFaqParityTest {
         tools.register(
                 "faq-kb-1",
                 new Tool(ToolCard.builder().id("faq-kb-1").name("faq").description("faq").build()) {
+
+                    /**
+                     * invoke.
+                     *
+                     * @param inputs inputs
+                     * @param kwargs kwargs
+                     * @return result
+                     * @since 0.1.0
+                     */
+
                     @Override
                     public Object invoke(Map<String, Object> inputs, Map<String, Object> kwargs) {
                         return Map.of(
@@ -63,6 +74,15 @@ class IntentFaqParityTest {
                                         "output_list",
                                         List.of(Map.of("score", 0.95, "content", "机票预订", "title", "订机票"))));
                     }
+
+                    /**
+                     * stream.
+                     *
+                     * @param inputs inputs
+                     * @param kwargs kwargs
+                     * @return result
+                     * @since 0.1.0
+                     */
 
                     @Override
                     public Iterator<Object> stream(Map<String, Object> inputs, Map<String, Object> kwargs) {
@@ -86,6 +106,16 @@ class IntentFaqParityTest {
         tools.register(
                 "faq-kb-2",
                 new Tool(ToolCard.builder().id("faq-kb-2").name("faq").description("faq").build()) {
+
+                    /**
+                     * invoke.
+                     *
+                     * @param inputs inputs
+                     * @param kwargs kwargs
+                     * @return result
+                     * @since 0.1.0
+                     */
+
                     @Override
                     public Object invoke(Map<String, Object> inputs, Map<String, Object> kwargs) {
                         return Map.of(
@@ -96,6 +126,15 @@ class IntentFaqParityTest {
                                         "output_list",
                                         List.of(Map.of("score", 0.75, "content", "机票预订", "title", "订机票样例"))));
                     }
+
+                    /**
+                     * stream.
+                     *
+                     * @param inputs inputs
+                     * @param kwargs kwargs
+                     * @return result
+                     * @since 0.1.0
+                     */
 
                     @Override
                     public Iterator<Object> stream(Map<String, Object> inputs, Map<String, Object> kwargs) {
@@ -139,6 +178,16 @@ class IntentFaqParityTest {
         tools.register(
                 "doc-kb-1",
                 new Tool(ToolCard.builder().id("doc-kb-1").name("doc").description("doc").build()) {
+
+                    /**
+                     * invoke.
+                     *
+                     * @param inputs inputs
+                     * @param kwargs kwargs
+                     * @return result
+                     * @since 0.1.0
+                     */
+
                     @Override
                     public Object invoke(Map<String, Object> inputs, Map<String, Object> kwargs) {
                         return Map.of(
@@ -149,6 +198,15 @@ class IntentFaqParityTest {
                                         "output_list",
                                         List.of(Map.of("score", 0.95, "content", "文档片段A"))));
                     }
+
+                    /**
+                     * stream.
+                     *
+                     * @param inputs inputs
+                     * @param kwargs kwargs
+                     * @return result
+                     * @since 0.1.0
+                     */
 
                     @Override
                     public Iterator<Object> stream(Map<String, Object> inputs, Map<String, Object> kwargs) {

@@ -20,6 +20,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 class ExtractorConfigValidatorTest {
     private static Map<String, Object> validBase() {
         return Map.of(

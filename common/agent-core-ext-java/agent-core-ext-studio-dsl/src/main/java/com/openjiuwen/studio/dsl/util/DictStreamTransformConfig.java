@@ -16,6 +16,7 @@ import java.util.Objects;
  *
  * @since 2026-08-25
  */
+
 public final class DictStreamTransformConfig {
     private final String inputRootPath;
     private final List<VariableDef> variables;
@@ -38,6 +39,7 @@ public final class DictStreamTransformConfig {
      * @param isLastField isLastField
      * @param emitFinalConcatFrame emitFinalConcatFrame
      */
+
     public DictStreamTransformConfig(
             String inputRootPath,
             List<VariableDef> variables,
@@ -63,11 +65,12 @@ public final class DictStreamTransformConfig {
      * @param data data
      * @return config
      */
+
     @SuppressWarnings("unchecked")
     public static DictStreamTransformConfig fromDict(Map<String, Object> data) {
         if (data == null) {
-            throw new IllegalArgumentException("AsyncDictStreamTransformConfig must be a dict");
-        }
+        throw new IllegalArgumentException("AsyncDictStreamTransformConfig must be a dict");
+    }
         Object variablesRaw = data.getOrDefault("variables", List.of());
         if (variablesRaw == null) {
             variablesRaw = List.of();
@@ -114,8 +117,8 @@ public final class DictStreamTransformConfig {
 
     private static boolean bool(Object v, boolean def) {
         if (v == null) {
-            return def;
-        }
+        return def;
+    }
         if (v instanceof Boolean b) {
             return b;
         }
@@ -167,6 +170,7 @@ public final class DictStreamTransformConfig {
      *
      * @since 2026-08-25
      */
+
     public static final class VariableDef {
         private final String name;
         private final String srcPath;
@@ -187,6 +191,7 @@ public final class DictStreamTransformConfig {
          * @param skipNone skipNone
          * @param castToStrForConcat castToStrForConcat
          */
+
         public VariableDef(
                 String name,
                 String srcPath,
@@ -210,10 +215,11 @@ public final class DictStreamTransformConfig {
          * @param data data
          * @return variable def
          */
+
         public static VariableDef fromDict(Map<String, Object> data) {
             if (data == null) {
-                throw new IllegalArgumentException("VariableDef must be a dict");
-            }
+            throw new IllegalArgumentException("VariableDef must be a dict");
+        }
             Object name = data.get("name");
             Object srcPath = data.get("src_path");
             if (!(name instanceof String) || ((String) name).isEmpty()) {

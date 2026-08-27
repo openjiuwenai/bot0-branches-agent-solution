@@ -4,7 +4,6 @@
 
 package com.openjiuwen.studio.dsl.complexintent;
 
-import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -14,6 +13,7 @@ import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.AssembledWorkflow;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,6 +29,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 class ComplexIntentDetectionParityTest {
     private NodeTypeRegistry registry;
 
@@ -42,7 +43,6 @@ class ComplexIntentDetectionParityTest {
     void tearDown() {
         StudioEngineTestSupport.clear();
     }
-
     @SuppressWarnings("unchecked")
     private static Map<String, Object> uf(Object out) {
         return (Map<String, Object>) ((Map<String, Object>) out).get("userFields");
@@ -92,9 +92,8 @@ class ComplexIntentDetectionParityTest {
             StudioEngineTestSupport.installComplexIntent(new ComplexIntentDetectionEngine.TestBridge() {
                 @Override
                 public Map<String, Object> intentResult(Map<String, Object> convertedInputs) {
-                    return Map.of("classificationId", 0, "result", "分类0", "name", "其他意图", "reason", "");
-                }
-
+            return Map.of("classificationId", 0, "result", "分类0", "name", "其他意图", "reason", "");
+        }
                 @Override
                 public Map<String, Object> subWorkflowResult(String workflowId, Map<String, Object> subInputs) {
                     return Map.of();
@@ -113,9 +112,8 @@ class ComplexIntentDetectionParityTest {
             StudioEngineTestSupport.installComplexIntent(new ComplexIntentDetectionEngine.TestBridge() {
                 @Override
                 public Map<String, Object> intentResult(Map<String, Object> convertedInputs) {
-                    return Map.of("classificationId", 1, "result", "分类1", "name", "refund", "reason", "llm");
-                }
-
+            return Map.of("classificationId", 1, "result", "分类1", "name", "refund", "reason", "llm");
+        }
                 @Override
                 public Map<String, Object> subWorkflowResult(String workflowId, Map<String, Object> subInputs) {
                     assertThat(workflowId).isEqualTo("wf_refund");
@@ -151,9 +149,8 @@ class ComplexIntentDetectionParityTest {
             StudioEngineTestSupport.installComplexIntent(new ComplexIntentDetectionEngine.TestBridge() {
                 @Override
                 public Map<String, Object> intentResult(Map<String, Object> convertedInputs) {
-                    return Map.of("classificationId", 1, "name", "refund");
-                }
-
+            return Map.of("classificationId", 1, "name", "refund");
+        }
                 @Override
                 public Map<String, Object> subWorkflowResult(String workflowId, Map<String, Object> subInputs) {
                     return Map.of("userFields", Map.of("answer", "done"));

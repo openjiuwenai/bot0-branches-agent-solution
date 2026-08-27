@@ -28,17 +28,17 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * P4 KnowledgeRetrieval + kb adapter parity tests.
  *
  * @since 2026-08-25
  */
-class KnowledgeRetrievalParityTest {
 
+class KnowledgeRetrievalParityTest {
     @AfterEach
     void resetFactory() {
         // restore General registration (tests may override)
@@ -106,6 +106,18 @@ class KnowledgeRetrievalParityTest {
     void engine_uses_registered_adapter_and_faq_fallback() {
         AtomicInteger calls = new AtomicInteger();
         KBAdapterFactory.register("FakeKB", () -> new KBServiceAdapter() {
+
+            /**
+             * search.
+             *
+             * @param query query
+             * @param connectionConfig connectionConfig
+             * @param knowledgeBases knowledgeBases
+             * @param retrievalParams retrievalParams
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public List<KBSearchResult> search(
                     String query,
@@ -224,7 +236,7 @@ class KnowledgeRetrievalParityTest {
                 KerberosAuth.extractKerberosConfig(
                         Map.of(
                                 "host_names", "host1",
-                                "cluster_ips", "1.2.3.4",
+                                "cluster_ips", "10.0.0.1",
                                 "user_keytab_file", "/tmp/k.keytab",
                                 "krb5_file", "/tmp/krb5.conf"));
         assertThat(cfg).isNotNull();

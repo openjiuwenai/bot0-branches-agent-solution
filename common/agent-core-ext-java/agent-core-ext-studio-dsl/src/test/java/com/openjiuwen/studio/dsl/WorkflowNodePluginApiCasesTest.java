@@ -4,7 +4,6 @@
 
 package com.openjiuwen.studio.dsl;
 
-import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -16,13 +15,14 @@ import com.openjiuwen.core.foundation.tool.ToolCard;
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.adapter.external.PluginNodeHandler;
-import com.openjiuwen.studio.dsl.support.InMemoryToolRegistry;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.flowapi.FlowApiEngine;
 import com.openjiuwen.studio.dsl.flowapi.FlowApiStatusCode;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
+import com.openjiuwen.studio.dsl.support.InMemoryToolRegistry;
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,12 +38,16 @@ import java.util.Map;
  *
  * @since 2026-08-25
  */
+
 class WorkflowNodePluginApiCasesTest {
     private static final Map<String, Object> MOCK_WEATHER =
             Map.of("latitude", 39.9, "longitude", 116.4, "current_weather", "true");
     private static final Map<String, Object> MOCK_API_SUCCESS =
             Map.of("errCode", 0, "errMessage", "success", "data", MOCK_WEATHER);
-    /** Non-empty response schema → Python unwraps {@code data}. */
+
+    /**
+     * Non-empty response schema → Python unwraps {@code data}.
+     */
     private static final List<Map<String, Object>> RESPONSE_SCHEMA =
             List.of(Map.of("name", "latitude", "description", "lat"));
 
@@ -53,12 +57,10 @@ class WorkflowNodePluginApiCasesTest {
     void setUp() {
         registry = NodeTypeRegistry.createWithBuiltins();
     }
-
     @AfterEach
     void tearDown() {
         StudioEngineTestSupport.clear();
     }
-
     @SuppressWarnings("unchecked")
     private static Map<String, Object> uf(Object invokeOut) {
         Map<String, Object> out = (Map<String, Object>) invokeOut;
@@ -169,10 +171,29 @@ class WorkflowNodePluginApiCasesTest {
         InMemoryToolRegistry tools = new InMemoryToolRegistry();
         ToolCard card = ToolCard.builder().id("weather_api").name("get_weather").description("wx").build();
         tools.register("weather_api", new Tool(card) {
+
+            /**
+             * invoke.
+             *
+             * @param inputs inputs
+             * @param kwargs kwargs
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public Object invoke(Map<String, Object> inputs, Map<String, Object> kwargs) {
                 return MOCK_API_SUCCESS;
             }
+
+            /**
+             * stream.
+             *
+             * @param inputs inputs
+             * @param kwargs kwargs
+             * @return result
+             * @since 0.1.0
+             */
 
             @Override
             public Iterator<Object> stream(Map<String, Object> inputs, Map<String, Object> kwargs) {

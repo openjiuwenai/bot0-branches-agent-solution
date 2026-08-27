@@ -12,6 +12,7 @@ import java.util.Map;
  *
  * @since 2026-08-17
  */
+
 public final class PythonExecRequest {
     private final String nodeId;
     private final String script;
@@ -33,6 +34,7 @@ public final class PythonExecRequest {
      * @param timeoutMs timeoutMs
      * @param interpreter interpreter
      */
+
     public PythonExecRequest(
             String nodeId,
             String script,
@@ -56,6 +58,7 @@ public final class PythonExecRequest {
      * @param inheritEnv inheritEnv
      * @param envWhitelist envWhitelist
      */
+
     public PythonExecRequest(
             String nodeId,
             String script,
@@ -84,6 +87,7 @@ public final class PythonExecRequest {
      *
      * @return result
      */
+
     public String nodeId() {
         return nodeId;
     }
@@ -93,6 +97,7 @@ public final class PythonExecRequest {
      *
      * @return result
      */
+
     public String script() {
         return script;
     }
@@ -102,6 +107,7 @@ public final class PythonExecRequest {
      *
      * @return result
      */
+
     public Map<String, Object> inputs() {
         return inputs;
     }
@@ -111,6 +117,7 @@ public final class PythonExecRequest {
      *
      * @return result
      */
+
     public long timeoutMs() {
         return timeoutMs;
     }
@@ -120,6 +127,7 @@ public final class PythonExecRequest {
      *
      * @return result
      */
+
     public String interpreter() {
         return interpreter;
     }
@@ -129,6 +137,7 @@ public final class PythonExecRequest {
      *
      * @return result
      */
+
     public String tenantId() {
         return tenantId;
     }
@@ -138,6 +147,7 @@ public final class PythonExecRequest {
      *
      * @return result
      */
+
     public String workflowExecutionId() {
         return workflowExecutionId;
     }
@@ -147,6 +157,7 @@ public final class PythonExecRequest {
      *
      * @return result
      */
+
     public String workdirRoot() {
         return workdirRoot;
     }
@@ -156,6 +167,7 @@ public final class PythonExecRequest {
      *
      * @return result
      */
+
     public boolean inheritEnv() {
         return inheritEnv;
     }
@@ -165,6 +177,7 @@ public final class PythonExecRequest {
      *
      * @return result
      */
+
     public List<String> envWhitelist() {
         return envWhitelist;
     }

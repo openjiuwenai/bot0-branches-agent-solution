@@ -15,24 +15,24 @@ import com.openjiuwen.core.foundation.tool.Tool;
 import com.openjiuwen.core.foundation.tool.ToolCard;
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
-import com.openjiuwen.studio.dsl.support.InMemoryToolRegistry;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.exec.WorkflowAssemblyBridge;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.AssembledWorkflow;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
+import com.openjiuwen.studio.dsl.support.InMemoryToolRegistry;
 import com.openjiuwen.studio.dsl.testsupport.LinearWorkflowTestSupport;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Plan-execute D-tier FlowApi paths from
@@ -40,6 +40,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * @since 2026-08-26
  */
+
 class WorkflowNodePlanExecuteCasesTest {
     private NodeTypeRegistry registry;
     private InMemoryToolRegistry tools;
@@ -74,10 +75,29 @@ class WorkflowNodePlanExecuteCasesTest {
     private void registerTool(String id, Map<String, Object> canned) {
         ToolCard card = ToolCard.builder().id(id).name(id).description(id).build();
         tools.register(id, new Tool(card) {
+
+            /**
+             * invoke.
+             *
+             * @param inputs inputs
+             * @param kwargs kwargs
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public Object invoke(Map<String, Object> inputs, Map<String, Object> kwargs) {
                 return Map.of("errCode", 0, "errMessage", "success", "data", canned);
             }
+
+            /**
+             * stream.
+             *
+             * @param inputs inputs
+             * @param kwargs kwargs
+             * @return result
+             * @since 0.1.0
+             */
 
             @Override
             public Iterator<Object> stream(Map<String, Object> inputs, Map<String, Object> kwargs) {
@@ -137,7 +157,15 @@ class WorkflowNodePlanExecuteCasesTest {
         return (Map<String, Object>) out;
     }
 
-    /** Manual multi-node chain — accumulate userFields (nested child path uses the same merge). */
+    /**
+     * Manual multi-node chain — accumulate userFields (nested child path uses the same merge).
+     *
+     * @param current current
+     * @param exec exec
+     * @param session session
+     * @return result
+     * @since 0.1.0
+     */
     private static Map<String, Object> mergeInvoke(
             Map<String, Object> current, ComponentExecutable exec, NodeSessionApi session) {
         return WorkflowAssemblyBridge.mergeLinearStep(current, asMap(exec.invoke(current, session, null)), null);

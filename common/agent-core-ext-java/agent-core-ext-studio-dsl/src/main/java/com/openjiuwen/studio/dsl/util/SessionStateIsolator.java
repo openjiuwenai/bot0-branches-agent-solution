@@ -6,10 +6,10 @@ package com.openjiuwen.studio.dsl.util;
 
 import com.openjiuwen.core.session.NodeSessionApi;
 
+import java.util.function.Supplier;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Supplier;
 
 /**
  * Snapshot / restore session local state around nested sub-workflow execution (FEAT §5.5).
@@ -21,8 +21,12 @@ import java.util.function.Supplier;
  *
  * @since 2026-08-17
  */
+
 public final class SessionStateIsolator {
-    /** Align with Python {@code CHILD_INTERRUPT_STATE_KEYS}. */
+
+    /**
+     * Align with Python {@code CHILD_INTERRUPT_STATE_KEYS}.
+     */
     public static final Set<String> CHILD_INTERRUPT_STATE_KEYS =
             Set.of("questioner_state", "flow_qa_state", "flow_input_state");
 
@@ -35,10 +39,11 @@ public final class SessionStateIsolator {
      * @param body body
      * @return result
      */
+
     public static <T> T runIsolated(NodeSessionApi session, Supplier<T> body) {
         if (session == null) {
-            return body.get();
-        }
+        return body.get();
+    }
         Map<String, Object> snap = snapshot(session);
         try {
             clearLocal(session);

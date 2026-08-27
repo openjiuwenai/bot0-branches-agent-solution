@@ -29,22 +29,46 @@ import java.util.Set;
  *
  * @since 2026-08-17
  */
+
 public final class CodeNodeHandler implements NodeHandlerFactory {
+
+    /**
+     * canonicalType.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public String canonicalType() {
         return "jiuwen.code";
     }
+
+    /**
+     * aliases.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
 
+    /**
+     * create.
+     *
+     * @param node node
+     * @param ctx ctx
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         return new CodeExecutable(node, ctx);
     }
-
     static final class CodeExecutable extends AbstractStudioNode {
         private final NodeBuildContext ctx;
         private final FlowCodeEngine engine;
@@ -62,11 +86,31 @@ public final class CodeNodeHandler implements NodeHandlerFactory {
             return engine;
         }
 
+        /**
+         * doInvoke.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
+
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
             ensureInit();
             return NodePayload.ofFields(engine.invoke(inputs, session, context));
         }
+
+        /**
+         * stream.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
 
         @Override
         public Iterator<Object> stream(Object inputs, NodeSessionApi session, ModelContext context) {
@@ -76,8 +120,8 @@ public final class CodeNodeHandler implements NodeHandlerFactory {
 
         private void ensureInit() {
             if (ready) {
-                return;
-            }
+            return;
+        }
             synchronized (this) {
                 if (!ready) {
                     String language = stringVal(nodeConfigs.get("language"));

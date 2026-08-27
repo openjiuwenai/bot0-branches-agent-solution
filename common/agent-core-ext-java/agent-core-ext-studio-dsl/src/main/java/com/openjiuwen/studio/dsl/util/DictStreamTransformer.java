@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
  *
  * @since 2026-08-25
  */
+
 public final class DictStreamTransformer {
     private static final Pattern TEMPLATE_VAR_RE = Pattern.compile("\\{\\{\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*}}");
     private static final Object TEMPLATE_MISSING = new Object();
@@ -31,6 +32,7 @@ public final class DictStreamTransformer {
      *
      * @param config config
      */
+
     public DictStreamTransformer(DictStreamTransformConfig config) {
         this.cfg = config;
         this.concatVars = config.variables().stream().filter(DictStreamTransformConfig.VariableDef::concat).toList();
@@ -45,6 +47,7 @@ public final class DictStreamTransformer {
      * @param stream input frames
      * @return output frames
      */
+
     public List<Map<String, Object>> transform(Iterable<Map<String, Object>> stream) {
         List<Map<String, Object>> out = new ArrayList<>();
         Map<String, Object> prevOut = null;
@@ -91,8 +94,8 @@ public final class DictStreamTransformer {
 
     private void accumulateConcat(String key, Object value, boolean skipNone, boolean castToStr) {
         if (skipNone && value == null) {
-            return;
-        }
+        return;
+    }
         if (value == null) {
             return;
         }

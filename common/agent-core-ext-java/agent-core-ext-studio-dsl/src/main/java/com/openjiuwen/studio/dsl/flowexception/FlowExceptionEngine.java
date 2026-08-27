@@ -15,6 +15,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class FlowExceptionEngine {
     public static final String USER_FIELDS = "userFields";
     public static final String WORKFLOW_EXCEPTION = "workflow_exception";
@@ -34,6 +35,7 @@ public final class FlowExceptionEngine {
      * @param inputs inputs
      * @param session session
      */
+
     public void invoke(Map<String, Object> inputs, NodeSessionApi session) {
         Map<String, Object> userFields = extractUserFields(inputs);
         if (session != null && alreadyAborted(session)) {
@@ -53,6 +55,7 @@ public final class FlowExceptionEngine {
      * @param session session
      * @return iterator that yields one empty map then throws
      */
+
     public Iterator<Object> stream(Map<String, Object> inputs, NodeSessionApi session) {
         Map<String, Object> userFields = extractUserFields(inputs);
         Map<String, Object> frameData = frameData(userFields);
@@ -62,13 +65,27 @@ public final class FlowExceptionEngine {
         return new Iterator<>() {
             private boolean yielded;
 
+            /**
+             * hasNext.
+             *
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public boolean hasNext() {
                 if (!yielded) {
-                    return true;
-                }
+                return true;
+            }
                 throw abort;
             }
+
+            /**
+             * next.
+             *
+             * @return result
+             * @since 0.1.0
+             */
 
             @Override
             public Object next() {
@@ -87,6 +104,7 @@ public final class FlowExceptionEngine {
      * @param inputs inputs
      * @return user fields
      */
+
     public static Map<String, Object> extractUserFields(Map<String, Object> inputs) {
         if (inputs == null) {
             return Map.of();
@@ -121,8 +139,8 @@ public final class FlowExceptionEngine {
 
     private static void markAborted(NodeSessionApi session) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             session.updateGlobalState(Map.of(ABORT_FLAG, true));
         } catch (RuntimeException ignored) {
@@ -132,8 +150,8 @@ public final class FlowExceptionEngine {
 
     private static void writeExceptionFrame(NodeSessionApi session, Map<String, Object> data) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             Map<String, Object> frame = new LinkedHashMap<>();
             frame.put("type", WORKFLOW_EXCEPTION);
@@ -147,8 +165,8 @@ public final class FlowExceptionEngine {
 
     private static void trace(NodeSessionApi session, Map<String, Object> data) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             session.trace(data);
         } catch (RuntimeException ignored) {

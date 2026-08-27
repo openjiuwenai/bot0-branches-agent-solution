@@ -21,6 +21,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class ExtractorEngine {
     private static final String LLM_EXTRA_CONFIGS = "llm_extra_configs";
 
@@ -39,7 +40,15 @@ public final class ExtractorEngine {
         this.presetInvoker = null;
     }
 
-    /** Direct unit-test entry (init + invoke without lazy path). */
+    /**
+     * Direct unit-test entry (init + invoke without lazy path).
+     *
+     * @param nodeId nodeId
+     * @param config config
+     * @param invoker invoker
+     * @return result
+     * @since 0.1.0
+     */
     public ExtractorEngine(String nodeId, ExtractorConfig config, ExtractorLlmExtractor.ModelInvoker invoker) {
         this.nodeId = nodeId;
         this.presetInvoker = invoker;
@@ -47,12 +56,15 @@ public final class ExtractorEngine {
     }
 
     /**
-     * Python {@code init(conf, session, context)} — validates config and wires LLM.
+     * * Python {@code init(conf, session, context)} — validates config and wires LLM.
+     *
+     * @param conf conf
+     * @param session session
+     * @since 0.1.0
      */
     public void init(Map<String, Object> conf, NodeSessionApi session) {
         init(conf, session, presetInvoker);
     }
-
     private void init(Map<String, Object> conf, NodeSessionApi session, ExtractorLlmExtractor.ModelInvoker testInvoker) {
         ExtractorConfigValidator.checkConfig(nodeId, conf);
         this.config = ExtractorConfig.fromNodeConfigs(conf);
@@ -64,7 +76,13 @@ public final class ExtractorEngine {
     }
 
     /**
-     * Python {@code invoke} → {@code reply_key_fields} → {@code as_dict}.
+     * * Python {@code invoke} → {@code reply_key_fields} → {@code as_dict}.
+     *
+     * @param inputs inputs
+     * @param session session
+     * @param context context
+     * @return result
+     * @since 0.1.0
      */
     public Map<String, Object> invoke(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
@@ -139,7 +157,13 @@ public final class ExtractorEngine {
         return Map.of();
     }
 
-    /** Python: keep only keys in {@code cn_fields_name} (empty config → no keys). */
+    /**
+     * Python: keep only keys in {@code cn_fields_name} (empty config → no keys).
+     *
+     * @param extracted extracted
+     * @return result
+     * @since 0.1.0
+     */
     private Map<String, Object> filterToKnownFields(Map<String, Object> extracted) {
         Map<String, Object> out = new LinkedHashMap<>();
         extracted.forEach((k, v) -> {
@@ -172,7 +196,12 @@ public final class ExtractorEngine {
     }
 
     /**
-     * Python {@code get_latest_chat_history(context, k)} — context messages only.
+     * * Python {@code get_latest_chat_history(context, k)} — context messages only.
+     *
+     * @param context context
+     * @param k k
+     * @return result
+     * @since 0.1.0
      */
     private List<Map<String, Object>> getLatestChatHistory(ModelContext context, Integer k) {
         Integer effectiveK = k;
@@ -206,8 +235,8 @@ public final class ExtractorEngine {
 
     private static void traceUser(NodeSessionApi session, String user) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             session.trace(Map.of("user", user == null ? "" : user));
         } catch (RuntimeException ignored) {

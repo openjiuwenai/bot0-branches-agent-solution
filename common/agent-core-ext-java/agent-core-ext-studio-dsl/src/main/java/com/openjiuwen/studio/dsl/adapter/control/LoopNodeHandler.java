@@ -6,9 +6,9 @@ package com.openjiuwen.studio.dsl.adapter.control;
 
 import com.openjiuwen.core.common.constants.Constant;
 import com.openjiuwen.core.context.ModelContext;
-import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.internal.NodeSession;
 import com.openjiuwen.core.session.internal.WorkflowSession;
+import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.state.InMemoryState;
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.core.workflow.components.flow.loop.LoopComponent;
@@ -18,12 +18,13 @@ import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
+
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * jiuwen.loop — Studio IR → core {@link LoopComponent} + {@link com.openjiuwen.core.workflow.component.loop.LoopGroup}
@@ -31,6 +32,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * @since 2026-08-17
  */
+
 public final class LoopNodeHandler implements NodeHandlerFactory {
     private final NodeTypeRegistry registry;
 
@@ -39,25 +41,48 @@ public final class LoopNodeHandler implements NodeHandlerFactory {
      *
      * @param registry registry
      */
+
     public LoopNodeHandler(NodeTypeRegistry registry) {
         this.registry = registry;
     }
+
+    /**
+     * canonicalType.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public String canonicalType() {
         return "jiuwen.loop";
     }
 
+    /**
+     * aliases.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
 
+    /**
+     * create.
+     *
+     * @param node node
+     * @param ctx ctx
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         return new LoopExecutable(node, registry, ctx);
     }
-
     static final class LoopExecutable extends AbstractStudioNode {
         private final NodeTypeRegistry registry;
         private final NodeBuildContext ctx;
@@ -68,6 +93,16 @@ public final class LoopNodeHandler implements NodeHandlerFactory {
             this.registry = registry;
             this.ctx = ctx;
         }
+
+        /**
+         * doInvoke.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
 
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context)
@@ -140,8 +175,8 @@ public final class LoopNodeHandler implements NodeHandlerFactory {
         private static void mergeLoopResult(
                 Map<String, Object> outUf, Object raw, Map<String, Object> outputSchema) {
             if (raw == null) {
-                return;
-            }
+            return;
+        }
             Map<String, Object> resultMap;
             if (raw instanceof Map<?, ?> m) {
                 resultMap = new LinkedHashMap<>();
@@ -180,8 +215,8 @@ public final class LoopNodeHandler implements NodeHandlerFactory {
             if (session != null) {
                 try {
                     if (session.getInner() != null) {
-                        return session;
-                    }
+            return session;
+        }
                 } catch (RuntimeException | Error ignored) {
                     // mock / incomplete session
                 }

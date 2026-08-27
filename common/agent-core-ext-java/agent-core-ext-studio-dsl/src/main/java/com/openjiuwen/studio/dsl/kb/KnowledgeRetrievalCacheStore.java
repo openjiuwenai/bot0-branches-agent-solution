@@ -7,11 +7,12 @@ package com.openjiuwen.studio.dsl.kb;
 import com.openjiuwen.studio.dsl.store.SharedJedisPool;
 
 import redis.clients.jedis.JedisPooled;
+import redis.clients.jedis.exceptions.JedisException;
 
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.Map;
 
 /**
  * Redis / in-memory cache for knowledge retrieval image & file virtual IDs
@@ -19,6 +20,7 @@ import java.util.logging.Logger;
  *
  * @since 2026-08-26
  */
+
 public final class KnowledgeRetrievalCacheStore {
     public static final String IMAGE_PREFIX = "knowledge:image:";
     public static final String FILE_PREFIX = "knowledge:file:";
@@ -29,12 +31,21 @@ public final class KnowledgeRetrievalCacheStore {
 
     private KnowledgeRetrievalCacheStore() {}
 
-    /** Test / host: inject Jedis; null clears override. */
+    /**
+     * Test / host: inject Jedis; null clears override.
+     *
+     * @param jedis jedis
+     * @since 0.1.0
+     */
     public static void setJedis(JedisPooled jedis) {
         jedisOverride = jedis;
     }
 
-    /** Clear in-memory cache (tests). */
+    /**
+     * Clear in-memory cache (tests).
+     *
+     * @since 0.1.0
+     */
     public static void clearMemory() {
         MEMORY.clear();
     }
@@ -63,16 +74,17 @@ public final class KnowledgeRetrievalCacheStore {
      * @param value cache payload
      * @param ttlSeconds TTL
      */
+
     public static void set(String key, String value, int ttlSeconds) {
         if (key == null || key.isBlank() || value == null) {
-            return;
-        }
+        return;
+    }
         JedisPooled jedis = resolveJedis();
         if (jedis != null) {
             try {
                 jedis.setex(key, ttlSeconds, value);
                 return;
-            } catch (Exception e) {
+            } catch (JedisException e) {
                 LOG.log(Level.WARNING, "Failed to cache knowledge key=" + key + ": " + e.getMessage(), e);
             }
         }
@@ -85,14 +97,19 @@ public final class KnowledgeRetrievalCacheStore {
         if (jedis != null) {
             try {
                 return jedis.get(key);
-            } catch (Exception e) {
+            } catch (JedisException e) {
                 LOG.log(Level.WARNING, "Failed to read knowledge cache key=" + key + ": " + e.getMessage(), e);
             }
         }
         return MEMORY.get(key);
     }
 
-    /** Expose memory map for tests. */
+    /**
+     * Expose memory map for tests.
+     *
+     * @return result
+     * @since 0.1.0
+     */
     static Map<String, String> memorySnapshot() {
         return Map.copyOf(MEMORY);
     }
@@ -113,15 +130,15 @@ public final class KnowledgeRetrievalCacheStore {
                 port = Integer.parseInt(p.trim());
             }
             return SharedJedisPool.getOrConnect(host.trim(), port);
-        } catch (Exception e) {
+        } catch (NumberFormatException | JedisException e) {
             return null;
         }
     }
 
     private static String firstNonBlank(String a, String b) {
         if (a != null && !a.isBlank()) {
-            return a.trim();
-        }
+        return a.trim();
+    }
         if (b != null && !b.isBlank()) {
             return b.trim();
         }

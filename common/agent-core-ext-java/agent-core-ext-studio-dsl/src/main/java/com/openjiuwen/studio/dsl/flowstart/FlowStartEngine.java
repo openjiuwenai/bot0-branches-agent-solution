@@ -24,6 +24,7 @@ import java.util.Set;
  *
  * @since 2026-08-26
  */
+
 public final class FlowStartEngine {
     private final FlowStartConfig config;
     private final String buildWorkflowId;
@@ -43,6 +44,7 @@ public final class FlowStartEngine {
      * @param session session
      * @return assembled output map ({@code systemFields}/{@code userFields}/{@code memory})
      */
+
     public Map<String, Object> invoke(Map<String, Object> inputs, NodeSessionApi session) {
         Map<String, Object> configs = config.raw();
         Map<String, Object> in = inputs == null ? Map.of() : inputs;
@@ -181,7 +183,14 @@ public final class FlowStartEngine {
     /**
      * Python {@code _get_redis_session_vars}: empty store → {@code {}}; when present, fill missing keys
      * from {@code valuesDefine} defaults.
+     *
+     * @param workflowId workflowId
+     * @param conversationId conversationId
+     * @param valuesDefine valuesDefine
+     * @return result
+     * @since 0.1.0
      */
+
     Map<String, Object> loadRedisSessionVars(
             String workflowId, String conversationId, Map<String, Object> valuesDefine) {
         if (blank(workflowId) || blank(conversationId) || valuesDefine == null || valuesDefine.isEmpty()) {
@@ -210,8 +219,8 @@ public final class FlowStartEngine {
                 || valuesDefine == null
                 || valuesDefine.isEmpty()
                 || valsStore == null) {
-            return;
-        }
+        return;
+    }
         String key = FlowStartAssignmentSupport.redisKey(workflowId, conversationId);
         Map<String, Object> newVars = new LinkedHashMap<>();
         for (String k : valuesDefine.keySet()) {
@@ -295,7 +304,13 @@ public final class FlowStartEngine {
         return wrap;
     }
 
-    /** Python {@code get_workflow_param(session, REQUEST_VARIABLES)} — key {@code _request}. */
+    /**
+     * Python {@code get_workflow_param(session, REQUEST_VARIABLES)} — key {@code _request}.
+     *
+     * @param session session
+     * @return result
+     * @since 0.1.0
+     */
     static Map<String, Object> readRequestVars(NodeSessionApi session) {
         if (session == null) {
             return Map.of();
@@ -320,7 +335,12 @@ public final class FlowStartEngine {
     /**
      * Best-effort io_state: {@code getGlobalState("io_state")} or empty. Python uses
      * {@code get_state_info(session, "io_state")}.
+     *
+     * @param session session
+     * @return result
+     * @since 0.1.0
      */
+
     @SuppressWarnings("unchecked")
     static Map<String, Object> readIoState(NodeSessionApi session) {
         if (session == null) {

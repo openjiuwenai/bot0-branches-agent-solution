@@ -14,15 +14,27 @@ import java.util.List;
  *
  * @since 2026-08-25
  */
+
 public final class NumberRangeValidateAction extends ValidateAction {
+
     /**
      * NumberRangeValidateAction.
      *
      * @param config config
      */
+
     public NumberRangeValidateAction(ActionConfig config) {
         super(config);
     }
+
+    /**
+     * validateField.
+     *
+     * @param fieldName fieldName
+     * @param value value
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     protected ValidationResult validateField(String fieldName, Object value) {
@@ -50,8 +62,8 @@ public final class NumberRangeValidateAction extends ValidateAction {
 
     private static double toDouble(Object v) {
         if (v instanceof Number n) {
-            return n.doubleValue();
-        }
+        return n.doubleValue();
+    }
         return Double.parseDouble(String.valueOf(v));
     }
 }

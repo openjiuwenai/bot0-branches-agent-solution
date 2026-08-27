@@ -9,11 +9,11 @@ import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.adapter.AbstractStudioNode;
 import com.openjiuwen.studio.dsl.adapter.StudioStreamFrames;
+import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
+import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.flowend.FlowEndEngine;
 import com.openjiuwen.studio.dsl.flowend.FlowEndGeneratorSupport;
 import com.openjiuwen.studio.dsl.flowend.FlowEndMixCoordinator;
-import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
-import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
 
@@ -29,22 +29,46 @@ import java.util.Set;
  *
  * @since 2026-08-17
  */
+
 public final class EndNodeHandler implements NodeHandlerFactory {
+
+    /**
+     * canonicalType.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public String canonicalType() {
         return "jiuwen.end";
     }
+
+    /**
+     * aliases.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
 
+    /**
+     * create.
+     *
+     * @param node node
+     * @param ctx ctx
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         return new EndExecutable(node);
     }
-
     public static final class EndExecutable extends AbstractStudioNode {
         private volatile Map<String, Object> streamOutput;
         private volatile boolean pendingMix;
@@ -54,19 +78,39 @@ public final class EndNodeHandler implements NodeHandlerFactory {
             super(node);
         }
 
+        /**
+         * setMix.
+         *
+         * @since 0.1.0
+         *
+         */
+
         @Override
         public void setMix() {
             pendingMix = true;
         }
 
+        /**
+         * setExpectMix.
+         *
+         * @param expect expect
+         * @since 0.1.0
+         */
+
         public void setExpectMix(boolean expect) {
             pendingExpectMix = expect;
         }
 
+        /**
+         * isMix.
+         *
+         * @return result
+         * @since 0.1.0
+         */
+
         public boolean isMix() {
             return pendingMix;
         }
-
         private FlowEndMixCoordinator mixOf(NodeSessionApi session) {
             FlowEndMixCoordinator mix = FlowEndEngine.mixCoordinator(session, node.id());
             if (pendingMix) {
@@ -84,11 +128,21 @@ public final class EndNodeHandler implements NodeHandlerFactory {
             return streamOutput;
         }
 
+        /**
+         * doInvoke.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
+
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
             if (FlowEndEngine.alreadyInvoked(session, node.id())) {
-                return NodePayload.ofFields(Map.of());
-            }
+            return NodePayload.ofFields(Map.of());
+        }
             FlowEndEngine.markInvoked(session, node.id());
 
             Prepared prepared = prepareBatchInputs(inputs);
@@ -107,11 +161,21 @@ public final class EndNodeHandler implements NodeHandlerFactory {
             return payload;
         }
 
+        /**
+         * stream.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
+
         @Override
         public Iterator<Object> stream(Object inputs, NodeSessionApi session, ModelContext context) {
             if (FlowEndEngine.alreadyStreamed(session, node.id())) {
-                return List.of().iterator();
-            }
+            return List.of().iterator();
+        }
             FlowEndEngine.markStreamed(session, node.id());
             Prepared prepared = prepareBatchInputs(asMap(inputs));
             FlowEndMixCoordinator.MixResult mixResult =
@@ -132,11 +196,21 @@ public final class EndNodeHandler implements NodeHandlerFactory {
             return frames.iterator();
         }
 
+        /**
+         * collect.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
+
         @Override
         public Object collect(Object inputs, NodeSessionApi session, ModelContext context) {
             if (FlowEndEngine.alreadyCollected(session, node.id())) {
-                return null;
-            }
+            return null;
+        }
             FlowEndEngine.markCollected(session, node.id());
             Map<String, Object> finalInputs = collectChunks(inputs);
             Prepared prepared = prepareFromFields(finalInputs);
@@ -155,11 +229,21 @@ public final class EndNodeHandler implements NodeHandlerFactory {
             return payload.toInvokeMap();
         }
 
+        /**
+         * transform.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
+
         @Override
         public Iterator<Object> transform(Object inputs, NodeSessionApi session, ModelContext context) {
             if (FlowEndEngine.alreadyTransformed(session, node.id())) {
-                return List.of().iterator();
-            }
+            return List.of().iterator();
+        }
             FlowEndEngine.markTransformed(session, node.id());
             streamOutput = null;
             Map<String, Object> in = asMap(inputs);
@@ -468,8 +552,8 @@ public final class EndNodeHandler implements NodeHandlerFactory {
                 if ("answer".equals(k)
                         || "result".equals(k)
                         || (k != null && k.startsWith(FlowEndEngine.OUTPUT_PREFIX) && k.endsWith("answer"))) {
-                    work.put(k, joined);
-                }
+            work.put(k, joined);
+        }
             }
             if (work.containsKey("#end_answer") || work.containsKey("answer")) {
                 work.putIfAbsent("answer", joined);
@@ -506,8 +590,8 @@ public final class EndNodeHandler implements NodeHandlerFactory {
             for (Map.Entry<String, Object> e : vars.entrySet()) {
                 if ((e.getValue() instanceof Iterator || e.getValue() instanceof Iterable)
                         && template.contains("{{" + e.getKey() + "}}")) {
-                    return true;
-                }
+            return true;
+        }
             }
             return false;
         }
@@ -586,8 +670,8 @@ public final class EndNodeHandler implements NodeHandlerFactory {
 
         private static void writeFrame(NodeSessionApi session, Object frame) {
             if (session == null || !(frame instanceof Map<?, ?>)) {
-                return;
-            }
+            return;
+        }
             try {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> fm = (Map<String, Object>) frame;
@@ -600,8 +684,8 @@ public final class EndNodeHandler implements NodeHandlerFactory {
         private static String firstNonBlank(Object... vals) {
             for (Object v : vals) {
                 if (v != null && !String.valueOf(v).isBlank()) {
-                    return String.valueOf(v);
-                }
+            return String.valueOf(v);
+        }
             }
             return null;
         }
@@ -609,7 +693,7 @@ public final class EndNodeHandler implements NodeHandlerFactory {
         private static String stringOrNull(Object v) {
             return v == null || String.valueOf(v).isBlank() ? null : String.valueOf(v);
         }
-
-        private record Prepared(Map<String, Object> fields, Map<String, Object> outputs) {}
-    }
+        private record Prepared(Map<String, Object> fields, Map<String, Object> outputs) {
+            }
+        }
 }

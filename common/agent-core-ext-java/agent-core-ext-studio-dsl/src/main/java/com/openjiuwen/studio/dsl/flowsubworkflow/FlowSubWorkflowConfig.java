@@ -12,6 +12,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class FlowSubWorkflowConfig {
     private final String nodeId;
     private final String referenceId;
@@ -37,6 +38,15 @@ public final class FlowSubWorkflowConfig {
         this.preDefineFields = preDefineFields == null ? Map.of() : Map.copyOf(preDefineFields);
         this.raw = raw == null ? Map.of() : Map.copyOf(raw);
     }
+
+    /**
+     * fromNodeConfigs.
+     *
+     * @param nodeId nodeId
+     * @param configs configs
+     * @return result
+     * @since 0.1.0
+     */
 
     @SuppressWarnings("unchecked")
     public static FlowSubWorkflowConfig fromNodeConfigs(String nodeId, Map<String, Object> configs) {
@@ -75,18 +85,38 @@ public final class FlowSubWorkflowConfig {
         return out;
     }
 
+    /**
+     * nodeId.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String nodeId() {
         return nodeId;
     }
+
+    /**
+     * referenceId.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String referenceId() {
         return referenceId;
     }
 
+    /**
+     * referencePath.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String referencePath() {
         return referencePath;
     }
-
     public Map<String, Object> userFields() {
         return userFields;
     }

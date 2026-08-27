@@ -16,6 +16,7 @@ import java.util.regex.Pattern;
  *
  * @since 2026-08-26
  */
+
 final class IntentDetectionConfigFormatter {
     private static final Pattern BRANCH_INDEX = Pattern.compile("branch_(\\d+)");
     private static final String DEFAULT_INT = "不确定，其他的意图";
@@ -111,7 +112,14 @@ final class IntentDetectionConfigFormatter {
                 configs);
     }
 
-    /** Python {@code reset} default_class override when branch_0 is absent. */
+    /**
+     * Python {@code reset} default_class override when branch_0 is absent.
+     *
+     * @param base base
+     * @param defaultClass defaultClass
+     * @return result
+     * @since 0.1.0
+     */
     static IntentDetectionConfig withDefaultClass(IntentDetectionConfig base, String defaultClass) {
         return new IntentDetectionConfig(
                 base.userPrompt(),
@@ -165,7 +173,6 @@ final class IntentDetectionConfigFormatter {
     private static String str(Object o) {
         return o == null ? "" : String.valueOf(o);
     }
-
     private static String first(Map<?, ?> m, String... keys) {
         for (String k : keys) {
             Object v = m.get(k);
@@ -188,8 +195,8 @@ final class IntentDetectionConfigFormatter {
 
     private static boolean bool(Object o, boolean def) {
         if (o instanceof Boolean b) {
-            return b;
-        }
+        return b;
+    }
         if (o == null) {
             return def;
         }
@@ -198,8 +205,8 @@ final class IntentDetectionConfigFormatter {
 
     private static int intOf(Object o, int def) {
         if (o instanceof Number n) {
-            return n.intValue();
-        }
+        return n.intValue();
+    }
         if (o == null) {
             return def;
         }
@@ -212,8 +219,8 @@ final class IntentDetectionConfigFormatter {
 
     private static double doubleOf(Object o, double def) {
         if (o instanceof Number n) {
-            return n.doubleValue();
-        }
+        return n.doubleValue();
+    }
         if (o == null) {
             return def;
         }

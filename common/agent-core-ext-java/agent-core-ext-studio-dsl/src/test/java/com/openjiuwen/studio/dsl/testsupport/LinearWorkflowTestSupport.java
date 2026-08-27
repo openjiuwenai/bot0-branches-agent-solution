@@ -23,12 +23,24 @@ import java.util.Objects;
  *
  * <p>Invokes nodes in {@link AssembledWorkflow} declaration order and merges {@code userFields}.
  * Production scheduling, IR binding, and edge routing remain the host responsibility.
+ *
+ * @since 0.1.0 (2026)
  */
+
 public final class LinearWorkflowTestSupport {
     private LinearWorkflowTestSupport() {}
 
     /**
-     * Sequential smoke path for unit tests; closes {@link NodeBuildContext#variableScope()} on exit.
+     * * Sequential smoke path for unit tests; closes {@link NodeBuildContext#variableScope()} on exit.
+     *
+     * @param registry registry
+     * @param workflow workflow
+     * @param ctx ctx
+     * @param inputs inputs
+     * @param session session
+     * @param modelContext modelContext
+     * @return result
+     * @since 0.1.0
      */
     @SuppressWarnings("unchecked")
     public static Map<String, Object> executeLinear(

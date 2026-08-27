@@ -14,6 +14,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 final class FlowMcpErrors {
     private FlowMcpErrors() {}
 
@@ -28,7 +29,6 @@ final class FlowMcpErrors {
     static NodeExecutionException of(FlowMcpStatusCode status, Map<String, ?> kwargs) {
         return of("mcp", status, kwargs);
     }
-
     static NodeExecutionException config(String nodeId, FlowMcpStatusCode status, Map<String, ?> kwargs) {
         return new NodeExecutionException(
                 nodeId == null ? "mcp" : nodeId,

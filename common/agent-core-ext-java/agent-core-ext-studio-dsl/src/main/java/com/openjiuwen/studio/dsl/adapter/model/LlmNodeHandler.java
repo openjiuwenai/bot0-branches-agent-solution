@@ -8,12 +8,12 @@ import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.adapter.AbstractStudioNode;
+import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.llmchain.LlmChainConfig;
 import com.openjiuwen.studio.dsl.llmchain.LlmChainEngine;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
-import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -25,22 +25,46 @@ import java.util.Set;
  *
  * @since 2026-08-17
  */
+
 public final class LlmNodeHandler implements NodeHandlerFactory {
+
+    /**
+     * canonicalType.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public String canonicalType() {
         return "jiuwen.LLMComponent";
     }
+
+    /**
+     * aliases.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public Set<String> aliases() {
         return Set.of("jiuwen.llm", "jiuwen.llm_chain", "jiuwen.llmChain");
     }
 
+    /**
+     * create.
+     *
+     * @param node node
+     * @param ctx ctx
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         return new LlmChainExecutable(node, ctx);
     }
-
     static final class LlmChainExecutable extends AbstractStudioNode {
         private final LlmChainEngine engine;
         private final Map<String, Object> nodeConfigs;
@@ -63,12 +87,32 @@ public final class LlmNodeHandler implements NodeHandlerFactory {
             return engine;
         }
 
+        /**
+         * doInvoke.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
+
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
             ensureInit();
             Map<String, Object> result = engine.invoke(inputs, session, context);
             return NodePayload.ofFields(result);
         }
+
+        /**
+         * stream.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
 
         @Override
         public Iterator<Object> stream(Object inputs, NodeSessionApi session, ModelContext context) {
@@ -79,8 +123,8 @@ public final class LlmNodeHandler implements NodeHandlerFactory {
 
         private void ensureInit() {
             if (ready) {
-                return;
-            }
+            return;
+        }
             synchronized (this) {
                 if (!ready) {
                     engine.init(new LinkedHashMap<>(nodeConfigs));

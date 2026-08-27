@@ -5,17 +5,18 @@
 package com.openjiuwen.studio.dsl.exec;
 
 import com.openjiuwen.studio.dsl.config.StudioDslNodeProperties;
-import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 import com.openjiuwen.studio.dsl.contract.EmptyToolRegistry;
 import com.openjiuwen.studio.dsl.contract.PythonCodeExecutor;
 import com.openjiuwen.studio.dsl.contract.SubWorkflowResolver;
 import com.openjiuwen.studio.dsl.contract.ToolRegistry;
+import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 
 /**
  * NodeBuildContext for Studio DSL node-type extension (FEAT-031).
  *
  * @since 2026-08-17
  */
+
 public final class NodeBuildContext {
     private final String workflowId;
     private final int nestingDepth;
@@ -38,6 +39,7 @@ public final class NodeBuildContext {
      * @param pythonExecutor pythonExecutor
      * @param subWorkflowResolver subWorkflowResolver
      */
+
     public NodeBuildContext(
             String workflowId,
             int nestingDepth,
@@ -69,6 +71,7 @@ public final class NodeBuildContext {
      * @param toolRegistry toolRegistry
      * @param nodeTypeRegistry nodeTypeRegistry
      */
+
     public NodeBuildContext(
             String workflowId,
             int nestingDepth,
@@ -106,6 +109,7 @@ public final class NodeBuildContext {
      * @param properties properties
      * @param testOverrides test-only stubs (null in production)
      */
+
     public NodeBuildContext(
             String workflowId,
             int nestingDepth,
@@ -137,6 +141,7 @@ public final class NodeBuildContext {
      * @param workflowId workflowId
      * @return result
      */
+
     public static NodeBuildContext defaults(String workflowId) {
         return defaults(workflowId, new StudioDslNodeProperties());
     }
@@ -148,6 +153,7 @@ public final class NodeBuildContext {
      * @param props props
      * @return result
      */
+
     public static NodeBuildContext defaults(String workflowId, StudioDslNodeProperties props) {
         StudioDslNodeProperties p = props == null ? new StudioDslNodeProperties() : props;
         return new NodeBuildContext(
@@ -178,6 +184,7 @@ public final class NodeBuildContext {
      * @param props props
      * @return result
      */
+
     public static NodeBuildContext defaults(String workflowId, String tenantId, StudioDslNodeProperties props) {
         StudioDslNodeProperties p = props == null ? new StudioDslNodeProperties() : props;
         return new NodeBuildContext(
@@ -206,6 +213,7 @@ public final class NodeBuildContext {
      * @param registry registry
      * @return result
      */
+
     public NodeBuildContext withRegistry(NodeTypeRegistry registry) {
         return new NodeBuildContext(
                 workflowId,
@@ -227,6 +235,7 @@ public final class NodeBuildContext {
      * @param overrides overrides
      * @return copy with test wiring
      */
+
     public NodeBuildContext withTestOverrides(StudioEngineTestOverrides overrides) {
         return new NodeBuildContext(
                 workflowId,
@@ -247,6 +256,7 @@ public final class NodeBuildContext {
      *
      * @return result
      */
+
     public String workflowId() {
         return workflowId;
     }
@@ -256,6 +266,7 @@ public final class NodeBuildContext {
      *
      * @return result
      */
+
     public int nestingDepth() {
         return nestingDepth;
     }
@@ -265,6 +276,7 @@ public final class NodeBuildContext {
      *
      * @return result
      */
+
     public int maxNestingDepth() {
         return maxNestingDepth;
     }
@@ -274,6 +286,7 @@ public final class NodeBuildContext {
      *
      * @return result
      */
+
     public PythonCodeExecutor pythonExecutor() {
         return pythonExecutor;
     }
@@ -283,6 +296,7 @@ public final class NodeBuildContext {
      *
      * @return result
      */
+
     public SubWorkflowResolver subWorkflowResolver() {
         return subWorkflowResolver;
     }
@@ -292,6 +306,7 @@ public final class NodeBuildContext {
      *
      * @return result
      */
+
     public ToolRegistry toolRegistry() {
         return toolRegistry;
     }
@@ -301,6 +316,7 @@ public final class NodeBuildContext {
      *
      * @return result
      */
+
     public NodeTypeRegistry nodeTypeRegistry() {
         return nodeTypeRegistry;
     }
@@ -310,6 +326,7 @@ public final class NodeBuildContext {
      *
      * @return result
      */
+
     public WorkflowVariableScope variableScope() {
         return variableScope;
     }
@@ -319,6 +336,7 @@ public final class NodeBuildContext {
      *
      * @return result
      */
+
     public String tenantId() {
         return tenantId;
     }
@@ -328,11 +346,17 @@ public final class NodeBuildContext {
      *
      * @return result
      */
+
     public StudioDslNodeProperties properties() {
         return properties;
     }
 
-    /** Test-only engine stubs; {@code null} in production. */
+    /**
+     * Test-only engine stubs; {@code null} in production.
+     *
+     * @return result
+     * @since 0.1.0
+     */
     public StudioEngineTestOverrides testOverrides() {
         return testOverrides;
     }
@@ -342,6 +366,7 @@ public final class NodeBuildContext {
      *
      * @return result
      */
+
     public NodeBuildContext childDepth() {
         return new NodeBuildContext(
                 workflowId + "/child@" + (nestingDepth + 1),

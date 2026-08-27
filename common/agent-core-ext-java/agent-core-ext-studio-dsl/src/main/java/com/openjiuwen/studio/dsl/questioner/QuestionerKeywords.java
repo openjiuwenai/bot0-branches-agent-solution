@@ -11,6 +11,7 @@ import java.util.List;
  *
  * @since 2026-08-26
  */
+
 final class QuestionerKeywords {
     static final List<String> USER_CONFIRM_INFO = List.of("%确认%", "确认", "没错", "正确");
     static final List<String> USER_BREAK_INFO = List.of("%跳出%", "结束", "意图结束", "跳出", "退出");
@@ -23,15 +24,13 @@ final class QuestionerKeywords {
     static boolean matchesConfirm(String userResponse) {
         return containsAny(userResponse, USER_CONFIRM_INFO);
     }
-
     static boolean matchesBreak(String userResponse) {
         return containsAny(userResponse, USER_BREAK_INFO);
     }
-
     private static boolean containsAny(String userResponse, List<String> keywords) {
         if (userResponse == null || userResponse.isBlank()) {
-            return false;
-        }
+        return false;
+    }
         for (String keyword : keywords) {
             if (userResponse.contains(keyword)) {
                 return true;

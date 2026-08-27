@@ -20,6 +20,7 @@ import java.util.Objects;
  *
  * @since 2026-08-17
  */
+
 public final class WorkflowAssemblyBridge {
     private final NodeTypeRegistry registry;
 
@@ -28,6 +29,7 @@ public final class WorkflowAssemblyBridge {
      *
      * @param registry registry
      */
+
     public WorkflowAssemblyBridge(NodeTypeRegistry registry) {
         this.registry = Objects.requireNonNull(registry, "registry");
     }
@@ -39,6 +41,7 @@ public final class WorkflowAssemblyBridge {
      * @param ctx ctx
      * @return result
      */
+
     public Map<String, ComponentExecutable> mapExecutables(AssembledWorkflow workflow, NodeBuildContext ctx) {
         Map<String, ComponentExecutable> map = new LinkedHashMap<>();
         for (AssembledNode node : workflow.nodes()) {
@@ -54,6 +57,7 @@ public final class WorkflowAssemblyBridge {
      * @param produced node invoke result
      * @return merged envelope
      */
+
     public static Map<String, Object> mergeLinearStep(
             Map<String, Object> current, Map<String, Object> produced) {
         return mergeLinearStep(current, produced, null);
@@ -67,6 +71,7 @@ public final class WorkflowAssemblyBridge {
      * @param scope optional workflow variable scope
      * @return merged envelope
      */
+
     @SuppressWarnings("unchecked")
     public static Map<String, Object> mergeLinearStep(
             Map<String, Object> current, Map<String, Object> produced, WorkflowVariableScope scope) {

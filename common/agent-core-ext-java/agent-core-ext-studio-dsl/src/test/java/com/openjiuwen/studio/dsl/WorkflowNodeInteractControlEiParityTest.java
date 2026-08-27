@@ -4,7 +4,6 @@
 
 package com.openjiuwen.studio.dsl;
 
-import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -20,15 +19,16 @@ import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 import com.openjiuwen.studio.dsl.store.ConversationValsStores;
 import com.openjiuwen.studio.dsl.store.InMemoryConversationValsStore;
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Parity for interact/control nodes (message / input / end / setVariable / aggregate / exception)
@@ -36,6 +36,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * @since 2026-08-25
  */
+
 class WorkflowNodeInteractControlEiParityTest {
     private InMemoryConversationValsStore store;
     private NodeTypeRegistry registry;
@@ -315,9 +316,8 @@ class WorkflowNodeInteractControlEiParityTest {
                 new com.openjiuwen.studio.dsl.complexintent.ComplexIntentDetectionEngine.TestBridge() {
                     @Override
                     public Map<String, Object> intentResult(Map<String, Object> convertedInputs) {
-                        return Map.of("classificationId", 1, "name", "refund", "result", "分类1");
-                    }
-
+        return Map.of("classificationId", 1, "name", "refund", "result", "分类1");
+    }
                     @Override
                     public Map<String, Object> subWorkflowResult(String workflowId, Map<String, Object> subInputs) {
                         return Map.of();

@@ -16,10 +16,22 @@ import java.util.Set;
  *
  * @since 2026-08-25
  */
+
 public final class LakeSearchAdapter implements KBServiceAdapter {
     private static final Set<String> EXCLUDED_META = Set.of(
             "content", "text", "score", "file_id", "fileId", "chunk_id", "chunkId",
             "title", "subtitle", "doc_type", "docType", "repo_id", "repoId");
+
+    /**
+     * search.
+     *
+     * @param query query
+     * @param connectionConfig connectionConfig
+     * @param knowledgeBases knowledgeBases
+     * @param retrievalParams retrievalParams
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public List<KBSearchResult> search(
@@ -54,7 +66,7 @@ public final class LakeSearchAdapter implements KBServiceAdapter {
                 try {
                     java.net.URI uri = java.net.URI.create(endpoint);
                     hostname = uri.getHost();
-                } catch (Exception ignored) {
+                } catch (IllegalArgumentException ignored) {
                     hostname = "";
                 }
             }
@@ -125,6 +137,7 @@ public final class LakeSearchAdapter implements KBServiceAdapter {
      * @param source default source
      * @return hits
      */
+
     @SuppressWarnings("unchecked")
     public static List<KBSearchResult> parseResponse(Map<String, Object> respData, String source) {
         List<KBSearchResult> results = new ArrayList<>();

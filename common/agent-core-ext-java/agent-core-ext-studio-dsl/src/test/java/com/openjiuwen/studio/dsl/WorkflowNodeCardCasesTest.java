@@ -24,16 +24,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Java port of {@code test_case_workflow_card001} card aspects — CardNodeHandler / FlowCardEngine.
  *
  * @since 2026-08-25
  */
+
 class WorkflowNodeCardCasesTest {
     private NodeTypeRegistry registry;
 
@@ -41,7 +42,6 @@ class WorkflowNodeCardCasesTest {
     void setUp() {
         registry = NodeTypeRegistry.createWithBuiltins();
     }
-
     @SuppressWarnings("unchecked")
     private static Map<String, Object> invokeMap(Object invokeOut) {
         return (Map<String, Object>) invokeOut;

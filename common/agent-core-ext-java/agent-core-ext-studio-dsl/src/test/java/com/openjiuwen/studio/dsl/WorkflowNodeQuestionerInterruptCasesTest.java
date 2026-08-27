@@ -25,10 +25,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Java port of {@code test_questioner_interrupt.py} (mock session / mock extract; no real LLM).
@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * @since 2026-08-25
  */
+
 class WorkflowNodeQuestionerInterruptCasesTest {
     private NodeTypeRegistry registry;
 
@@ -45,7 +46,6 @@ class WorkflowNodeQuestionerInterruptCasesTest {
     void setUp() {
         registry = NodeTypeRegistry.createWithBuiltins();
     }
-
     @SuppressWarnings("unchecked")
     private static Map<String, Object> uf(Object invokeOut) {
         Map<String, Object> out = (Map<String, Object>) invokeOut;

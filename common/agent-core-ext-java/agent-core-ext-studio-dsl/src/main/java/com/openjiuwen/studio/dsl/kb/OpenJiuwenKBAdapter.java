@@ -4,9 +4,9 @@
 
 package com.openjiuwen.studio.dsl.kb;
 
+import java.util.function.Function;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 
 /**
  * OpenJiuwen local RAG adapter (Python {@code OpenJiuwenKBAdapter}).
@@ -16,6 +16,7 @@ import java.util.function.Function;
  *
  * @since 2026-08-27
  */
+
 public final class OpenJiuwenKBAdapter implements KBServiceAdapter {
     @FunctionalInterface
     public interface SearchDelegate {
@@ -28,10 +29,26 @@ public final class OpenJiuwenKBAdapter implements KBServiceAdapter {
 
     private static volatile SearchDelegate delegate;
 
-    /** Host wiring for local OpenJiuwen KB search. */
+    /**
+     * Host wiring for local OpenJiuwen KB search.
+     *
+     * @param d d
+     * @since 0.1.0
+     */
     public static void setSearchDelegate(SearchDelegate d) {
         delegate = d;
     }
+
+    /**
+     * search.
+     *
+     * @param query query
+     * @param connectionConfig connectionConfig
+     * @param knowledgeBases knowledgeBases
+     * @param retrievalParams retrievalParams
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public List<KBSearchResult> search(

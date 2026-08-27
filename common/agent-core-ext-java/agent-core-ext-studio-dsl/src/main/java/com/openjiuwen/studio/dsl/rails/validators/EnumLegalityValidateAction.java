@@ -16,21 +16,32 @@ import java.util.Map;
  *
  * @since 2026-08-25
  */
+
 public final class EnumLegalityValidateAction extends ValidateAction {
+
     /**
      * EnumLegalityValidateAction.
      *
      * @param config config
      */
+
     public EnumLegalityValidateAction(ActionConfig config) {
         super(config);
     }
+
+    /**
+     * validateField.
+     *
+     * @param fieldName fieldName
+     * @param value value
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     protected ValidationResult validateField(String fieldName, Object value) {
         return ValidationResult.ok(value);
     }
-
     @Override
     @SuppressWarnings("unchecked")
     public Map<String, Object> execute(Map<String, Object> context) {

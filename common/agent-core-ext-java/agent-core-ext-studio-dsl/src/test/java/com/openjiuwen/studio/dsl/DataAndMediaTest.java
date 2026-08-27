@@ -10,11 +10,11 @@ import static org.mockito.Mockito.mock;
 import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
-import com.openjiuwen.studio.dsl.util.MediaSupport;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.MediaPart;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
+import com.openjiuwen.studio.dsl.util.MediaSupport;
 
 import org.junit.jupiter.api.Test;
 
@@ -26,6 +26,7 @@ import java.util.Map;
  *
  * @since 2026-08-17
  */
+
 class DataAndMediaTest {
     @Test
     void media_passthrough_preserved() {

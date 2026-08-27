@@ -11,6 +11,7 @@ import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
  *
  * @since 2026-08-26
  */
+
 public class ConversationAssistantMessage extends AssistantMessage {
     private Boolean enableHistory = true;
 
@@ -19,15 +20,28 @@ public class ConversationAssistantMessage extends AssistantMessage {
     public ConversationAssistantMessage(String content) {
         super(content);
     }
-
     public ConversationAssistantMessage(String content, boolean enableHistory) {
         super(content);
         this.enableHistory = enableHistory;
     }
 
+    /**
+     * getEnableHistory.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public Boolean getEnableHistory() {
         return enableHistory;
     }
+
+    /**
+     * setEnableHistory.
+     *
+     * @param enableHistory enableHistory
+     * @since 0.1.0
+     */
 
     public void setEnableHistory(Boolean enableHistory) {
         this.enableHistory = enableHistory;

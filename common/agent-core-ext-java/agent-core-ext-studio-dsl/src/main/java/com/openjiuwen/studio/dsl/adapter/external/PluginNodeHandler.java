@@ -30,16 +30,41 @@ import java.util.Set;
  *
  * @since 2026-08-17
  */
+
 public final class PluginNodeHandler implements NodeHandlerFactory {
+
+    /**
+     * canonicalType.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public String canonicalType() {
         return "jiuwen.plugin";
     }
 
+    /**
+     * aliases.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public Set<String> aliases() {
         return Set.of("jiuwen.api", "jiuwen.flowApi");
     }
+
+    /**
+     * create.
+     *
+     * @param node node
+     * @param ctx ctx
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
@@ -52,6 +77,7 @@ public final class PluginNodeHandler implements NodeHandlerFactory {
      * @param outputs raw plugin/tool/mock output
      * @return data map or passthrough
      */
+
     public static Map<String, Object> formatApiOutputs(Object outputs) {
         return FlowApiEngine.formatApiOutputsStatic(outputs);
     }
@@ -74,11 +100,10 @@ public final class PluginNodeHandler implements NodeHandlerFactory {
         FlowApiEngine engine() {
             return engine;
         }
-
         private void ensureInit() {
             if (ready) {
-                return;
-            }
+            return;
+        }
             synchronized (this) {
                 if (!ready) {
                     engine.setToolRegistry(toolRegistry);
@@ -87,6 +112,16 @@ public final class PluginNodeHandler implements NodeHandlerFactory {
                 }
             }
         }
+
+        /**
+         * doInvoke.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
 
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
@@ -100,6 +135,16 @@ public final class PluginNodeHandler implements NodeHandlerFactory {
             Map<String, Object> result = engine.invoke(in, session, context);
             return NodePayload.ofFields(result).withMediaPassthrough(media);
         }
+
+        /**
+         * stream.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
 
         @Override
         public Iterator<Object> stream(Object inputs, NodeSessionApi session, ModelContext context) {

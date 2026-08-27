@@ -12,6 +12,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class FlowCardConfig {
     private final String template;
     private final String name;
@@ -34,6 +35,14 @@ public final class FlowCardConfig {
         this.structOutputTemplate = structOutputTemplate == null ? "" : structOutputTemplate;
         this.enableStructMessage = enableStructMessage;
     }
+
+    /**
+     * fromNodeConfigs.
+     *
+     * @param configs configs
+     * @return result
+     * @since 0.1.0
+     */
 
     @SuppressWarnings("unchecked")
     public static FlowCardConfig fromNodeConfigs(Map<String, Object> configs) {
@@ -64,45 +73,85 @@ public final class FlowCardConfig {
         return new FlowCardConfig(template, name, outputMode, event, structTpl, structMsg);
     }
 
+    /**
+     * template.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String template() {
         return template;
     }
+
+    /**
+     * name.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String name() {
         return name;
     }
 
+    /**
+     * outputMode.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String outputMode() {
         return outputMode;
     }
-
     public Map<String, Object> event() {
         return event;
     }
+
+    /**
+     * structOutputTemplate.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String structOutputTemplate() {
         return structOutputTemplate;
     }
 
+    /**
+     * enableStructMessage.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean enableStructMessage() {
         return enableStructMessage;
     }
 
+    /**
+     * endInterrupt.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean endInterrupt() {
         if (event.isEmpty()) {
-            return false;
-        }
+        return false;
+    }
         return "task_completion".equals(String.valueOf(event.get("type")));
     }
 
     private static String str(Object o) {
         return o == null ? "" : String.valueOf(o);
     }
-
     private static boolean bool(Object o) {
         if (o instanceof Boolean b) {
-            return b;
-        }
+        return b;
+    }
         if (o == null) {
             return false;
         }

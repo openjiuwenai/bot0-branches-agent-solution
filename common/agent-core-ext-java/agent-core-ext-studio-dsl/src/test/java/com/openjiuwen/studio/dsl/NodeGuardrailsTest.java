@@ -21,8 +21,8 @@ import com.openjiuwen.studio.dsl.python.PythonExecRequest;
 import com.openjiuwen.studio.dsl.python.SubprocessPythonCodeExecutor;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -33,6 +33,7 @@ import java.util.Map;
  *
  * @since 2026-08-17
  */
+
 class NodeGuardrailsTest {
     @Test
     void llm_withoutWiringOrMock_failsNotFakeSuccess() {

@@ -12,6 +12,7 @@ import java.util.Map;
  *
  * @since 2026-08-25
  */
+
 public final class KBSearchResult {
     private String text = "";
     private double score;
@@ -37,6 +38,7 @@ public final class KBSearchResult {
      * @param text text
      * @return this
      */
+
     public KBSearchResult setText(String text) {
         this.text = text == null ? "" : text;
         return this;
@@ -53,6 +55,7 @@ public final class KBSearchResult {
      * @param score score
      * @return this
      */
+
     public KBSearchResult setScore(double score) {
         this.score = score;
         return this;
@@ -69,6 +72,7 @@ public final class KBSearchResult {
      * @param source source
      * @return this
      */
+
     public KBSearchResult setSource(String source) {
         this.source = source == null ? "" : source;
         return this;
@@ -85,6 +89,7 @@ public final class KBSearchResult {
      * @param metadata metadata
      * @return this
      */
+
     public KBSearchResult setMetadata(Map<String, Object> metadata) {
         this.metadata = metadata == null ? new LinkedHashMap<>() : new LinkedHashMap<>(metadata);
         return this;
@@ -101,6 +106,7 @@ public final class KBSearchResult {
      * @param knowledgeBaseId knowledgeBaseId
      * @return this
      */
+
     public KBSearchResult setKnowledgeBaseId(String knowledgeBaseId) {
         this.knowledgeBaseId = knowledgeBaseId == null ? "" : knowledgeBaseId;
         return this;
@@ -117,6 +123,7 @@ public final class KBSearchResult {
      * @param knowledgeBaseType knowledgeBaseType
      * @return this
      */
+
     public KBSearchResult setKnowledgeBaseType(String knowledgeBaseType) {
         this.knowledgeBaseType = knowledgeBaseType == null ? "" : knowledgeBaseType;
         return this;
@@ -133,6 +140,7 @@ public final class KBSearchResult {
      * @param fileId fileId
      * @return this
      */
+
     public KBSearchResult setFileId(String fileId) {
         this.fileId = fileId == null ? "" : fileId;
         return this;
@@ -149,6 +157,7 @@ public final class KBSearchResult {
      * @param documentName documentName
      * @return this
      */
+
     public KBSearchResult setDocumentName(String documentName) {
         this.documentName = documentName == null ? "" : documentName;
         return this;
@@ -165,6 +174,7 @@ public final class KBSearchResult {
      * @param subtitle subtitle
      * @return this
      */
+
     public KBSearchResult setSubtitle(String subtitle) {
         this.subtitle = subtitle == null ? "" : subtitle;
         return this;
@@ -181,6 +191,7 @@ public final class KBSearchResult {
      * @param serialNumber serialNumber
      * @return this
      */
+
     public KBSearchResult setSerialNumber(int serialNumber) {
         this.serialNumber = serialNumber;
         return this;
@@ -197,6 +208,7 @@ public final class KBSearchResult {
      * @param retrievalId retrievalId
      * @return this
      */
+
     public KBSearchResult setRetrievalId(String retrievalId) {
         this.retrievalId = retrievalId == null ? "" : retrievalId;
         return this;
@@ -213,6 +225,7 @@ public final class KBSearchResult {
      * @param type type
      * @return this
      */
+
     public KBSearchResult setType(String type) {
         this.type = type == null || type.isBlank() ? "doc" : type;
         return this;
@@ -223,6 +236,7 @@ public final class KBSearchResult {
      *
      * @return result
      */
+
     public Map<String, Object> toOutputMap() {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("content", text);

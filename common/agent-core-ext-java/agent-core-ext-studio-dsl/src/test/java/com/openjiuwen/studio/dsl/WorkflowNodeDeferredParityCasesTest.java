@@ -25,11 +25,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Enabled mock ports for previously deferred Python cases (#29/#30/#32/#36).
@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * @since 2026-08-26
  */
+
 class WorkflowNodeDeferredParityCasesTest {
     private NodeTypeRegistry registry;
 
@@ -45,7 +46,6 @@ class WorkflowNodeDeferredParityCasesTest {
     void setUp() {
         registry = NodeTypeRegistry.createWithBuiltins();
     }
-
     @SuppressWarnings("unchecked")
     private static Map<String, Object> uf(Object invokeOut) {
         Map<String, Object> out = (Map<String, Object>) invokeOut;
@@ -56,7 +56,13 @@ class WorkflowNodeDeferredParityCasesTest {
         return out;
     }
 
-    /** Mirrors Python {@code commit_user_inputs} writing {@code query} into session global state. */
+    /**
+     * Mirrors Python {@code commit_user_inputs} writing {@code query} into session global state.
+     *
+     * @param query query
+     * @return result
+     * @since 0.1.0
+     */
     private static NodeSessionApi sessionWithGlobalQuery(String query) {
         NodeSessionApi session = mock(NodeSessionApi.class);
         when(session.getGlobalState("query")).thenReturn(query);
@@ -92,7 +98,9 @@ class WorkflowNodeDeferredParityCasesTest {
         return session;
     }
 
-    /** #29 test_case_llm_react_multy_tools_010 — simplified Start→Message echo→End. */
+    /**
+     * #29 test_case_llm_react_multy_tools_010 — simplified Start→Message echo→End.
+     */
     @Nested
     class ReactToolsSimplified {
         @Test
@@ -133,7 +141,7 @@ class WorkflowNodeDeferredParityCasesTest {
     }
 
     /**
-     * #30 test_case_loop_multi_condition_logic_or — numLoop + Message {{index}} + OR breakCondition.
+     * * #30 test_case_loop_multi_condition_logic_or — numLoop + Message {{index}} + OR breakCondition.
      */
     @Nested
     class LoopMultiConditionOr {
@@ -203,7 +211,9 @@ class WorkflowNodeDeferredParityCasesTest {
         }
     }
 
-    /** #32 test_questioner_ssq — multi-field hang / partial resume / complete → End. */
+    /**
+     * #32 test_questioner_ssq — multi-field hang / partial resume / complete → End.
+     */
     @Nested
     class QuestionerSsq {
         private static List<Map<String, Object>> ssqFields() {
@@ -311,7 +321,9 @@ class WorkflowNodeDeferredParityCasesTest {
         }
     }
 
-    /** #36 test_case_workflow_mult_loop_common_002 — Branch then Loop body (simplified mock). */
+    /**
+     * #36 test_case_workflow_mult_loop_common_002 — Branch then Loop body (simplified mock).
+     */
     @Nested
     class MultLoopBranch {
         @Test

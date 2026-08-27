@@ -12,6 +12,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class FlowMessageConfig {
     private final String template;
     private final String name;
@@ -38,6 +39,14 @@ public final class FlowMessageConfig {
         this.event = event == null ? Map.of() : Map.copyOf(event);
     }
 
+    /**
+     * fromNodeConfigs.
+     *
+     * @param configs configs
+     * @return result
+     * @since 0.1.0
+     */
+
     @SuppressWarnings("unchecked")
     public static FlowMessageConfig fromNodeConfigs(Map<String, Object> configs) {
         Map<String, Object> c = configs == null ? Map.of() : configs;
@@ -60,42 +69,98 @@ public final class FlowMessageConfig {
         return new FlowMessageConfig(template, name, outputMode, structTpl, structMsg, history, event);
     }
 
+    /**
+     * template.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String template() {
         return template;
     }
+
+    /**
+     * name.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String name() {
         return name;
     }
 
+    /**
+     * outputMode.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String outputMode() {
         return outputMode;
     }
+
+    /**
+     * structOutputTemplate.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String structOutputTemplate() {
         return structOutputTemplate;
     }
 
+    /**
+     * enableStructMessage.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean enableStructMessage() {
         return enableStructMessage;
     }
 
+    /**
+     * enableHistory.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean enableHistory() {
         return enableHistory;
     }
-
     public Map<String, Object> event() {
         return event;
     }
+
+    /**
+     * endInterrupt.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean endInterrupt() {
         return "task_completion".equals(String.valueOf(event.get("type")));
     }
 
+    /**
+     * normalizeEnableHistory.
+     *
+     * @param value value
+     * @return result
+     * @since 0.1.0
+     */
+
     public static boolean normalizeEnableHistory(Object value) {
         if (value == null) {
-            return true;
-        }
+        return true;
+    }
         if (value instanceof String s) {
             return !"false".equalsIgnoreCase(s.trim());
         }
@@ -108,15 +173,13 @@ public final class FlowMessageConfig {
     private static String str(Object o) {
         return o == null ? "" : String.valueOf(o);
     }
-
     private static String blankToNull(String s) {
         return s == null || s.isBlank() ? null : s;
     }
-
     private static boolean bool(Object o) {
         if (o instanceof Boolean b) {
-            return b;
-        }
+        return b;
+    }
         if (o == null) {
             return false;
         }

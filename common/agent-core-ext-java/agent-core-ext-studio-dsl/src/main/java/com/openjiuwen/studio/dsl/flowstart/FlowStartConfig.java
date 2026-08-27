@@ -12,6 +12,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class FlowStartConfig {
     private final Map<String, Object> raw;
     private final String nodeName;
@@ -20,6 +21,15 @@ public final class FlowStartConfig {
         this.raw = raw == null ? Map.of() : Map.copyOf(new LinkedHashMap<>(raw));
         this.nodeName = nodeName;
     }
+
+    /**
+     * fromNodeConfigs.
+     *
+     * @param configs configs
+     * @param nodeId nodeId
+     * @return result
+     * @since 0.1.0
+     */
 
     public static FlowStartConfig fromNodeConfigs(Map<String, Object> configs, String nodeId) {
         Map<String, Object> c = configs == null ? Map.of() : configs;
@@ -30,6 +40,13 @@ public final class FlowStartConfig {
     public Map<String, Object> raw() {
         return raw;
     }
+
+    /**
+     * nodeName.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String nodeName() {
         return nodeName;

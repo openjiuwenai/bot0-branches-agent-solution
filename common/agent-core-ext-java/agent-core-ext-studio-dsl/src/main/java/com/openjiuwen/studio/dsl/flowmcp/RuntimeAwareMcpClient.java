@@ -19,6 +19,7 @@ import java.util.Optional;
  *
  * @since 2026-08-26
  */
+
 final class RuntimeAwareMcpClient implements McpClient {
     private final McpClient delegate;
     private final McpServerConfig config;
@@ -33,25 +34,59 @@ final class RuntimeAwareMcpClient implements McpClient {
     List<McpToolParam> toolParams() {
         return toolParams;
     }
-
     McpServerConfig config() {
         return config;
     }
+
+    /**
+     * connect.
+     *
+     * @param retryTimes retryTimes
+     * @param timeout timeout
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public boolean connect(int retryTimes, float timeout) throws Exception {
         return delegate.connect(retryTimes, timeout);
     }
 
+    /**
+     * disconnect.
+     *
+     * @param timeout timeout
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public boolean disconnect(float timeout) throws Exception {
         return delegate.disconnect(timeout);
     }
 
+    /**
+     * listTools.
+     *
+     * @param timeout timeout
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public List<Object> listTools(float timeout) throws Exception {
         return delegate.listTools(timeout);
     }
+
+    /**
+     * callTool.
+     *
+     * @param toolName toolName
+     * @param arguments arguments
+     * @param timeout timeout
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public Object callTool(String toolName, Map<String, Object> arguments, float timeout) throws Exception {
@@ -74,16 +109,31 @@ final class RuntimeAwareMcpClient implements McpClient {
         }
     }
 
+    /**
+     * getToolInfo.
+     *
+     * @param toolName toolName
+     * @param timeout timeout
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public Optional<Object> getToolInfo(String toolName, float timeout) throws Exception {
         return delegate.getToolInfo(toolName, timeout);
     }
 
+    /**
+     * getServerPath.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public String getServerPath() {
         return delegate.getServerPath();
     }
-
     @SuppressWarnings("unchecked")
     private static Map<String, String> extractRuntimeHeaders(Object kwargsRaw) {
         Map<String, String> out = new HashMap<>();

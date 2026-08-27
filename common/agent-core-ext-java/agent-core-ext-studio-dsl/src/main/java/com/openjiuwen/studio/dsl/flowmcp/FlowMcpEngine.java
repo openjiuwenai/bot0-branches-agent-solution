@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl.flowmcp;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.foundation.tool.mcp.McpClient;
@@ -17,10 +18,10 @@ import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * FlowMcp engine — strict 1:1 with Python {@code flow_mcp.FlowMcp}.
@@ -30,9 +31,13 @@ import java.util.concurrent.locks.ReentrantLock;
  *
  * @since 2026-08-26
  */
+
 public final class FlowMcpEngine {
     public static final String USER_FIELDS = "userFields";
-    /** Python {@code JIUWEN_RUNTIME_KWARGS}. */
+
+    /**
+     * Python {@code JIUWEN_RUNTIME_KWARGS}.
+     */
     public static final String JIUWEN_RUNTIME_KWARGS = "_jiuwen_runtime_kwargs";
 
     private static final String ERR_CODE = "errCode";
@@ -54,13 +59,25 @@ public final class FlowMcpEngine {
         this(nodeId, null);
     }
 
-    /** Test constructor — preset MCP client (mirrors Python patch on SSEClientNew). */
+    /**
+     * Test constructor — preset MCP client (mirrors Python patch on SSEClientNew).
+     *
+     * @param nodeId nodeId
+     * @param presetMcpClient presetMcpClient
+     * @return result
+     * @since 0.1.0
+     */
     public FlowMcpEngine(String nodeId, McpClient presetMcpClient) {
         this.nodeId = nodeId == null ? "mcp" : nodeId;
         this.presetMcpClient = presetMcpClient;
     }
 
-    /** Python {@code init}. */
+    /**
+     * Python {@code init}.
+     *
+     * @param conf conf
+     * @since 0.1.0
+     */
     public void init(Map<String, Object> conf) {
         Map<String, Object> c = conf == null ? Map.of() : new LinkedHashMap<>(conf);
         validateConfigs(c);
@@ -73,19 +90,48 @@ public final class FlowMcpEngine {
         createClient(c);
     }
 
+    /**
+     * isOlderVersion.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean isOlderVersion() {
         return olderVersion;
     }
+
+    /**
+     * client.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public McpClient client() {
         return client;
     }
 
+    /**
+     * api.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public McpTool api() {
         return api;
     }
 
-    /** Python {@code invoke}. */
+    /**
+     * Python {@code invoke}.
+     *
+     * @param inputs inputs
+     * @param session session
+     * @param context context
+     * @return result
+     * @since 0.1.0
+     */
     @SuppressWarnings("unchecked")
     public Map<String, Object> invoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         if (client == null) {
@@ -150,7 +196,13 @@ public final class FlowMcpEngine {
         }
     }
 
-    /** Package-visible for parity tests — Python {@code _format_api_outputs}. */
+    /**
+     * Package-visible for parity tests — Python {@code _format_api_outputs}.
+     *
+     * @param outputs outputs
+     * @return result
+     * @since 0.1.0
+     */
     @SuppressWarnings("unchecked")
     Map<String, Object> formatApiOutputs(Map<String, Object> outputs) {
         Object errorCodeObj = outputs.getOrDefault(ERR_CODE, FlowMcpStatusCode.WORKFLOW_MCP_EXECUTE_ERROR_CODE);
@@ -204,7 +256,7 @@ public final class FlowMcpEngine {
                     wrapped.put("text", MAPPER.writeValueAsString(asMap));
                     return Map.of("content", List.of(wrapped), "isError", false);
                 }
-            } catch (Exception ignored) {
+            } catch (JsonProcessingException ignored) {
                 // soft-fail like Python bare except
             }
             return asMap;
@@ -220,7 +272,13 @@ public final class FlowMcpEngine {
                                 + (outputData == null ? "null" : outputData.getClass().getName())));
     }
 
-    /** Package-visible for parity tests — Python {@code _format_api_inputs}. */
+    /**
+     * Package-visible for parity tests — Python {@code _format_api_inputs}.
+     *
+     * @param inputs inputs
+     * @return result
+     * @since 0.1.0
+     */
     Map<String, Object> formatApiInputs(Map<String, Object> inputs) {
         Map<String, McpToolParam> byName = new LinkedHashMap<>();
         for (McpToolParam p : toolParams) {
@@ -246,8 +304,8 @@ public final class FlowMcpEngine {
 
     private void initApi() {
         if (client == null) {
-            return;
-        }
+        return;
+    }
         String toolName = str(conf.get("tool_name"));
         if (toolName.isBlank()) {
             toolName = str(conf.get("toolName"));
@@ -388,8 +446,8 @@ public final class FlowMcpEngine {
 
     private void ensureConnected() throws Exception {
         if (client != null) {
-            client.connect();
-        }
+        client.connect();
+    }
     }
 
     private void validateConfigs(Map<String, Object> config) {
@@ -442,15 +500,15 @@ public final class FlowMcpEngine {
 
     private Object getRuntimeContextHeader(NodeSessionApi session) {
         if (session == null) {
-            return null;
-        }
+        return null;
+    }
         return getWorkflowParam(session, "api_config");
     }
 
     private static Object getWorkflowParam(NodeSessionApi session, String key) {
         if (session == null) {
-            return null;
-        }
+        return null;
+    }
         try {
             return session.getGlobalState(key);
         } catch (RuntimeException ignored) {
@@ -458,11 +516,17 @@ public final class FlowMcpEngine {
         }
     }
 
-    /** Python: {@code not conf.get("arguments")} — missing / empty list / null → older. */
+    /**
+     * Python: {@code not conf.get("arguments")} — missing / empty list / null → older.
+     *
+     * @param arguments arguments
+     * @return result
+     * @since 0.1.0
+     */
     private static boolean isOlderVersion(Object arguments) {
         if (arguments == null) {
-            return true;
-        }
+        return true;
+    }
         if (arguments instanceof List<?> list) {
             return list.isEmpty();
         }
@@ -490,8 +554,8 @@ public final class FlowMcpEngine {
 
     private static Object modelDumpOrSelf(Object item) {
         if (item == null) {
-            return null;
-        }
+        return null;
+    }
         Object dumped = reflectGet(item, "modelDump", null);
         if (dumped == null) {
             dumped = reflectInvoke(item, "model_dump");
@@ -501,8 +565,8 @@ public final class FlowMcpEngine {
 
     private static Object reflectGet(Object target, String getter, String field) {
         if (target == null) {
-            return null;
-        }
+        return null;
+    }
         Object viaGetter = reflectInvoke(target, getter);
         if (viaGetter != null) {
             return viaGetter;

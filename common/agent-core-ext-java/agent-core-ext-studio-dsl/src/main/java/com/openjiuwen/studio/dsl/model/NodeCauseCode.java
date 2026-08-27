@@ -9,31 +9,51 @@ package com.openjiuwen.studio.dsl.model;
  *
  * @since 2026-08-17
  */
+
 public enum NodeCauseCode {
-    /** Unknown canonical node type. */
+
+    /**
+     * Unknown canonical node type.
+     */
     UNKNOWN_NODE_TYPE,
 
-    /** Node config is invalid. */
+    /**
+     * Node config is invalid.
+     */
     NODE_CONFIG_INVALID,
 
-    /** Node invoke failed. */
+    /**
+     * Node invoke failed.
+     */
     NODE_INVOKE_FAILED,
 
-    /** Python subprocess timed out. */
+    /**
+     * Python subprocess timed out.
+     */
     PYTHON_TIMEOUT,
 
-    /** Python subprocess non-zero exit. */
+    /**
+     * Python subprocess non-zero exit.
+     */
     PYTHON_NON_ZERO,
 
-    /** Python IO / parse failure. */
+    /**
+     * Python IO / parse failure.
+     */
     PYTHON_IO,
 
-    /** Nested workflow depth exceeded. */
+    /**
+     * Nested workflow depth exceeded.
+     */
     NESTING_DEPTH_EXCEEDED,
 
-    /** Sub-workflow reference is invalid. */
+    /**
+     * Sub-workflow reference is invalid.
+     */
     SUBWORKFLOW_REF_INVALID,
 
-    /** Code path is ambiguous. */
+    /**
+     * Code path is ambiguous.
+     */
     CODE_PATH_AMBIGUOUS
 }

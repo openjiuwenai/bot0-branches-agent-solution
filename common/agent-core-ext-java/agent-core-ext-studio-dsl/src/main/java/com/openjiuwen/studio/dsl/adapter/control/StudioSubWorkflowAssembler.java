@@ -7,10 +7,10 @@ package com.openjiuwen.studio.dsl.adapter.control;
 import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
+import com.openjiuwen.core.workflow.components.flow.SubWorkflowComponent;
 import com.openjiuwen.core.workflow.Workflow;
 import com.openjiuwen.core.workflow.WorkflowCard;
 import com.openjiuwen.core.workflow.WorkflowComponent;
-import com.openjiuwen.core.workflow.components.flow.SubWorkflowComponent;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.AssembledWorkflow;
@@ -18,10 +18,10 @@ import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 import com.openjiuwen.studio.dsl.util.DeepCopies;
 
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Assemble Studio {@link AssembledWorkflow} into core {@link Workflow} + {@link SubWorkflowComponent}
@@ -30,8 +30,21 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * @since 2026-08-26
  */
+
 public final class StudioSubWorkflowAssembler {
     private StudioSubWorkflowAssembler() {}
+
+    /**
+     * assemble.
+     *
+     * @param child child
+     * @param nestNodeId nestNodeId
+     * @param registry registry
+     * @param ctx ctx
+     * @param frame frame
+     * @return result
+     * @since 0.1.0
+     */
 
     public static AssembledSub assemble(
             AssembledWorkflow child,
@@ -86,6 +99,17 @@ public final class StudioSubWorkflowAssembler {
         return new AssembledSub(workflow, new SubWorkflowComponent(workflow), ids, frame);
     }
 
+    /**
+     * AssembledSub.
+     *
+     * @param workflow workflow
+     * @param component component
+     * @param nodeIds nodeIds
+     * @param frame frame
+     * @return result
+     * @since 0.1.0
+     */
+
     public record AssembledSub(
             Workflow workflow,
             SubWorkflowComponent component,
@@ -96,6 +120,7 @@ public final class StudioSubWorkflowAssembler {
      * Adapts Studio IR node into a core {@link WorkflowComponent}; shares mutable frame so linear
      * userFields merge works without per-edge {@code inputs_schema}.
      */
+
     static final class StudioSubBodyAdapter extends WorkflowComponent {
         private final AssembledNode child;
         private final NodeTypeRegistry registry;
@@ -112,6 +137,16 @@ public final class StudioSubWorkflowAssembler {
             this.ctx = ctx;
             this.frame = frame;
         }
+
+        /**
+         * invoke.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
 
         @Override
         public Object invoke(Object inputs, NodeSessionApi session, ModelContext context) {
@@ -141,8 +176,6 @@ public final class StudioSubWorkflowAssembler {
                 return new LinkedHashMap<>(next);
             } catch (RuntimeException e) {
                 throw e;
-            } catch (Exception e) {
-                throw new RuntimeException(e);
             }
         }
     }
@@ -153,6 +186,16 @@ public final class StudioSubWorkflowAssembler {
         StudioSubPassthroughAdapter(AtomicReference<Map<String, Object>> frame) {
             this.frame = frame;
         }
+
+        /**
+         * invoke.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
 
         @Override
         public Object invoke(Object inputs, NodeSessionApi session, ModelContext context) {

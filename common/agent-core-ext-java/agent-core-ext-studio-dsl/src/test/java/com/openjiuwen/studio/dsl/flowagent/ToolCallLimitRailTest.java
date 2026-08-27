@@ -22,6 +22,7 @@ import java.util.Map;
  *
  * @since 2026-08-27
  */
+
 class ToolCallLimitRailTest {
     private static AgentCallbackContext ctx(List<ToolCall> toolCalls) {
         AssistantMessage response =

@@ -7,23 +7,35 @@ package com.openjiuwen.studio.dsl.rails.formatters;
 import com.openjiuwen.studio.dsl.rails.ActionConfig;
 import com.openjiuwen.studio.dsl.rails.ValidateAction;
 
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.LocalDateTime;
 
 /**
  * date_time_format — parse via {@link DateUtilCompatibleParser} (dateutil-compatible fuzzy parse).
  *
  * @since 2026-08-25
  */
+
 public final class DateTimeFormatValidateAction extends ValidateAction {
+
     /**
      * DateTimeFormatValidateAction.
      *
      * @param config config
      */
+
     public DateTimeFormatValidateAction(ActionConfig config) {
         super(config);
     }
+
+    /**
+     * validateField.
+     *
+     * @param fieldName fieldName
+     * @param value value
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     protected ValidationResult validateField(String fieldName, Object value) {
@@ -47,9 +59,25 @@ public final class DateTimeFormatValidateAction extends ValidateAction {
         }
     }
 
+    /**
+     * tryParse.
+     *
+     * @param value value
+     * @return result
+     * @since 0.1.0
+     */
+
     public static LocalDateTime tryParse(String value) {
         return DateUtilCompatibleParser.tryParse(value);
     }
+
+    /**
+     * toJavaPattern.
+     *
+     * @param py py
+     * @return result
+     * @since 0.1.0
+     */
 
     public static String toJavaPattern(String py) {
         return py.replace("%Y", "yyyy")

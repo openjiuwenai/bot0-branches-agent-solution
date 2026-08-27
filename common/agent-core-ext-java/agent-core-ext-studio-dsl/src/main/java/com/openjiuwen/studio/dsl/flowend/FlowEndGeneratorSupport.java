@@ -5,25 +5,26 @@
 package com.openjiuwen.studio.dsl.flowend;
 
 import java.util.ArrayList;
+import java.util.function.Consumer;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 
 /**
  * Drain / dedupe Iterator values under {@code #end_*} keys (Python AsyncGenerator handling).
  *
  * @since 2026-08-26
  */
+
 public final class FlowEndGeneratorSupport {
     private FlowEndGeneratorSupport() {}
 
     public static Map<String, String> buildOutputToInput(Map<String, Object> inputs) {
         if (inputs == null || inputs.isEmpty()) {
-            return Map.of();
-        }
+        return Map.of();
+    }
         IdentityHashMap<Object, List<String>> genMap = new IdentityHashMap<>();
         for (Map.Entry<String, Object> e : inputs.entrySet()) {
             if (isGenerator(e.getValue())) {
@@ -50,7 +51,13 @@ public final class FlowEndGeneratorSupport {
     }
 
     /**
-     * Only {@code #end_*} generator keys are materialized (Python {@code process_generator_values_of_output}).
+     * * Only {@code #end_*} generator keys are materialized (Python {@code process_generator_values_of_output}).
+     *
+     * @param inputs inputs
+     * @param outToIn outToIn
+     * @param streamCallback streamCallback
+     * @return result
+     * @since 0.1.0
      */
     public static Map<String, Object> processGeneratorValues(
             Map<String, Object> inputs, Map<String, String> outToIn, Consumer<Object> streamCallback) {
@@ -100,9 +107,26 @@ public final class FlowEndGeneratorSupport {
         return work;
     }
 
+    /**
+     * isGenerator.
+     *
+     * @param v v
+     * @return result
+     * @since 0.1.0
+     */
+
     public static boolean isGenerator(Object v) {
         return v instanceof Iterator || v instanceof Iterable;
     }
+
+    /**
+     * drainToString.
+     *
+     * @param v v
+     * @param streamCallback streamCallback
+     * @return result
+     * @since 0.1.0
+     */
 
     public static String drainToString(Object v, Consumer<Object> streamCallback) {
         StringBuilder sb = new StringBuilder();

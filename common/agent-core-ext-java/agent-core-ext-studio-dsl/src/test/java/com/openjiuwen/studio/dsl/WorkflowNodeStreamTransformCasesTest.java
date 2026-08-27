@@ -16,9 +16,9 @@ import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.stream.OutputSchema;
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.adapter.external.StreamTransformNodeHandler;
-import com.openjiuwen.studio.dsl.flowstreamtransform.FlowStreamTransformEngine.StreamMetadata;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
+import com.openjiuwen.studio.dsl.flowstreamtransform.FlowStreamTransformEngine.StreamMetadata;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
@@ -43,6 +43,7 @@ import java.util.Map;
  *
  * @since 2026-08-25
  */
+
 class WorkflowNodeStreamTransformCasesTest {
     private NodeTypeRegistry registry;
 
@@ -50,7 +51,6 @@ class WorkflowNodeStreamTransformCasesTest {
     void setUp() {
         registry = NodeTypeRegistry.createWithBuiltins();
     }
-
     private static Map<String, Object> baseTransformer() {
         return Map.of(
                 "frame_template",
@@ -71,7 +71,6 @@ class WorkflowNodeStreamTransformCasesTest {
     private ComponentExecutable create(String id, Map<String, Object> configs) {
         return registry.create(AssembledNode.of(id, "jiuwen.streamTransform", configs), NodeBuildContext.defaults("wf_st"));
     }
-
     @SuppressWarnings("unchecked")
     private static Map<String, Object> invokeMap(Object out) {
         return (Map<String, Object>) out;

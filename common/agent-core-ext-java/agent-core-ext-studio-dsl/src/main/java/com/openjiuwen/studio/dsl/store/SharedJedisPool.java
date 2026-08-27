@@ -11,6 +11,7 @@ import redis.clients.jedis.JedisPooled;
  *
  * @since 2026-08-27
  */
+
 public final class SharedJedisPool {
     private static volatile JedisPooled cached;
     private static volatile String cacheKey;
@@ -24,6 +25,7 @@ public final class SharedJedisPool {
      * @param port redis port
      * @return pooled client
      */
+
     public static JedisPooled getOrConnect(String host, int port) {
         String key = host + ":" + port;
         JedisPooled hit = cached;
@@ -40,7 +42,11 @@ public final class SharedJedisPool {
         }
     }
 
-    /** Test hook — clear memoized client. */
+    /**
+     * Test hook — clear memoized client.
+     *
+     * @since 0.1.0
+     */
     static void resetForTests() {
         synchronized (SharedJedisPool.class) {
             cached = null;

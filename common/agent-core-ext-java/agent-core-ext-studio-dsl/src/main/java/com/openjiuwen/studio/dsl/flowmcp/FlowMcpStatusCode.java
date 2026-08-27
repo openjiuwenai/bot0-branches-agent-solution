@@ -11,6 +11,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public enum FlowMcpStatusCode {
     WORKFLOW_MCP_UNSUPPORTED_TYPE_ERROR(101870, "Unsupported mcp type: {mcp_type}."),
     WORKFLOW_MCP_FIELD_EMPTY_TYPE_ERROR(101872, "Field {field} should not be empty in {mcp_type}."),
@@ -20,13 +21,19 @@ public enum FlowMcpStatusCode {
     WORKFLOW_MCP_INPUTS_ERROR(101876, "FlowMcp inputs error, param is {param}"),
     WORKFLOW_MCP_OUTPUTS_TYPE_ERROR(101877, "FlowMcp outputs type error: {msg}");
 
-    /** Align with Python StatusCode.WORKFLOW_MCP_EXECUTE_ERROR for outer catch. */
+    /**
+     * Align with Python StatusCode.WORKFLOW_MCP_EXECUTE_ERROR for outer catch.
+     */
     public static final int WORKFLOW_MCP_EXECUTE_ERROR_CODE = 101873;
 
-    /** Align with Python StatusCode.SUCCESS. */
+    /**
+     * Align with Python StatusCode.SUCCESS.
+     */
     public static final int SUCCESS_CODE = 0;
 
-    /** Align with Python StatusCode.WORKFLOW_API_EXECUTE_ERROR. */
+    /**
+     * Align with Python StatusCode.WORKFLOW_API_EXECUTE_ERROR.
+     */
     public static final int WORKFLOW_API_EXECUTE_ERROR_CODE = 105000;
 
     private final int code;
@@ -37,9 +44,24 @@ public enum FlowMcpStatusCode {
         this.template = template;
     }
 
+    /**
+     * code.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public int code() {
         return code;
     }
+
+    /**
+     * message.
+     *
+     * @param kwargs kwargs
+     * @return result
+     * @since 0.1.0
+     */
 
     public String message(Map<String, ?> kwargs) {
         String msg = template;

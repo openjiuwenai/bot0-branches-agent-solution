@@ -22,6 +22,7 @@ import com.openjiuwen.studio.dsl.contract.SecretDecryptor;
  *
  * @since 2026-08-26
  */
+
 public final class KnowledgeBaseConfigProviders {
     private static volatile KnowledgeBaseConfigProvider provider = new ObsKnowledgeBaseConfigProvider();
     private static volatile KnowledgeStorageProvider storageProvider;
@@ -29,25 +30,55 @@ public final class KnowledgeBaseConfigProviders {
 
     private KnowledgeBaseConfigProviders() {}
 
+    /**
+     * get.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public static KnowledgeBaseConfigProvider get() {
         return provider;
     }
+
+    /**
+     * setProvider.
+     *
+     * @param p p
+     * @since 0.1.0
+     */
 
     public static void setProvider(KnowledgeBaseConfigProvider p) {
         provider = p == null ? new ObsKnowledgeBaseConfigProvider() : p;
     }
 
-    /** Clears optional storage wiring; {@link #storage()} throws until configured again. */
+    /**
+     * Clears optional storage wiring; {@link #storage()} throws until configured again.
+     *
+     * @param storage storage
+     * @since 0.1.0
+     */
     public static void setStorageProvider(KnowledgeStorageProvider storage) {
         storageProvider = storage;
     }
 
-    /** Resets provider to OBS default and clears storage + decryptor (tests / dev only). */
+    /**
+     * Resets provider to OBS default and clears storage + decryptor (tests / dev only).
+     *
+     * @since 0.1.0
+     */
     public static void resetToDefaults() {
         provider = new ObsKnowledgeBaseConfigProvider();
         storageProvider = null;
         secretDecryptor = null;
     }
+
+    /**
+     * storage.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public static KnowledgeStorageProvider storage() {
         KnowledgeStorageProvider s = storageProvider;
@@ -61,14 +92,20 @@ public final class KnowledgeBaseConfigProviders {
         };
     }
 
+    /**
+     * setSecretDecryptor.
+     *
+     * @param decryptor decryptor
+     * @since 0.1.0
+     */
+
     public static void setSecretDecryptor(SecretDecryptor decryptor) {
         secretDecryptor = decryptor;
     }
-
     static String maybeDecrypt(String code, String value) {
         if (value == null || value.isBlank()) {
-            return value;
-        }
+        return value;
+    }
         if (!ObsKnowledgeBaseConfigProvider.SECRET_PARAM_CODES.contains(code)) {
             return value;
         }

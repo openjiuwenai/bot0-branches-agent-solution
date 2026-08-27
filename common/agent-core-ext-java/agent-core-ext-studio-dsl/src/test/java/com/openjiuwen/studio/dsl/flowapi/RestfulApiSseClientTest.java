@@ -12,7 +12,6 @@ import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
-
 import com.sun.net.httpserver.HttpServer;
 
 import org.junit.jupiter.api.Test;
@@ -22,16 +21,17 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.concurrent.Executors;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executors;
 
 /**
  * SSE line protocol + live HTTP SSE for FlowApi IR stream path.
  *
  * @since 2026-08-26
  */
+
 class RestfulApiSseClientTest {
     @Test
     void parseSseDataLines_stripsPrefixLikePython() {
@@ -44,7 +44,6 @@ class RestfulApiSseClientTest {
     void parseSseDataLines_ignoresNonData() {
         assertThat(RestfulApiSseClient.parseSseDataLines("hello\nid: 1\n")).isEmpty();
     }
-
     @Test
     void liveHttpSse_streamYieldsDataLinesThenFinish() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);

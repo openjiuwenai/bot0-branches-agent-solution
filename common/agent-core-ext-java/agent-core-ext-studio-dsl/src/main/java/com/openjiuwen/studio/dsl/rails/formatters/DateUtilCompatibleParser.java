@@ -4,23 +4,26 @@
 
 package com.openjiuwen.studio.dsl.rails.formatters;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.DateTimeParseException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.Year;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeFormatterBuilder;
-import java.time.format.DateTimeParseException;
+import java.util.concurrent.TimeUnit;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -33,6 +36,7 @@ import java.util.regex.Pattern;
  *
  * @since 2026-08-26
  */
+
 public final class DateUtilCompatibleParser {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final List<String> FIXED_FORMATS =
@@ -75,10 +79,11 @@ public final class DateUtilCompatibleParser {
      * @param value raw user text
      * @return parsed local datetime or null
      */
+
     public static LocalDateTime tryParse(String value) {
         if (value == null || value.isBlank()) {
-            return null;
-        }
+        return null;
+    }
         String trimmed = value.trim();
         LocalDateTime fromPython = tryParseViaPythonDateutil(trimmed);
         if (fromPython != null) {
@@ -94,6 +99,7 @@ public final class DateUtilCompatibleParser {
      * @param pyFormat python strftime
      * @return formatted string
      */
+
     public static String formatWithPyPattern(LocalDateTime dt, String pyFormat) {
         String javaFmt = DateTimeFormatValidateAction.toJavaPattern(pyFormat);
         return dt.format(DateTimeFormatter.ofPattern(javaFmt));
@@ -101,8 +107,8 @@ public final class DateUtilCompatibleParser {
 
     static LocalDateTime tryParseChineseRelative(String value) {
         if (value == null || value.isBlank()) {
-            return null;
-        }
+        return null;
+    }
         LocalDate today = LocalDate.now();
         if (value.contains("今天") || value.contains("今日")) {
             return atTimeFromText(value, today);
@@ -287,8 +293,8 @@ public final class DateUtilCompatibleParser {
 
     private static LocalDateTime tryParseViaPythonDateutil(String value) {
         if (!isPythonDateutilAvailable()) {
-            return null;
-        }
+        return null;
+    }
         String script =
                 """
                 import json, sys
@@ -308,13 +314,13 @@ public final class DateUtilCompatibleParser {
             Process p = pb.start();
             try (OutputStreamWriter w =
                     new OutputStreamWriter(p.getOutputStream(), StandardCharsets.UTF_8)) {
-                w.write(value);
-            }
+                        w.write(value);
+                    }
             String out;
             try (BufferedReader r =
                     new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
-                out = r.readLine();
-            }
+                        out = r.readLine();
+                    }
             if (!p.waitFor(3, TimeUnit.SECONDS)) {
                 p.destroyForcibly();
                 return null;
@@ -330,7 +336,7 @@ public final class DateUtilCompatibleParser {
                     node.path("hour").asInt(0),
                     node.path("minute").asInt(0),
                     node.path("second").asInt(0));
-        } catch (Exception ignored) {
+        } catch (IOException | InterruptedException ignored) {
             return null;
         }
     }
@@ -350,21 +356,35 @@ public final class DateUtilCompatibleParser {
                         new ProcessBuilder("python3", "-c", "from dateutil import parser")
                                 .redirectErrorStream(true)
                                 .start();
+                try (InputStream stdout = p.getInputStream()) {
+                    stdout.readAllBytes();
+                }
                 ok = p.waitFor(2, TimeUnit.SECONDS) && p.exitValue() == 0;
-            } catch (Exception ignored) {
+            } catch (IOException | InterruptedException ignored) {
                 ok = false;
+                if (Thread.currentThread().isInterrupted()) {
+                    Thread.currentThread().interrupt();
+                }
             }
             pythonDateutilAvailable = ok;
             return ok;
         }
     }
 
-    /** Test hook: reset python availability cache. */
+    /**
+     * Test hook: reset python availability cache.
+     *
+     * @since 0.1.0
+     */
     public static void resetPythonAvailabilityCacheForTest() {
         pythonDateutilAvailable = null;
     }
 
-    /** Test hook: force Java-only parsing path. */
+    /**
+     * Test hook: force Java-only parsing path.
+     *
+     * @since 0.1.0
+     */
     public static void disablePythonDateutilForTest() {
         pythonDateutilAvailable = false;
     }

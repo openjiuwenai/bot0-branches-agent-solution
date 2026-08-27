@@ -7,10 +7,10 @@ package com.openjiuwen.studio.dsl.kb;
 import com.openjiuwen.studio.dsl.python.SubprocessPythonCodeExecutor;
 
 import java.io.IOException;
-import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -22,6 +22,7 @@ import java.util.Map;
  *
  * @since 2026-08-25
  */
+
 public final class KbHttp {
     private static final HttpClient CLIENT =
             HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
@@ -36,6 +37,7 @@ public final class KbHttp {
      * @param body body
      * @return parsed JSON object
      */
+
     @SuppressWarnings("unchecked")
     public static Map<String, Object> postJson(String url, Map<String, String> headers, Map<String, Object> body) {
         try {
@@ -80,10 +82,11 @@ public final class KbHttp {
      * @param value value
      * @return json
      */
+
     public static String toJson(Object value) {
         if (value == null) {
-            return "null";
-        }
+        return "null";
+    }
         if (value instanceof String s) {
             return '"' + escape(s) + '"';
         }
@@ -121,15 +124,13 @@ public final class KbHttp {
     private static String escape(String s) {
         return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n");
     }
-
     private static String truncate(String s) {
         return s.length() <= 500 ? s : s.substring(0, 500) + "...";
     }
-
     static int intOf(Object o, int def) {
         if (o instanceof Number n) {
-            return n.intValue();
-        }
+        return n.intValue();
+    }
         if (o == null) {
             return def;
         }
@@ -142,8 +143,8 @@ public final class KbHttp {
 
     static double doubleOf(Object o, double def) {
         if (o instanceof Number n) {
-            return n.doubleValue();
-        }
+        return n.doubleValue();
+    }
         if (o == null) {
             return def;
         }
@@ -157,7 +158,6 @@ public final class KbHttp {
     static String str(Object o) {
         return o == null ? "" : String.valueOf(o);
     }
-
     @SuppressWarnings("unchecked")
     static Map<String, Object> mapOf(Object o) {
         if (!(o instanceof Map<?, ?> m)) {

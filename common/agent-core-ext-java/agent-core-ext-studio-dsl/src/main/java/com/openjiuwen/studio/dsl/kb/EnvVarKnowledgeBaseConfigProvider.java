@@ -16,6 +16,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class EnvVarKnowledgeBaseConfigProvider implements KnowledgeBaseConfigProvider {
     @Override
     public Map<String, Object> getKbConfig(Map<String, Object> nodeConfigs) {

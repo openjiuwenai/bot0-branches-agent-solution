@@ -11,6 +11,7 @@ import java.util.Map;
  *
  * @since 2026-08-25
  */
+
 public final class QuestionerField {
     private final String fieldName;
     private final String description;
@@ -31,6 +32,7 @@ public final class QuestionerField {
      * @param defaultValue defaultValue
      * @param reflection reflection
      */
+
     public QuestionerField(
             String fieldName,
             String description,
@@ -54,6 +56,7 @@ public final class QuestionerField {
      * @param m m
      * @return result
      */
+
     public static QuestionerField fromMap(Map<String, Object> m) {
         String name = first(m, "fieldName", "id", "name");
         String desc = str(m.get("description"));

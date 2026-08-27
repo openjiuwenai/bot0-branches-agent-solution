@@ -9,8 +9,8 @@ import com.openjiuwen.core.foundation.llm.schema.BaseMessage;
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.BranchRouter;
 import com.openjiuwen.studio.dsl.contract.ToolRegistry;
-import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.conversation.MessageHistorySupport;
+import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 
 import java.util.ArrayList;
@@ -23,6 +23,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class IntentDetectionEngine {
     private static final String INPUT = "input";
     private static final String LLM_EXTRA_CONFIGS = "llm_extra_configs";
@@ -32,8 +33,9 @@ public final class IntentDetectionEngine {
     private static final String USER_PROFILE_KEY = "userProfile";
     private static final String ENABLE_KEY = "enable";
 
-    /** Test-only LLM stub wired via constructor (mirrors Python patch). */
-
+    /**
+     * Test-only LLM stub wired via constructor (mirrors Python patch).
+     */
     private final String nodeId;
     private final Map<String, Object> llmConf;
     private final Map<String, Object> faqConfig;
@@ -54,11 +56,9 @@ public final class IntentDetectionEngine {
     public IntentDetectionEngine(String nodeId, Map<String, Object> nodeConfigs) {
         this(nodeId, nodeConfigs, null, null);
     }
-
     public IntentDetectionEngine(String nodeId, Map<String, Object> nodeConfigs, ToolRegistry toolRegistry) {
         this(nodeId, nodeConfigs, null, toolRegistry);
     }
-
     public IntentDetectionEngine(
             String nodeId,
             Map<String, Object> nodeConfigs,
@@ -98,6 +98,13 @@ public final class IntentDetectionEngine {
     // State management (Python reset / get_state / load_state)
     // --------------------------------------------------------------------------
 
+    /**
+     * reset.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean reset() {
         this.intentConfig = intentConfigRetry;
         this.nodeState = nodeStateRetry.copy();
@@ -110,26 +117,54 @@ public final class IntentDetectionEngine {
         return true;
     }
 
+    /**
+     * getState.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public IntentDetectionState getState() {
         return nodeState;
     }
 
+    /**
+     * loadState.
+     *
+     * @param state state
+     * @since 0.1.0
+     */
+
     public void loadState(IntentDetectionState state) {
         this.nodeState = state == null ? new IntentDetectionState() : state.copy();
     }
-
     // --------------------------------------------------------------------------
     // Branch router (Python add_branch / router / add_component)
     // --------------------------------------------------------------------------
+
+    /**
+     * addBranch.
+     *
+     * @param condition condition
+     * @param target target
+     * @param branchId branchId
+     * @since 0.1.0
+     */
 
     public void addBranch(Object condition, Object target, String branchId) {
         router.addBranch(condition, target, branchId);
     }
 
+    /**
+     * router.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public BranchRouter router() {
         return router;
     }
-
     // --------------------------------------------------------------------------
     // Main entry (Python invoke)
     // --------------------------------------------------------------------------
@@ -148,21 +183,12 @@ public final class IntentDetectionEngine {
         try {
             currentInputs = prepareDetectionInputs(inputs, chatHistory, session, globalIntentMap);
             globalIntentMap = mapOf(currentInputs.remove("global_intent_map"));
-        } catch (Exception e) {
+        } catch (IllegalArgumentException e) {
             raiseInputError(e.getMessage());
         }
 
         if (enableKnowledge) {
-            try {
-                intentClass = getFaqResult(currentInputs, chatHistory);
-            } catch (Exception e) {
-                throw new NodeExecutionException(
-                        nodeId,
-                        "jiuwen.intentDetection",
-                        NodeCauseCode.NODE_INVOKE_FAILED,
-                        "intent detection llm invoke error: Search is wrong",
-                        e);
-            }
+            intentClass = getFaqResult(currentInputs, chatHistory);
         }
 
         if (!intentClass.equals(intentConfig.defaultClass())) {
@@ -188,8 +214,8 @@ public final class IntentDetectionEngine {
 
     private void getKgInstance(Map<String, Object> conf) {
         if (!enableKnowledge) {
-            return;
-        }
+        return;
+    }
         String apiId = str(conf.get("apiId"));
         if (apiId.isBlank()) {
             apiId = str(conf.get("id"));
@@ -249,8 +275,8 @@ public final class IntentDetectionEngine {
 
     private IntentDetectionLlmDetector.ModelInvoker resolveInvoker() {
         if (testInvoker != null) {
-            return testInvoker;
-        }
+        return testInvoker;
+    }
         return null;
     }
 
@@ -498,8 +524,8 @@ public final class IntentDetectionEngine {
 
     private void tracePerformance(NodeSessionApi session, long durationMs) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             session.trace(Map.of("performance_metric", Map.of("intent llm cost", durationMs)));
         } catch (RuntimeException ignored) {
@@ -509,8 +535,8 @@ public final class IntentDetectionEngine {
 
     private static Object getWorkflowParam(NodeSessionApi session, String key) {
         if (session == null) {
-            return null;
-        }
+        return null;
+    }
         try {
             Object value = session.getGlobalState(key);
             if (value != null) {

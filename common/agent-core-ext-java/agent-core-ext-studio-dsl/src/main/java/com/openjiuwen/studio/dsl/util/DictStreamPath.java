@@ -13,6 +13,7 @@ import java.util.Map;
  *
  * @since 2026-08-25
  */
+
 public final class DictStreamPath {
     private DictStreamPath() {}
 
@@ -24,6 +25,7 @@ public final class DictStreamPath {
      * @param defaultValue default when missing
      * @return resolved value or default
      */
+
     @SuppressWarnings("unchecked")
     public static Object getByPath(Object obj, String path, Object defaultValue) {
         List<Object> tokens = parsePath(path);

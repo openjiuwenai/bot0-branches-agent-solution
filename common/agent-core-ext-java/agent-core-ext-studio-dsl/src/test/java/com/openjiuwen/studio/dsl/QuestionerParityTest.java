@@ -29,8 +29,8 @@ import java.util.Map;
  *
  * @since 2026-08-25
  */
-class QuestionerParityTest {
 
+class QuestionerParityTest {
     @Test
     void rails_length_and_range() {
         Map<String, Object> railsConfig = Map.of(

@@ -4,7 +4,6 @@
 
 package com.openjiuwen.studio.dsl;
 
-import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
@@ -20,6 +19,7 @@ import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 import com.openjiuwen.studio.dsl.testsupport.StubModelContext;
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 
 import org.junit.jupiter.api.Test;
 
@@ -31,6 +31,7 @@ import java.util.Map;
  *
  * @since 2026-08-17
  */
+
 class SemanticAdaptersTest {
     private final NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
     private NodeBuildContext ctx() {
@@ -107,7 +108,7 @@ class SemanticAdaptersTest {
     void extractor_llmExtractsFromContextHistory() {
         StudioEngineTestSupport.installExtractor(msgs -> "{\"city\": \"SZ\"}");
         try {
-            ModelContext model = new StubModelContext(new com.openjiuwen.core.foundation.llm.schema.UserMessage("住在深圳"));
+            ModelContext extractorModel = new StubModelContext(new com.openjiuwen.core.foundation.llm.schema.UserMessage("住在深圳"));
             ComponentExecutable exec = registry.create(
                     AssembledNode.of(
                             "e1",
@@ -129,7 +130,7 @@ class SemanticAdaptersTest {
                     ctx());
             @SuppressWarnings("unchecked")
             Map<String, Object> out = (Map<String, Object>) exec.invoke(
-                    Map.of("userFields", Map.of()), session, model);
+                    Map.of("userFields", Map.of()), session, extractorModel);
             @SuppressWarnings("unchecked")
             Map<String, Object> uf = (Map<String, Object>) out.get("userFields");
             assertThat(uf.get("city")).isEqualTo("SZ");

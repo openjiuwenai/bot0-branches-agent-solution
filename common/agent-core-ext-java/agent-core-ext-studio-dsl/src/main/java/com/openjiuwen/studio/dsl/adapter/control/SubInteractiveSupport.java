@@ -5,8 +5,8 @@
 package com.openjiuwen.studio.dsl.adapter.control;
 
 import com.openjiuwen.core.common.constants.Constant;
-import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.interaction.InteractiveInput;
+import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.studio.dsl.util.DeepCopies;
 import com.openjiuwen.studio.dsl.util.SessionStateIsolator;
 
@@ -20,13 +20,14 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 final class SubInteractiveSupport {
     private SubInteractiveSupport() {}
 
     static boolean shouldResume(NodeSessionApi session, Object inputs) {
         if (inputs instanceof InteractiveInput) {
-            return true;
-        }
+        return true;
+    }
         if (NestedWorkflowNodeHandler.detectInterruptInSession(session)) {
             return true;
         }
@@ -47,12 +48,18 @@ final class SubInteractiveSupport {
     }
 
     /**
-     * Build child payload: InteractiveInput on resume (raw_inputs routing, same as Python), else dict.
+     * * Build child payload: InteractiveInput on resume (raw_inputs routing, same as Python), else dict.
+     *
+     * @param preparedDict preparedDict
+     * @param session session
+     * @param originalInputs originalInputs
+     * @return result
+     * @since 0.1.0
      */
     static Object prepareChildPayload(Map<String, Object> preparedDict, NodeSessionApi session, Object originalInputs) {
         if (!shouldResume(session, originalInputs) && !shouldResume(session, preparedDict)) {
-            return preparedDict;
-        }
+        return preparedDict;
+    }
         String query = extractParentResumeQuery(session, originalInputs);
         if (query == null) {
             query = extractParentResumeQuery(session, preparedDict);
@@ -90,7 +97,12 @@ final class SubInteractiveSupport {
     }
 
     /**
-     * Linear Studio path cannot feed InteractiveInput into {@code asMap}; unwrap into userFields.
+     * * Linear Studio path cannot feed InteractiveInput into {@code asMap}; unwrap into userFields.
+     *
+     * @param childPayload childPayload
+     * @param preparedDict preparedDict
+     * @return result
+     * @since 0.1.0
      */
     static Map<String, Object> unwrapForLinear(Object childPayload, Map<String, Object> preparedDict) {
         if (!(childPayload instanceof InteractiveInput ii)) {
@@ -146,8 +158,8 @@ final class SubInteractiveSupport {
 
     static String extractFromInteractiveInput(Object inputs) {
         if (!(inputs instanceof InteractiveInput ii)) {
-            return null;
-        }
+        return null;
+    }
         if (ii.getUserInputs() != null && !ii.getUserInputs().isEmpty()) {
             List<String> keys = List.copyOf(ii.getUserInputs().keySet());
             Object val = ii.getUserInputs().get(keys.get(keys.size() - 1));
@@ -225,8 +237,8 @@ final class SubInteractiveSupport {
 
     static String normalizeInteractiveStored(Object value) {
         if (value == null) {
-            return null;
-        }
+        return null;
+    }
         if (value instanceof List<?> list) {
             if (list.isEmpty()) {
                 return null;
@@ -261,8 +273,8 @@ final class SubInteractiveSupport {
     @SuppressWarnings("unchecked")
     private static String findInteractiveInTree(Object root, String targetNodeId) {
         if (!(root instanceof Map<?, ?> map)) {
-            return null;
-        }
+        return null;
+    }
         if (targetNodeId != null) {
             Object target = map.get(targetNodeId);
             if (target instanceof Map<?, ?> tm && tm.containsKey(Constant.INTERACTIVE_INPUT)) {
@@ -315,8 +327,8 @@ final class SubInteractiveSupport {
     private static Object firstPresent(Map<String, Object> m, String... keys) {
         for (String k : keys) {
             if (m.containsKey(k) && m.get(k) != null && !String.valueOf(m.get(k)).isBlank()) {
-                return m.get(k);
-            }
+        return m.get(k);
+    }
         }
         return null;
     }

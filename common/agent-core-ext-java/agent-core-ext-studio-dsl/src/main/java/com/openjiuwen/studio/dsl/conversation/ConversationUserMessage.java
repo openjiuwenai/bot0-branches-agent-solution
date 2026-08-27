@@ -11,6 +11,7 @@ import com.openjiuwen.core.foundation.llm.schema.UserMessage;
  *
  * @since 2026-08-26
  */
+
 public class ConversationUserMessage extends UserMessage {
     private Boolean enableHistory = true;
 
@@ -19,15 +20,28 @@ public class ConversationUserMessage extends UserMessage {
     public ConversationUserMessage(String content) {
         super(content);
     }
-
     public ConversationUserMessage(String content, boolean enableHistory) {
         super(content);
         this.enableHistory = enableHistory;
     }
 
+    /**
+     * getEnableHistory.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public Boolean getEnableHistory() {
         return enableHistory;
     }
+
+    /**
+     * setEnableHistory.
+     *
+     * @param enableHistory enableHistory
+     * @since 0.1.0
+     */
 
     public void setEnableHistory(Boolean enableHistory) {
         this.enableHistory = enableHistory;

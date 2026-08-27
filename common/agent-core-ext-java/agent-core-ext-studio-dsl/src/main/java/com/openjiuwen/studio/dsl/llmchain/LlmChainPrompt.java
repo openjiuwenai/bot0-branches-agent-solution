@@ -13,6 +13,7 @@ import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.questioner.QuestionerLlmExtractor;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,6 +26,7 @@ import java.util.regex.Pattern;
  *
  * @since 2026-08-26
  */
+
 final class LlmChainPrompt {
     private static final String MEMORY_MESSAGE = "memory_message";
     private static final Map<String, String> ROLE_MAP =
@@ -231,8 +233,8 @@ final class LlmChainPrompt {
 
     static void validatePromptTemplate(String template) {
         if (template == null || template.isBlank()) {
-            return;
-        }
+        return;
+    }
         Matcher matcher = PLACEHOLDER_FIND.matcher(template);
         while (matcher.find()) {
             String placeholder = matcher.group(1).strip();
@@ -387,8 +389,8 @@ final class LlmChainPrompt {
 
     static String extractMemoryContent(Object memoryMsg) {
         if (memoryMsg == null) {
-            return "";
-        }
+        return "";
+    }
         if (memoryMsg instanceof Map<?, ?> m) {
             Object c = m.get("content");
             return c == null ? "" : String.valueOf(c);
@@ -459,8 +461,8 @@ final class LlmChainPrompt {
 
     static void resolveVisionUrls(LlmChainConfig config, Map<String, Object> inputs) {
         if (!config.vlEnable()) {
-            return;
-        }
+        return;
+    }
         for (String key : new ArrayList<>(inputs.keySet())) {
             if (!key.toLowerCase().contains("image_vision")) {
                 continue;
@@ -481,8 +483,8 @@ final class LlmChainPrompt {
 
     static String resolveImageUrl(String url) {
         if (url.startsWith("data:")) {
-            return url;
-        }
+        return url;
+    }
         try {
             java.net.http.HttpClient client =
                     java.net.http.HttpClient.newBuilder()
@@ -505,7 +507,7 @@ final class LlmChainPrompt {
             }
             String b64 = java.util.Base64.getEncoder().encodeToString(resp.body());
             return "data:" + contentType + ";base64," + b64;
-        } catch (Exception e) {
+        } catch (IOException | InterruptedException e) {
             return url;
         }
     }
@@ -513,12 +515,18 @@ final class LlmChainPrompt {
     /**
      * Controller-mode memory retrieve. Without agent_runtime retrieval service this is a gated
      * no-op (same soft-fail as Python when retrieve throws).
+     *
+     * @param messages messages
+     * @param inputs inputs
+     * @param session session
+     * @since 0.1.0
      */
+
     static void injectRetrievedMemory(
             List<Map<String, Object>> messages, Map<String, Object> inputs, NodeSessionApi session) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             Object emr = session.getGlobalState("enable_memory_retrieve");
             if (emr == null || Boolean.FALSE.equals(emr) || "".equals(String.valueOf(emr))) {

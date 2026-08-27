@@ -4,10 +4,11 @@
 
 package com.openjiuwen.studio.dsl.flowinput;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.openjiuwen.core.graph.pregel.GraphInterrupt;
-import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.interaction.InteractiveInput;
 import com.openjiuwen.core.session.interaction.WorkflowInteraction;
+import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.studio.dsl.adapter.StudioStreamFrames;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
@@ -28,6 +29,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class FlowInputEngine {
     public static final String STATE_KEY = "flow_input_state";
     public static final String USER_FIELDS = FlowInputUtils.USER_FIELDS;
@@ -53,6 +55,7 @@ public final class FlowInputEngine {
      * @param session session
      * @return output map (may wrap userFields)
      */
+
     public Map<String, Object> invoke(Object inputs, NodeSessionApi session) {
         try {
             Map<String, Object> inputMap = coerceInputs(inputs);
@@ -93,6 +96,7 @@ public final class FlowInputEngine {
      * @param session session
      * @return frames
      */
+
     public Iterator<Object> stream(Object inputs, NodeSessionApi session) {
         List<Object> frames = new ArrayList<>();
         try {
@@ -135,18 +139,30 @@ public final class FlowInputEngine {
         }
     }
 
+    /**
+     * getState.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public FlowInputState getState() {
         return nodeState;
     }
-
     public Map<String, Object> getStreamOutput() {
         return streamOutput;
     }
 
+    /**
+     * shouldInterrupt.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean shouldInterrupt() {
         return FlowInputState.USER_INTERACT.equals(nodeState.status());
     }
-
     private Map<String, Object> handleStart(
             Map<String, Object> inputs, NodeSessionApi session, FlowInputState current) {
         String query = FlowInputUtils.buildInputsMessage(config);
@@ -225,7 +241,6 @@ public final class FlowInputEngine {
     private void errorToOutput() {
         nodeState.setStatus(FlowInputState.END);
     }
-
     @SuppressWarnings("unchecked")
     private static Map<String, Object> coerceInputs(Object inputs) {
         if (inputs == null) {
@@ -244,7 +259,7 @@ public final class FlowInputEngine {
                             com.fasterxml.jackson.databind.json.JsonMapper.builder()
                                     .build()
                                     .readValue(trimmed, Map.class));
-                } catch (Exception ignored) {
+                } catch (JsonProcessingException ignored) {
                     // fall through
                 }
             }
@@ -266,12 +281,17 @@ public final class FlowInputEngine {
     }
 
     /**
-     * Python {@code await session.interact(...)} only — no userLatestInput short-circuit.
+     * * Python {@code await session.interact(...)} only — no userLatestInput short-circuit.
+     *
+     * @param session session
+     * @param question question
+     * @return result
+     * @since 0.1.0
      */
     private static Object sessionInteractOnly(NodeSessionApi session, String question) {
         if (session == null) {
-            return null;
-        }
+        return null;
+    }
         try {
             return session.interact(question);
         } catch (RuntimeException e) {
@@ -280,7 +300,13 @@ public final class FlowInputEngine {
         }
     }
 
-    /** Resume answers carried on inputs (Java Nested InteractiveInput / IR), not Python. */
+    /**
+     * Resume answers carried on inputs (Java Nested InteractiveInput / IR), not Python.
+     *
+     * @param inputs inputs
+     * @return result
+     * @since 0.1.0
+     */
     private static Object resolveReplyFromInputs(Map<String, Object> inputs) {
         Map<String, Object> uf = extractWorkingFields(inputs);
         if (uf.containsKey("response")) {
@@ -302,8 +328,8 @@ public final class FlowInputEngine {
 
     private static Object unwrapInteractive(Object interactive) {
         if (!(interactive instanceof InteractiveInput ii)) {
-            return null;
-        }
+        return null;
+    }
         if (ii.getRawInputs() != null) {
             return ii.getRawInputs();
         }
@@ -320,8 +346,8 @@ public final class FlowInputEngine {
 
     private static void rethrowGraphInterrupt(RuntimeException e) {
         if (isGraphInterrupt(e)) {
-            throw e;
-        }
+        throw e;
+    }
     }
 
     private static boolean isGraphInterrupt(Throwable e) {
@@ -338,8 +364,8 @@ public final class FlowInputEngine {
 
     private static FlowInputState loadState(NodeSessionApi session) {
         if (session == null) {
-            return new FlowInputState();
-        }
+        return new FlowInputState();
+    }
         try {
             Object raw = session.getState(STATE_KEY);
             if (raw instanceof Map<?, ?> m) {
@@ -364,8 +390,8 @@ public final class FlowInputEngine {
 
     private static void storeState(NodeSessionApi session, FlowInputState state) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             session.updateState(Map.of(STATE_KEY, state.serialize()));
         } catch (RuntimeException ignored) {
@@ -377,8 +403,8 @@ public final class FlowInputEngine {
     private static void writeStream(
             NodeSessionApi session, String type, int index, Map<String, Object> data) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             Map<String, Object> frame = new LinkedHashMap<>();
             frame.put("type", type);

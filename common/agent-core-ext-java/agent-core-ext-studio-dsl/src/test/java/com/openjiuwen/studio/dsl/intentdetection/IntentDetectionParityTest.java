@@ -4,31 +4,31 @@
 
 package com.openjiuwen.studio.dsl.intentdetection;
 
-import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.core.foundation.llm.schema.BaseMessage;
 import com.openjiuwen.core.foundation.llm.schema.SystemMessage;
 import com.openjiuwen.core.foundation.llm.schema.UserMessage;
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Python {@code intent_detection.py} LLM path parity (stub invoker, no network).
  *
  * @since 2026-08-26
  */
+
 class IntentDetectionParityTest {
     @AfterEach
     void tearDown() {
         StudioEngineTestSupport.clear();
     }
-
     private static Map<String, Object> modelConfigs() {
         Map<String, Object> extension = Map.of(
                 "api_key", "test-key",

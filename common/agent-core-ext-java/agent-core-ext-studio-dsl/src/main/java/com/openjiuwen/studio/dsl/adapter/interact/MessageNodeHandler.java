@@ -26,16 +26,41 @@ import java.util.Set;
  *
  * @since 2026-08-17
  */
+
 public final class MessageNodeHandler implements NodeHandlerFactory {
+
+    /**
+     * canonicalType.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public String canonicalType() {
         return "jiuwen.message";
     }
 
+    /**
+     * aliases.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
+
+    /**
+     * create.
+     *
+     * @param node node
+     * @param ctx ctx
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
@@ -58,21 +83,61 @@ public final class MessageNodeHandler implements NodeHandlerFactory {
             this.engine = new FlowMessageEngine(node.id(), config);
         }
 
+        /**
+         * doInvoke.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
+
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
             // Python invoke → {"result": final_res} only.
             return NodePayload.ofFields(engine.invoke(inputs, session));
         }
 
+        /**
+         * stream.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
+
         @Override
         public Iterator<Object> stream(Object inputs, NodeSessionApi session, ModelContext context) {
             return engine.stream(asMap(inputs), session);
         }
 
+        /**
+         * collect.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
+
         @Override
         public Object collect(Object inputs, NodeSessionApi session, ModelContext context) {
             return engine.collect(inputs, session);
         }
+
+        /**
+         * transform.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
 
         @Override
         public Iterator<Object> transform(Object inputs, NodeSessionApi session, ModelContext context) {

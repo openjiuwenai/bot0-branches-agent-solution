@@ -17,13 +17,18 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class ExtractorConfigValidator {
     private static final String NODE_TYPE = "jiuwen.extractor";
 
     private ExtractorConfigValidator() {}
 
     /**
-     * Validates raw node configs (camelCase IR) after top-level snake_case conversion, matching Python {@code init}.
+     * * Validates raw node configs (camelCase IR) after top-level snake_case conversion, matching Python {@code init}.
+     *
+     * @param nodeId nodeId
+     * @param rawConfigs rawConfigs
+     * @since 0.1.0
      */
     public static void checkConfig(String nodeId, Map<String, Object> rawConfigs) {
         Map<String, Object> conf = camelKeysToSnake(rawConfigs == null ? Map.of() : rawConfigs);
@@ -34,7 +39,7 @@ public final class ExtractorConfigValidator {
     }
 
     /**
-     * @return error message when illegal, {@code null} when valid
+     * * @return error message when illegal, {@code null} when valid
      */
     static String matchErrorConfig(Map<String, Object> conf) {
         Map<String, Object> model = modelOf(conf.get("model"));
@@ -140,8 +145,8 @@ public final class ExtractorConfigValidator {
 
     private static String camelToSnake(String text) {
         if (text == null || text.isEmpty()) {
-            return "";
-        }
+        return "";
+    }
         StringBuilder sb = new StringBuilder();
         sb.append(Character.toLowerCase(text.charAt(0)));
         for (int i = 1; i < text.length(); i++) {

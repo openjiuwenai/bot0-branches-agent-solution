@@ -4,17 +4,18 @@
 
 package com.openjiuwen.studio.dsl.flowend;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.TimeUnit;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Sync port of Python End {@code _mix_coordinate} (batch invoke/stream vs stream collect/transform).
  *
  * @since 2026-08-26
  */
+
 public final class FlowEndMixCoordinator {
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition condition = lock.newCondition();
@@ -24,20 +25,48 @@ public final class FlowEndMixCoordinator {
     private boolean mixEnabled;
     private boolean expectMix = true;
 
+    /**
+     * setExpectMix.
+     *
+     * @param expectMix expectMix
+     * @since 0.1.0
+     */
+
     public void setExpectMix(boolean expectMix) {
         this.expectMix = expectMix;
     }
 
+    /**
+     * setMix.
+     *
+     * @since 0.1.0
+     *
+     */
+
     public void setMix() {
         if (!expectMix) {
-            return;
-        }
+        return;
+    }
         mixEnabled = true;
     }
+
+    /**
+     * isMix.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean isMix() {
         return mixEnabled;
     }
+
+    /**
+     * reset.
+     *
+     * @since 0.1.0
+     *
+     */
 
     public void reset() {
         lock.lock();
@@ -55,10 +84,11 @@ public final class FlowEndMixCoordinator {
      * @param key {@code batch} or {@code stream}
      * @return merged inputs, merged outputs, isRenderer
      */
+
     public MixResult coordinate(String key, Map<String, Object> inputs, Map<String, Object> outputs) {
         if (renderComplete) {
-            return new MixResult(inputs, outputs, false);
-        }
+        return new MixResult(inputs, outputs, false);
+    }
         if (!mixEnabled) {
             return new MixResult(inputs, outputs, true);
         }
@@ -103,6 +133,13 @@ public final class FlowEndMixCoordinator {
         }
     }
 
+    /**
+     * markRenderComplete.
+     *
+     * @since 0.1.0
+     *
+     */
+
     public void markRenderComplete() {
         lock.lock();
         try {
@@ -140,7 +177,18 @@ public final class FlowEndMixCoordinator {
         return Map.of();
     }
 
+    /**
+     * MixResult.
+     *
+     * @param inputs inputs
+     * @param outputs outputs
+     * @param isRenderer isRenderer
+     * @return result
+     * @since 0.1.0
+     */
+
     public record MixResult(Map<String, Object> inputs, Map<String, Object> outputs, boolean isRenderer) {}
 
-    private record MapPair(Map<String, Object> inputs, Map<String, Object> outputs) {}
-}
+    private record MapPair(Map<String, Object> inputs, Map<String, Object> outputs) {
+        }
+    }

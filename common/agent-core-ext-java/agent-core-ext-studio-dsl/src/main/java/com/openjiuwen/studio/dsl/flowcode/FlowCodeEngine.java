@@ -18,9 +18,9 @@ import com.openjiuwen.studio.dsl.util.FlowCodeSchemaSupport;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.Map;
 
 /**
  * Strict 1:1 of Python {@code agent_runtime...flow_code.FlowCode}.
@@ -30,6 +30,7 @@ import java.util.logging.Logger;
  *
  * @since 2026-08-26
  */
+
 public final class FlowCodeEngine {
     private static final Logger LOG = Logger.getLogger(FlowCodeEngine.class.getName());
     public static final String USER_FIELDS = "userFields";
@@ -49,6 +50,16 @@ public final class FlowCodeEngine {
         this.nodeId = nodeId == null ? "code" : nodeId;
     }
 
+    /**
+     * setBuildContext.
+     *
+     * @param props props
+     * @param fallbackSubprocess fallbackSubprocess
+     * @param tenantId tenantId
+     * @param workflowId workflowId
+     * @since 0.1.0
+     */
+
     public void setBuildContext(
             StudioDslNodeProperties props,
             PythonCodeExecutor fallbackSubprocess,
@@ -65,6 +76,7 @@ public final class FlowCodeEngine {
      *
      * @param conf node configs
      */
+
     @SuppressWarnings("unchecked")
     public void init(Map<String, Object> conf) {
         Map<String, Object> c = conf == null ? Map.of() : new LinkedHashMap<>(conf);
@@ -92,9 +104,23 @@ public final class FlowCodeEngine {
         }
     }
 
+    /**
+     * code.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String code() {
         return code;
     }
+
+    /**
+     * execEnv.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String execEnv() {
         return execEnv;
@@ -108,6 +134,7 @@ public final class FlowCodeEngine {
      * @param context context
      * @return {userFields: result}
      */
+
     public Map<String, Object> invoke(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         try {
@@ -188,7 +215,13 @@ public final class FlowCodeEngine {
     }
 
     /**
-     * Python {@code stream} — single yield of invoke result.
+     * * Python {@code stream} — single yield of invoke result.
+     *
+     * @param inputs inputs
+     * @param session session
+     * @param context context
+     * @return result
+     * @since 0.1.0
      */
     public Iterator<Object> stream(Object inputs, NodeSessionApi session, ModelContext context) {
         Map<String, Object> in = asMap(inputs);
@@ -252,11 +285,17 @@ public final class FlowCodeEngine {
         return PythonCodeRunners.defaultLocalExecMode();
     }
 
-    /** Console log: wrapped runner writes print capture to stderr. */
+    /**
+     * Console log: wrapped runner writes print capture to stderr.
+     *
+     * @param result result
+     * @return result
+     * @since 0.1.0
+     */
     private static String functionLogOf(PythonExecResult result) {
         if (result == null) {
-            return "";
-        }
+        return "";
+    }
         String err = result.stderr();
         if (err != null && !err.isBlank()) {
             return err;
@@ -266,8 +305,8 @@ public final class FlowCodeEngine {
 
     private static void trace(NodeSessionApi session, Map<String, Object> data) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             session.trace(data);
         } catch (RuntimeException ignored) {

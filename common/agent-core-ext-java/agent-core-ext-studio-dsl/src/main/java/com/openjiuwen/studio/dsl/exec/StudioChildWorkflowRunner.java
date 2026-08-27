@@ -7,19 +7,19 @@ package com.openjiuwen.studio.dsl.exec;
 import com.openjiuwen.core.common.constants.Constant;
 import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.graph.pregel.GraphInterrupt;
-import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.interaction.WorkflowInteraction;
 import com.openjiuwen.core.session.internal.NodeSession;
 import com.openjiuwen.core.session.internal.WorkflowSession;
+import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.state.InMemoryState;
 import com.openjiuwen.studio.dsl.adapter.control.StudioSubWorkflowAssembler;
 import com.openjiuwen.studio.dsl.model.AssembledWorkflow;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 import com.openjiuwen.studio.dsl.util.DeepCopies;
 
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Run an assembled child workflow through core {@link com.openjiuwen.core.workflow.Workflow}
@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * @since 2026-08-27
  */
+
 public final class StudioChildWorkflowRunner {
     public static final String USER_FIELDS = "userFields";
 
@@ -45,6 +46,7 @@ public final class StudioChildWorkflowRunner {
      * @param context model context
      * @return merged output map (includes {@link #USER_FIELDS} when present)
      */
+
     public static Map<String, Object> invoke(
             AssembledWorkflow child,
             String nestNodeId,
@@ -105,8 +107,8 @@ public final class StudioChildWorkflowRunner {
 
     private static void mergeCoreResult(Map<String, Object> done, Object raw) {
         if (!(raw instanceof Map<?, ?> m)) {
-            return;
-        }
+        return;
+    }
         m.forEach((k, v) -> {
             if (v != null) {
                 done.putIfAbsent(String.valueOf(k), v);
@@ -122,8 +124,8 @@ public final class StudioChildWorkflowRunner {
         if (session != null) {
             try {
                 if (session.getInner() != null) {
-                    return session;
-                }
+        return session;
+    }
             } catch (RuntimeException | Error ignored) {
                 // mock session without inner
             }

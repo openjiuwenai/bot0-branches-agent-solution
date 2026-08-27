@@ -17,6 +17,7 @@ import java.util.Map;
  *
  * @since 2026-08-17
  */
+
 public final class MediaSupport {
     private MediaSupport() {}
 
@@ -26,10 +27,11 @@ public final class MediaSupport {
      * @param inputs inputs
      * @return result
      */
+
     public static List<MediaPart> mediaOf(Map<String, Object> inputs) {
         if (inputs == null) {
-            return List.of();
-        }
+        return List.of();
+    }
         Object raw = inputs.get("__media__");
         if (!(raw instanceof List<?> list)) {
             return List.of();
@@ -50,6 +52,7 @@ public final class MediaSupport {
      * @param media media
      * @return result
      */
+
     public static Map<String, Object> withConsumableMedia(Map<String, Object> userFields, List<MediaPart> media) {
         Map<String, Object> uf = new LinkedHashMap<>(userFields == null ? Map.of() : userFields);
         if (media != null && !media.isEmpty()) {
@@ -81,6 +84,7 @@ public final class MediaSupport {
      * @param media media
      * @return result
      */
+
     public static List<Map<String, Object>> toLlmContentParts(String text, List<MediaPart> media) {
         List<Map<String, Object>> parts = new ArrayList<>();
         if (text != null && !text.isBlank()) {
@@ -126,6 +130,7 @@ public final class MediaSupport {
      * @param userFields userFields
      * @return result
      */
+
     public static Map<String, Object> flattenForPrompt(Map<String, Object> inputs, Map<String, Object> userFields) {
         Map<String, Object> in = new LinkedHashMap<>(inputs == null ? Map.of() : inputs);
         if (userFields != null) {

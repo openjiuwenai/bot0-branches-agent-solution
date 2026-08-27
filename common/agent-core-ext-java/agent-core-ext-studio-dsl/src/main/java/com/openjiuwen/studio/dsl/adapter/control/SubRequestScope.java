@@ -20,10 +20,17 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class SubRequestScope {
-    /** Python {@code REQUEST_VARIABLES}. */
+
+    /**
+     * Python {@code REQUEST_VARIABLES}.
+     */
     public static final String REQUEST_KEY = "_request";
-    /** Alternate key used by Start / SetVariable. */
+
+    /**
+     * Alternate key used by Start / SetVariable.
+     */
     public static final String REQUEST_KEY_ALT = "_REQUEST";
 
     private SubRequestScope() {}
@@ -35,6 +42,7 @@ public final class SubRequestScope {
      * @param childInputs child invoke/stream inputs (may contain {@code _REQUEST})
      * @return parent snapshot (deep copy)
      */
+
     @SuppressWarnings("unchecked")
     public static Map<String, Object> enter(NodeSessionApi session, Map<String, Object> childInputs) {
         Map<String, Object> parentSnapshot = DeepCopies.map(readRequest(session));
@@ -51,10 +59,11 @@ public final class SubRequestScope {
      * @param session session
      * @param parentSnapshot snapshot from {@link #enter}
      */
+
     public static void exit(NodeSessionApi session, Map<String, Object> parentSnapshot) {
         if (parentSnapshot == null) {
-            return;
-        }
+        return;
+    }
         try {
             Map<String, Object> sub = readRequest(session);
             Map<String, Object> updated = new LinkedHashMap<>();
@@ -78,7 +87,12 @@ public final class SubRequestScope {
     /**
      * Build child {@code _REQUEST} view from inputs / userFields / session (Python
      * {@code _prepare_child_inputs} globals).
+     *
+     * @param childInputs childInputs
+     * @return result
+     * @since 0.1.0
      */
+
     public static Map<String, Object> extractChildRequest(Map<String, Object> childInputs) {
         Map<String, Object> out = new LinkedHashMap<>();
         if (childInputs == null) {
@@ -131,10 +145,18 @@ public final class SubRequestScope {
         return out;
     }
 
+    /**
+     * writeRequest.
+     *
+     * @param session session
+     * @param request request
+     * @since 0.1.0
+     */
+
     public static void writeRequest(NodeSessionApi session, Map<String, Object> request) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         Map<String, Object> copy = request == null ? Map.of() : DeepCopies.map(request);
         try {
             session.updateGlobalState(Map.of(REQUEST_KEY, copy, REQUEST_KEY_ALT, copy));

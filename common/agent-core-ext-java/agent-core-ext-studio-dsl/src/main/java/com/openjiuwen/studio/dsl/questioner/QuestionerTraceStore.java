@@ -4,21 +4,22 @@
 
 package com.openjiuwen.studio.dsl.questioner;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.session.NodeSessionApi;
-
 import com.openjiuwen.studio.dsl.store.SharedJedisPool;
 
 import redis.clients.jedis.JedisPooled;
+import redis.clients.jedis.exceptions.JedisException;
 
 import java.util.ArrayList;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.Map;
 
 /**
  * Questioner node Redis / in-memory trace store
@@ -29,6 +30,7 @@ import java.util.logging.Logger;
  *
  * @since 2026-08-26
  */
+
 public final class QuestionerTraceStore {
     public static final String KEY_PREFIX = "agentBuilder:questioner:trace";
     private static final Logger LOG = Logger.getLogger(QuestionerTraceStore.class.getName());
@@ -43,24 +45,51 @@ public final class QuestionerTraceStore {
 
     private QuestionerTraceStore() {}
 
-    /** Test / host: inject Jedis; null clears. */
+    /**
+     * Test / host: inject Jedis; null clears.
+     *
+     * @param jedis jedis
+     * @since 0.1.0
+     */
     public static void setJedis(JedisPooled jedis) {
         jedisOverride = jedis;
     }
 
-    /** Clear in-memory traces (tests). */
+    /**
+     * Clear in-memory traces (tests).
+     *
+     * @since 0.1.0
+     */
     public static void clearMemory() {
         MEMORY.clear();
     }
+
+    /**
+     * buildKey.
+     *
+     * @param sessionId sessionId
+     * @param componentId componentId
+     * @return result
+     * @since 0.1.0
+     */
 
     public static String buildKey(String sessionId, String componentId) {
         return KEY_PREFIX + ":" + nullToEmpty(sessionId) + ":" + nullToEmpty(componentId);
     }
 
+    /**
+     * append.
+     *
+     * @param sessionId sessionId
+     * @param componentId componentId
+     * @param traceData traceData
+     * @since 0.1.0
+     */
+
     public static void append(String sessionId, String componentId, Map<String, Object> traceData) {
         if (traceData == null || traceData.isEmpty()) {
-            return;
-        }
+        return;
+    }
         String key = buildKey(sessionId, componentId);
         JedisPooled jedis = resolveJedis();
         if (jedis != null) {
@@ -69,7 +98,7 @@ public final class QuestionerTraceStore {
                 jedis.rpush(key, json);
                 jedis.expire(key, DEFAULT_TTL_SECONDS);
                 return;
-            } catch (Exception e) {
+            } catch (JsonProcessingException | JedisException e) {
                 LOG.log(Level.WARNING, "Failed to append questioner trace to Redis: " + e.getMessage(), e);
             }
         }
@@ -103,13 +132,13 @@ public final class QuestionerTraceStore {
                             if (m != null) {
                                 out.add(m);
                             }
-                        } catch (Exception ignored) {
+                        } catch (JsonProcessingException ignored) {
                             // skip bad entry
                         }
                     }
                 }
                 return out;
-            } catch (Exception e) {
+            } catch (JedisException e) {
                 LOG.log(Level.WARNING, "Failed to get questioner trace from Redis: " + e.getMessage(), e);
             }
         }
@@ -124,13 +153,21 @@ public final class QuestionerTraceStore {
         return copy;
     }
 
+    /**
+     * delete.
+     *
+     * @param sessionId sessionId
+     * @param componentId componentId
+     * @since 0.1.0
+     */
+
     public static void delete(String sessionId, String componentId) {
         String key = buildKey(sessionId, componentId);
         JedisPooled jedis = resolveJedis();
         if (jedis != null) {
             try {
                 jedis.del(key);
-            } catch (Exception e) {
+            } catch (JedisException e) {
                 LOG.log(Level.WARNING, "Failed to delete questioner trace from Redis: " + e.getMessage(), e);
             }
         }
@@ -138,16 +175,22 @@ public final class QuestionerTraceStore {
     }
 
     /**
-     * Recover stored traces onto session tracer (Python {@code recover_to_session}).
+     * * Recover stored traces onto session tracer (Python {@code recover_to_session}).
+     *
+     * @param sessionId sessionId
+     * @param componentId componentId
+     * @param session session
+     * @since 0.1.0
      */
     public static void recoverToSession(String sessionId, String componentId, NodeSessionApi session) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         for (Map<String, Object> item : getAll(sessionId, componentId)) {
             try {
                 session.trace(item);
-            } catch (RuntimeException ignored) {
+            } catch (IllegalStateException | ClassCastException | NullPointerException
+                    | IllegalArgumentException | IndexOutOfBoundsException ignored) {
                 // mock / skipTrace
             }
         }
@@ -169,15 +212,15 @@ public final class QuestionerTraceStore {
                 port = Integer.parseInt(p.trim());
             }
             return SharedJedisPool.getOrConnect(host.trim(), port);
-        } catch (Exception e) {
+        } catch (NumberFormatException | JedisException e) {
             return null;
         }
     }
 
     private static String firstNonBlank(String a, String b) {
         if (a != null && !a.isBlank()) {
-            return a.trim();
-        }
+        return a.trim();
+    }
         if (b != null && !b.isBlank()) {
             return b.trim();
         }

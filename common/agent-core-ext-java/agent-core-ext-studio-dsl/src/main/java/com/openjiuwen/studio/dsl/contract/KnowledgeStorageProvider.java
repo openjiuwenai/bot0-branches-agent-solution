@@ -10,8 +10,10 @@ package com.openjiuwen.studio.dsl.contract;
  *
  * @since 2026-08-26
  */
+
 @FunctionalInterface
 public interface KnowledgeStorageProvider {
+
     /**
      * getContent.
      *
@@ -19,5 +21,6 @@ public interface KnowledgeStorageProvider {
      * @return UTF-8 JSON text
      * @throws Exception when object is missing or unreadable
      */
+
     String getContent(String objectKey) throws Exception;
 }

@@ -8,18 +8,19 @@ import com.openjiuwen.core.foundation.tool.mcp.McpClient;
 import com.openjiuwen.core.foundation.tool.mcp.McpToolCard;
 
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BiFunction;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiFunction;
 
 /**
  * Hand-rolled MCP client stub for tests (avoids Mockito inline agent).
  *
  * @since 2026-08-26
  */
+
 public final class RecordingMcpClient implements McpClient {
     private final List<McpToolCard> tools;
     private final BiFunction<String, Map<String, Object>, Object> callHandler;
@@ -31,6 +32,14 @@ public final class RecordingMcpClient implements McpClient {
         this.tools = tools == null ? List.of() : List.copyOf(tools);
         this.callHandler = callHandler;
     }
+
+    /**
+     * withContent.
+     *
+     * @param content content
+     * @return result
+     * @since 0.1.0
+     */
 
     public static RecordingMcpClient withContent(List<?> content) {
         McpToolCard card = McpToolCard.builder()
@@ -53,33 +62,81 @@ public final class RecordingMcpClient implements McpClient {
         return new RecordingMcpClient(List.of(card), (name, args) -> content);
     }
 
+    /**
+     * listToolsCalls.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public int listToolsCalls() {
         return listToolsCalls.get();
     }
 
+    /**
+     * callToolCalls.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public int callToolCalls() {
         return callToolCalls.get();
     }
-
     public Map<String, Object> lastCallArguments() {
         return lastCallArgs.isEmpty() ? Map.of() : lastCallArgs.get(lastCallArgs.size() - 1);
     }
+
+    /**
+     * connect.
+     *
+     * @param retryTimes retryTimes
+     * @param timeout timeout
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public boolean connect(int retryTimes, float timeout) {
         return true;
     }
 
+    /**
+     * disconnect.
+     *
+     * @param timeout timeout
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public boolean disconnect(float timeout) {
         return true;
     }
+
+    /**
+     * listTools.
+     *
+     * @param timeout timeout
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public List<Object> listTools(float timeout) {
         listToolsCalls.incrementAndGet();
         return new ArrayList<>(tools);
     }
+
+    /**
+     * callTool.
+     *
+     * @param toolName toolName
+     * @param arguments arguments
+     * @param timeout timeout
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public Object callTool(String toolName, Map<String, Object> arguments, float timeout) {
@@ -89,10 +146,26 @@ public final class RecordingMcpClient implements McpClient {
         return callHandler.apply(toolName, arguments);
     }
 
+    /**
+     * getToolInfo.
+     *
+     * @param toolName toolName
+     * @param timeout timeout
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public Optional<Object> getToolInfo(String toolName, float timeout) {
         return tools.stream().filter(t -> toolName.equals(t.getName())).map(t -> (Object) t).findFirst();
     }
+
+    /**
+     * getServerPath.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public String getServerPath() {

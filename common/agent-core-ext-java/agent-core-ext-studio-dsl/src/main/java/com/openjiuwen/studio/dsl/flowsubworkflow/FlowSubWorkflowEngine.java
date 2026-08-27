@@ -8,8 +8,8 @@ import com.openjiuwen.core.common.constants.Constant;
 import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.foundation.llm.schema.BaseMessage;
 import com.openjiuwen.core.foundation.llm.schema.UserMessage;
-import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.interaction.InteractiveInput;
+import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.studio.dsl.adapter.control.SubRequestScope;
 import com.openjiuwen.studio.dsl.util.DeepCopies;
 import com.openjiuwen.studio.dsl.util.SanitizeMessage;
@@ -31,6 +31,7 @@ import java.util.Set;
  *
  * @since 2026-08-26
  */
+
 public final class FlowSubWorkflowEngine {
     public static final String USER_FIELDS = "userFields";
     public static final String SYSTEM_FIELDS = "systemFields";
@@ -62,63 +63,152 @@ public final class FlowSubWorkflowEngine {
                 : config;
     }
 
+    /**
+     * config.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public FlowSubWorkflowConfig config() {
         return config;
     }
+
+    /**
+     * nodeState.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public SubWorkflowState nodeState() {
         return nodeState;
     }
 
+    /**
+     * lastChildCompleted.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean lastChildCompleted() {
         return lastChildCompleted;
     }
+
+    /**
+     * setLastChildCompleted.
+     *
+     * @param v v
+     * @since 0.1.0
+     */
 
     public void setLastChildCompleted(boolean v) {
         this.lastChildCompleted = v;
     }
 
+    /**
+     * interruptChildNodeId.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String interruptChildNodeId() {
         return interruptChildNodeId;
     }
+
+    /**
+     * setInterruptChildNodeId.
+     *
+     * @param id id
+     * @since 0.1.0
+     */
 
     public void setInterruptChildNodeId(String id) {
         this.interruptChildNodeId = id;
     }
 
+    /**
+     * pendingInteractPrompt.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String pendingInteractPrompt() {
         return pendingInteractPrompt;
     }
 
+    /**
+     * setPendingInteractPrompt.
+     *
+     * @param prompt prompt
+     * @since 0.1.0
+     */
+
     public void setPendingInteractPrompt(String prompt) {
         this.pendingInteractPrompt = prompt == null ? "" : prompt;
     }
-
     public Map<String, Object> streamState() {
         return streamState;
     }
 
+    /**
+     * shouldInterrupt.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean shouldInterrupt() {
         return nodeState.shouldInterrupt();
     }
+
+    /**
+     * reset.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean reset() {
         nodeState.reset();
         return true;
     }
 
+    /**
+     * loadState.
+     *
+     * @param state state
+     * @since 0.1.0
+     */
+
     public void loadState(SubWorkflowState state) {
         if (state != null) {
-            nodeState.setStatus(state.status());
-        }
+        nodeState.setStatus(state.status());
     }
+    }
+
+    /**
+     * errorToOutput.
+     *
+     * @since 0.1.0
+     *
+     */
 
     public void errorToOutput() {
         nodeState.setStatus(SubWorkflowExecutionStatus.END);
     }
 
     /**
-     * Python {@code _build_invoke_params}.
+     * * Python {@code _build_invoke_params}.
+     *
+     * @param inputs inputs
+     * @param session session
+     * @param context context
+     * @return result
+     * @since 0.1.0
      */
     public Map<String, Object> buildInvokeParams(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
@@ -180,6 +270,7 @@ public final class FlowSubWorkflowEngine {
      *
      * @param nestingDepth Studio host depth marker (not in Python; kept for linear chains)
      */
+
     public Object prepareChildInputs(
             Map<String, Object> inputs,
             NodeSessionApi session,
@@ -232,22 +323,43 @@ public final class FlowSubWorkflowEngine {
         return envelope;
     }
 
+    /**
+     * buildChildInteractiveInput.
+     *
+     * @param userResponse userResponse
+     * @return result
+     * @since 0.1.0
+     */
+
     public InteractiveInput buildChildInteractiveInput(String userResponse) {
         return new InteractiveInput(userResponse == null ? "" : userResponse);
     }
-
     public Map<String, Object> enterRequestScope(NodeSessionApi session, Object childInputs) {
         Map<String, Object> asMap =
                 childInputs instanceof Map<?, ?> m ? castMap(m) : Map.of();
         return SubRequestScope.enter(session, asMap);
     }
 
+    /**
+     * exitRequestScope.
+     *
+     * @param session session
+     * @param parentSnapshot parentSnapshot
+     * @since 0.1.0
+     */
+
     public void exitRequestScope(NodeSessionApi session, Map<String, Object> parentSnapshot) {
         SubRequestScope.exit(session, parentSnapshot);
     }
 
     /**
-     * Python success return shape.
+     * * Python success return shape.
+     *
+     * @param responseContent responseContent
+     * @param userFields userFields
+     * @param memory memory
+     * @return result
+     * @since 0.1.0
      */
     public Map<String, Object> packageSuccess(
             String responseContent, Map<String, Object> userFields, Map<String, Object> memory) {
@@ -265,7 +377,12 @@ public final class FlowSubWorkflowEngine {
     }
 
     /**
-     * Studio soft-hang envelope (host adaptation when {@code session.interact} is not wired).
+     * * Studio soft-hang envelope (host adaptation when {@code session.interact} is not wired).
+     *
+     * @param childUf childUf
+     * @param nestingDepth nestingDepth
+     * @return result
+     * @since 0.1.0
      */
     public Map<String, Object> packageSoftHang(Map<String, Object> childUf, int nestingDepth) {
         nodeState.setStatus(SubWorkflowExecutionStatus.USER_INTERACT);
@@ -286,7 +403,14 @@ public final class FlowSubWorkflowEngine {
     /**
      * Studio linear/Pregel success: Python {@code packageSuccess} plus Studio chain markers inside
      * {@code userFields} so parent merge / resume tests keep working.
+     *
+     * @param childUf childUf
+     * @param nestingDepth nestingDepth
+     * @param session session
+     * @return result
+     * @since 0.1.0
      */
+
     public Map<String, Object> packageStudioSuccess(
             Map<String, Object> childUf, int nestingDepth, NodeSessionApi session) {
         Map<String, Object> done = new LinkedHashMap<>(childUf == null ? Map.of() : childUf);
@@ -301,7 +425,11 @@ public final class FlowSubWorkflowEngine {
     }
 
     /**
-     * Parse child invoke dict — Python {@code _parse_normal_child_invoke_result}.
+     * * Parse child invoke dict — Python {@code _parse_normal_child_invoke_result}.
+     *
+     * @param result result
+     * @return result
+     * @since 0.1.0
      */
     public ParsedChildResult parseNormalChildInvokeResult(Map<String, Object> result) {
         String responseContent = stringOrEmpty(result.get("answer"));
@@ -353,10 +481,18 @@ public final class FlowSubWorkflowEngine {
         return Optional.empty();
     }
 
+    /**
+     * isChildInterruptFields.
+     *
+     * @param uf uf
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean isChildInterruptFields(Map<String, Object> uf) {
         if (uf == null || uf.isEmpty()) {
-            return false;
-        }
+        return false;
+    }
         // Resume completed markers — do not treat as interrupt even if should_interrupt lingered
         if (isResumedAnswer(uf)) {
             return false;
@@ -379,11 +515,17 @@ public final class FlowSubWorkflowEngine {
         return SubWorkflowExecutionStatus.isUserInteract(uf.get("nestedWorkflowState"));
     }
 
-    /** Child uf shows interaction already answered (resume success). */
+    /**
+     * Child uf shows interaction already answered (resume success).
+     *
+     * @param uf uf
+     * @return result
+     * @since 0.1.0
+     */
     public static boolean isResumedAnswer(Map<String, Object> uf) {
         if (uf == null || uf.isEmpty()) {
-            return false;
-        }
+        return false;
+    }
         Object hang = uf.get("hangState");
         if (hang != null && "Continue".equalsIgnoreCase(String.valueOf(hang))) {
             return true;
@@ -404,18 +546,40 @@ public final class FlowSubWorkflowEngine {
     /**
      * True when nested child still needs user input (uf flags or session interrupt keys).
      * Session keys are ignored once uf shows a completed resume answer.
+     *
+     * @param childUf childUf
+     * @param session session
+     * @return result
+     * @since 0.1.0
      */
+
     public boolean stillInterrupted(Map<String, Object> childUf, NodeSessionApi session) {
         if (isResumedAnswer(childUf)) {
-            return false;
-        }
+        return false;
+    }
         return isChildInterruptFields(childUf) || detectInterruptInSession(session);
     }
+
+    /**
+     * detectInterruptInSession.
+     *
+     * @param session session
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean detectInterruptInSession(NodeSessionApi session) {
         InterruptHit hit = detectChildInterrupt(session);
         return hit != null;
     }
+
+    /**
+     * detectChildInterrupt.
+     *
+     * @param session session
+     * @return result
+     * @since 0.1.0
+     */
 
     public InterruptHit detectChildInterrupt(NodeSessionApi session) {
         if (pendingInteractPrompt != null && !pendingInteractPrompt.isEmpty()) {
@@ -464,10 +628,18 @@ public final class FlowSubWorkflowEngine {
         return null;
     }
 
+    /**
+     * findInterruptInStateTree.
+     *
+     * @param stateRoot stateRoot
+     * @return result
+     * @since 0.1.0
+     */
+
     public InterruptHit findInterruptInStateTree(Object stateRoot) {
         if (!(stateRoot instanceof Map<?, ?> root)) {
-            return null;
-        }
+        return null;
+    }
         for (Map.Entry<?, ?> e : root.entrySet()) {
             if (!(e.getValue() instanceof Map<?, ?> value)) {
                 continue;
@@ -484,10 +656,19 @@ public final class FlowSubWorkflowEngine {
         return null;
     }
 
+    /**
+     * matchInterruptInNodeState.
+     *
+     * @param nodeId nodeId
+     * @param nodeStateMap nodeStateMap
+     * @return result
+     * @since 0.1.0
+     */
+
     public InterruptHit matchInterruptInNodeState(String nodeId, Map<String, Object> nodeStateMap) {
         if (nodeStateMap == null) {
-            return null;
-        }
+        return null;
+    }
         if (SubWorkflowExecutionStatus.isUserInteract(nodeStateMap.get("status"))) {
             return new InterruptHit(nodeId, extractInteractPrompt(nodeStateMap));
         }
@@ -508,6 +689,14 @@ public final class FlowSubWorkflowEngine {
         return null;
     }
 
+    /**
+     * extractInteractPrompt.
+     *
+     * @param nodeStateMap nodeStateMap
+     * @return result
+     * @since 0.1.0
+     */
+
     public String extractInteractPrompt(Map<String, Object> nodeStateMap) {
         for (String key : CHILD_INTERRUPT_STATE_KEYS) {
             Object qState = nodeStateMap.get(key);
@@ -524,11 +713,21 @@ public final class FlowSubWorkflowEngine {
         return q == null ? "" : String.valueOf(q);
     }
 
+    /**
+     * shouldResumeChildWorkflow.
+     *
+     * @param session session
+     * @param originalInputs originalInputs
+     * @param prepared prepared
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean shouldResumeChildWorkflow(
             NodeSessionApi session, Object originalInputs, Map<String, Object> prepared) {
         if (nodeState.status() == SubWorkflowExecutionStatus.USER_INTERACT) {
-            return true;
-        }
+        return true;
+    }
         if (detectChildInterrupt(session) != null) {
             return true;
         }
@@ -545,6 +744,15 @@ public final class FlowSubWorkflowEngine {
         return extractParentResumeQuery(session, originalInputs) != null
                 || extractParentResumeQuery(session, prepared) != null;
     }
+
+    /**
+     * extractParentResumeQuery.
+     *
+     * @param session session
+     * @param inputs inputs
+     * @return result
+     * @since 0.1.0
+     */
 
     public String extractParentResumeQuery(NodeSessionApi session, Object inputs) {
         String fromInput = extractFromInteractiveInput(inputs);
@@ -592,14 +800,21 @@ public final class FlowSubWorkflowEngine {
         return null;
     }
 
+    /**
+     * extractFromInteractiveInput.
+     *
+     * @param inputs inputs
+     * @return result
+     * @since 0.1.0
+     */
+
     public String extractFromInteractiveInput(Object inputs) {
         return extractFromInteractiveInputStatic(inputs);
     }
-
     static String extractFromInteractiveInputStatic(Object inputs) {
         if (!(inputs instanceof InteractiveInput ii)) {
-            return null;
-        }
+        return null;
+    }
         if (ii.getUserInputs() != null && !ii.getUserInputs().isEmpty()) {
             List<String> keys = List.copyOf(ii.getUserInputs().keySet());
             Object val = ii.getUserInputs().get(keys.get(keys.size() - 1));
@@ -623,7 +838,11 @@ public final class FlowSubWorkflowEngine {
     }
 
     /**
-     * Python {@code _process_stream_chunk} classification (dict / map frames).
+     * * Python {@code _process_stream_chunk} classification (dict / map frames).
+     *
+     * @param chunk chunk
+     * @return result
+     * @since 0.1.0
      */
     public StreamChunkAction processStreamChunk(Object chunk) {
         if (chunk instanceof Map<?, ?> m) {
@@ -711,6 +930,14 @@ public final class FlowSubWorkflowEngine {
         return updated;
     }
 
+    /**
+     * markGraphInterrupt.
+     *
+     * @param responseContent responseContent
+     * @param userFields userFields
+     * @since 0.1.0
+     */
+
     public void markGraphInterrupt(String responseContent, Map<String, Object> userFields) {
         lastChildCompleted = false;
         streamState = Map.of(
@@ -718,10 +945,19 @@ public final class FlowSubWorkflowEngine {
                 USER_FIELDS, userFields == null ? Map.of() : userFields);
     }
 
+    /**
+     * traceInterruptMarker.
+     *
+     * @param session session
+     * @param responseContent responseContent
+     * @param userFields userFields
+     * @since 0.1.0
+     */
+
     public void traceInterruptMarker(NodeSessionApi session, String responseContent, Map<String, Object> userFields) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("_sub_interrupt_marker", true);
@@ -735,6 +971,14 @@ public final class FlowSubWorkflowEngine {
         }
     }
 
+    /**
+     * invokeTimeoutSeconds.
+     *
+     * @param session session
+     * @return result
+     * @since 0.1.0
+     */
+
     public int invokeTimeoutSeconds(NodeSessionApi session) {
         // Python _get_timeout falls back to DEFAULT_FIRST_FRAME_TIMEOUT (not 300)
         Integer env = readEnvTimeout(session, "WORKFLOW_EXECUTE_TIMEOUT");
@@ -744,6 +988,14 @@ public final class FlowSubWorkflowEngine {
         return DEFAULT_FIRST_FRAME_TIMEOUT;
     }
 
+    /**
+     * frameTimeoutSeconds.
+     *
+     * @param session session
+     * @return result
+     * @since 0.1.0
+     */
+
     public int frameTimeoutSeconds(NodeSessionApi session) {
         Integer env = readEnvTimeout(session, "WORKFLOW_STREAM_FRAME_TIMEOUT");
         if (env != null && env > 0) {
@@ -752,14 +1004,20 @@ public final class FlowSubWorkflowEngine {
         return DEFAULT_STREAM_FRAME_TIMEOUT;
     }
 
+    /**
+     * firstFrameTimeoutSeconds.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public int firstFrameTimeoutSeconds() {
         return DEFAULT_FIRST_FRAME_TIMEOUT;
     }
-
     private Integer readEnvTimeout(NodeSessionApi session, String key) {
         if (session == null) {
-            return null;
-        }
+        return null;
+    }
         try {
             Object v = session.getEnv(key);
             if (v instanceof Number n) {
@@ -794,8 +1052,8 @@ public final class FlowSubWorkflowEngine {
 
     private static String normalizeInteractiveStored(Object value) {
         if (value == null) {
-            return null;
-        }
+        return null;
+    }
         if (value instanceof List<?> list) {
             if (list.isEmpty()) {
                 return null;
@@ -829,8 +1087,8 @@ public final class FlowSubWorkflowEngine {
 
     private static String findInteractiveInTree(Object root, String targetNodeId) {
         if (!(root instanceof Map<?, ?> map)) {
-            return null;
-        }
+        return null;
+    }
         if (targetNodeId != null) {
             Object target = map.get(targetNodeId);
             if (target instanceof Map<?, ?> tm && tm.containsKey(Constant.INTERACTIVE_INPUT)) {
@@ -879,16 +1137,14 @@ public final class FlowSubWorkflowEngine {
     private static String stringOrEmpty(Object o) {
         return o == null ? "" : String.valueOf(o);
     }
-
     private static String stringOrNull(Object o) {
         return o == null ? null : String.valueOf(o);
     }
-
     private static String firstNonBlank(Object... vals) {
         for (Object v : vals) {
             if (v != null && !String.valueOf(v).isBlank()) {
-                return String.valueOf(v);
-            }
+        return String.valueOf(v);
+    }
         }
         return "";
     }
@@ -896,13 +1152,31 @@ public final class FlowSubWorkflowEngine {
     private static Object firstPresent(Map<String, Object> m, String... keys) {
         for (String k : keys) {
             if (m.containsKey(k) && m.get(k) != null && !String.valueOf(m.get(k)).isBlank()) {
-                return m.get(k);
-            }
+        return m.get(k);
+    }
         }
         return null;
     }
 
+    /**
+     * ParsedChildResult.
+     *
+     * @param responseContent responseContent
+     * @param userFields userFields
+     * @return result
+     * @since 0.1.0
+     */
+
     public record ParsedChildResult(String responseContent, Map<String, Object> userFields) {}
+
+    /**
+     * InterruptHit.
+     *
+     * @param nodeId nodeId
+     * @param prompt prompt
+     * @return result
+     * @since 0.1.0
+     */
 
     public record InterruptHit(String nodeId, String prompt) {}
 
@@ -932,42 +1206,56 @@ public final class FlowSubWorkflowEngine {
         static StreamChunkAction skip() {
             return new StreamChunkAction(Kind.SKIP, Map.of(), null, null);
         }
-
         static StreamChunkAction interaction(Map<String, Object> payload) {
             return new StreamChunkAction(Kind.INTERACTION, payload, null, INTERACTION);
         }
-
         static StreamChunkAction abort(Map<String, Object> payload) {
             return new StreamChunkAction(Kind.ABORT, payload, null, "workflow_exception");
         }
-
         static StreamChunkAction finale(Map<String, Object> userFields) {
             return new StreamChunkAction(Kind.FINAL, userFields, null, "workflow_final");
         }
-
         static StreamChunkAction messageEnd() {
             return new StreamChunkAction(Kind.MESSAGE_END, Map.of(), null, MESSAGE_NODE_END);
         }
-
         static StreamChunkAction content(String content) {
             return new StreamChunkAction(Kind.CONTENT, Map.of(), content, "partial_content");
         }
-
         static StreamChunkAction passthrough(String type, Map<String, Object> payload) {
             return new StreamChunkAction(Kind.PASSTHROUGH, payload, null, type);
         }
 
+        /**
+         * kind.
+         *
+         * @return result
+         * @since 0.1.0
+         */
+
         public Kind kind() {
             return kind;
         }
-
         public Map<String, Object> payload() {
             return payload;
         }
 
+        /**
+         * content.
+         *
+         * @return result
+         * @since 0.1.0
+         */
+
         public String content() {
             return content;
         }
+
+        /**
+         * type.
+         *
+         * @return result
+         * @since 0.1.0
+         */
 
         public String type() {
             return type;

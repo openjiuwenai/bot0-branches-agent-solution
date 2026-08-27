@@ -23,6 +23,7 @@ import java.util.Map;
  *
  * @since 2026-08-17
  */
+
 class NestingDepthTest {
     @Test
     void nestingBeyondMax_rejectedAtCreate() {

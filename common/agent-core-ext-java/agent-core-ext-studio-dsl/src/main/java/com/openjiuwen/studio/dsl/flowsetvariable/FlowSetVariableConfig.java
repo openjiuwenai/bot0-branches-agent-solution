@@ -15,6 +15,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class FlowSetVariableConfig {
     private final Map<String, Object> variableMapping;
     private final Map<String, String> operatorMapping;
@@ -23,6 +24,14 @@ public final class FlowSetVariableConfig {
         this.variableMapping = variableMapping == null ? Map.of() : Map.copyOf(variableMapping);
         this.operatorMapping = operatorMapping == null ? Map.of() : Map.copyOf(operatorMapping);
     }
+
+    /**
+     * fromNodeConfigs.
+     *
+     * @param configs configs
+     * @return result
+     * @since 0.1.0
+     */
 
     @SuppressWarnings("unchecked")
     public static FlowSetVariableConfig fromNodeConfigs(Map<String, Object> configs) {
@@ -68,10 +77,16 @@ public final class FlowSetVariableConfig {
         return operatorMapping;
     }
 
+    /**
+     * isEmpty.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean isEmpty() {
         return variableMapping.isEmpty();
     }
-
     private static java.util.Optional<String> extractValue(Object side) {
         if (side instanceof Map<?, ?> m) {
             Object v = m.get("value");
@@ -82,8 +97,8 @@ public final class FlowSetVariableConfig {
 
     private static Object extractRaw(Object side) {
         if (side instanceof Map<?, ?> m) {
-            return m.get("value");
-        }
+        return m.get("value");
+    }
         return side;
     }
 }

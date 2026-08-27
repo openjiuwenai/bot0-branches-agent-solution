@@ -19,6 +19,7 @@ import com.openjiuwen.studio.dsl.llmchain.LlmChainEngine;
  *
  * @since 2026-08-27
  */
+
 public final class StudioEngineTestOverrides {
     private final LlmChainEngine.ModelBridge llmBridge;
     private final IntentDetectionLlmDetector.ModelInvoker intentInvoker;
@@ -38,38 +39,99 @@ public final class StudioEngineTestOverrides {
         this.mcpClient = builder.mcpClient;
     }
 
+    /**
+     * llmBridge.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public LlmChainEngine.ModelBridge llmBridge() {
         return llmBridge;
     }
+
+    /**
+     * intentInvoker.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public IntentDetectionLlmDetector.ModelInvoker intentInvoker() {
         return intentInvoker;
     }
 
+    /**
+     * extractorInvoker.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public ExtractorLlmExtractor.ModelInvoker extractorInvoker() {
         return extractorInvoker;
     }
+
+    /**
+     * flowAgentBridge.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public FlowAgentEngine.ReactBridge flowAgentBridge() {
         return flowAgentBridge;
     }
 
+    /**
+     * complexIntentBridge.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public ComplexIntentDetectionEngine.TestBridge complexIntentBridge() {
         return complexIntentBridge;
     }
+
+    /**
+     * flowApiBridge.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public FlowApiEngine.TestBridge flowApiBridge() {
         return flowApiBridge;
     }
 
+    /**
+     * mcpClient.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public McpClient mcpClient() {
         return mcpClient;
     }
+
+    /**
+     * builder.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public static Builder builder() {
         return new Builder();
     }
 
+    /**
+     * Builder.
+     *
+     * @since 0.1.0
+     */
     public static final class Builder {
         private LlmChainEngine.ModelBridge llmBridge;
         private IntentDetectionLlmDetector.ModelInvoker intentInvoker;
@@ -79,40 +141,103 @@ public final class StudioEngineTestOverrides {
         private FlowApiEngine.TestBridge flowApiBridge;
         private McpClient mcpClient;
 
+        /**
+         * llmBridge.
+         *
+         * @param bridge bridge
+         * @return result
+         * @since 0.1.0
+         */
+
         public Builder llmBridge(LlmChainEngine.ModelBridge bridge) {
             this.llmBridge = bridge;
             return this;
         }
+
+        /**
+         * intentInvoker.
+         *
+         * @param invoker invoker
+         * @return result
+         * @since 0.1.0
+         */
 
         public Builder intentInvoker(IntentDetectionLlmDetector.ModelInvoker invoker) {
             this.intentInvoker = invoker;
             return this;
         }
 
+        /**
+         * extractorInvoker.
+         *
+         * @param invoker invoker
+         * @return result
+         * @since 0.1.0
+         */
+
         public Builder extractorInvoker(ExtractorLlmExtractor.ModelInvoker invoker) {
             this.extractorInvoker = invoker;
             return this;
         }
+
+        /**
+         * flowAgentBridge.
+         *
+         * @param bridge bridge
+         * @return result
+         * @since 0.1.0
+         */
 
         public Builder flowAgentBridge(FlowAgentEngine.ReactBridge bridge) {
             this.flowAgentBridge = bridge;
             return this;
         }
 
+        /**
+         * complexIntentBridge.
+         *
+         * @param bridge bridge
+         * @return result
+         * @since 0.1.0
+         */
+
         public Builder complexIntentBridge(ComplexIntentDetectionEngine.TestBridge bridge) {
             this.complexIntentBridge = bridge;
             return this;
         }
+
+        /**
+         * flowApiBridge.
+         *
+         * @param bridge bridge
+         * @return result
+         * @since 0.1.0
+         */
 
         public Builder flowApiBridge(FlowApiEngine.TestBridge bridge) {
             this.flowApiBridge = bridge;
             return this;
         }
 
+        /**
+         * mcpClient.
+         *
+         * @param client client
+         * @return result
+         * @since 0.1.0
+         */
+
         public Builder mcpClient(McpClient client) {
             this.mcpClient = client;
             return this;
         }
+
+        /**
+         * build.
+         *
+         * @return result
+         * @since 0.1.0
+         */
 
         public StudioEngineTestOverrides build() {
             return new StudioEngineTestOverrides(this);

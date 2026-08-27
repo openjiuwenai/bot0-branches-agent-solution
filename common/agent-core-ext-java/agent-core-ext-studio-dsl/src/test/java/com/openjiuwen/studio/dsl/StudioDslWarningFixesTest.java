@@ -6,6 +6,9 @@ package com.openjiuwen.studio.dsl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.when;
 
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessageChunk;
 import com.openjiuwen.core.session.NodeSessionApi;
@@ -13,10 +16,10 @@ import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.exec.WorkflowVariableScope;
+import com.openjiuwen.studio.dsl.flowagent.FlowAgentEngine;
 import com.openjiuwen.studio.dsl.flowend.FlowEndEngine;
 import com.openjiuwen.studio.dsl.flowsetvariable.FlowSetVariableConfig;
 import com.openjiuwen.studio.dsl.flowsetvariable.FlowSetVariableEngine;
-import com.openjiuwen.studio.dsl.flowagent.FlowAgentEngine;
 import com.openjiuwen.studio.dsl.kb.KBAdapterFactory;
 import com.openjiuwen.studio.dsl.kb.KBSearchResult;
 import com.openjiuwen.studio.dsl.kb.OpenJiuwenKBAdapter;
@@ -27,30 +30,27 @@ import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.python.PythonCodeRunners;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 import com.openjiuwen.studio.dsl.store.ConversationValsStores;
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import com.openjiuwen.studio.dsl.util.ConditionEvaluator;
 import com.openjiuwen.studio.dsl.util.OutboundUrlSafety;
-import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import com.openjiuwen.studio.dsl.util.TypeCoercer;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.when;
 
 /**
  * Regression tests for review Warning batch A fixes.
  *
  * @since 2026-08-27
  */
+
 class StudioDslWarningFixesTest {
     @AfterEach
     void tearDown() {
@@ -214,17 +214,33 @@ class StudioDslWarningFixesTest {
     void kbAdapterFactory_supportsOpenJiuwen() {
         assertThat(KBAdapterFactory.create("OpenJiuwen")).isInstanceOf(OpenJiuwenKBAdapter.class);
     }
-
     @Test
     void studioTestHooks_tracksInstallLifecycle() {
         assertThat(StudioEngineTestSupport.isActive()).isFalse();
         StudioEngineTestSupport.installLlm(
                 new LlmChainEngine.ModelBridge() {
+
+                    /**
+                     * invoke.
+                     *
+                     * @param messages messages
+                     * @return result
+                     * @since 0.1.0
+                     */
+
                     @Override
                     public com.openjiuwen.core.foundation.llm.schema.AssistantMessage invoke(
                             java.util.List<com.openjiuwen.core.foundation.llm.schema.BaseMessage> messages) {
                         return null;
                     }
+
+                    /**
+                     * stream.
+                     *
+                     * @param messages messages
+                     * @return result
+                     * @since 0.1.0
+                     */
 
                     @Override
                     public java.util.Iterator<com.openjiuwen.core.foundation.llm.schema.AssistantMessageChunk> stream(
@@ -276,8 +292,16 @@ class StudioDslWarningFixesTest {
                 new FlowAgentEngine.ReactBridge() {
                     @Override
                     public Map<String, Object> invoke(Map<String, Object> mappedInputs) {
-                        return Map.of("output", "ok", "result_type", "tool");
-                    }
+        return Map.of("output", "ok", "result_type", "tool");
+    }
+
+                    /**
+                     * stream.
+                     *
+                     * @param mappedInputs mappedInputs
+                     * @return result
+                     * @since 0.1.0
+                     */
 
                     @Override
                     public java.util.Iterator<Object> stream(Map<String, Object> mappedInputs) {
@@ -310,11 +334,28 @@ class StudioDslWarningFixesTest {
 
         StudioEngineTestSupport.installLlm(
                 new LlmChainEngine.ModelBridge() {
+
+                    /**
+                     * invoke.
+                     *
+                     * @param messages messages
+                     * @return result
+                     * @since 0.1.0
+                     */
+
                     @Override
                     public com.openjiuwen.core.foundation.llm.schema.AssistantMessage invoke(
                             List<com.openjiuwen.core.foundation.llm.schema.BaseMessage> messages) {
                         return null;
                     }
+
+                    /**
+                     * stream.
+                     *
+                     * @param messages messages
+                     * @return result
+                     * @since 0.1.0
+                     */
 
                     @Override
                     public java.util.Iterator<AssistantMessageChunk> stream(

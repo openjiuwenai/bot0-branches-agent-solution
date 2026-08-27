@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl.questioner;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.context.ContextWindow;
 import com.openjiuwen.core.context.ModelContext;
@@ -29,6 +30,7 @@ import java.util.regex.Pattern;
  *
  * @since 2026-08-25
  */
+
 public final class QuestionerEngine {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final Pattern TEMPLATE_VAR = Pattern.compile("\\{\\{\\s*([\\w.]+)\\s*\\}\\}");
@@ -43,6 +45,7 @@ public final class QuestionerEngine {
      * @param nodeId nodeId
      * @param config config
      */
+
     public QuestionerEngine(String nodeId, QuestionerConfig config) {
         this(nodeId, config, null);
     }
@@ -54,6 +57,7 @@ public final class QuestionerEngine {
      * @param config config
      * @param modelInvoker modelInvoker
      */
+
     public QuestionerEngine(String nodeId, QuestionerConfig config, QuestionerLlmExtractor.ModelInvoker modelInvoker) {
         this.nodeId = nodeId;
         this.config = config;
@@ -67,6 +71,7 @@ public final class QuestionerEngine {
      * @param session session (nullable)
      * @return userFields map (already mapped names when finished); may still be interacting
      */
+
     public Map<String, Object> invoke(Map<String, Object> inputs, NodeSessionApi session) {
         return invoke(inputs, session, null);
     }
@@ -79,6 +84,7 @@ public final class QuestionerEngine {
      * @param context model context
      * @return userFields
      */
+
     public Map<String, Object> invoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         assertResponseType();
         Map<String, Object> in = inputs == null ? Map.of() : inputs;
@@ -340,7 +346,7 @@ public final class QuestionerEngine {
     private static String jsonFields(Map<String, Object> fields) {
         try {
             return MAPPER.writeValueAsString(fields);
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
             return String.valueOf(fields);
         }
     }
@@ -408,8 +414,8 @@ public final class QuestionerEngine {
 
     private void mergeContextChatHistory(Map<String, Object> userFields, ModelContext context) {
         if (!config.withChatHistory() || context == null) {
-            return;
-        }
+        return;
+    }
         if (userFields.containsKey("chatHistory")) {
             return;
         }
@@ -454,8 +460,8 @@ public final class QuestionerEngine {
 
     private void writeUserToContext(ModelContext context, String content) {
         if (!config.withChatHistory() || context == null || content == null || content.isEmpty()) {
-            return;
-        }
+        return;
+    }
         try {
             context.addMessages(new UserMessage(content));
         } catch (RuntimeException ignored) {
@@ -465,8 +471,8 @@ public final class QuestionerEngine {
 
     private void writeAssistantToContext(ModelContext context, String content) {
         if (!config.withChatHistory() || context == null || content == null || content.isEmpty()) {
-            return;
-        }
+        return;
+    }
         try {
             context.addMessages(new AssistantMessage(content));
         } catch (RuntimeException ignored) {
@@ -526,8 +532,8 @@ public final class QuestionerEngine {
 
     private void softTrace(NodeSessionApi session, Map<String, Object> data) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             session.trace(data);
         } catch (RuntimeException ignored) {
@@ -545,8 +551,8 @@ public final class QuestionerEngine {
 
     private static String sessionIdOf(NodeSessionApi session) {
         if (session == null) {
-            return null;
-        }
+        return null;
+    }
         try {
             String id = session.getSessionId();
             return id == null || id.isBlank() ? null : id;
@@ -607,7 +613,6 @@ public final class QuestionerEngine {
     private static Object convertType(Object value, String type) {
         return TypeCoercer.coerce(value, type, null, false);
     }
-
     private QuestionerState stateFromResult(Map<String, Object> result, QuestionerState fallback) {
         Object raw = result.get("_state");
         if (raw instanceof Map<?, ?> m) {
@@ -676,8 +681,8 @@ public final class QuestionerEngine {
 
     private void storeState(NodeSessionApi session, QuestionerState state) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             session.updateState(Map.of(QuestionerState.KEY, state.toMap()));
         } catch (RuntimeException ignored) {
@@ -687,8 +692,8 @@ public final class QuestionerEngine {
 
     private void publishInterrupt(NodeSessionApi session, String question) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             Map<String, Object> custom = new LinkedHashMap<>();
             custom.put("answer", question);
@@ -740,7 +745,14 @@ public final class QuestionerEngine {
         return null;
     }
 
-    /** Python {@code chat_history[-1].content} with {@code query} fallback. */
+    /**
+     * Python {@code chat_history[-1].content} with {@code query} fallback.
+     *
+     * @param userFields userFields
+     * @param query query
+     * @return result
+     * @since 0.1.0
+     */
     private static String resolveUserResponseFromHistory(Map<String, Object> userFields, String query) {
         String fromHistory = lastChatHistoryContent(userFields);
         if (fromHistory != null) {
@@ -751,8 +763,8 @@ public final class QuestionerEngine {
 
     private Object collectViaInteract(NodeSessionApi session, QuestionerState state) {
         if (session == null) {
-            return null;
-        }
+        return null;
+    }
         try {
             Map<String, Object> ask = new LinkedHashMap<>();
             ask.put("type", "INPUT_REQUIRED");
@@ -786,8 +798,8 @@ public final class QuestionerEngine {
 
     private static Object resolvePath(Map<String, Object> uf, String path) {
         if (uf.containsKey(path)) {
-            return uf.get(path);
-        }
+        return uf.get(path);
+    }
         if (path.startsWith("userFields.")) {
             return uf.get(path.substring("userFields.".length()));
         }
@@ -825,14 +837,12 @@ public final class QuestionerEngine {
     private static boolean bool(Object o) {
         return o instanceof Boolean b ? b : o != null && Boolean.parseBoolean(String.valueOf(o));
     }
-
     private record RailsResult(Map<String, Object> arguments, List<String> failedFields) {}
 
     private record ContinueAskDecision(boolean continueAsk, String question, boolean needUserConfirm) {
         static ContinueAskDecision end() {
-            return new ContinueAskDecision(false, "", false);
-        }
-
+        return new ContinueAskDecision(false, "", false);
+    }
         static ContinueAskDecision ask(String question, boolean needUserConfirm) {
             return new ContinueAskDecision(true, question, needUserConfirm);
         }

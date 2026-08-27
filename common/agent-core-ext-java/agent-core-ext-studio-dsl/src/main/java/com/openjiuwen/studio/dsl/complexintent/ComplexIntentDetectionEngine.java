@@ -6,9 +6,9 @@ package com.openjiuwen.studio.dsl.complexintent;
 
 import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.graph.pregel.GraphInterrupt;
-import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.interaction.InteractiveInput;
 import com.openjiuwen.core.session.interaction.WorkflowInteraction;
+import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.studio.dsl.contract.SubWorkflowResolver;
 import com.openjiuwen.studio.dsl.contract.ToolRegistry;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
@@ -32,17 +32,27 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class ComplexIntentDetectionEngine {
     public static final String USER_FIELDS = "userFields";
     public static final String KEY_CLASSIFICATION_ID = "classificationId";
     public static final String RESPONSE_CONTENT = "responseContent";
     public static final String INPUT = "input";
 
-    /** Test stub for intent + optional sub-workflow (mirrors patching IntentDetection / SubWorkflow). */
+    /**
+     * Test stub for intent + optional sub-workflow (mirrors patching IntentDetection / SubWorkflow).
+     */
     public interface TestBridge {
         Map<String, Object> intentResult(Map<String, Object> convertedInputs);
 
-        /** {@code null} = skip / no workflow result. */
+        /**
+         * {@code null} = skip / no workflow result.
+         *
+         * @param workflowId workflowId
+         * @param subInputs subInputs
+         * @return result
+         * @since 0.1.0
+         */
         Map<String, Object> subWorkflowResult(String workflowId, Map<String, Object> subInputs);
     }
 
@@ -62,7 +72,6 @@ public final class ComplexIntentDetectionEngine {
     public ComplexIntentDetectionEngine(String nodeId, Map<String, Object> nodeConfigs) {
         this(nodeId, nodeConfigs, null, null, null, null, null);
     }
-
     public ComplexIntentDetectionEngine(
             String nodeId,
             Map<String, Object> nodeConfigs,
@@ -71,7 +80,6 @@ public final class ComplexIntentDetectionEngine {
             NodeBuildContext buildContext) {
         this(nodeId, nodeConfigs, subWorkflowResolver, nodeTypeRegistry, buildContext, null, null);
     }
-
     public ComplexIntentDetectionEngine(
             String nodeId,
             Map<String, Object> nodeConfigs,
@@ -81,7 +89,6 @@ public final class ComplexIntentDetectionEngine {
             ToolRegistry toolRegistry) {
         this(nodeId, nodeConfigs, subWorkflowResolver, nodeTypeRegistry, buildContext, toolRegistry, null);
     }
-
     public ComplexIntentDetectionEngine(
             String nodeId,
             Map<String, Object> nodeConfigs,
@@ -124,20 +131,49 @@ public final class ComplexIntentDetectionEngine {
         this.buildContext = buildContext;
     }
 
+    /**
+     * getState.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public ComplexIntentState getState() {
         return state;
     }
 
+    /**
+     * loadState.
+     *
+     * @param s s
+     * @since 0.1.0
+     */
+
     public void loadState(ComplexIntentState s) {
         this.state = s == null ? new ComplexIntentState() : s.copy();
     }
+
+    /**
+     * reset.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean reset() {
         this.state = new ComplexIntentState();
         return true;
     }
 
-    /** Python {@code invoke}. */
+    /**
+     * Python {@code invoke}.
+     *
+     * @param inputs inputs
+     * @param session session
+     * @param context context
+     * @return result
+     * @since 0.1.0
+     */
     public Map<String, Object> invoke(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         try {
@@ -437,8 +473,8 @@ public final class ComplexIntentDetectionEngine {
 
     private static boolean isHang(Map<String, Object> out) {
         if (out == null) {
-            return false;
-        }
+        return false;
+    }
         Object uf = out.get(USER_FIELDS);
         if (uf instanceof Map<?, ?> m) {
             Object hang = m.get("hangState");
@@ -455,8 +491,8 @@ public final class ComplexIntentDetectionEngine {
 
     private void loadStateFromSession(NodeSessionApi session) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             Object raw = session.getState(ComplexIntentState.STATE_KEY);
             if (raw instanceof Map<?, ?> m) {
@@ -471,8 +507,8 @@ public final class ComplexIntentDetectionEngine {
 
     private void storeStateToSession(NodeSessionApi session) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             session.updateState(Map.of(ComplexIntentState.STATE_KEY, state.toMap()));
         } catch (RuntimeException ignored) {

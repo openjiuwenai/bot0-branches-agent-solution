@@ -6,24 +6,24 @@ package com.openjiuwen.studio.dsl.adapter.control;
 
 import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.session.NodeSessionApi;
-import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.core.workflow.component.BranchComponent;
+import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.core.workflow.condition.AlwaysTrue;
 import com.openjiuwen.studio.dsl.adapter.AbstractStudioNode;
+import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
-import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 import com.openjiuwen.studio.dsl.util.ConditionEvaluator;
 
 import java.util.ArrayList;
+import java.util.function.BooleanSupplier;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.BooleanSupplier;
 
 /**
  * jiuwen.branch — populate core BranchComponent/BranchRouter and select branchId (FEAT routing).
@@ -32,12 +32,15 @@ import java.util.function.BooleanSupplier;
  *
  * @since 2026-08-17
  */
+
 public final class BranchNodeHandler implements NodeHandlerFactory {
+
     /**
      * canonicalType.
      *
      * @return result
      */
+
     @Override
     public String canonicalType() {
         return "jiuwen.branch";
@@ -48,6 +51,7 @@ public final class BranchNodeHandler implements NodeHandlerFactory {
      *
      * @return result
      */
+
     @Override
     public Set<String> aliases() {
         return Set.of();
@@ -60,6 +64,7 @@ public final class BranchNodeHandler implements NodeHandlerFactory {
      * @param ctx ctx
      * @return result
      */
+
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         BranchComponent component = new BranchComponent();
@@ -80,10 +85,11 @@ public final class BranchNodeHandler implements NodeHandlerFactory {
      * @param executable executable
      * @return result
      */
+
     static Object toCoreCondition(BranchDef d, BranchExecutable executable) {
         if (d.isDefault) {
-            return new AlwaysTrue();
-        }
+        return new AlwaysTrue();
+    }
         if (d.condition instanceof String s) {
             return s;
         }
@@ -113,6 +119,7 @@ public final class BranchNodeHandler implements NodeHandlerFactory {
          * @param context context
          * @return result
          */
+
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
             Map<String, Object> uf = userFieldsOf(inputs);
@@ -132,6 +139,7 @@ public final class BranchNodeHandler implements NodeHandlerFactory {
          *
          * @return result
          */
+
         public BranchComponent branchComponent() {
             return component;
         }
@@ -174,8 +182,8 @@ public final class BranchNodeHandler implements NodeHandlerFactory {
 
     private static void addParsed(List<BranchDef> out, Object item) {
         if (!(item instanceof Map<?, ?> m)) {
-            return;
-        }
+        return;
+    }
         String id = String.valueOf(first(m, "branchId", "id", "default"));
         Object cond = firstObj(m, "condition", "conditions");
         boolean isDefault = Boolean.TRUE.equals(m.get("isDefault"))

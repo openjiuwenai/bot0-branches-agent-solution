@@ -8,10 +8,10 @@ import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.adapter.AbstractStudioNode;
+import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
-import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -26,27 +26,57 @@ import java.util.Set;
  *
  * @since 2026-08-25
  */
+
 public final class ParamOutputNodeHandler implements NodeHandlerFactory {
     public static final String TYPE = "EI.ParamOutput";
     public static final String USER_FIELDS = "userFields";
     public static final String SYSTEM_FIELDS = "systemFields";
+
+    /**
+     * canonicalType.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public String canonicalType() {
         return TYPE;
     }
 
+    /**
+     * aliases.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public Set<String> aliases() {
         return Set.of("ei.paramOutput", "ei.ParamOutput");
     }
+
+    /**
+     * create.
+     *
+     * @param node node
+     * @param ctx ctx
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         return new ParamOutputExecutable(node);
     }
 
-    /** Python {@code ParamOutput.invoke} — map / non-map branches. */
+    /**
+     * Python {@code ParamOutput.invoke} — map / non-map branches.
+     *
+     * @param inputs inputs
+     * @return result
+     * @since 0.1.0
+     */
     public static Map<String, Object> passthrough(Object inputs) {
         Map<String, Object> result = new LinkedHashMap<>();
         if (inputs instanceof Map<?, ?> m) {
@@ -73,11 +103,28 @@ public final class ParamOutputNodeHandler implements NodeHandlerFactory {
         /**
          * Bypass {@link AbstractStudioNode#asMap} so non-Map inputs match Python
          * {@code {USER_FIELDS: inputs}} rather than wrapping as {@code {value: ...}}.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
          */
+
         @Override
         public Object invoke(Object inputs, NodeSessionApi session, ModelContext context) {
             return passthrough(inputs);
         }
+
+        /**
+         * doInvoke.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
 
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {

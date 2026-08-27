@@ -24,6 +24,7 @@ import java.util.Map;
  *
  * @since 2026-08-25
  */
+
 class WorkflowNodeLoopCasesTest {
     private NodeTypeRegistry registry;
 
@@ -31,7 +32,6 @@ class WorkflowNodeLoopCasesTest {
     void setUp() {
         registry = NodeTypeRegistry.createWithBuiltins();
     }
-
     @SuppressWarnings("unchecked")
     private static Map<String, Object> uf(Object invokeOut) {
         Map<String, Object> out = (Map<String, Object>) invokeOut;

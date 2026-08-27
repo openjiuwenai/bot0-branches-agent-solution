@@ -11,6 +11,7 @@ import com.openjiuwen.studio.dsl.model.NodeCauseCode;
  *
  * @since 2026-08-17
  */
+
 public class NodeExecutionException extends RuntimeException {
     private final String nodeId;
     private final String nodeType;
@@ -24,6 +25,7 @@ public class NodeExecutionException extends RuntimeException {
      * @param causeCode causeCode
      * @param reason reason
      */
+
     public NodeExecutionException(String nodeId, String nodeType, NodeCauseCode causeCode, String reason) {
         this(nodeId, nodeType, causeCode, reason, null);
     }
@@ -37,6 +39,7 @@ public class NodeExecutionException extends RuntimeException {
      * @param reason reason
      * @param cause cause
      */
+
     public NodeExecutionException(
             String nodeId, String nodeType, NodeCauseCode causeCode, String reason, Throwable cause) {
         super(format(nodeId, nodeType, causeCode, reason), cause);
@@ -54,6 +57,7 @@ public class NodeExecutionException extends RuntimeException {
      *
      * @return result
      */
+
     public String nodeId() {
         return nodeId;
     }
@@ -63,6 +67,7 @@ public class NodeExecutionException extends RuntimeException {
      *
      * @return result
      */
+
     public String nodeType() {
         return nodeType;
     }
@@ -72,6 +77,7 @@ public class NodeExecutionException extends RuntimeException {
      *
      * @return result
      */
+
     public NodeCauseCode causeCode() {
         return causeCode;
     }

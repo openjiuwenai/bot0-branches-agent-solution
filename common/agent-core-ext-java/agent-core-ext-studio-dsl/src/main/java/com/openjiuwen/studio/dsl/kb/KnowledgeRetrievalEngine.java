@@ -14,9 +14,9 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.UUID;
 
 /**
  * Knowledge retrieval orchestration — strict 1:1 with Python {@code FlowKnowledgeRetrieval}.
@@ -28,6 +28,7 @@ import java.util.regex.Pattern;
  *
  * @since 2026-08-25
  */
+
 public final class KnowledgeRetrievalEngine {
     private static final Pattern IMAGE_ID_PATTERN = Pattern.compile("\\{(img-[a-z0-9-]+)}", Pattern.CASE_INSENSITIVE);
     private static final String RETRIEVAL_IMAGE_FORMAT = "![img](https://agent_arts_knowledge_img_url/%s)";
@@ -43,6 +44,7 @@ public final class KnowledgeRetrievalEngine {
      * @param nodeId nodeId
      * @param configs configs
      */
+
     public KnowledgeRetrievalEngine(String nodeId, Map<String, Object> configs) {
         this.nodeId = nodeId;
         this.configs = configs == null ? Map.of() : configs;
@@ -55,6 +57,7 @@ public final class KnowledgeRetrievalEngine {
      * @param session session
      * @return userFields
      */
+
     public Map<String, Object> invoke(Map<String, Object> inputs, NodeSessionApi session) {
         // Explicit mockDocuments (test / host stub — not in Python, keeps FEAT smoke)
         Object docs = configs.get("mockDocuments");
@@ -138,8 +141,8 @@ public final class KnowledgeRetrievalEngine {
             List<Map<String, Object>> knowledgeBases,
             Map<String, Object> retrievalParams) {
         if (isCustomSource(connection)) {
-            return retrieveCustom(adapter, query, connection, knowledgeBases, retrievalParams);
-        }
+        return retrieveCustom(adapter, query, connection, knowledgeBases, retrievalParams);
+    }
         List<Map<String, Object>> active = new ArrayList<>();
         for (Map<String, Object> kb : knowledgeBases) {
             if (!"CLOSE".equalsIgnoreCase(KbHttp.str(kb.get("status")))) {
@@ -310,8 +313,8 @@ public final class KnowledgeRetrievalEngine {
 
     private static ImageReplaceResult replaceImageIds(String content, boolean retrieveImage) {
         if (content == null || content.isEmpty()) {
-            return new ImageReplaceResult("", Map.of());
-        }
+        return new ImageReplaceResult("", Map.of());
+    }
         if (!retrieveImage) {
             return new ImageReplaceResult(IMAGE_ID_PATTERN.matcher(content).replaceAll(""), Map.of());
         }
@@ -336,7 +339,6 @@ public final class KnowledgeRetrievalEngine {
     static boolean isCustomSource(Map<String, Object> connection) {
         return "CUSTOM".equalsIgnoreCase(KbHttp.str(connection.get("knowledge_source")));
     }
-
     private Map<String, Object> resolveKbConfig() {
         Object inline = configs.get("kbConfig");
         if (inline instanceof Map<?, ?>) {

@@ -17,6 +17,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class FlowAgentToolLoader {
     private FlowAgentToolLoader() {}
 
@@ -27,6 +28,7 @@ public final class FlowAgentToolLoader {
      * @param studioTools optional studio tool registry (may be null)
      * @return tools found (missing plugin_id skipped with soft-fail like Python)
      */
+
     public static List<Tool> loadToolsFromPlugins(
             List<Map<String, Object>> pluginConfigs, ToolRegistry studioTools) {
         List<Tool> tools = new ArrayList<>();

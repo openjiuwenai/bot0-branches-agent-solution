@@ -13,7 +13,9 @@ import com.openjiuwen.studio.dsl.python.PythonExecResult;
  *
  * @since 2026-08-17
  */
+
 public interface PythonCodeExecutor {
+
     /**
      * execute.
      *
@@ -21,5 +23,6 @@ public interface PythonCodeExecutor {
      * @return result
      * @throws NodeExecutionException when the call fails
      */
+
     PythonExecResult execute(PythonExecRequest request) throws NodeExecutionException;
 }

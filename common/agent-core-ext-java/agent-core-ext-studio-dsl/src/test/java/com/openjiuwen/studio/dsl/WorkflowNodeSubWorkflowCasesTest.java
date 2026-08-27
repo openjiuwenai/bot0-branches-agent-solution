@@ -11,22 +11,22 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.interaction.InteractiveInput;
 import com.openjiuwen.core.session.internal.NodeSession;
 import com.openjiuwen.core.session.internal.WorkflowSession;
+import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.state.InMemoryState;
 import com.openjiuwen.core.workflow.ComponentExecutable;
-import com.openjiuwen.studio.dsl.adapter.StudioStreamFrames;
 import com.openjiuwen.studio.dsl.adapter.control.NestedWorkflowNodeHandler;
 import com.openjiuwen.studio.dsl.adapter.control.SubRequestScope;
-import com.openjiuwen.studio.dsl.support.InMemoryToolRegistry;
+import com.openjiuwen.studio.dsl.adapter.StudioStreamFrames;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.AssembledWorkflow;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
+import com.openjiuwen.studio.dsl.support.InMemoryToolRegistry;
 import com.openjiuwen.studio.dsl.util.SanitizeMessage;
 import com.openjiuwen.studio.dsl.util.SessionStateIsolator;
 
@@ -35,12 +35,12 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Java port of high-value node-level cases from {@code test_sub_workflow.py}
@@ -51,6 +51,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * @since 2026-08-26
  */
+
 class WorkflowNodeSubWorkflowCasesTest {
     private NodeTypeRegistry registry;
 
@@ -58,7 +59,6 @@ class WorkflowNodeSubWorkflowCasesTest {
     void setUp() {
         registry = NodeTypeRegistry.createWithBuiltins();
     }
-
     @SuppressWarnings("unchecked")
     private static Map<String, Object> uf(Object invokeOut) {
         Map<String, Object> out = (Map<String, Object>) invokeOut;
@@ -79,7 +79,6 @@ class WorkflowNodeSubWorkflowCasesTest {
     private static NodeSessionApi statefulSession(AtomicReference<Map<String, Object>> bucket) {
         return statefulSession(bucket, new AtomicReference<>(new HashMap<>()));
     }
-
     private static NodeSessionApi statefulSession(
             AtomicReference<Map<String, Object>> bucket, AtomicReference<Map<String, Object>> global) {
         NodeSessionApi session = mock(NodeSessionApi.class);

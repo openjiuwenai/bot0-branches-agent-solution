@@ -17,6 +17,7 @@ import java.util.Map;
  *
  * @since 2026-08-25
  */
+
 public final class QuestionerConfig {
     private final String questionContent;
     private final boolean extractFieldsFromResponse;
@@ -78,6 +79,14 @@ public final class QuestionerConfig {
         this.modelRequestConfig = modelRequestConfig;
         this.rawConfigs = rawConfigs == null ? Map.of() : Map.copyOf(rawConfigs);
     }
+
+    /**
+     * fromNodeConfigs.
+     *
+     * @param configs configs
+     * @return result
+     * @since 0.1.0
+     */
 
     @SuppressWarnings("unchecked")
     public static QuestionerConfig fromNodeConfigs(Map<String, Object> configs) {
@@ -217,57 +226,125 @@ public final class QuestionerConfig {
     private static String str(Object o) {
         return o == null ? "" : String.valueOf(o);
     }
-
     private static boolean bool(Object o, boolean def) {
         if (o instanceof Boolean b) {
-            return b;
-        }
+        return b;
+    }
         if (o == null) {
             return def;
         }
         return Boolean.parseBoolean(String.valueOf(o));
     }
 
+    /**
+     * questionContent.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String questionContent() {
         return questionContent;
     }
+
+    /**
+     * extractFieldsFromResponse.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean extractFieldsFromResponse() {
         return extractFieldsFromResponse;
     }
 
+    /**
+     * questionConstructionMethod.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String questionConstructionMethod() {
         return questionConstructionMethod;
     }
+
+    /**
+     * maxResponse.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public int maxResponse() {
         return maxResponse;
     }
 
+    /**
+     * acceptLanguage.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String acceptLanguage() {
         return acceptLanguage;
     }
+
+    /**
+     * autoAskTemplate.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String autoAskTemplate() {
         return autoAskTemplate;
     }
 
+    /**
+     * allowNodeConfirm.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean allowNodeConfirm() {
         return allowNodeConfirm;
     }
+
+    /**
+     * allowNodeBreak.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean allowNodeBreak() {
         return allowNodeBreak;
     }
 
+    /**
+     * enumVisible.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean enumVisible() {
         return enumVisible;
     }
 
+    /**
+     * keyFields.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public List<QuestionerField> keyFields() {
         return keyFields;
     }
-
     public Map<String, Object> railsConfig() {
         return railsConfig;
     }
@@ -276,41 +353,103 @@ public final class QuestionerConfig {
         return mockExtractedFields;
     }
 
+    /**
+     * extraPromptForFieldsExtraction.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String extraPromptForFieldsExtraction() {
         return extraPromptForFieldsExtraction;
     }
+
+    /**
+     * exampleContent.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String exampleContent() {
         return exampleContent;
     }
 
+    /**
+     * promptTemplate.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String promptTemplate() {
         return promptTemplate;
     }
+
+    /**
+     * withChatHistory.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean withChatHistory() {
         return withChatHistory;
     }
 
+    /**
+     * modelClientConfig.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public ModelClientConfig modelClientConfig() {
         return modelClientConfig;
     }
 
+    /**
+     * modelRequestConfig.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public ModelRequestConfig modelRequestConfig() {
         return modelRequestConfig;
     }
-
     public Map<String, Object> rawConfigs() {
         return rawConfigs;
     }
+
+    /**
+     * hasModelWiring.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean hasModelWiring() {
         return modelClientConfig != null && modelRequestConfig != null;
     }
 
+    /**
+     * hasQuestionContent.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean hasQuestionContent() {
         return questionContent != null && !questionContent.isBlank();
     }
+
+    /**
+     * needExtractFields.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean needExtractFields() {
         return extractFieldsFromResponse && !keyFields.isEmpty();
@@ -322,10 +461,11 @@ public final class QuestionerConfig {
      * @param state state
      * @return true when more extraction rounds are needed
      */
+
     public boolean needExtractFields(QuestionerState state) {
         if (!extractFieldsFromResponse || keyFields.isEmpty()) {
-            return false;
-        }
+        return false;
+    }
         int extracted = state == null ? 0 : state.extractedFields().size();
         return keyFields.size() > extracted;
     }

@@ -9,13 +9,14 @@ package com.openjiuwen.studio.dsl.flowapi;
  *
  * @since 2026-08-26
  */
+
 final class FlowApiTypeTransform {
     private FlowApiTypeTransform() {}
 
     static Object transform(String nodeId, Object value, String expectedType, String key) {
         if (expectedType == null || expectedType.isBlank()) {
-            return value;
-        }
+        return value;
+    }
         String t = expectedType.toLowerCase();
         try {
             return switch (t) {

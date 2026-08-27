@@ -19,6 +19,7 @@ import java.util.regex.Pattern;
  *
  * @since 2026-08-25
  */
+
 public final class FlowCodeSchemaSupport {
     private FlowCodeSchemaSupport() {}
 
@@ -28,10 +29,11 @@ public final class FlowCodeSchemaSupport {
      * @param nodeId nodeId
      * @param code code
      */
+
     public static void checkBlacklist(String nodeId, String code) {
         if (code == null || code.isBlank()) {
-            return;
-        }
+        return;
+    }
         String raw = System.getenv("CODE_BLACK_LIST");
         if (raw == null || raw.isBlank()) {
             raw = System.getProperty("CODE_BLACK_LIST", "[]");
@@ -59,6 +61,7 @@ public final class FlowCodeSchemaSupport {
      * @param configs node configs
      * @return result
      */
+
     public static Map<String, Object> coerceInputs(Map<String, Object> inputs, Map<String, Object> configs) {
         if (inputs == null) {
             return Map.of();
@@ -86,6 +89,7 @@ public final class FlowCodeSchemaSupport {
      * @param configs configs
      * @return result
      */
+
     public static Map<String, Object> coerceOutputs(Map<String, Object> outputs, Map<String, Object> configs) {
         if (outputs == null) {
             return Map.of();

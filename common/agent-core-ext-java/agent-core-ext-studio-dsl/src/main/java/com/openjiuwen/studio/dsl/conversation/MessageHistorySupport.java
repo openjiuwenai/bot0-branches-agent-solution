@@ -14,13 +14,22 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class MessageHistorySupport {
     private MessageHistorySupport() {}
 
+    /**
+     * readEnableHistory.
+     *
+     * @param msg msg
+     * @return result
+     * @since 0.1.0
+     */
+
     public static boolean readEnableHistory(BaseMessage msg) {
         if (msg == null) {
-            return true;
-        }
+        return true;
+    }
         if (msg instanceof ConversationUserMessage user && user.getEnableHistory() != null) {
             return user.getEnableHistory();
         }
@@ -43,7 +52,13 @@ public final class MessageHistorySupport {
         return true;
     }
 
-    /** Python {@code get_latest_chat_history} turn dict. */
+    /**
+     * Python {@code get_latest_chat_history} turn dict.
+     *
+     * @param msg msg
+     * @return result
+     * @since 0.1.0
+     */
     public static Map<String, Object> toHistoryTurn(BaseMessage msg) {
         Map<String, Object> turn = new LinkedHashMap<>();
         turn.put("role", msg.getRole() == null ? "" : msg.getRole());

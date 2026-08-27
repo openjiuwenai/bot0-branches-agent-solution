@@ -19,6 +19,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class FlowAggregateEngine {
     public static final String USER_FIELDS = "userFields";
 
@@ -37,6 +38,7 @@ public final class FlowAggregateEngine {
      * @param session unused (parity signature)
      * @return fields map with userFields only
      */
+
     public Map<String, Object> invoke(Map<String, Object> inputs, NodeSessionApi session) {
         String mode = config.mode();
         Map<String, List<String>> groups = config.groups();
@@ -66,13 +68,18 @@ public final class FlowAggregateEngine {
      * @param session session
      * @return same shape as invoke
      */
+
     public Map<String, Object> collect(Object inputs, NodeSessionApi session) {
         Map<String, Object> resolved = resolveStreamInputs(asMap(inputs));
         return invoke(resolved, session);
     }
 
     /**
-     * Python: {@code inner if (isinstance(inner, dict) and inner) else inputs}.
+     * * Python: {@code inner if (isinstance(inner, dict) and inner) else inputs}.
+     *
+     * @param inputs inputs
+     * @return result
+     * @since 0.1.0
      */
     public static Map<String, Object> extractUser(Map<String, Object> inputs) {
         if (inputs == null) {
@@ -88,12 +95,16 @@ public final class FlowAggregateEngine {
     }
 
     /**
-     * Python {@code _first_non_empty}.
+     * * Python {@code _first_non_empty}.
+     *
+     * @param lst lst
+     * @return result
+     * @since 0.1.0
      */
     public static Object firstNonEmpty(List<Object> lst) {
         if (lst == null || lst.isEmpty()) {
-            return null;
-        }
+        return null;
+    }
         for (Object x : lst) {
             if (x instanceof String s) {
                 if (!s.isEmpty()) {
@@ -107,12 +118,15 @@ public final class FlowAggregateEngine {
     }
 
     /**
-     * Python {@code _validate_param_type} (strict type equality; no Number widen).
+     * * Python {@code _validate_param_type} (strict type equality; no Number widen).
+     *
+     * @param lst lst
+     * @since 0.1.0
      */
     void validateParamType(List<Object> lst) {
         if (lst == null || lst.isEmpty()) {
-            return;
-        }
+        return;
+    }
         List<Object> nonNull = new ArrayList<>();
         for (Object item : lst) {
             if (item != null) {
@@ -136,7 +150,10 @@ public final class FlowAggregateEngine {
     }
 
     /**
-     * Python {@code _validate_dict_value_types}.
+     * * Python {@code _validate_dict_value_types}.
+     *
+     * @param lst lst
+     * @since 0.1.0
      */
     @SuppressWarnings("unchecked")
     void validateDictValueTypes(List<Object> lst) {
@@ -163,7 +180,11 @@ public final class FlowAggregateEngine {
     }
 
     /**
-     * Python {@code _resolve_stream_inputs} — Iterator / Iterable / Publisher as AsyncGenerator.
+     * * Python {@code _resolve_stream_inputs} — Iterator / Iterable / Publisher as AsyncGenerator.
+     *
+     * @param inputs inputs
+     * @return result
+     * @since 0.1.0
      */
     @SuppressWarnings("unchecked")
     static Map<String, Object> resolveStreamInputs(Map<String, Object> inputs) {
@@ -185,8 +206,8 @@ public final class FlowAggregateEngine {
 
     private static Object resolveOne(Object value) {
         if (value instanceof Iterator<?> it) {
-            return joinChunks(it);
-        }
+        return joinChunks(it);
+    }
         if (value instanceof Iterable<?> it && !(value instanceof Map<?, ?>) && !(value instanceof CharSequence)) {
             return joinChunks(it.iterator());
         }

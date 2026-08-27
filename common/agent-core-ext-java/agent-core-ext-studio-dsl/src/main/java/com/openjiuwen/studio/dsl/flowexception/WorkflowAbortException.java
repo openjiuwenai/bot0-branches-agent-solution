@@ -14,10 +14,17 @@ import java.util.Objects;
  *
  * @since 2026-08-26
  */
+
 public final class WorkflowAbortException extends RuntimeException {
-    /** Python {@code WORKFLOW_EXCEPTION_END_ERROR[0]}. */
+
+    /**
+     * Python {@code WORKFLOW_EXCEPTION_END_ERROR[0]}.
+     */
     public static final int ERROR_CODE = 101924;
-    /** Python {@code WORKFLOW_EXCEPTION_END_ERROR[1]}. */
+
+    /**
+     * Python {@code WORKFLOW_EXCEPTION_END_ERROR[1]}.
+     */
     public static final String ERROR_MESSAGE =
             "The workflow anomaly termination component terminates execution";
 
@@ -35,10 +42,16 @@ public final class WorkflowAbortException extends RuntimeException {
         this.nodeType = nodeType;
     }
 
+    /**
+     * errorCode.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public int errorCode() {
         return ERROR_CODE;
     }
-
     public Map<String, Object> data() {
         return data;
     }
@@ -47,17 +60,45 @@ public final class WorkflowAbortException extends RuntimeException {
         return data;
     }
 
+    /**
+     * nodeId.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String nodeId() {
         return nodeId;
     }
+
+    /**
+     * nodeName.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String nodeName() {
         return nodeName;
     }
 
+    /**
+     * nodeType.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String nodeType() {
         return nodeType;
     }
+
+    /**
+     * toString.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public String toString() {
@@ -70,11 +111,19 @@ public final class WorkflowAbortException extends RuntimeException {
                 + '}';
     }
 
+    /**
+     * equals.
+     *
+     * @param o o
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {
-            return true;
-        }
+        return true;
+    }
         if (!(o instanceof WorkflowAbortException that)) {
             return false;
         }
@@ -83,6 +132,13 @@ public final class WorkflowAbortException extends RuntimeException {
                 && Objects.equals(nodeName, that.nodeName)
                 && Objects.equals(nodeType, that.nodeType);
     }
+
+    /**
+     * hashCode.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public int hashCode() {

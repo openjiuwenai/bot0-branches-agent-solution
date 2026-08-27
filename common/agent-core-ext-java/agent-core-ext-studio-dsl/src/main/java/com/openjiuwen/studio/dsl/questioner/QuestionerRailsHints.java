@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
  *
  * @since 2026-08-26
  */
+
 final class QuestionerRailsHints {
     private static final String CONTINUE_ASK_ZH = "请您提供{non_extracted_key_fields_names}相关的信息";
     private static final String CONTINUE_ASK_EN =
@@ -115,11 +116,10 @@ final class QuestionerRailsHints {
     static String formatConstraintsForPrompt(QuestionerConfig config, String fieldName) {
         return formatConstraintParts(config, constraintsForField(config, fieldName), true);
     }
-
     static String formatConstraintHint(QuestionerConfig config, String fieldName) {
         if (!config.enumVisible()) {
-            return "";
-        }
+        return "";
+    }
         return formatConstraintParts(config, constraintsForField(config, fieldName), false);
     }
 
@@ -207,8 +207,8 @@ final class QuestionerRailsHints {
 
     static String constructContinueQuestion(QuestionerConfig config, List<QuestionerField> missing) {
         if ("llm_based".equalsIgnoreCase(config.questionConstructionMethod())) {
-            return formatContinueAskQuestion(config, missing);
-        }
+        return formatContinueAskQuestion(config, missing);
+    }
         return constructQuestionWithConstraints(config, missing);
     }
 
@@ -253,11 +253,10 @@ final class QuestionerRailsHints {
     private static String formatDescription(String formatType) {
         return FORMAT_DESCRIPTIONS.getOrDefault(formatType, "");
     }
-
     private static String datetimeFormatHint(String dateFormat) {
         if (DATETIME_HINTS.containsKey(dateFormat)) {
-            return DATETIME_HINTS.get(dateFormat);
-        }
+        return DATETIME_HINTS.get(dateFormat);
+    }
         return dateFormat
                 .replace("%Y", "2025")
                 .replace("%y", "25")

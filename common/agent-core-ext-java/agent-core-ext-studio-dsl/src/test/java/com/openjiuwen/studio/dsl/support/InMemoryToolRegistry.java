@@ -7,15 +7,16 @@ package com.openjiuwen.studio.dsl.support;
 import com.openjiuwen.core.foundation.tool.Tool;
 import com.openjiuwen.studio.dsl.contract.ToolRegistry;
 
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * InMemoryToolRegistry for Studio DSL node-type extension (FEAT-031).
  *
  * @since 2026-08-17
  */
+
 public final class InMemoryToolRegistry implements ToolRegistry {
     private final Map<String, Tool> byId = new ConcurrentHashMap<>();
 
@@ -25,6 +26,7 @@ public final class InMemoryToolRegistry implements ToolRegistry {
      * @param apiId apiId
      * @param tool tool
      */
+
     public void register(String apiId, Tool tool) {
         byId.put(apiId, tool);
     }
@@ -35,6 +37,7 @@ public final class InMemoryToolRegistry implements ToolRegistry {
      * @param apiId apiId
      * @return result
      */
+
     @Override
     public Optional<Tool> find(String apiId) {
         return Optional.ofNullable(byId.get(apiId));

@@ -11,6 +11,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class McpToolParam {
     public static final String METHOD_BODY = "Body";
     public static final String METHOD_HEADERS = "Headers";
@@ -32,6 +33,14 @@ public final class McpToolParam {
         this.method = method == null || method.isBlank() ? METHOD_BODY : method;
         this.defaultValue = defaultValue;
     }
+
+    /**
+     * fromMap.
+     *
+     * @param raw raw
+     * @return result
+     * @since 0.1.0
+     */
 
     public static McpToolParam fromMap(Map<?, ?> raw) {
         Object req = raw.get("required");
@@ -62,25 +71,67 @@ public final class McpToolParam {
                 def);
     }
 
+    /**
+     * name.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String name() {
         return name;
     }
+
+    /**
+     * description.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String description() {
         return description;
     }
 
+    /**
+     * type.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String type() {
         return type;
     }
+
+    /**
+     * required.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean required() {
         return required;
     }
 
+    /**
+     * method.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String method() {
         return method;
     }
+
+    /**
+     * defaultValue.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public Object defaultValue() {
         return defaultValue;

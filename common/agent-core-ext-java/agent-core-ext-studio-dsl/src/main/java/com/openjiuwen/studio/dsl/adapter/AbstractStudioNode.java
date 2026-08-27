@@ -6,8 +6,8 @@ package com.openjiuwen.studio.dsl.adapter;
 
 import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.graph.pregel.GraphInterrupt;
-import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.interaction.WorkflowInteraction;
+import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.WorkflowComponent;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.flowexception.WorkflowAbortException;
@@ -15,6 +15,7 @@ import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
 
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -23,12 +24,15 @@ import java.util.Map;
  *
  * @since 2026-08-17
  */
+
 public abstract class AbstractStudioNode extends WorkflowComponent {
+
     /**
      * node.
      *
      * @return result
      */
+
     protected final AssembledNode node;
 
     /**
@@ -36,6 +40,7 @@ public abstract class AbstractStudioNode extends WorkflowComponent {
      *
      * @param node node
      */
+
     protected AbstractStudioNode(AssembledNode node) {
         this.node = node;
     }
@@ -48,6 +53,7 @@ public abstract class AbstractStudioNode extends WorkflowComponent {
      * @param context context
      * @return result
      */
+
     @Override
     public Object invoke(Object inputs, NodeSessionApi session, ModelContext context) {
         try {
@@ -94,6 +100,7 @@ public abstract class AbstractStudioNode extends WorkflowComponent {
      * @return result
      * @throws Exception when the call fails
      */
+
     protected abstract NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context)
             throws Exception;
 
@@ -103,6 +110,7 @@ public abstract class AbstractStudioNode extends WorkflowComponent {
      * @param inputs inputs
      * @return result
      */
+
     @SuppressWarnings("unchecked")
     protected static Map<String, Object> asMap(Object inputs) {
         if (inputs == null) {
@@ -122,6 +130,7 @@ public abstract class AbstractStudioNode extends WorkflowComponent {
      * @param inputs inputs
      * @return result
      */
+
     protected static Map<String, Object> userFieldsOf(Map<String, Object> inputs) {
         Object uf = inputs.get("userFields");
         if (uf instanceof Map<?, ?> m) {

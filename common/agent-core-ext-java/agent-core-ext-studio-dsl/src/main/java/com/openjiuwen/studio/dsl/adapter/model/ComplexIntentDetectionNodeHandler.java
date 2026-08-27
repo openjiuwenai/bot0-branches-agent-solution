@@ -9,10 +9,10 @@ import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.adapter.AbstractStudioNode;
 import com.openjiuwen.studio.dsl.complexintent.ComplexIntentDetectionEngine;
+import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
-import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -23,22 +23,46 @@ import java.util.Set;
  *
  * @since 2026-08-25
  */
+
 public final class ComplexIntentDetectionNodeHandler implements NodeHandlerFactory {
+
+    /**
+     * canonicalType.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public String canonicalType() {
         return "EI.ComplexIntentDetection";
     }
+
+    /**
+     * aliases.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public Set<String> aliases() {
         return Set.of("ei.complexIntentDetection", "EI.complexIntentDetection");
     }
 
+    /**
+     * create.
+     *
+     * @param node node
+     * @param ctx ctx
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         return new ComplexIntentExecutable(node, ctx);
     }
-
     static final class ComplexIntentExecutable extends AbstractStudioNode {
         private final ComplexIntentDetectionEngine engine;
 
@@ -61,6 +85,16 @@ public final class ComplexIntentDetectionNodeHandler implements NodeHandlerFacto
         ComplexIntentDetectionEngine engine() {
             return engine;
         }
+
+        /**
+         * doInvoke.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
 
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {

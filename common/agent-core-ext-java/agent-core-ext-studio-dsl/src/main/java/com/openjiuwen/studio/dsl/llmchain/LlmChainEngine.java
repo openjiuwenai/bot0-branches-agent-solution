@@ -16,6 +16,7 @@ import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -27,12 +28,15 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class LlmChainEngine {
     private static final String USER_FIELDS = "userFields";
     private static final String PARTIAL_CONTENT = "partial_content";
     private static final String LLM_EXTRA_CONFIGS = "llm_extra_configs";
 
-    /** Invoke + stream bridge. */
+    /**
+     * Invoke + stream bridge.
+     */
     public interface ModelBridge {
         AssistantMessage invoke(List<BaseMessage> messages) throws Exception;
 
@@ -59,7 +63,12 @@ public final class LlmChainEngine {
         this.initialized = bridge != null;
     }
 
-    /** Python {@code init}. */
+    /**
+     * Python {@code init}.
+     *
+     * @param conf conf
+     * @since 0.1.0
+     */
     public void init(Map<String, Object> conf) {
         this.config = LlmChainConfig.from(nodeId, conf);
         this.initialized = presetBridge != null;
@@ -71,7 +80,15 @@ public final class LlmChainEngine {
         return streamFinalOutput;
     }
 
-    /** Python {@code invoke}. */
+    /**
+     * Python {@code invoke}.
+     *
+     * @param inputs inputs
+     * @param session session
+     * @param context context
+     * @return result
+     * @since 0.1.0
+     */
     public Map<String, Object> invoke(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         initializeIfNeeded(session);
@@ -105,7 +122,15 @@ public final class LlmChainEngine {
         }
     }
 
-    /** Python {@code stream} — returns iterator of frame maps. */
+    /**
+     * Python {@code stream} — returns iterator of frame maps.
+     *
+     * @param inputs inputs
+     * @param session session
+     * @param context context
+     * @return result
+     * @since 0.1.0
+     */
     public Iterator<Object> stream(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         initializeIfNeeded(session);
@@ -291,7 +316,9 @@ public final class LlmChainEngine {
         return String.valueOf(chunk.getContent());
     }
 
-    /** Lazy pull iterator — yields content frames as chunks arrive (Python {@code _stream_real_time}). */
+    /**
+     * Lazy pull iterator — yields content frames as chunks arrive (Python {@code _stream_real_time}).
+     */
     private final class RealTimeStreamIterator implements Iterator<Object> {
         private final Iterator<AssistantMessageChunk> source;
         private final List<BaseMessage> languageModelInputs;
@@ -327,11 +354,18 @@ public final class LlmChainEngine {
             this.outputReasoning = outputReasoning;
         }
 
+        /**
+         * hasNext.
+         *
+         * @return result
+         * @since 0.1.0
+         */
+
         @Override
         public boolean hasNext() {
             if (nextFrame != null) {
-                return true;
-            }
+            return true;
+        }
             if (!sourceExhausted) {
                 pullContentFrame();
                 if (nextFrame != null) {
@@ -345,11 +379,18 @@ public final class LlmChainEngine {
             return nextFrame != null;
         }
 
+        /**
+         * next.
+         *
+         * @return result
+         * @since 0.1.0
+         */
+
         @Override
         public Object next() {
             if (!hasNext()) {
-                throw new java.util.NoSuchElementException();
-            }
+            throw new java.util.NoSuchElementException();
+        }
             Object frame = nextFrame;
             nextFrame = null;
             return frame;
@@ -438,8 +479,8 @@ public final class LlmChainEngine {
 
     private void initializeIfNeeded(NodeSessionApi session) {
         if (initialized && bridge != null) {
-            return;
-        }
+        return;
+    }
         if (config == null) {
             throw new NodeExecutionException(
                     nodeId,
@@ -455,7 +496,7 @@ public final class LlmChainEngine {
         try {
             this.bridge = createDefaultBridge(session);
             this.initialized = true;
-        } catch (Exception e) {
+        } catch (IllegalArgumentException | IllegalStateException e) {
             throw new NodeExecutionException(
                     nodeId,
                     LlmChainConfig.JIUWEN_LLM_TYPE,
@@ -471,13 +512,31 @@ public final class LlmChainEngine {
         ModelRequestConfig request = buildRequest(config);
         Model model = new Model(client, request);
         return new ModelBridge() {
+
+            /**
+             * invoke.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) throws Exception {
                 return model.invoke(messages, null, null, null, null, null, null, null, null, null);
             }
 
+            /**
+             * stream.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
-            public Iterator<AssistantMessageChunk> stream(List<BaseMessage> messages) throws Exception {
+            public Iterator<AssistantMessageChunk> stream(List<BaseMessage> messages)
+                    throws Exception {
                 return model.stream(messages, List.of(), null, null, null, null, null, null, null, null);
             }
         };
@@ -545,8 +604,8 @@ public final class LlmChainEngine {
 
     private static void appendUsageMetadata(UsageMetadata usage, Map<String, Object> finalOutput) {
         if (usage == null) {
-            return;
-        }
+        return;
+    }
         finalOutput.putAll(usageToMap(usage));
     }
 
@@ -573,8 +632,8 @@ public final class LlmChainEngine {
 
     private static void mergeChunkMetadata(AssistantMessageChunk chunk, Map<String, Object> modelStats) {
         if (chunk == null || modelStats == null) {
-            return;
-        }
+        return;
+    }
         Map<String, Object> metadata = chunk.getMetadata();
         if (metadata != null && !metadata.isEmpty()) {
             modelStats.putAll(metadata);
@@ -600,8 +659,8 @@ public final class LlmChainEngine {
 
     private static void writePartial(NodeSessionApi session, int index, Map<String, Object> data) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             Map<String, Object> envelope = new LinkedHashMap<>();
             envelope.put("type", PARTIAL_CONTENT);
@@ -615,8 +674,8 @@ public final class LlmChainEngine {
 
     private static void trace(NodeSessionApi session, Map<String, Object> data) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             session.trace(data);
         } catch (RuntimeException ignored) {

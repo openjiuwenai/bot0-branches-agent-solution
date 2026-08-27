@@ -14,6 +14,7 @@ import java.util.Objects;
  *
  * @since 2026-08-17
  */
+
 public final class AssembledNode {
     private final String id;
     private final String irType;
@@ -32,6 +33,7 @@ public final class AssembledNode {
      * @param inputsSchema inputsSchema
      * @param outputsSchema outputsSchema
      */
+
     public AssembledNode(
             String id,
             String irType,
@@ -57,6 +59,7 @@ public final class AssembledNode {
      * @param configs configs
      * @return result
      */
+
     public static AssembledNode of(String id, String irType, Map<String, Object> configs) {
         return new AssembledNode(id, irType, irType, configs, Map.of(), Map.of());
     }
@@ -66,6 +69,7 @@ public final class AssembledNode {
      *
      * @return result
      */
+
     public String id() {
         return id;
     }
@@ -75,6 +79,7 @@ public final class AssembledNode {
      *
      * @return result
      */
+
     public String irType() {
         return irType;
     }
@@ -84,6 +89,7 @@ public final class AssembledNode {
      *
      * @return result
      */
+
     public String canonicalType() {
         return canonicalType;
     }
@@ -93,6 +99,7 @@ public final class AssembledNode {
      *
      * @return result
      */
+
     public Map<String, Object> configs() {
         return configs;
     }
@@ -102,6 +109,7 @@ public final class AssembledNode {
      *
      * @return result
      */
+
     public Map<String, Object> inputsSchema() {
         return inputsSchema;
     }
@@ -111,6 +119,7 @@ public final class AssembledNode {
      *
      * @return result
      */
+
     public Map<String, Object> outputsSchema() {
         return outputsSchema;
     }
@@ -121,6 +130,7 @@ public final class AssembledNode {
      * @param canonical canonical
      * @return result
      */
+
     public AssembledNode withCanonical(String canonical) {
         return new AssembledNode(id, irType, canonical, configs, inputsSchema, outputsSchema);
     }

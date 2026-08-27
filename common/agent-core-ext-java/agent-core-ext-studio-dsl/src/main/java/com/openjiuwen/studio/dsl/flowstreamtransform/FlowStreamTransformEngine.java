@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl.flowstreamtransform;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.context.ModelContext;
@@ -32,19 +33,37 @@ import java.util.regex.Pattern;
  *
  * @since 2026-08-26
  */
+
 public final class FlowStreamTransformEngine {
-    /** Python USER_FIELDS. */
+
+    /**
+     * Python USER_FIELDS.
+     */
     public static final String USER_FIELDS = "userFields";
-    /** Python STREAM_TYPE_PARTIAL_CONTENT. */
+
+    /**
+     * Python STREAM_TYPE_PARTIAL_CONTENT.
+     */
     public static final String STREAM_TYPE_PARTIAL_CONTENT = "end node stream";
-    /** Python STREAM_TYPE_MESSAGE_END. */
+
+    /**
+     * Python STREAM_TYPE_MESSAGE_END.
+     */
     public static final String STREAM_TYPE_MESSAGE_END = "message_end";
 
-    /** Python CONFIG_ERROR. */
+    /**
+     * Python CONFIG_ERROR.
+     */
     public static final int CONFIG_ERROR = 101170;
-    /** Python INPUT_INVALID. */
+
+    /**
+     * Python INPUT_INVALID.
+     */
     public static final int INPUT_INVALID = 101171;
-    /** Python TRANSFORMER_CONFIG_ERROR. */
+
+    /**
+     * Python TRANSFORMER_CONFIG_ERROR.
+     */
     public static final int TRANSFORMER_CONFIG_ERROR = 101172;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -65,6 +84,7 @@ public final class FlowStreamTransformEngine {
      *
      * @param node assembled node
      */
+
     @SuppressWarnings("unchecked")
     public FlowStreamTransformEngine(AssembledNode node) {
         this.nodeId = node.id();
@@ -122,25 +142,59 @@ public final class FlowStreamTransformEngine {
         this.metadata = StreamMetadata.fromNode(node);
     }
 
+    /**
+     * sourceField.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String sourceField() {
         return sourceField;
     }
+
+    /**
+     * outputField.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String outputField() {
         return outputField;
     }
 
+    /**
+     * directAssignOutput.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean directAssignOutput() {
         return directAssignOutput;
     }
 
+    /**
+     * parseJsonStrings.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean parseJsonStrings() {
         return parseJsonStrings;
     }
-
     public Map<String, Object> transformerConf() {
         return transformerConf;
     }
+
+    /**
+     * metadata.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public StreamMetadata metadata() {
         return metadata;
@@ -154,6 +208,7 @@ public final class FlowStreamTransformEngine {
      * @param context context (unused; parity signature)
      * @return result map with userFields
      */
+
     public Map<String, Object> invoke(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         Map<String, Object> uf = userFieldsOf(inputs);
@@ -186,6 +241,7 @@ public final class FlowStreamTransformEngine {
      * @param context context
      * @return invoke result
      */
+
     public Map<String, Object> collect(Object inputs, NodeSessionApi session, ModelContext context) {
         Map<String, Object> resolved = resolveStreamInputs(inputs);
         return invoke(resolved, session, context);
@@ -199,6 +255,7 @@ public final class FlowStreamTransformEngine {
      * @param context context
      * @return OutputSchema iterator
      */
+
     public Iterator<Object> transform(Object inputs, NodeSessionApi session, ModelContext context) {
         Map<String, Object> resolved = resolveStreamInputs(inputs);
         Map<String, Object> uf = userFieldsOf(resolved);
@@ -246,6 +303,7 @@ public final class FlowStreamTransformEngine {
      * @param inputs raw inputs
      * @return resolved map
      */
+
     @SuppressWarnings("unchecked")
     public static Map<String, Object> resolveStreamInputs(Object inputs) {
         if (inputs == null) {
@@ -307,6 +365,7 @@ public final class FlowStreamTransformEngine {
      * @param outputs optional user-field outputs
      * @return payload
      */
+
     public static Map<String, Object> getDataOfStreamingWithMetadata(
             Object answer, StreamMetadata metadata, Map<String, Object> outputs) {
         Map<String, Object> base = new LinkedHashMap<>();
@@ -329,6 +388,7 @@ public final class FlowStreamTransformEngine {
      * @param message message
      * @return exception
      */
+
     public static NodeExecutionException buildError(String nodeId, int errorCode, String message) {
         NodeCauseCode cause =
                 errorCode == INPUT_INVALID ? NodeCauseCode.NODE_INVOKE_FAILED : NodeCauseCode.NODE_CONFIG_INVALID;
@@ -377,8 +437,8 @@ public final class FlowStreamTransformEngine {
 
     private void writeFrame(NodeSessionApi session, String type, int index, Map<String, Object> answer) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         OutputSchema schema =
                 new OutputSchema(type, index, getDataOfStreamingWithMetadata(answer, metadata, null));
         try {
@@ -418,11 +478,7 @@ public final class FlowStreamTransformEngine {
             }
 
             if (item instanceof byte[] bytes) {
-                try {
-                    item = new String(bytes, StandardCharsets.UTF_8);
-                } catch (Exception ignored) {
-                    continue;
-                }
+                item = new String(bytes, StandardCharsets.UTF_8);
             }
 
             if (item instanceof String str) {
@@ -440,7 +496,11 @@ public final class FlowStreamTransformEngine {
     }
 
     /**
-     * Python {@code ast.literal_eval} first, then JSON (Studio tests may use JSON literals).
+     * * Python {@code ast.literal_eval} first, then JSON (Studio tests may use JSON literals).
+     *
+     * @param s s
+     * @return result
+     * @since 0.1.0
      */
     static Map<String, Object> parseLiteralOrJson(String s) {
         Map<String, Object> literal = tryPythonLiteralMap(s);
@@ -449,7 +509,7 @@ public final class FlowStreamTransformEngine {
         }
         try {
             return MAPPER.readValue(s, MAP_TYPE);
-        } catch (Exception ignored) {
+        } catch (JsonProcessingException ignored) {
             return null;
         }
     }
@@ -470,15 +530,15 @@ public final class FlowStreamTransformEngine {
                 normalized = normalized.replace('\'', '"');
             }
             return MAPPER.readValue(normalized, MAP_TYPE);
-        } catch (Exception ignored) {
+        } catch (JsonProcessingException ignored) {
             return null;
         }
     }
 
     private static Object tryGetDataAttribute(Object item) {
         if (item == null) {
-            return null;
-        }
+        return null;
+    }
         try {
             var m = item.getClass().getMethod("getData");
             return m.invoke(item);
@@ -506,12 +566,16 @@ public final class FlowStreamTransformEngine {
     }
 
     /**
-     * Top-level AsyncGenerator analogue: Iterable/Iterator/array that is not CharSequence and not Map.
+     * * Top-level AsyncGenerator analogue: Iterable/Iterator/array that is not CharSequence and not Map.
+     *
+     * @param value value
+     * @return result
+     * @since 0.1.0
      */
     private static boolean isAsyncGeneratorAnalogue(Object value) {
         if (value == null || value instanceof Map<?, ?> || value instanceof CharSequence) {
-            return false;
-        }
+        return false;
+    }
         return isIterableStream(value);
     }
 
@@ -519,15 +583,15 @@ public final class FlowStreamTransformEngine {
         if (originStream instanceof Iterator<?>
                 || originStream instanceof Iterable<?>
                 || originStream instanceof Object[]) {
-            return !(originStream instanceof CharSequence);
-        }
+        return !(originStream instanceof CharSequence);
+    }
         return false;
     }
 
     static Iterator<?> toIterator(Object originStream) {
         if (originStream instanceof Iterator<?> it) {
-            return it;
-        }
+        return it;
+    }
         if (originStream instanceof Object[] arr) {
             return java.util.Arrays.asList(arr).iterator();
         }
@@ -545,13 +609,16 @@ public final class FlowStreamTransformEngine {
      * @param nodeName nodeName
      * @param shouldInterrupt shouldInterrupt
      */
+
     public record StreamMetadata(String nodeId, String nodeType, String nodeName, boolean shouldInterrupt) {
+
         /**
          * fromNode.
          *
          * @param node node
          * @return metadata
          */
+
         @SuppressWarnings("unchecked")
         public static StreamMetadata fromNode(AssembledNode node) {
             Map<String, Object> configs = node.configs();
@@ -585,16 +652,16 @@ public final class FlowStreamTransformEngine {
         private static String firstNonBlank(Object... vals) {
             for (Object v : vals) {
                 if (v != null && !String.valueOf(v).isBlank()) {
-                    return String.valueOf(v);
-                }
+            return String.valueOf(v);
+        }
             }
             return "";
         }
 
         private static boolean bool(Object v, boolean def) {
             if (v == null) {
-                return def;
-            }
+            return def;
+        }
             if (v instanceof Boolean b) {
                 return b;
             }

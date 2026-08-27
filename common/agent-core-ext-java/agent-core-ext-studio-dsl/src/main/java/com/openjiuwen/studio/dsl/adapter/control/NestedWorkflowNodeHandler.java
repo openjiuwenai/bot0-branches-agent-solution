@@ -7,11 +7,11 @@ package com.openjiuwen.studio.dsl.adapter.control;
 import com.openjiuwen.core.common.constants.Constant;
 import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.graph.pregel.GraphInterrupt;
-import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.interaction.InteractiveInput;
 import com.openjiuwen.core.session.interaction.WorkflowInteraction;
 import com.openjiuwen.core.session.internal.NodeSession;
 import com.openjiuwen.core.session.internal.WorkflowSession;
+import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.state.InMemoryState;
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.core.workflow.components.flow.SubWorkflowComponent;
@@ -34,12 +34,12 @@ import com.openjiuwen.studio.dsl.util.SanitizeMessage;
 import com.openjiuwen.studio.dsl.util.SessionStateIsolator;
 
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * jiuwen.subWorkflow — strict 1:1 with Python {@code sub_workflow.py} ({@code SubWorkflow}).
@@ -50,6 +50,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * @since 2026-08-17
  */
+
 public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
     private final NodeTypeRegistry registry;
 
@@ -57,15 +58,38 @@ public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
         this.registry = registry;
     }
 
+    /**
+     * canonicalType.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public String canonicalType() {
         return "jiuwen.subWorkflow";
     }
 
+    /**
+     * aliases.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public Set<String> aliases() {
         return Set.of("jiuwen.workflowComposite");
     }
+
+    /**
+     * create.
+     *
+     * @param node node
+     * @param ctx ctx
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
@@ -123,21 +147,51 @@ public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
             this.engine = engine;
         }
 
-        /** Exposed for tests / hosts that need the core SubWorkflowComponent. */
+        /**
+         * Exposed for tests / hosts that need the core SubWorkflowComponent.
+         *
+         * @return result
+         * @since 0.1.0
+         */
         public SubWorkflowComponent coreComponent() {
             return assembled.component();
         }
 
-        /** Python {@code SubWorkflow} engine. */
+        /**
+         * Python {@code SubWorkflow} engine.
+         *
+         * @return result
+         * @since 0.1.0
+         */
         public FlowSubWorkflowEngine engine() {
             return engine;
         }
+
+        /**
+         * doInvoke.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
 
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
             return SessionStateIsolator.runIsolated(
                     session, () -> invokeChild(inputs, session, context));
         }
+
+        /**
+         * stream.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
 
         @Override
         public Iterator<Object> stream(Object inputs, NodeSessionApi session, ModelContext context) {
@@ -291,7 +345,6 @@ public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
         private OptionalInteraction findInteraction(Map<String, Object> rawMap) {
             return new OptionalInteraction(engine.findInteractionChunkInChildResult(rawMap).isPresent());
         }
-
         private Iterator<Object> streamChild(
                 Map<String, Object> inputs,
                 NodeSessionApi session,
@@ -530,16 +583,16 @@ public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
         private static boolean hasWorkflowEnd(List<Object> frames) {
             for (Object f : frames) {
                 if (f instanceof Map<?, ?> m && StudioStreamFrames.WORKFLOW_END.equals(String.valueOf(m.get("type")))) {
-                    return true;
-                }
+            return true;
+        }
             }
             return false;
         }
 
         private static Object toStudioFrame(Object chunk, int index) {
             if (chunk instanceof Map<?, ?>) {
-                return chunk;
-            }
+            return chunk;
+        }
             Map<String, Object> frame = new LinkedHashMap<>();
             frame.put("type", StudioStreamFrames.PARTIAL_CONTENT);
             frame.put("index", index);
@@ -551,8 +604,8 @@ public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
 
         private static void mergeCoreResult(Map<String, Object> done, Object raw) {
             if (!(raw instanceof Map<?, ?> m)) {
-                return;
-            }
+            return;
+        }
             m.forEach((k, v) -> {
                 if (v != null) {
                     done.putIfAbsent(String.valueOf(k), v);
@@ -566,8 +619,8 @@ public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
 
         private static boolean canUseCoreSubWorkflow(NodeSessionApi session) {
             if (session == null) {
-                return false;
-            }
+            return false;
+        }
             try {
                 return session.getInner() != null;
             } catch (RuntimeException | Error e) {
@@ -577,8 +630,8 @@ public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
 
         private static boolean forceCore(Map<String, Object> configs) {
             if (configs == null) {
-                return false;
-            }
+            return false;
+        }
             Object v = configs.getOrDefault("useCoreSubWorkflow", configs.get("use_core_sub_workflow"));
             return Boolean.TRUE.equals(v) || "true".equalsIgnoreCase(String.valueOf(v));
         }
@@ -587,8 +640,8 @@ public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
             if (session != null) {
                 try {
                     if (session.getInner() != null) {
-                        return session;
-                    }
+            return session;
+        }
                 } catch (RuntimeException | Error ignored) {
                     // mock
                 }
@@ -668,8 +721,8 @@ public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
 
         private static Object tagSubFrame(Object frame, int index) {
             if (!(frame instanceof Map<?, ?> m)) {
-                return frame;
-            }
+            return frame;
+        }
             Map<String, Object> copy = new LinkedHashMap<>();
             m.forEach((k, v) -> copy.put(String.valueOf(k), v));
             // Message/Engine frames use payload; Studio hosts / tests often read data
@@ -683,8 +736,8 @@ public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
 
         private static void writeFrame(NodeSessionApi session, Object frame) {
             if (session == null || !(frame instanceof Map<?, ?>)) {
-                return;
-            }
+            return;
+        }
             try {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> fm = (Map<String, Object>) frame;
@@ -697,20 +750,34 @@ public final class NestedWorkflowNodeHandler implements NodeHandlerFactory {
         private NodePayload interruptPayload(Map<String, Object> childUf) {
             return NodePayload.userFields(engine.packageSoftHang(childUf, depth));
         }
-
         static boolean isChildInterrupt(Map<String, Object> uf) {
             return NestedWorkflowNodeHandler.isChildInterrupt(uf);
         }
-
         static boolean detectInterruptInSession(NodeSessionApi session) {
             return NestedWorkflowNodeHandler.detectInterruptInSession(session);
         }
     }
 
+    /**
+     * isChildInterrupt.
+     *
+     * @param uf uf
+     * @return result
+     * @since 0.1.0
+     */
+
     public static boolean isChildInterrupt(Map<String, Object> uf) {
         return new FlowSubWorkflowEngine(FlowSubWorkflowConfig.fromNodeConfigs("", Map.of()))
                 .isChildInterruptFields(uf);
     }
+
+    /**
+     * detectInterruptInSession.
+     *
+     * @param session session
+     * @return result
+     * @since 0.1.0
+     */
 
     public static boolean detectInterruptInSession(NodeSessionApi session) {
         return new FlowSubWorkflowEngine(FlowSubWorkflowConfig.fromNodeConfigs("", Map.of()))

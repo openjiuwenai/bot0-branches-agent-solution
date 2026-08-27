@@ -13,6 +13,7 @@ import java.util.Map;
  *
  * @since 2026-08-25
  */
+
 public final class ActionConfig {
     private final Map<String, Object> actionExtraArgs;
 
@@ -21,6 +22,7 @@ public final class ActionConfig {
      *
      * @param actionExtraArgs actionExtraArgs
      */
+
     public ActionConfig(Map<String, Object> actionExtraArgs) {
         this.actionExtraArgs =
                 actionExtraArgs == null
@@ -33,6 +35,7 @@ public final class ActionConfig {
      *
      * @return result
      */
+
     public Map<String, Object> actionExtraArgs() {
         return actionExtraArgs;
     }
@@ -44,6 +47,7 @@ public final class ActionConfig {
      * @param defaultValue defaultValue
      * @return result
      */
+
     public Object getExtraArg(String key, Object defaultValue) {
         return actionExtraArgs.getOrDefault(key, defaultValue);
     }

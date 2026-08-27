@@ -14,6 +14,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 final class ExtractorConfigFormatter {
     private static final String DEFAULT_EXAMPLE =
             """
@@ -138,8 +139,8 @@ final class ExtractorConfigFormatter {
 
     private static String camelToSnake(String text) {
         if (text == null || text.isEmpty()) {
-            return "";
-        }
+        return "";
+    }
         StringBuilder sb = new StringBuilder();
         sb.append(Character.toLowerCase(text.charAt(0)));
         for (int i = 1; i < text.length(); i++) {
@@ -165,7 +166,6 @@ final class ExtractorConfigFormatter {
     private static String str(Object o) {
         return o == null ? "" : String.valueOf(o);
     }
-
     private static String first(Map<?, ?> m, String... keys) {
         for (String k : keys) {
             Object v = m.get(k);
@@ -188,8 +188,8 @@ final class ExtractorConfigFormatter {
 
     private static boolean bool(Object o, boolean def) {
         if (o instanceof Boolean b) {
-            return b;
-        }
+        return b;
+    }
         if (o == null) {
             return def;
         }
@@ -198,15 +198,15 @@ final class ExtractorConfigFormatter {
 
     private static Boolean nullableBool(Object o) {
         if (o instanceof Boolean b) {
-            return b;
-        }
+        return b;
+    }
         return null;
     }
 
     private static int intOf(Object o, int def) {
         if (o instanceof Number n) {
-            return n.intValue();
-        }
+        return n.intValue();
+    }
         if (o == null) {
             return def;
         }
@@ -219,8 +219,8 @@ final class ExtractorConfigFormatter {
 
     private static double doubleOf(Object o, double def) {
         if (o instanceof Number n) {
-            return n.doubleValue();
-        }
+        return n.doubleValue();
+    }
         if (o == null) {
             return def;
         }

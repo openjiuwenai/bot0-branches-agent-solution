@@ -5,16 +5,17 @@
 package com.openjiuwen.studio.dsl.kb;
 
 import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import java.util.List;
+import java.util.Map;
 
 /**
  * connectorType → adapter (Python {@code KBAdapterFactory}).
  *
  * @since 2026-08-25
  */
+
 public final class KBAdapterFactory {
     private static final Map<String, Supplier<KBServiceAdapter>> REGISTRY = new ConcurrentHashMap<>();
 
@@ -37,6 +38,7 @@ public final class KBAdapterFactory {
      * @param connectorType connectorType
      * @param supplier supplier
      */
+
     public static void register(String connectorType, Supplier<KBServiceAdapter> supplier) {
         REGISTRY.put(connectorType, supplier);
     }
@@ -47,10 +49,11 @@ public final class KBAdapterFactory {
      * @param connectorType connectorType
      * @return adapter
      */
+
     public static KBServiceAdapter create(String connectorType) {
         if (connectorType == null || connectorType.isBlank()) {
-            throw new IllegalArgumentException("Unsupported connector type: (empty)");
-        }
+        throw new IllegalArgumentException("Unsupported connector type: (empty)");
+    }
         Supplier<KBServiceAdapter> s = REGISTRY.get(connectorType);
         if (s != null) {
             return s.get();
@@ -70,6 +73,7 @@ public final class KBAdapterFactory {
      *
      * @return types
      */
+
     public static List<String> supportedTypes() {
         return new ArrayList<>(REGISTRY.keySet());
     }

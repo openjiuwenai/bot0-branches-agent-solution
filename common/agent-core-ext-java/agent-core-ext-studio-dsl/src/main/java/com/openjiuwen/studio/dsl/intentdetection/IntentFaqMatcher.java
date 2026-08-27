@@ -9,6 +9,7 @@ import com.openjiuwen.studio.dsl.adapter.external.PluginNodeHandler;
 import com.openjiuwen.studio.dsl.contract.ToolRegistry;
 import com.openjiuwen.studio.dsl.kb.KnowledgeRequestContext;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -20,17 +21,43 @@ import java.util.Optional;
  *
  * @since 2026-08-26
  */
+
 public final class IntentFaqMatcher {
     private static final int FEW_SHOT_NUM = 5;
     private static final int SEARCH_NUM = 1;
     private static final String DEFAULT_QUERY_CATE = "title";
     private static final String DEFAULT_CLASS_CATE = "content";
-    /** Python module constant {@code SEARCH_TYPE} (extension {@code intent_detection.py}). */
+
+    /**
+     * Python module constant {@code SEARCH_TYPE} (extension {@code intent_detection.py}).
+     */
     private static final String SEARCH_TYPE = "faq";
 
     private IntentFaqMatcher() {}
 
+    /**
+     * FaqMatchResult.
+     *
+     * @param intentClass intentClass
+     * @param fewShotExample fewShotExample
+     * @param shortCircuit shortCircuit
+     * @return result
+     * @since 0.1.0
+     */
+
     public record FaqMatchResult(String intentClass, String fewShotExample, boolean shortCircuit) {}
+
+    /**
+     * match.
+     *
+     * @param config config
+     * @param tools tools
+     * @param query query
+     * @param chatHistory chatHistory
+     * @param enableKnowledge enableKnowledge
+     * @return result
+     * @since 0.1.0
+     */
 
     public static FaqMatchResult match(
             IntentDetectionConfig config,
@@ -39,8 +66,8 @@ public final class IntentFaqMatcher {
             List<Map<String, Object>> chatHistory,
             boolean enableKnowledge) {
         if (!enableKnowledge) {
-            return new FaqMatchResult(config.defaultClass(), "", false);
-        }
+        return new FaqMatchResult(config.defaultClass(), "", false);
+    }
         String apiId = resolveApiId(config.kgConfig());
         if (apiId.isBlank() || tools == null) {
             return new FaqMatchResult(config.defaultClass(), "", false);
@@ -62,7 +89,14 @@ public final class IntentFaqMatcher {
         return new FaqMatchResult(config.defaultClass(), String.valueOf(searchData), false);
     }
 
-    /** Python {@code anayls_search}. */
+    /**
+     * Python {@code anayls_search}.
+     *
+     * @param config config
+     * @param searchData searchData
+     * @return result
+     * @since 0.1.0
+     */
     static List<Map<String, Object>> anaylsSearch(IntentDetectionConfig config, Map<String, Object> searchData) {
         List<Map<String, Object>> res = new ArrayList<>();
         try {
@@ -89,7 +123,14 @@ public final class IntentFaqMatcher {
         return res;
     }
 
-    /** Python {@code doc_search}. */
+    /**
+     * Python {@code doc_search}.
+     *
+     * @param config config
+     * @param searchData searchData
+     * @return result
+     * @since 0.1.0
+     */
     static String docSearch(IntentDetectionConfig config, Map<String, Object> searchData) {
         String res = "";
         try {
@@ -236,8 +277,8 @@ public final class IntentFaqMatcher {
 
     private static String resolveApiId(Map<String, Object> kg) {
         if (kg == null || kg.isEmpty()) {
-            return "";
-        }
+        return "";
+    }
         String apiId = str(kg.get("apiId"));
         if (!apiId.isBlank()) {
             return apiId;
@@ -247,8 +288,8 @@ public final class IntentFaqMatcher {
 
     private static double scoreOf(Object o) {
         if (o instanceof Number n) {
-            return n.doubleValue();
-        }
+        return n.doubleValue();
+    }
         if (o == null) {
             return 0;
         }

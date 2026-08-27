@@ -4,7 +4,6 @@
 
 package com.openjiuwen.studio.dsl.llmchain;
 
-import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -15,6 +14,7 @@ import com.openjiuwen.core.foundation.llm.schema.UsageMetadata;
 import com.openjiuwen.core.foundation.llm.schema.UserMessage;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.testsupport.StubModelContext;
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -30,13 +30,12 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
-class LlmChainParityTest {
 
+class LlmChainParityTest {
     @AfterEach
     void tearDown() {
         StudioEngineTestSupport.clear();
     }
-
     private static Map<String, Object> baseConf() {
         Map<String, Object> conf = new LinkedHashMap<>();
         conf.put(
@@ -65,6 +64,15 @@ class LlmChainParityTest {
     @Test
     void invokeFormatsTextOutputAndFlattensUsage() {
         StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
+
+            /**
+             * invoke.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
                 AssistantMessage msg = new AssistantMessage("北京是中国的首都");
@@ -75,6 +83,14 @@ class LlmChainParityTest {
                 msg.setUsageMetadata(usage);
                 return msg;
             }
+
+            /**
+             * stream.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
 
             @Override
             public Iterator<AssistantMessageChunk> stream(List<BaseMessage> messages) {
@@ -106,10 +122,27 @@ class LlmChainParityTest {
                                 Map.of("id", "country", "type", "string"))));
 
         StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
+
+            /**
+             * invoke.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
                 return new AssistantMessage("{\"capital\": \"北京\", \"country\": \"中国\"}");
             }
+
+            /**
+             * stream.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
 
             @Override
             public Iterator<AssistantMessageChunk> stream(List<BaseMessage> messages) {
@@ -129,10 +162,27 @@ class LlmChainParityTest {
     @Test
     void undefinedPlaceholderRaises() {
         StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
+
+            /**
+             * invoke.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
-                return new AssistantMessage("x");
-            }
+        return new AssistantMessage("x");
+    }
+
+            /**
+             * stream.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
 
             @Override
             public Iterator<AssistantMessageChunk> stream(List<BaseMessage> messages) {
@@ -161,10 +211,27 @@ class LlmChainParityTest {
     @Test
     void streamRealTimeYieldsChunksThenFinal() {
         StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
+
+            /**
+             * invoke.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
-                return new AssistantMessage("ab");
-            }
+        return new AssistantMessage("ab");
+    }
+
+            /**
+             * stream.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
 
             @Override
             public Iterator<AssistantMessageChunk> stream(List<BaseMessage> messages) {
@@ -207,10 +274,27 @@ class LlmChainParityTest {
                                 Map.of("id", "reasoning_content", "type", "string"))));
 
         StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
+
+            /**
+             * invoke.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
                 return new AssistantMessage("答案");
             }
+
+            /**
+             * stream.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
 
             @Override
             public Iterator<AssistantMessageChunk> stream(List<BaseMessage> messages) {
@@ -243,11 +327,28 @@ class LlmChainParityTest {
     void enableHistoryInjectsChatHistoryVariable() {
         List<BaseMessage> captured = new ArrayList<>();
         StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
+
+            /**
+             * invoke.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
                 captured.addAll(messages);
                 return new AssistantMessage("ok");
             }
+
+            /**
+             * stream.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
 
             @Override
             public Iterator<AssistantMessageChunk> stream(List<BaseMessage> messages) {

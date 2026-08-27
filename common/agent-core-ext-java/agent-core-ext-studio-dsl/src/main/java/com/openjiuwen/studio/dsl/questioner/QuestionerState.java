@@ -14,6 +14,7 @@ import java.util.Set;
  *
  * @since 2026-08-25
  */
+
 public final class QuestionerState {
     public static final String KEY = "questioner_state";
     public static final String START = "start";
@@ -37,6 +38,7 @@ public final class QuestionerState {
      * @param raw raw
      * @return result
      */
+
     @SuppressWarnings("unchecked")
     public static QuestionerState fromMap(Map<String, Object> raw) {
         QuestionerState s = new QuestionerState();
@@ -91,6 +93,7 @@ public final class QuestionerState {
      *
      * @return result
      */
+
     public Map<String, Object> toMap() {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("status", status);
@@ -121,6 +124,7 @@ public final class QuestionerState {
      *
      * @param status status
      */
+
     public void setStatus(String status) {
         this.status = status;
     }
@@ -135,6 +139,7 @@ public final class QuestionerState {
      *
      * @param question question
      */
+
     public void setQuestion(String question) {
         this.question = question == null ? "" : question;
     }
@@ -144,7 +149,11 @@ public final class QuestionerState {
         return responseNum;
     }
 
-    /** incrementResponseNum. */
+    /**
+     * incrementResponseNum.
+     *
+     * @since 0.1.0
+     */
     public void incrementResponseNum() {
         responseNum++;
     }
@@ -169,6 +178,7 @@ public final class QuestionerState {
      *
      * @param needUserConfirm needUserConfirm
      */
+
     public void setNeedUserConfirm(boolean needUserConfirm) {
         this.needUserConfirm = needUserConfirm;
     }
@@ -183,6 +193,7 @@ public final class QuestionerState {
      *
      * @param userBreak userBreak
      */
+
     public void setUserBreak(boolean userBreak) {
         this.userBreak = userBreak;
     }
@@ -197,6 +208,7 @@ public final class QuestionerState {
      *
      * @param userResponse userResponse
      */
+
     public void setUserResponse(String userResponse) {
         this.userResponse = userResponse == null ? "" : userResponse;
     }
@@ -216,6 +228,7 @@ public final class QuestionerState {
      *
      * @param raw raw inputs
      */
+
     public void setInputs(Map<String, Object> raw) {
         inputs.clear();
         if (raw != null) {

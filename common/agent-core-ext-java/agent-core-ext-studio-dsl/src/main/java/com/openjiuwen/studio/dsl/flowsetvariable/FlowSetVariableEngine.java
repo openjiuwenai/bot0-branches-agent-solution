@@ -22,13 +22,23 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class FlowSetVariableEngine {
     public static final String USER_FIELDS = "userFields";
-    /** Python {@code GLOBAL_REF_PREFIX}. */
+
+    /**
+     * Python {@code GLOBAL_REF_PREFIX}.
+     */
     public static final String MEMORY_PREFIX = "MEMORY_VARIABLE.";
-    /** Python {@code MEMORY_VAR_INDICATOR}. */
+
+    /**
+     * Python {@code MEMORY_VAR_INDICATOR}.
+     */
     public static final String MEMORY_VAR_INDICATOR = "memory";
-    /** Python {@code REDIS_GLOBAL_VALS_NAME}. */
+
+    /**
+     * Python {@code REDIS_GLOBAL_VALS_NAME}.
+     */
     public static final String REDIS_GLOBAL_VALS_NAME = "global.vals";
     public static final String SESSION_VAR_DEFS = "_session_var_defs";
     public static final String REQUEST_KEY = "_REQUEST";
@@ -58,6 +68,7 @@ public final class FlowSetVariableEngine {
      * @param session session
      * @return applied fields (Handler returns empty for Python {@code None})
      */
+
     public Map<String, Object> invoke(Map<String, Object> inputs, NodeSessionApi session) {
         Map<String, Object> vars = new LinkedHashMap<>();
         if (scope != null) {
@@ -120,8 +131,8 @@ public final class FlowSetVariableEngine {
             Object right,
             String operator) {
         if (left == null || left.isBlank()) {
-            return;
-        }
+        return;
+    }
         String leftRefStr = SessionUtils.extractOriginKey(left);
         if (leftRefStr == null || leftRefStr.isBlank()) {
             leftRefStr = stripRef(left);
@@ -200,7 +211,17 @@ public final class FlowSetVariableEngine {
      *
      * <p>Python uses {@code generate_value(session, left)} when {@code left} is a {@code ${...}} ref;
      * Studio IR often uses bare keys ({@code "n"}), which must be read from vars/scope.
+     *
+     * @param vars vars
+     * @param inputUserFields inputUserFields
+     * @param session session
+     * @param left left
+     * @param leftRefStr leftRefStr
+     * @param memoryGlobal memoryGlobal
+     * @return result
+     * @since 0.1.0
      */
+
     private static Object readCurrent(
             Map<String, Object> vars,
             Map<String, Object> inputUserFields,
@@ -227,17 +248,34 @@ public final class FlowSetVariableEngine {
 
     private static String simpleName(String ref) {
         if (ref == null) {
-            return "";
-        }
+        return "";
+    }
         return ref.contains(".") ? ref.substring(ref.lastIndexOf('.') + 1) : ref;
     }
 
-    /** Python {@code LoopSetVariableComponent.generate_value}. */
+    /**
+     * Python {@code LoopSetVariableComponent.generate_value}.
+     *
+     * @param vars vars
+     * @param session session
+     * @param value value
+     * @return result
+     * @since 0.1.0
+     */
     static Object generateValue(Map<String, Object> vars, NodeSessionApi session, Object value) {
         return generateValue(vars, Map.of(), session, value);
     }
 
-    /** Python {@code LoopSetVariableComponent.generate_value}. */
+    /**
+     * Python {@code LoopSetVariableComponent.generate_value}.
+     *
+     * @param vars vars
+     * @param inputUserFields inputUserFields
+     * @param session session
+     * @param value value
+     * @return result
+     * @since 0.1.0
+     */
     static Object generateValue(
             Map<String, Object> vars, Map<String, Object> inputUserFields, NodeSessionApi session, Object value) {
         if (value instanceof String s && SessionUtils.isRefPath(s)) {
@@ -262,8 +300,8 @@ public final class FlowSetVariableEngine {
 
     private static Object lookupVar(Map<String, Object> vars, Map<String, Object> inputUserFields, String ref) {
         if (vars.containsKey(ref)) {
-            return vars.get(ref);
-        }
+        return vars.get(ref);
+    }
         Object fromInput = lookupInput(inputUserFields, ref);
         if (fromInput != null) {
             return fromInput;
@@ -277,12 +315,19 @@ public final class FlowSetVariableEngine {
 
     private static Object lookupInput(Map<String, Object> inputUserFields, String key) {
         if (inputUserFields == null || key == null || key.isBlank()) {
-            return null;
-        }
+        return null;
+    }
         return inputUserFields.get(key);
     }
 
-    /** Python {@code LoopSetVariableComponent.generate_output}. */
+    /**
+     * Python {@code LoopSetVariableComponent.generate_output}.
+     *
+     * @param keys keys
+     * @param value value
+     * @return result
+     * @since 0.1.0
+     */
     @SuppressWarnings("unchecked")
     static Object generateOutput(String[] keys, Object value) {
         Object output = value;
@@ -296,8 +341,8 @@ public final class FlowSetVariableEngine {
 
     static boolean isSessionVar(String leftRefStr, Map<String, Object> sessionVarDefs, String[] keys) {
         if (sessionVarDefs == null || sessionVarDefs.isEmpty()) {
-            return false;
-        }
+        return false;
+    }
         if (keys.length >= 4 && MEMORY_VAR_INDICATOR.equals(keys[2])) {
             return sessionVarDefs.containsKey(keys[keys.length - 1]);
         }
@@ -307,8 +352,8 @@ public final class FlowSetVariableEngine {
     @SuppressWarnings("unchecked")
     private static Object extractMemoryValue(Object outputData, String varName) {
         if (!(outputData instanceof Map<?, ?> od)) {
-            return outputData;
-        }
+        return outputData;
+    }
         Object uf = od.get(USER_FIELDS);
         if (uf instanceof Map<?, ?> ufm) {
             Object memory = ufm.get(MEMORY_VAR_INDICATOR);
@@ -326,8 +371,8 @@ public final class FlowSetVariableEngine {
             Map<String, Object> sessionVarDefs,
             Map<String, Object> redisPatch) {
         if (redisPatch.isEmpty() || sessionVarDefs.isEmpty()) {
-            return;
-        }
+        return;
+    }
         String wf = workflowId == null || workflowId.isBlank() ? "wf" : workflowId;
         String conversationId = resolveConversationId(inputs, session);
         if (conversationId == null || conversationId.isBlank()) {
@@ -354,7 +399,6 @@ public final class FlowSetVariableEngine {
     static String redisKey(String workflowId, String conversationId) {
         return REDIS_GLOBAL_VALS_NAME + "." + workflowId + "." + conversationId;
     }
-
     static long conversationTtlSeconds() {
         String env = System.getenv("CONVERSATION_VARIABLE_STORE_TIME");
         if (env == null || env.isBlank()) {
@@ -372,8 +416,8 @@ public final class FlowSetVariableEngine {
 
     private static void persistGlobal(NodeSessionApi session, Map<String, Object> globalPatch) {
         if (session == null || globalPatch.isEmpty()) {
-            return;
-        }
+        return;
+    }
         try {
             session.updateGlobalState(Map.copyOf(globalPatch));
         } catch (RuntimeException ignored) {
@@ -384,8 +428,8 @@ public final class FlowSetVariableEngine {
     @SuppressWarnings("unchecked")
     private static void persistRequest(NodeSessionApi session, Map<String, Object> requestPatch) {
         if (session == null || requestPatch.isEmpty()) {
-            return;
-        }
+        return;
+    }
         try {
             Map<String, Object> merged = new LinkedHashMap<>();
             Object existing = session.getGlobalState(REQUEST_KEY);
@@ -404,8 +448,8 @@ public final class FlowSetVariableEngine {
 
     private static void persistLocal(NodeSessionApi session, Map<String, Object> vars) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             session.updateState(Map.copyOf(vars));
         } catch (RuntimeException ignored) {
@@ -480,8 +524,8 @@ public final class FlowSetVariableEngine {
 
     private static Object sessionGlobal(NodeSessionApi session, String key) {
         if (session == null || key == null) {
-            return null;
-        }
+        return null;
+    }
         try {
             return session.getGlobalState(key);
         } catch (RuntimeException e) {
@@ -492,16 +536,16 @@ public final class FlowSetVariableEngine {
     private static Object firstNonNull(Object... values) {
         for (Object v : values) {
             if (v != null) {
-                return v;
-            }
+        return v;
+    }
         }
         return null;
     }
 
     private static String[] slice(String[] keys, int from) {
         if (from >= keys.length) {
-            return new String[0];
-        }
+        return new String[0];
+    }
         String[] out = new String[keys.length - from];
         System.arraycopy(keys, from, out, 0, out.length);
         return out;
@@ -509,8 +553,8 @@ public final class FlowSetVariableEngine {
 
     private static long toLong(Object v) {
         if (v instanceof Number n) {
-            return n.longValue();
-        }
+        return n.longValue();
+    }
         if (v == null) {
             return 0L;
         }

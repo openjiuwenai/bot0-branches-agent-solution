@@ -4,6 +4,8 @@
 
 package com.openjiuwen.studio.dsl.store;
 
+import redis.clients.jedis.exceptions.JedisException;
+
 /**
  * Process-wide store accessor (Python {@code get_redis_client()} analogue).
  *
@@ -12,6 +14,7 @@ package com.openjiuwen.studio.dsl.store;
  *
  * @since 2026-08-25
  */
+
 public final class ConversationValsStores {
     private static final InMemoryConversationValsStore MEMORY = new InMemoryConversationValsStore();
     private static volatile ConversationValsStore override;
@@ -25,6 +28,7 @@ public final class ConversationValsStores {
      *
      * @param store store (null clears override)
      */
+
     public static void setDefault(ConversationValsStore store) {
         override = store;
     }
@@ -34,6 +38,7 @@ public final class ConversationValsStores {
      *
      * @return result
      */
+
     public static ConversationValsStore get() {
         ConversationValsStore o = override;
         if (o != null) {
@@ -59,7 +64,7 @@ public final class ConversationValsStores {
                     jedisStoreKey = key;
                     return jedisStore;
                 }
-            } catch (Exception ignored) {
+            } catch (NumberFormatException | JedisException ignored) {
                 // fall through to memory — Python Start also soft-fails redis errors
             }
         }
@@ -71,14 +76,14 @@ public final class ConversationValsStores {
      *
      * @return result
      */
+
     public static InMemoryConversationValsStore memoryStore() {
         return MEMORY;
     }
-
     private static String firstNonBlank(String a, String b) {
         if (a != null && !a.isBlank()) {
-            return a.trim();
-        }
+        return a.trim();
+    }
         if (b != null && !b.isBlank()) {
             return b.trim();
         }
@@ -87,8 +92,8 @@ public final class ConversationValsStores {
 
     private static int parsePort(String raw, int fallback) {
         if (raw == null || raw.isBlank()) {
-            return fallback;
-        }
+        return fallback;
+    }
         try {
             return Integer.parseInt(raw.trim());
         } catch (NumberFormatException e) {

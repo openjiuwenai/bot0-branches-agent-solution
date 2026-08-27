@@ -16,6 +16,7 @@ import java.util.Objects;
  *
  * @since 2026-08-17
  */
+
 public final class NodePayload {
     private final Map<String, Object> fields;
     private final List<MediaPart> media;
@@ -26,6 +27,7 @@ public final class NodePayload {
      * @param fields fields
      * @param media media
      */
+
     public NodePayload(Map<String, Object> fields, List<MediaPart> media) {
         this.fields = Collections.unmodifiableMap(new LinkedHashMap<>(Objects.requireNonNullElse(fields, Map.of())));
         this.media = Collections.unmodifiableList(new ArrayList<>(Objects.requireNonNullElse(media, List.of())));
@@ -37,6 +39,7 @@ public final class NodePayload {
      * @param fields fields
      * @return result
      */
+
     public static NodePayload ofFields(Map<String, Object> fields) {
         return new NodePayload(fields, List.of());
     }
@@ -47,6 +50,7 @@ public final class NodePayload {
      * @param userFields userFields
      * @return result
      */
+
     public static NodePayload userFields(Map<String, Object> userFields) {
         Map<String, Object> wrap = new LinkedHashMap<>();
         wrap.put("userFields", userFields == null ? Map.of() : userFields);
@@ -58,6 +62,7 @@ public final class NodePayload {
      *
      * @return result
      */
+
     public Map<String, Object> fields() {
         return fields;
     }
@@ -67,6 +72,7 @@ public final class NodePayload {
      *
      * @return result
      */
+
     public List<MediaPart> media() {
         return media;
     }
@@ -77,10 +83,11 @@ public final class NodePayload {
      * @param extra extra
      * @return result
      */
+
     public NodePayload withMediaPassthrough(List<MediaPart> extra) {
         if (extra == null || extra.isEmpty()) {
-            return this;
-        }
+        return this;
+    }
         List<MediaPart> merged = new ArrayList<>(media);
         merged.addAll(extra);
         return new NodePayload(fields, merged);
@@ -91,6 +98,7 @@ public final class NodePayload {
      *
      * @return result
      */
+
     public Map<String, Object> toInvokeMap() {
         Map<String, Object> out = new LinkedHashMap<>(fields);
         if (!media.isEmpty()) {

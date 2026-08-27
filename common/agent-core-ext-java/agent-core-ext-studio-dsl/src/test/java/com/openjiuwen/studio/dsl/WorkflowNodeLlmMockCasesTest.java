@@ -4,7 +4,6 @@
 
 package com.openjiuwen.studio.dsl;
 
-import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
@@ -15,14 +14,15 @@ import com.openjiuwen.core.foundation.tool.Tool;
 import com.openjiuwen.core.foundation.tool.ToolCard;
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
-import com.openjiuwen.studio.dsl.support.InMemoryToolRegistry;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
-import com.openjiuwen.studio.dsl.testsupport.LinearWorkflowTestSupport;
 import com.openjiuwen.studio.dsl.intentdetection.IntentDetectionEngine;
 import com.openjiuwen.studio.dsl.llmchain.LlmChainEngine;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.AssembledWorkflow;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
+import com.openjiuwen.studio.dsl.support.InMemoryToolRegistry;
+import com.openjiuwen.studio.dsl.testsupport.LinearWorkflowTestSupport;
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,6 +40,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 class WorkflowNodeLlmMockCasesTest {
     private NodeTypeRegistry registry;
 
@@ -47,7 +48,6 @@ class WorkflowNodeLlmMockCasesTest {
     void setUp() {
         registry = NodeTypeRegistry.createWithBuiltins();
     }
-
     @SuppressWarnings("unchecked")
     private static Map<String, Object> uf(Object invokeOut) {
         Map<String, Object> out = (Map<String, Object>) invokeOut;
@@ -82,10 +82,27 @@ class WorkflowNodeLlmMockCasesTest {
     @Test
     void test_workflow_llm_text_invoke_mock() {
         StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
+
+            /**
+             * invoke.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
-                return new AssistantMessage("hello from mock llm");
-            }
+        return new AssistantMessage("hello from mock llm");
+    }
+
+            /**
+             * stream.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
 
             @Override
             public Iterator<AssistantMessageChunk> stream(List<BaseMessage> messages) {
@@ -107,10 +124,27 @@ class WorkflowNodeLlmMockCasesTest {
     @Test
     void test_workflow_llm_chain_two_nodes_mock() {
         StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
+
+            /**
+             * invoke.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
-                return new AssistantMessage("step2-final");
-            }
+        return new AssistantMessage("step2-final");
+    }
+
+            /**
+             * stream.
+             *
+             * @param messages messages
+             * @return result
+             * @since 0.1.0
+             */
 
             @Override
             public Iterator<AssistantMessageChunk> stream(List<BaseMessage> messages) {
@@ -208,10 +242,29 @@ class WorkflowNodeLlmMockCasesTest {
         ToolCard toolCard =
                 ToolCard.builder().id("mock_plugin_multi_level_param").name("multi").description("m").build();
         tools.register("mock_plugin_multi_level_param", new Tool(toolCard) {
+
+            /**
+             * invoke.
+             *
+             * @param inputs inputs
+             * @param kwargs kwargs
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public Object invoke(Map<String, Object> inputs, Map<String, Object> kwargs) {
                 return Map.of("errCode", 0, "errMessage", "success", "data", nested);
             }
+
+            /**
+             * stream.
+             *
+             * @param inputs inputs
+             * @param kwargs kwargs
+             * @return result
+             * @since 0.1.0
+             */
 
             @Override
             public Iterator<Object> stream(Map<String, Object> inputs, Map<String, Object> kwargs) {

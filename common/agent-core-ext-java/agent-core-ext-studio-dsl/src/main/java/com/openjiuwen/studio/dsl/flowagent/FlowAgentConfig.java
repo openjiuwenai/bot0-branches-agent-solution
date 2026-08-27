@@ -17,6 +17,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class FlowAgentConfig {
     public static final String JIUWEN_AGENT_TYPE = "jiuwen.agent";
 
@@ -50,6 +51,15 @@ public final class FlowAgentConfig {
         this.llmConfig = llmConfig;
         this.plugins = plugins;
     }
+
+    /**
+     * from.
+     *
+     * @param nodeId nodeId
+     * @param conf conf
+     * @return result
+     * @since 0.1.0
+     */
 
     public static FlowAgentConfig from(String nodeId, Map<String, Object> conf) {
         Map<String, Object> c = conf == null ? Map.of() : conf;
@@ -101,34 +111,82 @@ public final class FlowAgentConfig {
         }
     }
 
+    /**
+     * strategyName.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String strategyName() {
         return strategyName;
     }
+
+    /**
+     * strategyProvider.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String strategyProvider() {
         return strategyProvider;
     }
 
+    /**
+     * maxIteration.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public int maxIteration() {
         return maxIteration;
     }
+
+    /**
+     * streaming.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean streaming() {
         return streaming;
     }
 
+    /**
+     * withChatHistory.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean withChatHistory() {
         return withChatHistory;
     }
+
+    /**
+     * chatHistoryMaxTurn.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public int chatHistoryMaxTurn() {
         return chatHistoryMaxTurn;
     }
 
+    /**
+     * systemPrompt.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String systemPrompt() {
         return systemPrompt;
     }
-
     public Map<String, Object> llmConfig() {
         return llmConfig;
     }
@@ -139,23 +197,23 @@ public final class FlowAgentConfig {
 
     private static Object first(Map<String, Object> c, String a, String b) {
         if (c.containsKey(a) && c.get(a) != null) {
-            return c.get(a);
-        }
+        return c.get(a);
+    }
         return c.get(b);
     }
 
     private static String str(Object o, String def) {
         if (o == null) {
-            return def;
-        }
+        return def;
+    }
         String s = String.valueOf(o);
         return s.isBlank() ? def : s;
     }
 
     private static int intVal(Object o, int def) {
         if (o instanceof Number n) {
-            return n.intValue();
-        }
+        return n.intValue();
+    }
         if (o != null) {
             try {
                 return Integer.parseInt(String.valueOf(o));
@@ -168,8 +226,8 @@ public final class FlowAgentConfig {
 
     private static boolean boolVal(Object o, boolean def) {
         if (o instanceof Boolean b) {
-            return b;
-        }
+        return b;
+    }
         if (o != null) {
             return Boolean.parseBoolean(String.valueOf(o));
         }

@@ -17,15 +17,16 @@ import com.openjiuwen.studio.dsl.testsupport.StubModelContext;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Python {@code flow_extractor.py} LLM path parity (stub invoker, no network).
  *
  * @since 2026-08-26
  */
+
 class ExtractorParityTest {
     private static Map<String, Object> modelConfigs() {
         Map<String, Object> extension = Map.of(

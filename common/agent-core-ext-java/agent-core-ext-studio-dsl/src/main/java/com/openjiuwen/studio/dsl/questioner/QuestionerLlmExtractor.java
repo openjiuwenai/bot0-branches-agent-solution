@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl.questioner;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.foundation.llm.Model;
@@ -17,10 +18,11 @@ import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.component.llm.QuestionerDefaultConfig;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
-import com.openjiuwen.studio.dsl.rails.formatters.DateUtilCompatibleParser;
 import com.openjiuwen.studio.dsl.rails.formatters.DateTimeFormatValidateAction;
+import com.openjiuwen.studio.dsl.rails.formatters.DateUtilCompatibleParser;
 import com.openjiuwen.studio.dsl.util.TypeCoercer;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -34,6 +36,7 @@ import java.util.regex.Pattern;
  *
  * @since 2026-08-26
  */
+
 public final class QuestionerLlmExtractor {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
@@ -60,7 +63,9 @@ public final class QuestionerLlmExtractor {
             Return format: {"{{field_name}}": "corrected value"} or {"{{field_name}}": "original value"} if the value is correct.
             """;
 
-    /** Injectable for tests (returns raw LLM text). */
+    /**
+     * Injectable for tests (returns raw LLM text).
+     */
     @FunctionalInterface
     public interface ModelInvoker {
         String invoke(List<BaseMessage> messages) throws Exception;
@@ -73,17 +78,24 @@ public final class QuestionerLlmExtractor {
     public QuestionerLlmExtractor(String nodeId, QuestionerConfig config) {
         this(nodeId, config, null);
     }
-
     public QuestionerLlmExtractor(String nodeId, QuestionerConfig config, ModelInvoker invoker) {
         this.nodeId = nodeId;
         this.config = config;
         this.invoker = invoker != null ? invoker : defaultInvoker(config);
     }
 
+    /**
+     * hasModelWiring.
+     *
+     * @param configs configs
+     * @return result
+     * @since 0.1.0
+     */
+
     public static boolean hasModelWiring(Map<String, Object> configs) {
         if (configs == null) {
-            return false;
-        }
+        return false;
+    }
         if (configs.get("apiKey") != null || configs.get("modelClientConfig") instanceof Map<?, ?>) {
             return true;
         }
@@ -117,7 +129,13 @@ public final class QuestionerLlmExtractor {
     /**
      * Python {@code _try_parse_time_from_user_input} — when LLM left a field null and rails
      * declare {@code date_time_format}, parse the raw user query into that format.
+     *
+     * @param extracted extracted
+     * @param userInput userInput
+     * @return result
+     * @since 0.1.0
      */
+
     Map<String, Object> tryParseTimeFromUserInput(Map<String, Object> extracted, String userInput) {
         if (extracted == null) {
             extracted = new LinkedHashMap<>();
@@ -287,7 +305,7 @@ public final class QuestionerLlmExtractor {
                 m.forEach((k, v) -> out.put(String.valueOf(k), v));
                 return out;
             }
-        } catch (Exception ignored) {
+        } catch (JsonProcessingException ignored) {
             // fall through
         }
         Map<String, Object> literal = tryPythonLiteralMap(cleaned);
@@ -311,7 +329,7 @@ public final class QuestionerLlmExtractor {
                 m.forEach((k, v) -> out.put(String.valueOf(k), v));
                 return out;
             }
-        } catch (Exception ignored) {
+        } catch (JsonProcessingException ignored) {
             // ast.literal_eval parity best-effort
         }
         return null;
@@ -343,8 +361,8 @@ public final class QuestionerLlmExtractor {
 
     private static boolean isValidValue(Object v) {
         if (v == null) {
-            return false;
-        }
+        return false;
+    }
         if (v instanceof String s) {
             String t = s.strip().toLowerCase();
             return !t.isEmpty() && !"null".equals(t) && !"none".equals(t);
@@ -396,8 +414,8 @@ public final class QuestionerLlmExtractor {
 
     private void traceLlm(NodeSessionApi session, List<BaseMessage> inputs, String response) {
         if (session == null || response == null) {
-            return;
-        }
+        return;
+    }
         Map<String, Object> llmInfo = new LinkedHashMap<>();
         llmInfo.put("llm_inputs", messageMaps(inputs));
         llmInfo.put("llm_outputs", response);
@@ -408,8 +426,8 @@ public final class QuestionerLlmExtractor {
 
     private void appendRedisTrace(NodeSessionApi session, Map<String, Object> data) {
         if (session == null || data == null || data.isEmpty()) {
-            return;
-        }
+        return;
+    }
         try {
             String sessionId = session.getSessionId();
             if (sessionId == null || sessionId.isBlank()) {
@@ -423,8 +441,8 @@ public final class QuestionerLlmExtractor {
 
     private static void trace(NodeSessionApi session, Map<String, Object> data) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             session.trace(data);
         } catch (RuntimeException ignored) {

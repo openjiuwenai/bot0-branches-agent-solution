@@ -9,6 +9,7 @@ package com.openjiuwen.studio.dsl.flowsubworkflow;
  *
  * @since 2026-08-26
  */
+
 public enum SubWorkflowExecutionStatus {
     START("start"),
     END("end"),
@@ -20,14 +21,29 @@ public enum SubWorkflowExecutionStatus {
         this.value = value;
     }
 
+    /**
+     * value.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String value() {
         return value;
     }
 
+    /**
+     * isUserInteract.
+     *
+     * @param status status
+     * @return result
+     * @since 0.1.0
+     */
+
     public static boolean isUserInteract(Object status) {
         if (status == null) {
-            return false;
-        }
+        return false;
+    }
         if (status instanceof SubWorkflowExecutionStatus s) {
             return s == USER_INTERACT;
         }

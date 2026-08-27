@@ -24,16 +24,41 @@ import java.util.Set;
  *
  * @since 2026-08-17
  */
+
 public final class ExceptionNodeHandler implements NodeHandlerFactory {
+
+    /**
+     * canonicalType.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public String canonicalType() {
         return "jiuwen.exception";
     }
 
+    /**
+     * aliases.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public Set<String> aliases() {
         return Set.of();
     }
+
+    /**
+     * create.
+     *
+     * @param node node
+     * @param ctx ctx
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
@@ -54,12 +79,32 @@ public final class ExceptionNodeHandler implements NodeHandlerFactory {
             this.engine = new FlowExceptionEngine(config);
         }
 
+        /**
+         * doInvoke.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
+
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
             engine.invoke(inputs, session);
             // unreachable — invoke always throws WorkflowAbortException
             return NodePayload.ofFields(Map.of());
         }
+
+        /**
+         * stream.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
 
         @Override
         public Iterator<Object> stream(Object inputs, NodeSessionApi session, ModelContext context) {

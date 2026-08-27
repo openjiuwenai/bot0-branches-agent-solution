@@ -6,11 +6,11 @@ package com.openjiuwen.studio.dsl.adapter.control;
 
 import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.session.NodeSessionApi;
-import com.openjiuwen.core.workflow.ComponentExecutable;
-import com.openjiuwen.core.workflow.WorkflowComponent;
 import com.openjiuwen.core.workflow.component.loop.LoopBreakComponent;
 import com.openjiuwen.core.workflow.component.loop.LoopGroup;
+import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.core.workflow.components.flow.loop.LoopComponent;
+import com.openjiuwen.core.workflow.WorkflowComponent;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
@@ -20,10 +20,10 @@ import com.openjiuwen.studio.dsl.util.ConditionEvaluator;
 import com.openjiuwen.studio.dsl.util.DeepCopies;
 
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Assemble Studio IR {@code loopBody} into core {@link LoopGroup} + {@link LoopComponent}
@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * @since 2026-08-26
  */
+
 final class StudioLoopGroupAssembler {
     private StudioLoopGroupAssembler() {}
 
@@ -304,8 +305,8 @@ final class StudioLoopGroupAssembler {
     private static Object firstPresent(Map<?, ?> m, String... keys) {
         for (String k : keys) {
             if (m.containsKey(k) && m.get(k) != null) {
-                return m.get(k);
-            }
+        return m.get(k);
+    }
         }
         return null;
     }
@@ -319,7 +320,6 @@ final class StudioLoopGroupAssembler {
     private static String stringVal(Object o) {
         return o == null ? "" : String.valueOf(o);
     }
-
     record AssembledLoop(LoopComponent component, Map<String, Object> outputSchema, List<String> bodyIds, String breakId) {}
 
     private record Conn(String from, String to) {}
@@ -329,6 +329,7 @@ final class StudioLoopGroupAssembler {
      * Shares a mutable frame so Studio IR linear body semantics (userFields merge) work
      * without requiring every IR edge to declare {@code inputs_schema}.
      */
+
     static final class StudioLoopBodyAdapter extends WorkflowComponent {
         private final AssembledNode child;
         private final NodeTypeRegistry registry;
@@ -345,6 +346,16 @@ final class StudioLoopGroupAssembler {
             this.ctx = ctx;
             this.frame = frame;
         }
+
+        /**
+         * invoke.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
 
         @Override
         @SuppressWarnings("unchecked")
@@ -379,16 +390,14 @@ final class StudioLoopGroupAssembler {
                 return new LinkedHashMap<>(uf);
             } catch (RuntimeException e) {
                 throw e;
-            } catch (Exception e) {
-                throw new RuntimeException(e);
             }
         }
 
         private static void enrichFromSession(Map<String, Object> merged, NodeSessionApi session) {
             for (String k : List.of("item", "index")) {
                 if (merged.get(k) != null) {
-                    continue;
-                }
+            continue;
+        }
                 try {
                     Object v = session.getState(k);
                     if (v == null && session.getInner() != null && session.getInner().state() != null) {
@@ -427,7 +436,9 @@ final class StudioLoopGroupAssembler {
         }
     }
 
-    /** IR {@code breakCondition} as core {@link LoopBreakComponent}. */
+    /**
+     * IR {@code breakCondition} as core {@link LoopBreakComponent}.
+     */
     static final class StudioLoopBreakAdapter extends LoopBreakComponent {
         private final Object breakCond;
         private final AtomicReference<Map<String, Object>> frame;
@@ -436,6 +447,16 @@ final class StudioLoopGroupAssembler {
             this.breakCond = breakCond;
             this.frame = frame;
         }
+
+        /**
+         * invoke.
+         *
+         * @param inputs inputs
+         * @param session session
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
 
         @Override
         public Object invoke(Object inputs, NodeSessionApi session, ModelContext context) {

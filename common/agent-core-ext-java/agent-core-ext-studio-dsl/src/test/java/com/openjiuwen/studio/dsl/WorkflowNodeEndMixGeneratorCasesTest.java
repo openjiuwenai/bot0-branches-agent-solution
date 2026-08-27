@@ -5,12 +5,15 @@
 package com.openjiuwen.studio.dsl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
-import com.openjiuwen.studio.dsl.adapter.StudioStreamFrames;
 import com.openjiuwen.studio.dsl.adapter.control.EndNodeHandler;
+import com.openjiuwen.studio.dsl.adapter.StudioStreamFrames;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
@@ -19,27 +22,20 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * End mix + Iterator/generator parity (Python end.py mix / process_generator_values / collect / transform).
  *
  * @since 2026-08-26
  */
+
 class WorkflowNodeEndMixGeneratorCasesTest {
     private NodeTypeRegistry registry;
 
@@ -47,7 +43,6 @@ class WorkflowNodeEndMixGeneratorCasesTest {
     void setUp() {
         registry = NodeTypeRegistry.createWithBuiltins();
     }
-
     @SuppressWarnings("unchecked")
     private static Map<String, Object> uf(Object out) {
         Map<String, Object> m = (Map<String, Object>) out;
@@ -158,6 +153,10 @@ class WorkflowNodeEndMixGeneratorCasesTest {
         AtomicReference<Object> batchOut = new AtomicReference<>();
         AtomicReference<Object> streamOut = new AtomicReference<>();
 
+        Thread.UncaughtExceptionHandler failFast =
+                (t, e) -> {
+                    throw new AssertionError("unexpected thread failure: " + t.getName(), e);
+                };
         Thread batch = new Thread(() -> {
             started.countDown();
             batchOut.set(
@@ -173,6 +172,8 @@ class WorkflowNodeEndMixGeneratorCasesTest {
             streamOut.set(
                     end.collect(Map.of("userFields", Map.of("b", "B")), sharedSession, null));
         });
+        batch.setUncaughtExceptionHandler(failFast);
+        stream.setUncaughtExceptionHandler(failFast);
         batch.start();
         stream.start();
         batch.join(5000);

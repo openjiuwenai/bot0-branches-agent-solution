@@ -9,6 +9,7 @@ package com.openjiuwen.studio.dsl.flowexception;
  *
  * @since 2026-08-26
  */
+
 public final class FlowExceptionConfig {
     private final String nodeId;
     private final String nodeName;
@@ -20,13 +21,34 @@ public final class FlowExceptionConfig {
         this.nodeType = nodeType == null || nodeType.isBlank() ? "jiuwen.exception" : nodeType;
     }
 
+    /**
+     * nodeId.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String nodeId() {
         return nodeId;
     }
 
+    /**
+     * nodeName.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String nodeName() {
         return nodeName;
     }
+
+    /**
+     * nodeType.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String nodeType() {
         return nodeType;

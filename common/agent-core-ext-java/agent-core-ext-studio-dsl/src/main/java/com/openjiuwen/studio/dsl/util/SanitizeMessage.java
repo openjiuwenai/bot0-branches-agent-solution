@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
  *
  * @since 2026-08-26
  */
+
 public final class SanitizeMessage {
     private static final List<Pattern> PATTERNS = List.of(
             Pattern.compile("(secret key:\\s*)(\\S+)", Pattern.CASE_INSENSITIVE),
@@ -28,10 +29,11 @@ public final class SanitizeMessage {
      * @param message raw message
      * @return sanitized message
      */
+
     public static String sanitize(String message) {
         if (message == null) {
-            return "";
-        }
+        return "";
+    }
         String out = message;
         for (Pattern pattern : PATTERNS) {
             out = pattern.matcher(out).replaceAll("$1***");

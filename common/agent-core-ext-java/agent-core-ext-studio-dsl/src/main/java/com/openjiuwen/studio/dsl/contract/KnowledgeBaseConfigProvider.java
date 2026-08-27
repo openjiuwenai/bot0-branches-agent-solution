@@ -12,13 +12,16 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 @FunctionalInterface
 public interface KnowledgeBaseConfigProvider {
+
     /**
      * getKbConfig.
      *
      * @param nodeConfigs IR node configs (connectionId, knowledgeBaseIds, retrievalConfig, …)
      * @return map with keys {@code connection}, {@code knowledge_bases}, {@code retrieval_params}
      */
+
     Map<String, Object> getKbConfig(Map<String, Object> nodeConfigs);
 }

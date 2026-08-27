@@ -15,7 +15,20 @@ import java.util.Map;
  *
  * @since 2026-08-25
  */
+
 public final class KooSearchAdapter implements KBServiceAdapter {
+
+    /**
+     * search.
+     *
+     * @param query query
+     * @param connectionConfig connectionConfig
+     * @param knowledgeBases knowledgeBases
+     * @param retrievalParams retrievalParams
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public List<KBSearchResult> search(
             String query,

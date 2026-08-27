@@ -4,13 +4,14 @@
 
 package com.openjiuwen.studio.dsl.flowapi;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.foundation.tool.Tool;
 import com.openjiuwen.core.graph.pregel.GraphInterrupt;
-import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.interaction.WorkflowInteraction;
+import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.stream.OutputSchema;
 import com.openjiuwen.studio.dsl.contract.ToolRegistry;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
@@ -18,10 +19,10 @@ import com.openjiuwen.studio.dsl.util.OutboundUrlSafety;
 import com.openjiuwen.studio.dsl.util.TemplateRenderer;
 
 import java.io.IOException;
-import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -40,6 +41,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class FlowApiEngine {
     public static final String USER_FIELDS = "userFields";
     public static final String EXCEPTION_ENABLE = "exceptionEnable";
@@ -54,12 +56,15 @@ public final class FlowApiEngine {
      * {@code X-Auth-Token}. Production hosts must inject a real token via session workflow param
      * {@code runtime_auth_headers} before invoke (see README).
      */
+
     public static final String PYTHON_PARITY_AUTH_TOKEN_PLACEHOLDER = "defaultUser|0";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
-    /** Test stub for ainvoke/astream (mirrors patching RestfulApiToolNew). */
+    /**
+     * Test stub for ainvoke/astream (mirrors patching RestfulApiToolNew).
+     */
     public interface TestBridge {
         Map<String, Object> ainvoke(String apiId, Map<String, Object> inputs, Map<String, String> headers);
 
@@ -86,17 +91,28 @@ public final class FlowApiEngine {
     public FlowApiEngine(String nodeId) {
         this(nodeId, null);
     }
-
     public FlowApiEngine(String nodeId, TestBridge bridge) {
         this.nodeId = nodeId == null ? "plugin" : nodeId;
         this.presetBridge = bridge;
     }
 
+    /**
+     * setToolRegistry.
+     *
+     * @param toolRegistry toolRegistry
+     * @since 0.1.0
+     */
+
     public void setToolRegistry(ToolRegistry toolRegistry) {
         this.toolRegistry = toolRegistry;
     }
 
-    /** Python {@code init} / {@code _init_from_conf}. */
+    /**
+     * Python {@code init} / {@code _init_from_conf}.
+     *
+     * @param conf conf
+     * @since 0.1.0
+     */
     @SuppressWarnings("unchecked")
     public void init(Map<String, Object> conf) {
         Map<String, Object> c = conf == null ? Map.of() : new LinkedHashMap<>(conf);
@@ -136,19 +152,48 @@ public final class FlowApiEngine {
         }
     }
 
+    /**
+     * apiId.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String apiId() {
         return apiId;
     }
+
+    /**
+     * params.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public List<FlowApiParam> params() {
         return params;
     }
 
+    /**
+     * response.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public List<FlowApiParam> response() {
         return response;
     }
 
-    /** Python {@code invoke}. */
+    /**
+     * Python {@code invoke}.
+     *
+     * @param inputs inputs
+     * @param session session
+     * @param context context
+     * @return result
+     * @since 0.1.0
+     */
     @SuppressWarnings("unchecked")
     public Map<String, Object> invoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         try {
@@ -193,7 +238,13 @@ public final class FlowApiEngine {
     }
 
     /**
-     * Python {@code stream} — yields userFields frames (+ optional OutputSchema error on suppress).
+     * * Python {@code stream} — yields userFields frames (+ optional OutputSchema error on suppress).
+     *
+     * @param inputs inputs
+     * @param session session
+     * @param context context
+     * @return result
+     * @since 0.1.0
      */
     public Iterator<Object> stream(Object inputs, NodeSessionApi session, ModelContext context) {
         List<Object> frames = new ArrayList<>();
@@ -237,6 +288,7 @@ public final class FlowApiEngine {
      * @param outputs raw plugin output
      * @param hasResponse whether API declares response schema ({@code if self._api.response})
      */
+
     @SuppressWarnings("unchecked")
     public Map<String, Object> formatApiOutputs(Object outputs, boolean hasResponse) {
         if (!(outputs instanceof Map<?, ?> m)) {
@@ -272,13 +324,23 @@ public final class FlowApiEngine {
         return map;
     }
 
-    /** Convenience: use engine response schema. */
+    /**
+     * Convenience: use engine response schema.
+     *
+     * @param outputs outputs
+     * @return result
+     * @since 0.1.0
+     */
     public Map<String, Object> formatApiOutputs(Object outputs) {
         return formatApiOutputs(outputs, !response.isEmpty());
     }
 
     /**
-     * Static unwrap used by callers that only have a raw envelope (treat as hasResponse when data present).
+     * * Static unwrap used by callers that only have a raw envelope (treat as hasResponse when data present).
+     *
+     * @param outputs outputs
+     * @return result
+     * @since 0.1.0
      */
     public static Map<String, Object> formatApiOutputsStatic(Object outputs) {
         FlowApiEngine tmp = new FlowApiEngine("plugin");
@@ -350,7 +412,12 @@ public final class FlowApiEngine {
         return out;
     }
 
-    /** Python {@code get_auth_token} — dev placeholder unless host already set {@code X-Auth-Token}. */
+    /**
+     * Python {@code get_auth_token} — dev placeholder unless host already set {@code X-Auth-Token}.
+     *
+     * @return result
+     * @since 0.1.0
+     */
     public Map<String, String> getAuthToken() {
         return getAuthToken(Map.of());
     }
@@ -359,7 +426,12 @@ public final class FlowApiEngine {
      * Python {@code get_auth_token}. When {@code existingHeaders} already contains a non-blank
      * {@code X-Auth-Token} (from session {@code runtime_auth_headers}), returns {@code null} so the
      * host value is preserved.
+     *
+     * @param existingHeaders existingHeaders
+     * @return result
+     * @since 0.1.0
      */
+
     public Map<String, String> getAuthToken(Map<String, String> existingHeaders) {
         Object authObj = conf.get("auth");
         if (!(authObj instanceof Map<?, ?> auth) || auth.isEmpty()) {
@@ -545,7 +617,7 @@ public final class FlowApiEngine {
         try {
             Map<String, Object> parsed = MAPPER.readValue(resp.body(), MAP_TYPE);
             data.putAll(parsed);
-        } catch (Exception ignored) {
+        } catch (JsonProcessingException ignored) {
             // keep raw
         }
         Map<String, Object> envelope = new LinkedHashMap<>();
@@ -671,8 +743,8 @@ public final class FlowApiEngine {
 
     private static Object tryGetContent(Object item) {
         if (item == null) {
-            return null;
-        }
+        return null;
+    }
         try {
             var m = item.getClass().getMethod("getContent");
             return m.invoke(item);
@@ -709,7 +781,7 @@ public final class FlowApiEngine {
             try {
                 Map<String, Object> parsed = MAPPER.readValue(s, MAP_TYPE);
                 streamingResponse = parsed;
-            } catch (Exception ignored) {
+            } catch (JsonProcessingException ignored) {
                 // keep null
             }
         }
@@ -779,7 +851,7 @@ public final class FlowApiEngine {
         }
         try {
             return MAPPER.readValue(s, MAP_TYPE);
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
             return Map.of();
         }
     }
@@ -828,11 +900,10 @@ public final class FlowApiEngine {
     private static String urlOf(Map<String, Object> c) {
         return firstNonBlank(str(c.get("url")), str(c.get("endpoint")));
     }
-
     private static Object getWorkflowParam(NodeSessionApi session, String key) {
         if (session == null) {
-            return null;
-        }
+        return null;
+    }
         try {
             return session.getGlobalState(key);
         } catch (RuntimeException ignored) {
@@ -870,8 +941,8 @@ public final class FlowApiEngine {
 
     private static boolean bool(Object o) {
         if (o == null) {
-            return false;
-        }
+        return false;
+    }
         if (o instanceof Boolean b) {
             return b;
         }
@@ -881,18 +952,23 @@ public final class FlowApiEngine {
     private static String str(Object o) {
         return o == null ? "" : String.valueOf(o);
     }
-
     private static String firstNonBlank(String... vals) {
         for (String v : vals) {
             if (v != null && !v.isBlank()) {
-                return v;
-            }
+        return v;
+    }
         }
         return "";
     }
 
     /**
-     * Python {@code WorkflowMetadata} subset.
+     * * Python {@code WorkflowMetadata} subset.
+     *
+     * @param nodeId nodeId
+     * @param nodeType nodeType
+     * @param nodeName nodeName
+     * @return result
+     * @since 0.1.0
      */
     public record WorkflowMetadata(String nodeId, String nodeType, String nodeName) {
         static final WorkflowMetadata EMPTY = new WorkflowMetadata("", "", "");

@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl.flowagent;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.context.ModelContext;
@@ -21,6 +22,7 @@ import com.openjiuwen.core.singleagent.agents.ReActAgentConfig;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
 import com.openjiuwen.studio.dsl.contract.ToolRegistry;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -35,15 +37,18 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class FlowAgentEngine {
     public static final String USER_FIELDS = "userFields";
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    /** Test / host stub for ReAct invoke+stream (mirrors patching ReActAgent). */
+    /**
+     * Test / host stub for ReAct invoke+stream (mirrors patching ReActAgent).
+     */
     public interface ReactBridge {
-        Map<String, Object> invoke(Map<String, Object> mappedInputs) throws Exception;
+        Map<String, Object> invoke(Map<String, Object> mappedInputs) throws IOException, InterruptedException;
 
-        Iterator<Object> stream(Map<String, Object> mappedInputs) throws Exception;
+        Iterator<Object> stream(Map<String, Object> mappedInputs) throws IOException, InterruptedException;
     }
 
     private final String nodeId;
@@ -70,7 +75,12 @@ public final class FlowAgentEngine {
         this.initialized = bridge != null;
     }
 
-    /** Python {@code init} via conf map (IR node configs). */
+    /**
+     * Python {@code init} via conf map (IR node configs).
+     *
+     * @param conf conf
+     * @since 0.1.0
+     */
     public void init(Map<String, Object> conf) {
         this.config = FlowAgentConfig.from(nodeId, conf);
         this.initialized = presetBridge != null;
@@ -79,39 +89,87 @@ public final class FlowAgentEngine {
         this.tools.clear();
     }
 
+    /**
+     * setStudioToolRegistry.
+     *
+     * @param registry registry
+     * @since 0.1.0
+     */
+
     public void setStudioToolRegistry(ToolRegistry registry) {
         this.studioToolRegistry = registry;
     }
 
-    /** Python {@code add_tool}. */
+    /**
+     * Python {@code add_tool}.
+     *
+     * @param tool tool
+     * @return result
+     * @since 0.1.0
+     */
     public FlowAgentEngine addTool(Tool tool) {
         if (tool != null) {
-            tools.add(tool);
-        }
+        tools.add(tool);
+    }
         return this;
     }
 
-    /** Python {@code add_tools}. */
+    /**
+     * Python {@code add_tools}.
+     *
+     * @param more more
+     * @return result
+     * @since 0.1.0
+     */
     public FlowAgentEngine addTools(List<Tool> more) {
         if (more != null) {
-            tools.addAll(more);
-        }
+        tools.addAll(more);
+    }
         return this;
     }
+
+    /**
+     * tools.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public List<Tool> tools() {
         return List.copyOf(tools);
     }
 
+    /**
+     * config.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public FlowAgentConfig config() {
         return config;
     }
+
+    /**
+     * isInitialized.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean isInitialized() {
         return initialized;
     }
 
-    /** Python {@code invoke}. */
+    /**
+     * Python {@code invoke}.
+     *
+     * @param inputs inputs
+     * @param session session
+     * @param context context
+     * @return result
+     * @since 0.1.0
+     */
     public Map<String, Object> invoke(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         ensureInitialized();
@@ -121,7 +179,7 @@ public final class FlowAgentEngine {
                     ? bridge.invoke(mapped)
                     : asMap(reactAgent.invoke(mapped, toSession(session)));
             return formatInvokeOutput(result);
-        } catch (Exception e) {
+        } catch (RuntimeException | IOException | InterruptedException e) {
             Map<String, Object> err = new LinkedHashMap<>();
             err.put("output", "Error in FlowAgent execution: " + e.getMessage());
             err.put("result_type", "error");
@@ -129,7 +187,15 @@ public final class FlowAgentEngine {
         }
     }
 
-    /** Python {@code stream}. */
+    /**
+     * Python {@code stream}.
+     *
+     * @param inputs inputs
+     * @param session session
+     * @param context context
+     * @return result
+     * @since 0.1.0
+     */
     public Iterator<Object> stream(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         ensureInitialized();
@@ -139,7 +205,7 @@ public final class FlowAgentEngine {
                 return bridge.stream(mapped);
             }
             return reactAgent.stream(mapped, toSession(session), List.of(StreamMode.OUTPUT));
-        } catch (Exception e) {
+        } catch (RuntimeException | IOException | InterruptedException e) {
             Map<String, Object> err = new LinkedHashMap<>();
             err.put("type", "error");
             Map<String, Object> payload = new LinkedHashMap<>();
@@ -150,7 +216,15 @@ public final class FlowAgentEngine {
         }
     }
 
-    /** Python {@code collect} — aggregate last chunk then invoke. */
+    /**
+     * Python {@code collect} — aggregate last chunk then invoke.
+     *
+     * @param inputs inputs
+     * @param session session
+     * @param context context
+     * @return result
+     * @since 0.1.0
+     */
     public Map<String, Object> collect(
             Object inputs, NodeSessionApi session, ModelContext context) {
         ensureInitialized();
@@ -170,7 +244,7 @@ public final class FlowAgentEngine {
                     ? bridge.invoke(mapped)
                     : reactAgent.invoke(mapped, toSession(session));
             return asMap(result);
-        } catch (Exception e) {
+        } catch (RuntimeException | IOException | InterruptedException e) {
             Map<String, Object> err = new LinkedHashMap<>();
             err.put("output", "Error in FlowAgent collect: " + e.getMessage());
             err.put("result_type", "error");
@@ -180,8 +254,8 @@ public final class FlowAgentEngine {
 
     void ensureInitialized() {
         if (initialized) {
-            return;
-        }
+        return;
+    }
         synchronized (initLock) {
             if (initialized) {
                 return;
@@ -276,8 +350,8 @@ public final class FlowAgentEngine {
 
     private void registerTools() {
         if (tools.isEmpty() || reactAgent == null) {
-            return;
-        }
+        return;
+    }
         for (Tool tool : tools) {
             try {
                 ToolCard card = tool.getCard();
@@ -350,15 +424,15 @@ public final class FlowAgentEngine {
         }
         try {
             return MAPPER.readValue(t, new TypeReference<Object>() {});
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
             return null;
         }
     }
 
     private static Session toSession(NodeSessionApi session) {
         if (session == null) {
-            return null;
-        }
+        return null;
+    }
         try {
             return session.getInner();
         } catch (RuntimeException e) {
@@ -378,16 +452,16 @@ public final class FlowAgentEngine {
 
     private static String str(Object o, String def) {
         if (o == null) {
-            return def;
-        }
+        return def;
+    }
         String s = String.valueOf(o);
         return s.isBlank() ? def : s;
     }
 
     private static float num(Object o, double def) {
         if (o instanceof Number n) {
-            return n.floatValue();
-        }
+        return n.floatValue();
+    }
         if (o != null) {
             try {
                 return Float.parseFloat(String.valueOf(o));

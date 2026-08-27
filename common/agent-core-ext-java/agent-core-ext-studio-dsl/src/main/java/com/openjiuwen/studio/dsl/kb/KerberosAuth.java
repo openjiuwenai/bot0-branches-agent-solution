@@ -8,24 +8,27 @@ import org.ietf.jgss.GSSContext;
 import org.ietf.jgss.GSSManager;
 import org.ietf.jgss.GSSName;
 
-import javax.security.auth.Subject;
+import java.io.File;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.util.Base64;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
-import java.io.File;
-import java.security.PrivilegedExceptionAction;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import javax.security.auth.Subject;
 
 /**
  * Kerberos SPNEGO token for LakeSearch (Python {@code kerberos_auth.get_spnego_token}).
  *
  * @since 2026-08-26
  */
+
 public final class KerberosAuth {
     private static final int DEFAULT_CREDS_LIFETIME_SECONDS = 3600;
     private static final ConcurrentHashMap<String, CachedSubject> SUBJECT_CACHE = new ConcurrentHashMap<>();
@@ -41,11 +44,12 @@ public final class KerberosAuth {
      * @param clientPrincipal optional principal; auto from keytab when blank
      * @return base64-encoded SPNEGO token (standard Base64, not URL-safe)
      */
+
     public static String getSpnegoToken(
             String servicePrincipal, String keytabPath, String krb5ConfPath, String clientPrincipal) {
         if (!new File(keytabPath).isFile()) {
-            throw new IllegalStateException("Keytab file not found: " + keytabPath);
-        }
+        throw new IllegalStateException("Keytab file not found: " + keytabPath);
+    }
         if (krb5ConfPath != null && !krb5ConfPath.isBlank() && !new File(krb5ConfPath).isFile()) {
             throw new IllegalStateException("krb5.conf file not found: " + krb5ConfPath);
         }
@@ -70,7 +74,7 @@ public final class KerberosAuth {
                         }
                         return Base64.getEncoder().encodeToString(token);
                     });
-        } catch (Exception e) {
+        } catch (LoginException | PrivilegedActionException e) {
             if (e instanceof RuntimeException re) {
                 throw re;
             }
@@ -86,11 +90,14 @@ public final class KerberosAuth {
         }
     }
 
-    /** clear cached subjects (tests). */
+    /**
+     * clear cached subjects (tests).
+     *
+     * @since 0.1.0
+     */
     public static void clearCache() {
         SUBJECT_CACHE.clear();
     }
-
     private static Subject getOrLoginSubject(String keytabPath, String clientPrincipal) throws LoginException {
         String cacheKey = keytabPath + "|" + (clientPrincipal == null ? "" : clientPrincipal);
         long now = System.currentTimeMillis();
@@ -108,6 +115,15 @@ public final class KerberosAuth {
             options.put("principal", clientPrincipal);
         }
         Configuration jaas = new Configuration() {
+
+            /**
+             * getAppConfigurationEntry.
+             *
+             * @param name name
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public AppConfigurationEntry[] getAppConfigurationEntry(String name) {
                 return new AppConfigurationEntry[] {
@@ -133,6 +149,7 @@ public final class KerberosAuth {
      * @param extraParams connection extra_params
      * @return config map or null when incomplete
      */
+
     public static Map<String, Object> extractKerberosConfig(Map<String, Object> extraParams) {
         if (extraParams == null) {
             return null;
@@ -161,10 +178,11 @@ public final class KerberosAuth {
      * @param kerberosConfig from {@link #extractKerberosConfig}
      * @return {@code Negotiate {token}}
      */
+
     public static String buildNegotiateAuthorization(String hostname, Map<String, Object> kerberosConfig) {
         if (hostname == null || hostname.isBlank()) {
-            throw new IllegalStateException("Cannot extract hostname for Kerberos service principal");
-        }
+        throw new IllegalStateException("Cannot extract hostname for Kerberos service principal");
+    }
         String token =
                 getSpnegoToken(
                         "HTTP@" + hostname,
@@ -184,5 +202,6 @@ public final class KerberosAuth {
         return out;
     }
 
-    private record CachedSubject(Subject subject, long expireAtMs) {}
-}
+    private record CachedSubject(Subject subject, long expireAtMs) {
+        }
+    }

@@ -23,6 +23,7 @@ import java.util.Set;
  *
  * @since 2026-08-17
  */
+
 public final class NodeTypeRegistry {
     private final Map<String, NodeHandlerFactory> byCanonical = new LinkedHashMap<>();
     private final Map<String, String> aliasToCanonical = new LinkedHashMap<>();
@@ -32,6 +33,7 @@ public final class NodeTypeRegistry {
      *
      * @param factory factory
      */
+
     synchronized void register(NodeHandlerFactory factory) {
         Objects.requireNonNull(factory, "factory");
         String canonical = factory.canonicalType();
@@ -63,6 +65,7 @@ public final class NodeTypeRegistry {
      * @param irType irType
      * @return result
      */
+
     public String canonicalize(String irType) {
         return canonicalize(irType, "n/a");
     }
@@ -74,6 +77,7 @@ public final class NodeTypeRegistry {
      * @param nodeId node id for {@link NodeExecutionException}
      * @return canonical type
      */
+
     public String canonicalize(String irType, String nodeId) {
         String nid = nodeId == null || nodeId.isBlank() ? "n/a" : nodeId;
         if (irType == null) {
@@ -96,6 +100,7 @@ public final class NodeTypeRegistry {
      * @param ctx ctx
      * @return result
      */
+
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
         String canonical = canonicalize(node.irType(), node.id());
         NodeHandlerFactory factory = byCanonical.get(canonical);
@@ -108,6 +113,7 @@ public final class NodeTypeRegistry {
      *
      * @return result
      */
+
     public Set<String> canonicalTypes() {
         return Set.copyOf(byCanonical.keySet());
     }
@@ -117,6 +123,7 @@ public final class NodeTypeRegistry {
      *
      * @return result
      */
+
     public Collection<NodeHandlerFactory> factories() {
         return byCanonical.values();
     }
@@ -126,6 +133,7 @@ public final class NodeTypeRegistry {
      *
      * @return result
      */
+
     public static NodeTypeRegistry createWithBuiltins() {
         NodeTypeRegistry registry = new NodeTypeRegistry();
         BuiltinNodeBootstrap.registerAll(registry);

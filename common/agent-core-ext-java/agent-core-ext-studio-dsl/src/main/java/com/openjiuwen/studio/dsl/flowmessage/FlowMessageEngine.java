@@ -9,9 +9,9 @@ import com.openjiuwen.studio.dsl.adapter.StudioStreamFrames;
 import com.openjiuwen.studio.dsl.flowstreamtransform.FlowStreamTransformEngine;
 import com.openjiuwen.studio.dsl.util.TemplateRenderer;
 
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.ZonedDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -23,12 +23,16 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class FlowMessageEngine {
     public static final String MESSAGE_OUTPUTS_KEY = "message_outputs";
     public static final String USER_FIELDS = "userFields";
     public static final String NODE_TYPE = "message";
     public static final String JIUWEN_MESSAGE_TYPE = "jiuwen.message";
-    /** Python {@code MESSAGE_NODE_STREAM}. */
+
+    /**
+     * Python {@code MESSAGE_NODE_STREAM}.
+     */
     public static final String MESSAGE_NODE_STREAM = "message node stream";
 
     private static final ZoneId BJ_ZONE = ZoneId.of("Asia/Shanghai");
@@ -49,6 +53,7 @@ public final class FlowMessageEngine {
      * @param session session
      * @return map with {@code result}
      */
+
     public Map<String, Object> invoke(Map<String, Object> inputs, NodeSessionApi session) {
         Map<String, Object> uf = extractUserFields(inputs);
         String finalRes = renderTemplate(uf);
@@ -71,6 +76,7 @@ public final class FlowMessageEngine {
      * @param session session
      * @return frame iterator
      */
+
     public Iterator<Object> stream(Map<String, Object> inputs, NodeSessionApi session) {
         List<Object> frames = new ArrayList<>();
         Map<String, Object> uf = extractUserFields(inputs == null ? Map.of() : inputs);
@@ -97,6 +103,7 @@ public final class FlowMessageEngine {
      * @param session session
      * @return invoke map
      */
+
     public Map<String, Object> collect(Object inputs, NodeSessionApi session) {
         Map<String, Object> resolved = FlowStreamTransformEngine.resolveStreamInputs(inputs);
         return invoke(resolved, session);
@@ -109,6 +116,7 @@ public final class FlowMessageEngine {
      * @param session session
      * @return stream iterator
      */
+
     public Iterator<Object> transform(Object inputs, NodeSessionApi session) {
         Map<String, Object> resolved = FlowStreamTransformEngine.resolveStreamInputs(inputs);
         return stream(resolved, session);
@@ -141,10 +149,19 @@ public final class FlowMessageEngine {
         }
     }
 
+    /**
+     * formatStructAnswer.
+     *
+     * @param originOutput originOutput
+     * @param variables variables
+     * @return result
+     * @since 0.1.0
+     */
+
     public String formatStructAnswer(String originOutput, Map<String, Object> variables) {
         if (!config.enableStructMessage() || config.structOutputTemplate().isBlank()) {
-            return "";
-        }
+        return "";
+    }
         try {
             Map<String, Object> all = new LinkedHashMap<>(variables == null ? Map.of() : variables);
             all.put("_NODE_OUTPUT", originOutput);
@@ -159,10 +176,18 @@ public final class FlowMessageEngine {
         }
     }
 
+    /**
+     * splitAnswerThink.
+     *
+     * @param answer answer
+     * @return result
+     * @since 0.1.0
+     */
+
     public static String[] splitAnswerThink(String answer) {
         if (answer == null) {
-            return new String[] {"", ""};
-        }
+        return new String[] {"", ""};
+    }
         int i = answer.indexOf(SPLIT_DELIMITER);
         if (i < 0) {
             return new String[] {answer, ""};
@@ -209,8 +234,8 @@ public final class FlowMessageEngine {
 
     void appendWorkflowMessageOutput(NodeSessionApi session, Map<String, Object> record) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             Object existing = session.getGlobalState(MESSAGE_OUTPUTS_KEY);
             List<Object> list = new ArrayList<>();
@@ -276,8 +301,8 @@ public final class FlowMessageEngine {
     @SuppressWarnings("unchecked")
     private static void writeStream(NodeSessionApi session, Map<?, ?> frame) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             session.writeCustomStream((Map<String, Object>) frame);
         } catch (RuntimeException ignored) {

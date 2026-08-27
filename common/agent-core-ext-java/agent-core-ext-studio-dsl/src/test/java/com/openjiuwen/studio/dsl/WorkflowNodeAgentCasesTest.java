@@ -4,7 +4,6 @@
 
 package com.openjiuwen.studio.dsl;
 
-import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -14,23 +13,25 @@ import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.flowagent.FlowAgentEngine;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Java port of mock paths from {@code test_flow_agent.py} via {@link FlowAgentEngine}.
  *
  * @since 2026-08-26
  */
+
 class WorkflowNodeAgentCasesTest {
     private NodeTypeRegistry registry;
     private AtomicReference<Map<String, Object>> lastInputs;
@@ -46,6 +47,14 @@ class WorkflowNodeAgentCasesTest {
                 return Map.of("output", "Agent response", "result_type", "answer");
             }
 
+            /**
+             * stream.
+             *
+             * @param mappedInputs mappedInputs
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             public Iterator<Object> stream(Map<String, Object> mappedInputs) {
                 return List.<Object>of(Map.of("output", "stream")).iterator();
@@ -57,7 +66,6 @@ class WorkflowNodeAgentCasesTest {
     void tearDown() {
         StudioEngineTestSupport.clear();
     }
-
     @SuppressWarnings("unchecked")
     private static Map<String, Object> uf(Object invokeOut) {
         Map<String, Object> out = (Map<String, Object>) invokeOut;
@@ -113,6 +121,14 @@ class WorkflowNodeAgentCasesTest {
                 public Map<String, Object> invoke(Map<String, Object> mappedInputs) {
                     throw new IllegalStateException("boom");
                 }
+
+                /**
+                 * stream.
+                 *
+                 * @param mappedInputs mappedInputs
+                 * @return result
+                 * @since 0.1.0
+                 */
 
                 @Override
                 public Iterator<Object> stream(Map<String, Object> mappedInputs) {

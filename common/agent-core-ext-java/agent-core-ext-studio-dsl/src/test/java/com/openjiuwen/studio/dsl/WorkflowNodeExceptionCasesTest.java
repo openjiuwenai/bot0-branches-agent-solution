@@ -23,10 +23,10 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Java port of {@code test_flow_exception.py} core branch → exception vs end behavior
@@ -36,6 +36,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * @since 2026-08-25
  */
+
 class WorkflowNodeExceptionCasesTest {
     private NodeTypeRegistry registry;
 
@@ -43,7 +44,6 @@ class WorkflowNodeExceptionCasesTest {
     void setUp() {
         registry = NodeTypeRegistry.createWithBuiltins();
     }
-
     @SuppressWarnings("unchecked")
     private static Map<String, Object> uf(Object invokeOut) {
         Map<String, Object> out = (Map<String, Object>) invokeOut;

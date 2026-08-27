@@ -13,12 +13,18 @@ import java.util.Map;
  *
  * @since 2026-08-27
  */
+
 public final class CustomerHeaderInject {
     private static volatile boolean enabled = true;
 
     private CustomerHeaderInject() {}
 
-    /** Host may disable rename (tests). */
+    /**
+     * Host may disable rename (tests).
+     *
+     * @param on on
+     * @since 0.1.0
+     */
     public static void setEnabled(boolean on) {
         enabled = on;
     }
@@ -28,10 +34,11 @@ public final class CustomerHeaderInject {
      *
      * @param headers mutable outbound headers
      */
+
     public static void applyToKb(Map<String, String> headers) {
         if (!enabled || headers == null || headers.isEmpty()) {
-            return;
-        }
+        return;
+    }
         Map<String, String> captured = KnowledgeRequestContext.headers();
         if (captured.isEmpty()) {
             return;
@@ -60,8 +67,8 @@ public final class CustomerHeaderInject {
 
     private static String lookupIgnoreCase(Map<String, String> map, String key) {
         if (map.containsKey(key)) {
-            return map.get(key);
-        }
+        return map.get(key);
+    }
         String lower = key.toLowerCase(Locale.ROOT);
         for (Map.Entry<String, String> e : map.entrySet()) {
             if (e.getKey() != null && e.getKey().toLowerCase(Locale.ROOT).equals(lower)) {

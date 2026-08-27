@@ -9,6 +9,7 @@ package com.openjiuwen.studio.dsl.flowapi;
  *
  * @since 2026-08-26
  */
+
 public enum FlowApiStatusCode {
     SUCCESS(0, "success"),
     WORKFLOW_API_INIT_ERROR(101741, "Api component init error. msg={msg}"),
@@ -25,9 +26,23 @@ public enum FlowApiStatusCode {
         this.template = template;
     }
 
+    /**
+     * code.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public int code() {
         return code;
     }
+
+    /**
+     * template.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String template() {
         return template;

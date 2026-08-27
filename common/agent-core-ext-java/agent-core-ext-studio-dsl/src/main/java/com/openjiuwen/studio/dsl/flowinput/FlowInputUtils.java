@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl.flowinput;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -17,6 +18,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class FlowInputUtils {
     public static final String USER_FIELDS = "userFields";
 
@@ -43,6 +45,7 @@ public final class FlowInputUtils {
      * @param userResponse response
      * @return field map
      */
+
     @SuppressWarnings("unchecked")
     public static Map<String, Object> parseUserResponse(Object userResponse) {
         Map<String, Object> values = new LinkedHashMap<>();
@@ -64,7 +67,7 @@ public final class FlowInputUtils {
                 pm.forEach((k, v) -> out.put(String.valueOf(k), v));
                 return out;
             }
-        } catch (Exception ignored) {
+        } catch (JsonProcessingException ignored) {
             // fall through to line parsing
         }
         for (String line : responseStr.split("\n")) {
@@ -82,6 +85,7 @@ public final class FlowInputUtils {
      * @param config node config
      * @return JSON string
      */
+
     public static String buildInputsMessage(Map<String, Object> config) {
         List<Map<String, Object>> inputsNeed = inputDefs(config);
         List<Map<String, Object>> converted = new ArrayList<>();
@@ -90,7 +94,7 @@ public final class FlowInputUtils {
         }
         try {
             return MAPPER.writeValueAsString(Map.of("inputs", converted));
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
             // fallback compact
             StringBuilder sb = new StringBuilder("{\"inputs\":[");
             for (int i = 0; i < converted.size(); i++) {
@@ -110,6 +114,7 @@ public final class FlowInputUtils {
      * @param inputs inputs
      * @param config config
      */
+
     public static void validateInputs(Map<String, Object> inputs, Map<String, Object> config) {
         Map<String, Object> values = inputs == null ? new LinkedHashMap<>() : inputs;
         for (Map<String, Object> def : inputDefs(config)) {
@@ -153,6 +158,7 @@ public final class FlowInputUtils {
      * @param config config
      * @return inputs
      */
+
     public static Map<String, Object> fillInputs(
             Map<String, Object> inputs, Map<String, Object> values, Map<String, Object> config) {
         Map<String, Object> out = inputs == null ? new LinkedHashMap<>() : inputs;
@@ -235,7 +241,7 @@ public final class FlowInputUtils {
             };
         } catch (TypeException e) {
             throw e;
-        } catch (Exception e) {
+        } catch (JsonProcessingException | IllegalArgumentException e) {
             throw new IllegalArgumentException(e.getMessage(), e);
         }
     }
@@ -267,6 +273,14 @@ public final class FlowInputUtils {
         return out;
     }
 
+    /**
+     * fieldId.
+     *
+     * @param def def
+     * @return result
+     * @since 0.1.0
+     */
+
     public static String fieldId(Map<String, Object> def) {
         Object id = def.get("id");
         if (id == null) {
@@ -283,11 +297,17 @@ public final class FlowInputUtils {
                 || "true".equalsIgnoreCase(String.valueOf(def.get("required")));
     }
 
-    /** Python truthiness for fill_inputs empty check. */
+    /**
+     * Python truthiness for fill_inputs empty check.
+     *
+     * @param value value
+     * @return result
+     * @since 0.1.0
+     */
     private static boolean isPythonFalsy(Object value) {
         if (value == null) {
-            return true;
-        }
+        return true;
+    }
         if (value instanceof Boolean b) {
             return !b;
         }

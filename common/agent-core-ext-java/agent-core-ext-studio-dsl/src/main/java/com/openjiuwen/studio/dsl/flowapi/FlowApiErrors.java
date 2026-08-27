@@ -14,8 +14,19 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class FlowApiErrors {
     private FlowApiErrors() {}
+
+    /**
+     * of.
+     *
+     * @param nodeId nodeId
+     * @param status status
+     * @param msg msg
+     * @return result
+     * @since 0.1.0
+     */
 
     public static NodeExecutionException of(String nodeId, FlowApiStatusCode status, String msg) {
         String message = status.template().replace("{msg}", msg == null ? "" : msg);
@@ -27,6 +38,16 @@ public final class FlowApiErrors {
                 nodeId, "jiuwen.plugin", cause, message + " [pythonErrorCode=" + status.code() + "]");
     }
 
+    /**
+     * ofCode.
+     *
+     * @param nodeId nodeId
+     * @param errorCode errorCode
+     * @param message message
+     * @return result
+     * @since 0.1.0
+     */
+
     public static NodeExecutionException ofCode(String nodeId, int errorCode, String message) {
         return new NodeExecutionException(
                 nodeId,
@@ -34,6 +55,17 @@ public final class FlowApiErrors {
                 NodeCauseCode.NODE_INVOKE_FAILED,
                 message + " [pythonErrorCode=" + errorCode + "]");
     }
+
+    /**
+     * of.
+     *
+     * @param nodeId nodeId
+     * @param status status
+     * @param msg msg
+     * @param unused unused
+     * @return result
+     * @since 0.1.0
+     */
 
     public static NodeExecutionException of(
             String nodeId, FlowApiStatusCode status, String msg, Map<String, String> unused) {

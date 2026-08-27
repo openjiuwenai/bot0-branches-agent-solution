@@ -13,10 +13,19 @@ import java.util.Optional;
  *
  * @since 2026-08-26
  */
+
 public final class EmptyToolRegistry implements ToolRegistry {
     public static final EmptyToolRegistry INSTANCE = new EmptyToolRegistry();
 
     private EmptyToolRegistry() {}
+
+    /**
+     * find.
+     *
+     * @param apiId apiId
+     * @return result
+     * @since 0.1.0
+     */
 
     @Override
     public Optional<Tool> find(String apiId) {

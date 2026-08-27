@@ -21,8 +21,8 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
-class FlowEndEngineTest {
 
+class FlowEndEngineTest {
     @Test
     void convertSimple_skipsIterator() {
         Iterator<String> it = List.of("a").iterator();

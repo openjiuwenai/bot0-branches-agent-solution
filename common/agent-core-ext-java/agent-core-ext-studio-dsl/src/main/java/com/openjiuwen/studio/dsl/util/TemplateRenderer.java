@@ -13,9 +13,13 @@ import java.util.regex.Pattern;
  *
  * @since 2026-08-17
  */
+
 public final class TemplateRenderer {
     private static final Pattern DOLLAR = Pattern.compile("\\$\\{([^}]+)}");
-    /** Studio / Python {@code {{key}}} placeholders (message / QA / end). */
+
+    /**
+     * Studio / Python {@code {{key}}} placeholders (message / QA / end).
+     */
     private static final Pattern MUSTACHE = Pattern.compile("\\{\\{([^{}]+?)}}");
 
     private TemplateRenderer() {}
@@ -27,10 +31,11 @@ public final class TemplateRenderer {
      * @param fields fields
      * @return result
      */
+
     public static String render(String template, Map<String, Object> fields) {
         if (template == null) {
-            return "";
-        }
+        return "";
+    }
         String step1 = substitute(DOLLAR, template, fields);
         return substitute(MUSTACHE, step1, fields);
     }

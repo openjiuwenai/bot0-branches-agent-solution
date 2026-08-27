@@ -23,6 +23,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 class FlowMcpParityTest {
     private static final List<Map<String, Object>> MOCK_CONTENT =
             List.of(Map.of("type", "text", "text", "mock mcp response"));
@@ -33,11 +34,9 @@ class FlowMcpParityTest {
     void setUp() {
         stubClient = RecordingMcpClient.withContent(MOCK_CONTENT);
     }
-
     private FlowMcpEngine engine() {
         return new FlowMcpEngine("n1", stubClient);
     }
-
     private static Map<String, Object> makeConf(boolean olderVersion) {
         Map<String, Object> conf = new LinkedHashMap<>();
         conf.put("type", "sse");

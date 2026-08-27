@@ -13,6 +13,7 @@ import java.util.Objects;
  *
  * @since 2026-08-17
  */
+
 public final class MediaPart {
     private final String modality;
     private final String mimeType;
@@ -29,10 +30,11 @@ public final class MediaPart {
      * @param bytesRef bytesRef
      * @param meta meta
      */
+
     public MediaPart(String modality, String mimeType, String uri, String bytesRef, Map<String, Object> meta) {
         if ((uri == null || uri.isBlank()) && (bytesRef == null || bytesRef.isBlank())) {
-            throw new IllegalArgumentException("MediaPart requires uri or bytesRef");
-        }
+        throw new IllegalArgumentException("MediaPart requires uri or bytesRef");
+    }
         this.modality = Objects.requireNonNull(modality, "modality");
         this.mimeType = mimeType;
         this.uri = uri;
@@ -45,6 +47,7 @@ public final class MediaPart {
      *
      * @return result
      */
+
     public String modality() {
         return modality;
     }
@@ -54,6 +57,7 @@ public final class MediaPart {
      *
      * @return result
      */
+
     public String mimeType() {
         return mimeType;
     }
@@ -63,6 +67,7 @@ public final class MediaPart {
      *
      * @return result
      */
+
     public String uri() {
         return uri;
     }
@@ -72,6 +77,7 @@ public final class MediaPart {
      *
      * @return result
      */
+
     public String bytesRef() {
         return bytesRef;
     }
@@ -81,6 +87,7 @@ public final class MediaPart {
      *
      * @return result
      */
+
     public Map<String, Object> meta() {
         return meta;
     }

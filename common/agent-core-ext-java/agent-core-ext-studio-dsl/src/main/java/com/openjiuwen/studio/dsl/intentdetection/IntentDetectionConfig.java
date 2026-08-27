@@ -12,6 +12,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class IntentDetectionConfig {
     static final String DEFAULT_CLASS_ID = "分类0";
     static final String DEFAULT_CLASS_ID_LEGACY = "分类1";
@@ -84,78 +85,196 @@ public final class IntentDetectionConfig {
         this.rawConfigs = rawConfigs == null ? Map.of() : Map.copyOf(rawConfigs);
     }
 
+    /**
+     * fromNodeConfigs.
+     *
+     * @param configs configs
+     * @return result
+     * @since 0.1.0
+     */
+
     public static IntentDetectionConfig fromNodeConfigs(Map<String, Object> configs) {
         return IntentDetectionConfigFormatter.format(configs == null ? Map.of() : configs);
     }
+
+    /**
+     * userPrompt.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String userPrompt() {
         return userPrompt;
     }
 
+    /**
+     * categoryInfo.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String categoryInfo() {
         return categoryInfo;
     }
+
+    /**
+     * categoryList.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public List<String> categoryList() {
         return categoryList;
     }
 
+    /**
+     * categoryNameList.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public List<String> categoryNameList() {
         return categoryNameList;
     }
+
+    /**
+     * defaultClass.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String defaultClass() {
         return defaultClass;
     }
 
+    /**
+     * enableHistory.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean enableHistory() {
         return enableHistory;
     }
+
+    /**
+     * enableInput.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean enableInput() {
         return enableInput;
     }
 
+    /**
+     * chatHistoryMaxTurn.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public int chatHistoryMaxTurn() {
         return chatHistoryMaxTurn;
     }
+
+    /**
+     * exampleContent.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public List<String> exampleContent() {
         return exampleContent;
     }
 
+    /**
+     * overridable.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean overridable() {
         return overridable;
     }
+
+    /**
+     * enableKnowledge.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean enableKnowledge() {
         return enableKnowledge;
     }
 
+    /**
+     * recallThreshold.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public double recallThreshold() {
         return recallThreshold;
     }
 
+    /**
+     * q2labelFewShotScore.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public double q2labelFewShotScore() {
         return q2labelFewShotScore;
     }
-
     public Map<String, Object> kgConfig() {
         return kgConfig;
     }
+
+    /**
+     * kgScope.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String kgScope() {
         return kgScope;
     }
 
+    /**
+     * modelName.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String modelName() {
         return modelName;
     }
 
+    /**
+     * modelType.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String modelType() {
         return modelType;
     }
-
     public Map<String, Object> hyperParameters() {
         return hyperParameters;
     }
@@ -172,10 +291,17 @@ public final class IntentDetectionConfig {
         return rawConfigs;
     }
 
+    /**
+     * hasModelWiring.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean hasModelWiring() {
         if (!modelName.isBlank() && !modelType.isBlank()) {
-            return true;
-        }
+        return true;
+    }
         return IntentDetectionLlmDetector.hasModelWiring(rawConfigs);
     }
 }

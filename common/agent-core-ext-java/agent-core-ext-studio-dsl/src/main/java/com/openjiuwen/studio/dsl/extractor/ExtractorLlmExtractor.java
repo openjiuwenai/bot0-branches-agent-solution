@@ -16,6 +16,7 @@ import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.questioner.QuestionerLlmExtractor;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,6 +28,7 @@ import java.util.stream.Collectors;
  *
  * @since 2026-08-26
  */
+
 public final class ExtractorLlmExtractor {
     static final String DEFAULT_EXAMPLE_CONTENT =
             """
@@ -63,7 +65,9 @@ public final class ExtractorLlmExtractor {
             请充分考虑以上对话历史及用户输入，正确提取最符合约束要求的 JSON 格式参数。
             """;
 
-    /** Injectable for tests (returns raw LLM text). */
+    /**
+     * Injectable for tests (returns raw LLM text).
+     */
     @FunctionalInterface
     public interface ModelInvoker {
         String invoke(List<BaseMessage> messages) throws Exception;
@@ -76,11 +80,9 @@ public final class ExtractorLlmExtractor {
     public ExtractorLlmExtractor(String nodeId, ExtractorConfig config) {
         this(nodeId, config, null, Map.of());
     }
-
     public ExtractorLlmExtractor(String nodeId, ExtractorConfig config, ModelInvoker invoker) {
         this(nodeId, config, invoker, Map.of());
     }
-
     public ExtractorLlmExtractor(
             String nodeId, ExtractorConfig config, ModelInvoker invoker, Map<String, Object> modelMap) {
         this.nodeId = nodeId;
@@ -88,10 +90,18 @@ public final class ExtractorLlmExtractor {
         this.invoker = invoker != null ? invoker : defaultInvoker(config, modelMap);
     }
 
+    /**
+     * hasModelWiring.
+     *
+     * @param configs configs
+     * @return result
+     * @since 0.1.0
+     */
+
     public static boolean hasModelWiring(Map<String, Object> configs) {
         if (configs == null) {
-            return false;
-        }
+        return false;
+    }
         Object model = configs.get("model");
         if (model instanceof Map<?, ?> m) {
             Object name = first(m, "modelName", "model_name", "name");
@@ -235,8 +245,8 @@ public final class ExtractorLlmExtractor {
 
     private static String lastContent(List<Map<String, Object>> chatHistory) {
         if (chatHistory == null || chatHistory.isEmpty()) {
-            return "";
-        }
+        return "";
+    }
         return str(chatHistory.get(chatHistory.size() - 1).get("content"));
     }
 
@@ -256,8 +266,8 @@ public final class ExtractorLlmExtractor {
 
     private static void trace(NodeSessionApi session, Map<String, Object> data) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             session.trace(data);
         } catch (RuntimeException ignored) {
@@ -269,7 +279,14 @@ public final class ExtractorLlmExtractor {
         return createDefaultInvoker(config, modelMap);
     }
 
-    /** Validates wiring and returns production invoker (Python {@code _create_llm_instance}). */
+    /**
+     * Validates wiring and returns production invoker (Python {@code _create_llm_instance}).
+     *
+     * @param config config
+     * @param modelMap modelMap
+     * @return result
+     * @since 0.1.0
+     */
     public static ModelInvoker createDefaultInvoker(ExtractorConfig config, Map<String, Object> modelMap) {
         return messages -> {
             ModelClientConfig client = buildClient(config, modelMap);

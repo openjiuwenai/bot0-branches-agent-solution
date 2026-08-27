@@ -12,12 +12,15 @@ import java.util.Map;
  *
  * @since 2026-08-25
  */
+
 public abstract class ValidateAction extends RailsAction {
+
     /**
      * ValidateAction.
      *
      * @param config config
      */
+
     protected ValidateAction(ActionConfig config) {
         super(config);
     }
@@ -29,6 +32,7 @@ public abstract class ValidateAction extends RailsAction {
      * @param value value
      * @return valid + possibly normalized value
      */
+
     protected abstract ValidationResult validateField(String fieldName, Object value);
 
     @Override
@@ -74,22 +78,26 @@ public abstract class ValidateAction extends RailsAction {
      * @param valid valid
      * @param value value
      */
+
     public record ValidationResult(boolean valid, Object value) {
+
         /**
          * ok.
          *
          * @param value value
          * @return result
          */
+
         public static ValidationResult ok(Object value) {
-            return new ValidationResult(true, value);
-        }
+        return new ValidationResult(true, value);
+    }
 
         /**
          * fail.
          *
          * @return result
          */
+
         public static ValidationResult fail() {
             return new ValidationResult(false, null);
         }

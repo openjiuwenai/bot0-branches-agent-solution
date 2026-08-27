@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl.util;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -17,6 +18,7 @@ import java.util.Map;
  *
  * @since 2026-08-17
  */
+
 public final class TypeCoercer {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final TypeReference<List<Object>> LIST_TYPE = new TypeReference<>() {};
@@ -30,11 +32,12 @@ public final class TypeCoercer {
      * @param schema schema
      * @return coerced map
      */
+
     @SuppressWarnings("unchecked")
     public static Map<String, Object> coerceMap(Map<String, Object> inputs, Map<String, Object> schema) {
         if (inputs == null) {
-            return Map.of();
-        }
+        return Map.of();
+    }
         if (schema == null || schema.isEmpty()) {
             return new LinkedHashMap<>(inputs);
         }
@@ -54,6 +57,7 @@ public final class TypeCoercer {
      * @param inputMode when true, None→defaults for string/array/object
      * @return result
      */
+
     public static Map<String, Object> coerceByFieldList(
             Map<String, Object> values, List<Map<String, Object>> fieldList, boolean inputMode) {
         if (values == null) {
@@ -122,6 +126,7 @@ public final class TypeCoercer {
      * @param schema schema
      * @return coerced value
      */
+
     public static Object coerce(Object value, String type, Object schema) {
         return coerce(value, type, schema, false);
     }
@@ -135,11 +140,12 @@ public final class TypeCoercer {
      * @param inputMode inputMode
      * @return coerced value
      */
+
     @SuppressWarnings("unchecked")
     public static Object coerce(Object value, String type, Object schema, boolean inputMode) {
         if (type == null || type.isEmpty()) {
-            return value;
-        }
+        return value;
+    }
         if (value == null) {
             if (inputMode) {
                 if ("string".equals(type)) {
@@ -229,7 +235,7 @@ public final class TypeCoercer {
         }
         try {
             return MAPPER.readValue(t, LIST_TYPE);
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
             return s;
         }
     }

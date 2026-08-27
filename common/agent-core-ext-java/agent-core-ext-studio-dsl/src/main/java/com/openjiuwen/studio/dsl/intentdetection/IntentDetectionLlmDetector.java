@@ -16,6 +16,7 @@ import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.questioner.QuestionerLlmExtractor;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,6 +30,7 @@ import java.util.stream.Collectors;
  *
  * @since 2026-08-26
  */
+
 public final class IntentDetectionLlmDetector {
     private static final String DEFAULT_SYSTEM_PROMPT = "你是一个识别用户输入意图的AI助手。";
     private static final String DEFAULT_USER_PROMPT =
@@ -74,6 +76,17 @@ public final class IntentDetectionLlmDetector {
         String invoke(List<BaseMessage> messages) throws Exception;
     }
 
+    /**
+     * DetectionResult.
+     *
+     * @param intentClass intentClass
+     * @param reason reason
+     * @param classificationId classificationId
+     * @param name name
+     * @return result
+     * @since 0.1.0
+     */
+
     public record DetectionResult(String intentClass, String reason, int classificationId, String name) {}
 
     private final String nodeId;
@@ -83,11 +96,9 @@ public final class IntentDetectionLlmDetector {
     public IntentDetectionLlmDetector(String nodeId, IntentDetectionConfig config) {
         this(nodeId, config, null, Map.of());
     }
-
     public IntentDetectionLlmDetector(String nodeId, IntentDetectionConfig config, ModelInvoker invoker) {
         this(nodeId, config, invoker, Map.of());
     }
-
     public IntentDetectionLlmDetector(
             String nodeId, IntentDetectionConfig config, ModelInvoker invoker, Map<String, Object> modelMap) {
         this.nodeId = nodeId;
@@ -95,10 +106,18 @@ public final class IntentDetectionLlmDetector {
         this.invoker = invoker != null ? invoker : defaultInvoker(config, modelMap);
     }
 
+    /**
+     * hasModelWiring.
+     *
+     * @param configs configs
+     * @return result
+     * @since 0.1.0
+     */
+
     public static boolean hasModelWiring(Map<String, Object> configs) {
         if (configs == null) {
-            return false;
-        }
+        return false;
+    }
         Object llm = configs.get("llm");
         if (llm instanceof Map<?, ?> lm) {
             Object model = lm.get("model");
@@ -116,7 +135,18 @@ public final class IntentDetectionLlmDetector {
         return QuestionerLlmExtractor.hasModelWiring(configs);
     }
 
-    /** Python {@code get_llm_result}. */
+    /**
+     * Python {@code get_llm_result}.
+     *
+     * @param input input
+     * @param chatHistory chatHistory
+     * @param categoryInfo categoryInfo
+     * @param exampleContent exampleContent
+     * @param memConf memConf
+     * @param session session
+     * @return result
+     * @since 0.1.0
+     */
     public String invokeLlm(
             String input,
             String chatHistory,
@@ -153,7 +183,18 @@ public final class IntentDetectionLlmDetector {
         }
     }
 
-    /** Unit-test helper around {@link #invokeLlm} + post-process. */
+    /**
+     * Unit-test helper around {@link #invokeLlm} + post-process.
+     *
+     * @param input input
+     * @param chatHistory chatHistory
+     * @param categoryInfo categoryInfo
+     * @param faqFewShotExample faqFewShotExample
+     * @param globalIntentMap globalIntentMap
+     * @param session session
+     * @return result
+     * @since 0.1.0
+     */
     public DetectionResult detect(
             String input,
             String chatHistory,
@@ -211,8 +252,8 @@ public final class IntentDetectionLlmDetector {
 
     static String refixLlmOutput(String inputStr) {
         if (inputStr == null) {
-            return "";
-        }
+        return "";
+    }
         Matcher matcher = JSON_OBJECT.matcher(inputStr.strip());
         if (matcher.find()) {
             String res = matcher.group(0);
@@ -254,8 +295,8 @@ public final class IntentDetectionLlmDetector {
 
     static int classificationIndex(String cls) {
         if (cls == null) {
-            return 0;
-        }
+        return 0;
+    }
         String digits = cls.replace("分类", "").replaceAll("[^0-9]", "");
         if (digits.isEmpty()) {
             return 0;
@@ -270,8 +311,8 @@ public final class IntentDetectionLlmDetector {
     private void appendMemoryMessage(
             List<BaseMessage> messages, Map<String, Object> memConf, NodeSessionApi session) {
         if (memConf == null || session == null) {
-            return;
-        }
+        return;
+    }
         Object userProfile = memConf.get(USER_PROFILE_KEY);
         if (!(userProfile instanceof Map<?, ?> profile)) {
             return;
@@ -339,8 +380,8 @@ public final class IntentDetectionLlmDetector {
 
     private static void trace(NodeSessionApi session, Map<String, Object> data) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             session.trace(data);
         } catch (RuntimeException ignored) {

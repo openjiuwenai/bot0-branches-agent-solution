@@ -18,6 +18,7 @@ import java.util.Set;
  *
  * @since 2026-08-26
  */
+
 public final class IrToMcpServerConfig {
     private static final Set<String> SKIP_SNAKE = Set.of("headers", "auth");
     static final Set<String> MCP_PARAM_LOCATIONS =
@@ -31,6 +32,7 @@ public final class IrToMcpServerConfig {
      * @param irConfig raw IR (camel or snake)
      * @return pair of config + deserialized tool params
      */
+
     public static Converted convert(Map<String, Object> irConfig) {
         Map<String, Object> ir = camelToSnake(irConfig, SKIP_SNAKE);
 
@@ -113,7 +115,14 @@ public final class IrToMcpServerConfig {
         return params;
     }
 
-    /** Python {@code extends_headers} / {@code extend_heads} — identity by default. */
+    /**
+     * Python {@code extends_headers} / {@code extend_heads} — identity by default.
+     *
+     * @param headers headers
+     * @param ir ir
+     * @return result
+     * @since 0.1.0
+     */
     static Map<String, String> extendHeaders(Map<String, String> headers, Map<String, Object> ir) {
         return headers;
     }
@@ -173,8 +182,8 @@ public final class IrToMcpServerConfig {
 
     private static String toSnake(String camel) {
         if (camel == null || camel.isBlank()) {
-            return "";
-        }
+        return "";
+    }
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < camel.length(); i++) {
             char c = camel.charAt(i);
@@ -202,6 +211,15 @@ public final class IrToMcpServerConfig {
         return o == null ? "" : String.valueOf(o);
     }
 
-    /** Conversion result. */
-    public record Converted(McpServerConfig config, List<McpToolParam> toolParams, String transportType) {}
-}
+    /**
+     * Conversion result.
+     *
+     * @param config config
+     * @param toolParams toolParams
+     * @param transportType transportType
+     * @return result
+     * @since 0.1.0
+     */
+    public record Converted(McpServerConfig config, List<McpToolParam> toolParams, String transportType) {
+        }
+    }

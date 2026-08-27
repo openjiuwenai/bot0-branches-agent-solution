@@ -4,7 +4,6 @@
 
 package com.openjiuwen.studio.dsl;
 
-import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
@@ -21,15 +20,16 @@ import com.openjiuwen.studio.dsl.model.AssembledWorkflow;
 import com.openjiuwen.studio.dsl.questioner.QuestionerState;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 import com.openjiuwen.studio.dsl.testsupport.LinearWorkflowTestSupport;
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * D-tier controller / agent-controller workflow files reduced to user-visible
@@ -41,6 +41,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * @since 2026-08-26
  */
+
 class WorkflowNodeControllerSuiteCasesTest {
     private NodeTypeRegistry registry;
 
@@ -48,7 +49,6 @@ class WorkflowNodeControllerSuiteCasesTest {
     void setUp() {
         registry = NodeTypeRegistry.createWithBuiltins();
     }
-
     @SuppressWarnings("unchecked")
     private static Map<String, Object> uf(Object invokeOut) {
         Map<String, Object> out = (Map<String, Object>) invokeOut;
@@ -109,7 +109,16 @@ class WorkflowNodeControllerSuiteCasesTest {
         return session;
     }
 
-    /** Start → Questioner(hang) → resume → Message → End. */
+    /**
+     * Start → Questioner(hang) → resume → Message → End.
+     *
+     * @param question question
+     * @param msgTemplate msgTemplate
+     * @param endTemplate endTemplate
+     * @param resumeQuery resumeQuery
+     * @return result
+     * @since 0.1.0
+     */
     private Map<String, Object> hangResumeMessageEnd(
             String question, String msgTemplate, String endTemplate, String resumeQuery) {
         NodeSessionApi session = sessionWithState();
@@ -149,7 +158,15 @@ class WorkflowNodeControllerSuiteCasesTest {
         return current;
     }
 
-    /** Start → Questioner(hang) → resume → End. */
+    /**
+     * Start → Questioner(hang) → resume → End.
+     *
+     * @param question question
+     * @param endTemplate endTemplate
+     * @param resumeQuery resumeQuery
+     * @return result
+     * @since 0.1.0
+     */
     private Map<String, Object> hangResumeEnd(String question, String endTemplate, String resumeQuery) {
         NodeSessionApi session = sessionWithState();
         ComponentExecutable start =
@@ -177,7 +194,12 @@ class WorkflowNodeControllerSuiteCasesTest {
         return current;
     }
 
-    /** Start → Questioner → Questioner → End (two hangs; fresh session per questioner). */
+    /**
+     * Start → Questioner → Questioner → End (two hangs; fresh session per questioner).
+     *
+     * @return result
+     * @since 0.1.0
+     */
     private Map<String, Object> doubleQuestionerEnd() {
         ComponentExecutable start =
                 registry.create(AssembledNode.of("start", "jiuwen.start", Map.of()), StudioEngineTestSupport.context("wf"));

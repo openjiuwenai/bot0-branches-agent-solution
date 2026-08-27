@@ -6,19 +6,19 @@ package com.openjiuwen.studio.dsl.flowqa;
 
 import com.openjiuwen.core.context.ModelContext;
 import com.openjiuwen.core.graph.pregel.GraphInterrupt;
-import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.session.interaction.InteractiveInput;
 import com.openjiuwen.core.session.interaction.WorkflowInteraction;
+import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.studio.dsl.adapter.StudioStreamFrames;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.util.TemplateRenderer;
 
 import java.util.ArrayList;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
 
 /**
@@ -26,6 +26,7 @@ import java.util.regex.Pattern;
  *
  * @since 2026-08-26
  */
+
 public final class FlowQaEngine {
     public static final String STATE_KEY = "flow_qa_state";
     public static final String USER_FIELDS = "userFields";
@@ -40,15 +41,39 @@ public final class FlowQaEngine {
         this.config = config == null ? FlowQaConfig.from(Map.of()) : config;
     }
 
+    /**
+     * fromConfigs.
+     *
+     * @param nodeId nodeId
+     * @param conf conf
+     * @return result
+     * @since 0.1.0
+     */
+
     public static FlowQaEngine fromConfigs(String nodeId, Map<String, Object> conf) {
         return new FlowQaEngine(nodeId, FlowQaConfig.from(conf));
     }
+
+    /**
+     * config.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public FlowQaConfig config() {
         return config;
     }
 
-    /** Python {@code invoke}. */
+    /**
+     * Python {@code invoke}.
+     *
+     * @param inputs inputs
+     * @param session session
+     * @param context context
+     * @return result
+     * @since 0.1.0
+     */
     public Map<String, Object> invoke(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         try {
@@ -167,11 +192,18 @@ public final class FlowQaEngine {
         return out;
     }
 
-    /** Python {@code _process_values_of_dict} — missing {{key}} raises. */
+    /**
+     * Python {@code _process_values_of_dict} — missing {{key}} raises.
+     *
+     * @param originTemplate originTemplate
+     * @param inputs inputs
+     * @return result
+     * @since 0.1.0
+     */
     String processValuesOfDict(String originTemplate, Map<String, Object> inputs) {
         if (originTemplate == null) {
-            return "";
-        }
+        return "";
+    }
         java.util.regex.Matcher m = PLACEHOLDER_SPLIT.matcher(originTemplate);
         List<String> tokens = new ArrayList<>();
         int last = 0;
@@ -298,8 +330,8 @@ public final class FlowQaEngine {
 
     private static Object unwrapInteractive(Object interactive) {
         if (!(interactive instanceof InteractiveInput ii)) {
-            return null;
-        }
+        return null;
+    }
         if (ii.getRawInputs() != null) {
             return ii.getRawInputs();
         }
@@ -311,8 +343,8 @@ public final class FlowQaEngine {
 
     private static Object tryInteract(NodeSessionApi session, String question) {
         if (session == null) {
-            return null;
-        }
+        return null;
+    }
         try {
             Object latest = session.userLatestInput(question);
             if (latest != null) {
@@ -369,8 +401,8 @@ public final class FlowQaEngine {
 
     static void storeState(NodeSessionApi session, Map<String, Object> state) {
         if (session == null) {
-            return;
-        }
+        return;
+    }
         try {
             session.updateState(Map.of(STATE_KEY, state));
         } catch (RuntimeException ignored) {

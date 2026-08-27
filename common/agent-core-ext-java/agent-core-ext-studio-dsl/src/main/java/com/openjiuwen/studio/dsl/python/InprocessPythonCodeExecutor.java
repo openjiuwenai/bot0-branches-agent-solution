@@ -4,13 +4,13 @@
 
 package com.openjiuwen.studio.dsl.python;
 
+import com.openjiuwen.studio.dsl.contract.PythonCodeExecutor;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
-import com.openjiuwen.studio.dsl.contract.PythonCodeExecutor;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,8 +18,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Java-side analogue of Python {@code InprocessCodeRunner} selection path.
@@ -30,7 +30,17 @@ import java.util.concurrent.TimeoutException;
  *
  * @since 2026-08-25
  */
+
 public final class InprocessPythonCodeExecutor implements PythonCodeExecutor {
+
+    /**
+     * execute.
+     *
+     * @param request request
+     * @return result
+     * @since 0.1.0
+     */
+
     @Override
     public PythonExecResult execute(PythonExecRequest request) throws NodeExecutionException {
         Path scriptFile = null;
@@ -132,8 +142,8 @@ public final class InprocessPythonCodeExecutor implements PythonCodeExecutor {
 
     private static String truncate(String s) {
         if (s == null) {
-            return "";
-        }
+        return "";
+    }
         return s.length() <= 500 ? s : s.substring(0, 500) + "...";
     }
 }

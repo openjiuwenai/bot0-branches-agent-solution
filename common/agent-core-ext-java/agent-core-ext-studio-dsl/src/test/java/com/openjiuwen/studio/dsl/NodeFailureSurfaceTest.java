@@ -28,6 +28,7 @@ import java.util.Map;
  *
  * @since 2026-08-17
  */
+
 class NodeFailureSurfaceTest {
     @Test
     void subWorkflow_nullResolverResult_isRefInvalidAtCreate() {
@@ -67,11 +68,22 @@ class NodeFailureSurfaceTest {
     @Test
     void unexpectedInvokeException_wrapsAsNodeInvokeFailed() {
         AbstractStudioNode exec = new AbstractStudioNode(AssembledNode.of("b1", "demo.boom", Map.of())) {
+
+            /**
+             * doInvoke.
+             *
+             * @param inputs inputs
+             * @param session session
+             * @param context context
+             * @return result
+             * @since 0.1.0
+             */
+
             @Override
             protected NodePayload doInvoke(
                     Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
-                throw new IllegalStateException("unexpected");
-            }
+        throw new IllegalStateException("unexpected");
+    }
         };
         assertThatThrownBy(() -> exec.invoke(
                 Map.of("userFields", Map.of()), mock(NodeSessionApi.class), mock(ModelContext.class)))

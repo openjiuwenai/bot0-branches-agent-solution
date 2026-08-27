@@ -5,8 +5,8 @@
 package com.openjiuwen.studio.dsl.util;
 
 import java.net.InetAddress;
-import java.net.URI;
 import java.net.UnknownHostException;
+import java.net.URI;
 import java.util.Locale;
 
 /**
@@ -14,6 +14,7 @@ import java.util.Locale;
  *
  * @since 2026-08-27
  */
+
 public final class OutboundUrlSafety {
     private OutboundUrlSafety() {}
 
@@ -23,10 +24,11 @@ public final class OutboundUrlSafety {
      * @param url rendered URL
      * @throws IllegalArgumentException when URL is unsafe or malformed
      */
+
     public static void validateOutbound(String url) {
         if (url == null || url.isBlank()) {
-            throw new IllegalArgumentException("outbound URL is empty");
-        }
+        throw new IllegalArgumentException("outbound URL is empty");
+    }
         URI uri;
         try {
             uri = URI.create(url.trim());
@@ -84,8 +86,8 @@ public final class OutboundUrlSafety {
 
     private static boolean isBlockedAddress(InetAddress addr) {
         if (addr.isAnyLocalAddress() || addr.isLoopbackAddress() || addr.isLinkLocalAddress()) {
-            return true;
-        }
+        return true;
+    }
         if (addr.isSiteLocalAddress()) {
             return true;
         }

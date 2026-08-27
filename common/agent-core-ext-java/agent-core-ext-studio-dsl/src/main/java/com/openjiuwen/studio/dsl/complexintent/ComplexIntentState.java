@@ -12,6 +12,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class ComplexIntentState {
     public static final String START = "START";
     public static final String END = "END";
@@ -27,70 +28,173 @@ public final class ComplexIntentState {
     private double matchedScore;
     private String matchedLayer;
 
+    /**
+     * status.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String status() {
         return status;
     }
 
+    /**
+     * setStatus.
+     *
+     * @param status status
+     * @since 0.1.0
+     */
+
     public void setStatus(String status) {
         this.status = status == null ? START : status;
     }
-
     public Map<String, Object> intentResult() {
         return intentResult;
     }
+
+    /**
+     * setIntentResult.
+     *
+     * @param intentResult intentResult
+     * @since 0.1.0
+     */
 
     public void setIntentResult(Map<String, Object> intentResult) {
         this.intentResult = intentResult == null ? new LinkedHashMap<>() : new LinkedHashMap<>(intentResult);
     }
 
+    /**
+     * workflowId.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String workflowId() {
         return workflowId;
     }
+
+    /**
+     * setWorkflowId.
+     *
+     * @param workflowId workflowId
+     * @since 0.1.0
+     */
 
     public void setWorkflowId(String workflowId) {
         this.workflowId = workflowId;
     }
 
+    /**
+     * branchId.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String branchId() {
         return branchId;
     }
+
+    /**
+     * setBranchId.
+     *
+     * @param branchId branchId
+     * @since 0.1.0
+     */
 
     public void setBranchId(String branchId) {
         this.branchId = branchId;
     }
 
+    /**
+     * resumeQuery.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String resumeQuery() {
         return resumeQuery;
     }
+
+    /**
+     * setResumeQuery.
+     *
+     * @param resumeQuery resumeQuery
+     * @since 0.1.0
+     */
 
     public void setResumeQuery(String resumeQuery) {
         this.resumeQuery = resumeQuery;
     }
 
+    /**
+     * interruptChildNodeId.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String interruptChildNodeId() {
         return interruptChildNodeId;
     }
+
+    /**
+     * setInterruptChildNodeId.
+     *
+     * @param interruptChildNodeId interruptChildNodeId
+     * @since 0.1.0
+     */
 
     public void setInterruptChildNodeId(String interruptChildNodeId) {
         this.interruptChildNodeId = interruptChildNodeId;
     }
 
+    /**
+     * matchedScore.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public double matchedScore() {
         return matchedScore;
     }
+
+    /**
+     * setMatchedScore.
+     *
+     * @param matchedScore matchedScore
+     * @since 0.1.0
+     */
 
     public void setMatchedScore(double matchedScore) {
         this.matchedScore = matchedScore;
     }
 
+    /**
+     * matchedLayer.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String matchedLayer() {
         return matchedLayer;
     }
 
+    /**
+     * setMatchedLayer.
+     *
+     * @param matchedLayer matchedLayer
+     * @since 0.1.0
+     */
+
     public void setMatchedLayer(String matchedLayer) {
         this.matchedLayer = matchedLayer;
     }
-
     public Map<String, Object> toMap() {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("status", status);
@@ -103,6 +207,14 @@ public final class ComplexIntentState {
         m.put("matched_layer", matchedLayer);
         return m;
     }
+
+    /**
+     * fromMap.
+     *
+     * @param raw raw
+     * @return result
+     * @since 0.1.0
+     */
 
     @SuppressWarnings("unchecked")
     public static ComplexIntentState fromMap(Map<String, Object> raw) {
@@ -143,6 +255,13 @@ public final class ComplexIntentState {
         }
         return s;
     }
+
+    /**
+     * copy.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public ComplexIntentState copy() {
         return fromMap(toMap());

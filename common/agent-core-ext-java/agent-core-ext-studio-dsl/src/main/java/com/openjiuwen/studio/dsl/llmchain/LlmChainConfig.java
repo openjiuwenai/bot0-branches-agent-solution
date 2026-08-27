@@ -17,6 +17,7 @@ import java.util.Map;
  *
  * @since 2026-08-26
  */
+
 public final class LlmChainConfig {
     static final int CHAT_HISTORY_MAX_TURN_DEFAULT = 3;
     static final String JIUWEN_LLM_TYPE = "jiuwen.LLMComponent";
@@ -31,15 +32,38 @@ public final class LlmChainConfig {
         this.memory = mapOf(this.raw.get("memory"));
     }
 
+    /**
+     * from.
+     *
+     * @param nodeId nodeId
+     * @param conf conf
+     * @return result
+     * @since 0.1.0
+     */
+
     public static LlmChainConfig from(String nodeId, Map<String, Object> conf) {
         LlmChainConfig cfg = new LlmChainConfig(nodeId, conf);
         cfg.validate();
         return cfg;
     }
 
+    /**
+     * nodeId.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String nodeId() {
         return nodeId;
     }
+
+    /**
+     * nodeName.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public String nodeName() {
         String name = str(raw.get("name"));
@@ -66,14 +90,27 @@ public final class LlmChainConfig {
         return mapOf(model().get("extension"));
     }
 
+    /**
+     * modelName.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String modelName() {
         return str(first(model(), "modelName", "model_name"));
     }
 
+    /**
+     * modelType.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String modelType() {
         return str(first(model(), "modelType", "model_type"));
     }
-
     public Map<String, Object> responseFormat() {
         Object rf = raw.get("responseFormat");
         if (rf instanceof Map<?, ?>) {
@@ -82,9 +119,23 @@ public final class LlmChainConfig {
         return Map.of("type", "text");
     }
 
+    /**
+     * responseType.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String responseType() {
         return str(responseFormat().getOrDefault("type", "text"));
     }
+
+    /**
+     * enableHistory.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean enableHistory() {
         Object v = raw.get("enableHistory");
@@ -93,6 +144,13 @@ public final class LlmChainConfig {
         }
         return false;
     }
+
+    /**
+     * historySize.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public int historySize() {
         Object v = raw.get("historySize");
@@ -111,17 +169,36 @@ public final class LlmChainConfig {
         return listOfMaps(uf.get("outputs"));
     }
 
+    /**
+     * isThinkingEnabled.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public boolean isThinkingEnabled() {
         Map<String, Object> thinking = mapOf(hyperParameters().get("thinking"));
         return "enabled".equals(str(thinking.get("type")));
     }
 
-    /** thinking.type unset/blank → None state; otherwise enabled|disabled. */
+    /**
+     * thinking.type unset/blank → None state; otherwise enabled|disabled.
+     *
+     * @return result
+     * @since 0.1.0
+     */
     public String thinkingTypeOrNull() {
         Map<String, Object> thinking = mapOf(hyperParameters().get("thinking"));
         String type = str(thinking.get("type"));
         return type.isBlank() ? null : type;
     }
+
+    /**
+     * vlEnable.
+     *
+     * @return result
+     * @since 0.1.0
+     */
 
     public boolean vlEnable() {
         Object v = extension().get("vl_enable");
@@ -131,20 +208,34 @@ public final class LlmChainConfig {
         return Boolean.parseBoolean(str(v));
     }
 
+    /**
+     * userTemplate.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String userTemplate() {
         for (Map<String, Object> el : templateContent()) {
             if ("user".equals(str(el.get("role")))) {
-                return str(el.get("content"));
-            }
+        return str(el.get("content"));
+    }
         }
         throw configError("Failed to retrieve llm template content");
     }
 
+    /**
+     * systemTemplateOrNull.
+     *
+     * @return result
+     * @since 0.1.0
+     */
+
     public String systemTemplateOrNull() {
         for (Map<String, Object> el : templateContent()) {
             if ("system".equals(str(el.get("role")))) {
-                return str(el.get("content"));
-            }
+        return str(el.get("content"));
+    }
         }
         return null;
     }

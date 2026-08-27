@@ -21,6 +21,7 @@ import java.util.Map;
  *
  * @since 2026-08-27
  */
+
 public final class ToolCallLimitRail extends AgentRail {
     static final String COUNT_KEY = "flow_agent_tool_call_rounds";
 
@@ -30,11 +31,18 @@ public final class ToolCallLimitRail extends AgentRail {
         this.maxToolCallRounds = maxToolCallRounds;
     }
 
+    /**
+     * afterModelCall.
+     *
+     * @param ctx ctx
+     * @since 0.1.0
+     */
+
     @Override
     public void afterModelCall(AgentCallbackContext ctx) {
         if (!(ctx.getInputs() instanceof ModelCallInputs inputs)) {
-            return;
-        }
+        return;
+    }
         Object response = inputs.getResponse();
         if (!(response instanceof AssistantMessage assistant)) {
             return;

@@ -4,25 +4,25 @@
 
 package com.openjiuwen.studio.dsl.python;
 
+import com.openjiuwen.studio.dsl.contract.PythonCodeExecutor;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.NodeCauseCode;
-import com.openjiuwen.studio.dsl.contract.PythonCodeExecutor;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.TimeUnit;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -31,7 +31,9 @@ import java.util.stream.Stream;
  *
  * @since 2026-08-17
  */
+
 public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
+
     /**
      * execute.
      *
@@ -39,6 +41,7 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
      * @return result
      * @throws NodeExecutionException when the call fails
      */
+
     @Override
     public PythonExecResult execute(PythonExecRequest request) throws NodeExecutionException {
         Path workDir = null;
@@ -125,8 +128,8 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
 
     private static void cleanup(Path workDir) {
         if (workDir == null) {
-            return;
-        }
+        return;
+    }
         try (Stream<Path> walk = Files.walk(workDir)) {
             walk.sorted((a, b) -> b.compareTo(a)).forEach(p -> {
                 try {
@@ -147,6 +150,7 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
      * @return created directory
      * @throws IOException when the directory cannot be created
      */
+
     public static Path createIsolationWorkDir(PythonExecRequest request) throws IOException {
         Path root;
         if (request.workdirRoot() != null && !request.workdirRoot().isBlank()) {
@@ -189,6 +193,15 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
         return s.isEmpty() ? "x" : (s.length() > 64 ? s.substring(0, 64) : s);
     }
 
+    /**
+     * buildWrappedCode.
+     *
+     * @param userCode userCode
+     * @param inputs inputs
+     * @return result
+     * @since 0.1.0
+     */
+
     public static String buildWrappedCode(String userCode, Map<String, Object> inputs) {
         String inputsLiteral = toPythonLiteral(inputs == null ? Map.of() : inputs);
         return ""
@@ -212,16 +225,19 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
     }
 
     /**
-     * Embed inputs as a Python literal (Python {@code repr(inputs)} in {@code build_wrapped_code}).
+     * * Embed inputs as a Python literal (Python {@code repr(inputs)} in {@code build_wrapped_code}).
+     *
+     * @param inputs inputs
+     * @return result
+     * @since 0.1.0
      */
     static String toPythonLiteral(Map<String, Object> inputs) {
         return pythonRepr(inputs);
     }
-
     static String pythonRepr(Object value) {
         if (value == null) {
-            return "None";
-        }
+        return "None";
+    }
         if (value instanceof Boolean b) {
             return b ? "True" : "False";
         }
@@ -300,8 +316,8 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
 
     private static String jsonValue(Object v) {
         if (v == null) {
-            return "null";
-        }
+        return "null";
+    }
         if (v instanceof Number || v instanceof Boolean) {
             return String.valueOf(v);
         }
@@ -316,7 +332,6 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
     private static String escapeJson(String s) {
         return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n");
     }
-
     @SuppressWarnings("unchecked")
     public static Map<String, Object> parseJsonObject(String stdout) throws IOException {
         String trimmed = stdout == null ? "" : stdout.trim();
@@ -333,18 +348,20 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
 
     private static String truncate(String s) {
         if (s == null) {
-            return "";
-        }
+        return "";
+    }
         return s.length() <= 500 ? s : s.substring(0, 500) + "...";
     }
 
-    /** Tiny JSON subset parser sufficient for python json.dumps(dict) results. */
+    /**
+     * Tiny JSON subset parser sufficient for python json.dumps(dict) results.
+     */
     private static final class JsonNull {
         private static final JsonNull INSTANCE = new JsonNull();
 
-        private JsonNull() {}
-    }
-
+        private JsonNull() {
+            }
+        }
     public static final class SimpleJson {
         private final String s;
         private int i;
@@ -352,6 +369,14 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
         private SimpleJson(String s) {
             this.s = s;
         }
+
+        /**
+         * parse.
+         *
+         * @param s s
+         * @return result
+         * @since 0.1.0
+         */
 
         public static Object parse(String s) throws IOException {
             SimpleJson p = new SimpleJson(s.trim());
@@ -497,11 +522,10 @@ public final class SubprocessPythonCodeExecutor implements PythonCodeExecutor {
         private boolean peek(char c) {
             return i < s.length() && s.charAt(i) == c;
         }
-
         private void skipWs() {
             while (i < s.length() && Character.isWhitespace(s.charAt(i))) {
-                i++;
-            }
+            i++;
+        }
         }
     }
 }
