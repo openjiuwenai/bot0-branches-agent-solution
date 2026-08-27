@@ -30,11 +30,12 @@ public record GraphLoopConfig(
         String forkDescription) {
 
     /**
-     * 最小配置（骨架档：空 Veto 契约不挂 veto、恒空评估器不挂收敛——只做
-     * 分叉记录；fork 描述取默认文案）。
+     * 最小配置（骨架档：空 Veto 契约走 isEmpty-gate 不挂 veto、null 评估器
+     * 走 null-gate 不挂收敛——只做分叉记录；fork 描述取默认文案。
+     * 注意：恒空（非 null）评估器仍会挂载 ConvergenceRail——勿用恒空替代 null）。
      *
      * @param executor 子任务执行逻辑
-     * @return 最小配置（空契约 + 恒空评估器 + 默认 fork 描述）
+     * @return 最小配置（空契约 + null 评估器 + 默认 fork 描述）
      */
     public static GraphLoopConfig minimal(SubAgentExecutor executor) {
         // R3-2 修正：null evaluator 走 GraphLoopRails 的 null-gate（真不挂
