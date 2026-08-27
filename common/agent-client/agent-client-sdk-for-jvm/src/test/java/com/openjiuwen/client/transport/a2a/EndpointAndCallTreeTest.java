@@ -199,25 +199,50 @@ class EndpointAndCallTreeTest {
     }
 
     @Test
-    void clientEnforcesDistinctConversationLimitBeforeNetworkAndAllowsReuse() {
-        TransportProvider transport = new TransportProvider() {
-            @Override public Flow.Publisher<com.openjiuwen.client.api.InvocationEvent> createAndStream(CreateCommand c) {
-                return subscriber -> subscriber.onSubscribe(new Flow.Subscription() {
-                    @Override public void request(long n) { }
-                    @Override public void cancel() { }
-                });
-            }
-            @Override public java.util.concurrent.CompletionStage<InvocationSnapshot> getTask(String t, String c) { return null; }
-            @Override public java.util.concurrent.CompletionStage<InvocationSnapshot> resumeToolResult(ResumeCommand c) { return null; }
-            @Override public void close() { }
-        };
+    void clientEnforcesDistinctConversationLimitBeforeNetwork() {
+        TransportProvider transport = new NoopTransportProvider();
         try (AgentClient client = AgentClients.builder().transport(transport)
                 .maxDistinctConversations(2).build()) {
-            client.invoke(InvocationRequest.builder().conversationId("c1").mode(InvocationMode.ASYNC).input("x").build());
-            client.invoke(InvocationRequest.builder().conversationId("c1").mode(InvocationMode.ASYNC).input("x2").build());
-            client.invoke(InvocationRequest.builder().conversationId("c2").mode(InvocationMode.ASYNC).input("y").build());
-            assertThrows(ConversationLimitExceededException.class, () -> client.invoke(InvocationRequest.builder()
-                    .conversationId("c3").mode(InvocationMode.ASYNC).input("z").build()));
+            client.invoke(InvocationRequest.builder()
+                    .conversationId("c1").mode(InvocationMode.ASYNC).input("x").build());
+            client.invoke(InvocationRequest.builder()
+                    .conversationId("c1").mode(InvocationMode.ASYNC).input("x2").build());
+            client.invoke(InvocationRequest.builder()
+                    .conversationId("c2").mode(InvocationMode.ASYNC).input("y").build());
+            assertThrows(ConversationLimitExceededException.class, () -> client.invoke(
+                    InvocationRequest.builder()
+                            .conversationId("c3").mode(InvocationMode.ASYNC).input("z").build()));
+        }
+    }
+
+    private static final class NoopTransportProvider implements TransportProvider {
+        @Override
+        public Flow.Publisher<com.openjiuwen.client.api.InvocationEvent> createAndStream(
+                CreateCommand c) {
+            return subscriber -> subscriber.onSubscribe(new Flow.Subscription() {
+                @Override
+                public void request(long n) {
+                }
+
+                @Override
+                public void cancel() {
+                }
+            });
+        }
+
+        @Override
+        public java.util.concurrent.CompletionStage<InvocationSnapshot> getTask(String t, String c) {
+            return java.util.concurrent.CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public java.util.concurrent.CompletionStage<InvocationSnapshot> resumeToolResult(
+                ResumeCommand c) {
+            return java.util.concurrent.CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public void close() {
         }
     }
 
@@ -320,7 +345,7 @@ class EndpointAndCallTreeTest {
     }
 
     @Test
-    void genuineInvalidSubscriptionParamsAreNotMisclassifiedAsTerminalState() throws Exception {
+    void invalidSubscriptionParamsAreNotMisclassifiedAsTerminalState() throws Exception {
         CopyOnWriteArrayList<String> methods = new CopyOnWriteArrayList<>();
         HttpServer server = server(exchange -> {
             JsonNode request = MAPPER.readTree(exchange.getRequestBody().readAllBytes());

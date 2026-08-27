@@ -223,11 +223,28 @@ public final class RuntimeVerificationApp {
         run.startedAt = Instant.now();
         AgentClient client = null;
         try {
-            run.wireStartSequence = currentMockWireSequence(run.request.runtimeUrl());
-            client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
-                    .endpointUrl(run.request.runtimeUrl())
-                    .maxDistinctConversations(5)
-                    .build();
+            executeRunScenario(run);
+        } catch (IOException | InterruptedException | java.util.concurrent.ExecutionException
+                | java.util.concurrent.TimeoutException error) {
+            run.status = "FAILED";
+            run.error = rootMessage(error);
+            run.addDiagnostic(error.getClass().getSimpleName() + ": " + rootMessage(error));
+        } finally {
+            run.finishedAt = Instant.now();
+            if (client != null) {
+                client.close();
+            }
+        }
+    }
+
+    private void executeRunScenario(RunRecord run)
+            throws IOException, InterruptedException, java.util.concurrent.ExecutionException,
+            java.util.concurrent.TimeoutException {
+        run.wireStartSequence = currentMockWireSequence(run.request.runtimeUrl());
+        try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
+                .endpointUrl(run.request.runtimeUrl())
+                .maxDistinctConversations(5)
+                .build()) {
             AtomicInteger toolExecutions = new AtomicInteger();
             client.tools().register(LocalToolDescriptor.builder("local.echo")
                     .displayName("Local echo").description("Returns the supplied text")
@@ -250,33 +267,18 @@ public final class RuntimeVerificationApp {
                 executeMultiInvocation(run, client, conversationId);
                 return;
             }
-            InvocationRequest request = InvocationRequest.builder()
-                    .conversationId(conversationId).mode(run.request.mode()).input(run.request.input())
-                    .traceId(run.id).correlationId("runtime-verification-" + run.id)
-                    .attribute("tenantId", "must-not-reach-runtime")
-                    .attribute("routingAgent", "must-not-reach-runtime")
-                    .credentialToken("must-not-reach-runtime")
-                    .agentId("must-not-reach-runtime").build();
-            InvocationCall call = client.invoke(request);
+            InvocationCall call = client.invoke(buildInvocationRequest(run, conversationId));
             run.invocationRef = call.invocationRef();
             CompletableFuture<InvocationEvent.InputRequired> inputRequired = subscribeEvents(run, call);
             subscribeTree(run, call);
             SnapshotResult result = resolveScenarioSnapshot(run, client, call, conversationId, inputRequired);
             finalizeRun(run, result.snapshot(), toolExecutions, result.observedIncompleteInput());
-        } catch (IOException | InterruptedException | java.util.concurrent.ExecutionException
-                | java.util.concurrent.TimeoutException error) {
-            run.status = "FAILED";
-            run.error = rootMessage(error);
-            run.addDiagnostic(error.getClass().getSimpleName() + ": " + rootMessage(error));
-        } finally {
-            run.finishedAt = Instant.now();
-            if (client != null) {
-                client.close();
-            }
         }
     }
 
-    /** 验证同一 Client、同一 conversationId 下多个独立 invocation/task。 */
+    /**
+     * 验证同一 Client、同一 conversationId 下多个独立 invocation/task。
+     */
     private void executeMultiInvocation(RunRecord run, AgentClient client, String conversationId)
             throws InterruptedException, java.util.concurrent.ExecutionException,
             java.util.concurrent.TimeoutException {
@@ -305,6 +307,16 @@ public final class RuntimeVerificationApp {
         run.status = "COMPLETED";
         first.close();
         second.close();
+    }
+
+    private InvocationRequest buildInvocationRequest(RunRecord run, String conversationId) {
+        return InvocationRequest.builder()
+                .conversationId(conversationId).mode(run.request.mode()).input(run.request.input())
+                .traceId(run.id).correlationId("runtime-verification-" + run.id)
+                .attribute("tenantId", "must-not-reach-runtime")
+                .attribute("routingAgent", "must-not-reach-runtime")
+                .credentialToken("must-not-reach-runtime")
+                .agentId("must-not-reach-runtime").build();
     }
 
     private static InvocationSnapshot queryAsyncUntilSettled(AgentClient client, InvocationCall call,

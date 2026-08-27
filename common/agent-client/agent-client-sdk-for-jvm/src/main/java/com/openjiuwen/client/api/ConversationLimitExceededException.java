@@ -31,12 +31,20 @@ public final class ConversationLimitExceededException extends IllegalStateExcept
         this.limit = limit;
     }
 
-    /** @return 被拒绝的新会话标识 */
+    /**
+     * 获取被拒绝的新会话标识。
+     *
+     * @return 被拒绝的新会话标识
+     */
     public String conversationId() {
         return conversationId;
     }
 
-    /** @return 当前 Client 的不同会话上限 */
+    /**
+     * 获取当前 Client 的不同会话上限。
+     *
+     * @return 当前 Client 的不同会话上限
+     */
     public int limit() {
         return limit;
     }

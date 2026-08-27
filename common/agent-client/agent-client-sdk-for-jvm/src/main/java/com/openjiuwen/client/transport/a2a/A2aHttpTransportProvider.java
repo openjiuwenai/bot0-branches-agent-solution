@@ -734,48 +734,55 @@ public class A2aHttpTransportProvider
                 .build();
         CompletableFuture<InvocationSnapshot> ack = new CompletableFuture<>();
         http.sendAsync(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
-                .whenComplete((resp, ex) -> {
-                    if (ex != null) {
-                        A2aTransportException e = A2aTransportException.network(
-                                "resume request failed: " + rootMessage(ex), ex);
-                        if (ch.taskRef != null) {
-                            recoverUnaryByQuery(ch, sink, ack, snapshotRef, e);
-                        } else {
-                            ack.completeExceptionally(e);
-                            failStream(sink, e);
-                        }
-                        return;
-                    }
-                    emitRawResponse(ch, source, rawResponsePayload(resp.statusCode(),
-                            resp.headers(), resp.body(), null, false));
-                    if (resp.statusCode() / 100 != 2) {
-                        A2aTransportException e = governanceError(resp.statusCode(), resp.body());
-                        ack.completeExceptionally(e);
-                        failStream(sink, e);
-                        return;
-                    }
-                    try {
-                        JsonNode result = extractResult(codec.readTree(resp.body()));
-                        A2aJsonCodec.Frame f = codec.parseFrame(result).orElse(null);
-                        bindTaskRef(ch, f);
-                        if (sink != null) {
-                            emit(sink, f);
-                        } else {
-                            applyRootOutput(ch, f);
-                            applyFrameToCallTree(ch, f);
-                        }
-                        // 快照驱动的续跑（无 sink）走到终态：通道再无用处，及时释放，避免 taskRef 映射堆积；
-                        // 未到终态则保留通道，等待后续续跑推进。
-                        if (sink == null && f != null && f.state() != null && f.state().isTerminal()) {
-                            releaseChannel(ch);
-                        }
-                        ack.complete(snapshotFromFrame(snapshotRef, f));
-                    } catch (A2aTransportException | IllegalArgumentException e) {
-                        ack.completeExceptionally(e);
-                        failStream(sink, e);
-                    }
-                });
+                .whenComplete((resp, ex) -> handleUnaryResponse(request, ack, resp, ex));
         return ack;
+    }
+
+    private void handleUnaryResponse(UnaryRequest request, CompletableFuture<InvocationSnapshot> ack,
+            HttpResponse<String> resp, Throwable ex) {
+        Channel ch = request.ch();
+        Channel sink = request.sink();
+        String snapshotRef = request.snapshotRef();
+        RawResponseEvent.Source source = request.source();
+        if (ex != null) {
+            A2aTransportException e = A2aTransportException.network(
+                    "resume request failed: " + rootMessage(ex), ex);
+            if (ch.taskRef != null) {
+                recoverUnaryByQuery(ch, sink, ack, snapshotRef, e);
+            } else {
+                ack.completeExceptionally(e);
+                failStream(sink, e);
+            }
+            return;
+        }
+        emitRawResponse(ch, source, rawResponsePayload(resp.statusCode(),
+                resp.headers(), resp.body(), null, false));
+        if (resp.statusCode() / 100 != 2) {
+            A2aTransportException e = governanceError(resp.statusCode(), resp.body());
+            ack.completeExceptionally(e);
+            failStream(sink, e);
+            return;
+        }
+        try {
+            JsonNode result = extractResult(codec.readTree(resp.body()));
+            A2aJsonCodec.Frame f = codec.parseFrame(result).orElse(null);
+            bindTaskRef(ch, f);
+            if (sink != null) {
+                emit(sink, f);
+            } else {
+                applyRootOutput(ch, f);
+                applyFrameToCallTree(ch, f);
+            }
+            // 快照驱动的续跑（无 sink）走到终态：通道再无用处，及时释放，避免 taskRef 映射堆积；
+            // 未到终态则保留通道，等待后续续跑推进。
+            if (sink == null && f != null && f.state() != null && f.state().isTerminal()) {
+                releaseChannel(ch);
+            }
+            ack.complete(snapshotFromFrame(snapshotRef, f));
+        } catch (A2aTransportException | IllegalArgumentException e) {
+            ack.completeExceptionally(e);
+            failStream(sink, e);
+        }
     }
 
     private void recoverUnaryByQuery(Channel ch, Channel sink, CompletableFuture<InvocationSnapshot> ack,
@@ -1766,10 +1773,9 @@ public class A2aHttpTransportProvider
      * @return result 节点
      */
     private static JsonNode extractResult(JsonNode root) {
-        A2aTransportException normalized = A2aErrorNormalizer.fromJsonRpc(root);
-        if (normalized != null) {
+        A2aErrorNormalizer.fromJsonRpc(root).ifPresent(normalized -> {
             throw normalized;
-        }
+        });
         return root.has("result") ? root.get("result") : root;
     }
 

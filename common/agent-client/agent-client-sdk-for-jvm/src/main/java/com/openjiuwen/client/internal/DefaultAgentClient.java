@@ -185,6 +185,8 @@ public final class DefaultAgentClient implements AgentClient {
 
     /**
      * 原子准入不同 conversationId；校验位于所有 Transport 调用之前。
+     *
+     * @param conversationId 会话标识
      */
     private void admitConversation(String conversationId) {
         synchronized (conversationAdmissionLock) {
@@ -424,7 +426,7 @@ public final class DefaultAgentClient implements AgentClient {
                         // 首次创建调用场景：工具失败直接失败整个调用，避免业务悬挂。
                         failCall(state.invocationRef, ex);
                     }
-                    return null;
+                    return Boolean.TRUE;
                 });
     }
 

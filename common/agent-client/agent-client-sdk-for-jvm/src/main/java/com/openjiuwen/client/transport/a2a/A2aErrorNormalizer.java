@@ -7,33 +7,36 @@ package com.openjiuwen.client.transport.a2a;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.openjiuwen.client.api.ErrorCodes;
 
+import java.util.Optional;
+
 /** Shared normalization for HTTP and JSON-RPC A2A errors. */
 final class A2aErrorNormalizer {
     private A2aErrorNormalizer() {
     }
 
-    static A2aTransportException fromJsonRpc(JsonNode root) {
+    static Optional<A2aTransportException> fromJsonRpc(JsonNode root) {
         JsonNode error = root == null ? null : root.get("error");
         if (error == null || error.isNull()) {
-            return null;
+            return Optional.empty();
         }
         int rpcCode = error.path("code").asInt();
         String message = error.path("message").asText("");
         String declared = error.path("data").path("code").asText(null);
         String code = normalizeCode(rpcCode, message, declared);
-        return new A2aTransportException("JSON-RPC error: " + rpcCode + " " + message,
-                null, code, 0, false);
+        return Optional.of(new A2aTransportException("JSON-RPC error: " + rpcCode + " " + message,
+                null, code, 0, false));
     }
 
     static A2aTransportException fromHttp(int status, JsonNode body, String rawBody) {
-        A2aTransportException rpc = fromJsonRpc(body);
-        if (rpc != null) {
+        Optional<A2aTransportException> rpc = fromJsonRpc(body);
+        if (rpc.isPresent()) {
+            A2aTransportException normalized = rpc.get();
             // HTTP status remains authoritative for infrastructure failures even
             // when the body happens to use JSON-RPC. A deterministic JSON-RPC
             // error on a successful (2xx) response stays non-retryable.
             boolean httpRetryable = status == 408 || status == 425 || status == 429 || status >= 500;
-            return new A2aTransportException(rpc.getMessage(), rpc, rpc.code(), status,
-                    rpc.retryable() || httpRetryable);
+            return new A2aTransportException(normalized.getMessage(), normalized, normalized.code(), status,
+                    normalized.retryable() || httpRetryable);
         }
         String code = body == null ? null : body.path("code").asText(null);
         String message = body == null ? rawBody : body.path("message").asText(rawBody);
