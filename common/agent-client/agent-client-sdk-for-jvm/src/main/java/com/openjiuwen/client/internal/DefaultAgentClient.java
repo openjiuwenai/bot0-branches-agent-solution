@@ -409,7 +409,10 @@ public final class DefaultAgentClient implements AgentClient {
         dispatcher.dispatch(call, ctx)
                 .orTimeout(10, TimeUnit.SECONDS)
                 .thenAccept(record -> submitToolResult(state, call.toolCallId(), record))
-                .exceptionally(ex -> {
+                .whenComplete((ignored, ex) -> {
+                    if (ex == null) {
+                        return;
+                    }
                     // dispatch timed out or failed (e.g., stale inFlight entry from a previous run,
                     // toolExecutor saturated, tool execution hung) — clear the stale entry so the next
                     // dispatch for the same toolCallId gets a fresh pipeline.
@@ -426,7 +429,6 @@ public final class DefaultAgentClient implements AgentClient {
                         // 首次创建调用场景：工具失败直接失败整个调用，避免业务悬挂。
                         failCall(state.invocationRef, ex);
                     }
-                    return Boolean.TRUE;
                 });
     }
 
