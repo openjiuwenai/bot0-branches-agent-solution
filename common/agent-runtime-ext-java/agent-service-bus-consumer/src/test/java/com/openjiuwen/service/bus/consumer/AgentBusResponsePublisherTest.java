@@ -12,18 +12,16 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
+import com.openjiuwen.service.bus.consumer.a2a.A2aJsonRpcResponseSerializer;
 import com.openjiuwen.service.bus.consumer.model.BusResponseProjection;
 import com.openjiuwen.service.bus.consumer.runtime.AgentBusResponsePublisher;
 
-import org.a2aproject.sdk.jsonrpc.common.json.JsonUtil;
 import org.a2aproject.sdk.spec.Task;
 import org.a2aproject.sdk.spec.TaskState;
 import org.a2aproject.sdk.spec.TaskStatus;
 import org.junit.jupiter.api.Test;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -38,26 +36,32 @@ class AgentBusResponsePublisherTest {
         AtomicReference<BrokerOutboundMessage> captured = new AtomicReference<>();
         var publisher = new AgentBusResponsePublisher(recordingProducer(captured), "runtime-a");
         publisher.publish(new BusResponseProjection("event", "INVOCATION_ACCEPTED", "tenant-a", "corr", "task",
-                Instant.now(), Map.of(), "trace", "runtime-a", "gateway-a", "route", "idem", "request-message",
+                Instant.now(), Map.of("idempotencyResult", "NEW"), "trace", "runtime-a", "gateway-a", "route",
+                "idem", "request-message",
                 "ACCEPTED", 0));
 
         assertThat(captured.get().routingDescriptor()).isEqualTo("target=gateway-a");
         assertThat(captured.get().headers().sourceServiceId()).isEqualTo("runtime-a");
         assertThat(captured.get().headers().targetServiceId()).isEqualTo("gateway-a");
         assertThat(captured.get().headers().payloadRef()).isNull();
-        assertThat(captured.get().headers().inlinePayload()).contains("taskId=task");
+        assertThat(captured.get().headers().inlinePayload()).contains("\"taskId\":\"task\"");
     }
 
     @Test
-    void publishesInputRequiredThroughTheCanonicalAgentBusEventType() {
+    void publishesInputRequiredThroughTheCanonicalAgentBusEventType() throws Exception {
         AtomicReference<BrokerOutboundMessage> captured = new AtomicReference<>();
         var publisher = new AgentBusResponsePublisher(recordingProducer(captured), "runtime-a");
+        Task task = Task.builder().id("task").contextId("ctx")
+                .status(new TaskStatus(TaskState.TASK_STATE_INPUT_REQUIRED)).build();
+        String response = A2aJsonRpcResponseSerializer.streamingEvent("request-1", task);
         publisher.publish(new BusResponseProjection("input-event", "INVOCATION_INPUT_REQUIRED", "tenant-a", "corr",
-                "task", Instant.now(), Map.of("taskState", "TASK_STATE_INPUT_REQUIRED"), "trace", "runtime-a",
+                "task", Instant.now(), Map.of("taskState", "TASK_STATE_INPUT_REQUIRED", "a2aResponse", response),
+                "trace", "runtime-a",
                 "gateway-a", "route", "idem", "request-message", "INPUT_REQUIRED", 1));
 
         assertThat(captured.get().headers().eventType().name()).isEqualTo("INVOCATION_INPUT_REQUIRED");
-        assertThat(captured.get().headers().inlinePayload()).contains("taskId=task", "status=input_required");
+        assertThat(captured.get().headers().inlinePayload()).contains("\"taskId\":\"task\"",
+                "\"status\":\"input_required\"");
     }
 
     @Test
@@ -66,18 +70,16 @@ class AgentBusResponsePublisherTest {
         var publisher = new AgentBusResponsePublisher(recordingProducer(captured), "runtime-a");
         Task task = Task.builder().id("task").contextId("ctx")
                 .status(new TaskStatus(TaskState.TASK_STATE_COMPLETED)).metadata(Map.of("result", "done")).build();
+        String response = A2aJsonRpcResponseSerializer.streamingEvent("request-1", task);
         publisher.publish(new BusResponseProjection("response-event", "INVOCATION_RESPONSE", "tenant-a", "corr",
-                "task", Instant.now(), Map.of("task", task), "trace", "runtime-a", "gateway-a", "route", "idem",
-                "request-message", "RESPONSE", 1));
+                "task", Instant.now(), Map.of("a2aResponse", response), "trace", "runtime-a", "gateway-a", "route",
+                "idem", "request-message", "RESPONSE", 1));
 
         String inlinePayload = captured.get().headers().inlinePayload();
-        assertThat(inlinePayload).contains("taskId=task", "a2aResponseType=Task");
-        String encoded = token(inlinePayload, "a2aResponse");
-        String json = new String(Base64.getUrlDecoder().decode(encoded), StandardCharsets.UTF_8);
-        Task restored = JsonUtil.fromJson(json, Task.class);
-        assertThat(restored.id()).isEqualTo("task");
-        assertThat(restored.status().state()).isEqualTo(TaskState.TASK_STATE_COMPLETED);
-        assertThat(restored.metadata()).containsEntry("result", "done");
+        assertThat(inlinePayload).contains("\"taskId\":\"task\"", "\"a2aResponse\":{")
+                .doesNotContain("a2aResponseType");
+        assertThat(new com.fasterxml.jackson.databind.ObjectMapper().readTree(inlinePayload).get("a2aResponse"))
+                .isEqualTo(new com.fasterxml.jackson.databind.ObjectMapper().readTree(response));
     }
 
     @Test
@@ -94,13 +96,28 @@ class AgentBusResponsePublisherTest {
             }
         };
         var publisher = new AgentBusResponsePublisher(unavailable, "runtime-a");
-        BusResponseProjection projection = new BusResponseProjection("event", "INVOCATION_RESPONSE", "tenant-a",
-                "corr", "task", Instant.now(), Map.of(), "trace", "runtime-a", "gateway-a", "route", "idem",
-                "request-message", "RESPONSE", 1);
+        BusResponseProjection projection = new BusResponseProjection("event", "INVOCATION_FAILED", "tenant-a",
+                "corr", null, Instant.now(), Map.of("errorCode", "BROKER_UNAVAILABLE", "retryable", true),
+                "trace", "runtime-a", "gateway-a", "route", "idem", "request-message", "FAILED", 1);
 
         assertThatThrownBy(() -> publisher.publish(projection))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("UNAVAILABLE");
+    }
+
+    @Test
+    void rejectsProjectionLargerThanInlinePayloadLimitBeforePublishing() {
+        AtomicReference<BrokerOutboundMessage> captured = new AtomicReference<>();
+        var publisher = new AgentBusResponsePublisher(recordingProducer(captured), "runtime-a");
+        BusResponseProjection projection = new BusResponseProjection("event", "INVOCATION_FAILED", "tenant-a",
+                "corr", null, Instant.now(), Map.of("errorCode", "TOO_LARGE", "retryable", false,
+                "reason", "x".repeat(70_000)), "trace", "runtime-a", "gateway-a", "route", "idem",
+                "request-message", "FAILED", 1);
+
+        assertThatThrownBy(() -> publisher.publish(projection))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("64 KiB");
+        assertThat(captured.get()).isNull();
     }
 
     private static BrokerForwardingProducerPort recordingProducer(AtomicReference<BrokerOutboundMessage> captured) {
@@ -116,15 +133,5 @@ class AgentBusResponsePublisherTest {
                 return BrokerProduceOutcome.accepted();
             }
         };
-    }
-
-    private static String token(String payload, String name) {
-        String prefix = name + "=";
-        for (String value : payload.split(";")) {
-            if (value.startsWith(prefix)) {
-                return value.substring(prefix.length());
-            }
-        }
-        throw new AssertionError("Missing token " + name);
     }
 }

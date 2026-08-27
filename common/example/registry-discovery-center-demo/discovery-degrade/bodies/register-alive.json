@@ -1,0 +1,13 @@
+{
+  "tenantId": "smoke-tenant",
+  "agentId": "smoke-agent",
+  "agentName": "smoke-alive",
+  "frameworkType": "JIUWEN",
+  "routeKey": "/v1/query",
+  "contractVersion": "1.0.0",
+  "capabilityVersion": "1.0.0",
+  "endpointUrl": "http://127.0.0.1:18090/a2a",
+  "maxConcurrency": 10,
+  "weight": 100,
+  "region": "cn-east-1"
+}

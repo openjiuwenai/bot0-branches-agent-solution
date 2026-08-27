@@ -26,7 +26,8 @@ import java.util.List;
  */
 public interface AgentDiscoveryService {
     /**
-     * List ONLINE/DEGRADED/DRAINING instances for {@code (tenantId, agentId)}.
+     * List ONLINE/DEGRADED instances for {@code (tenantId, agentId)}.
+     * DRAINING/OFFLINE excluded; 15s heartbeat filter applied in SQL.
      *
      * @param tenantId tenantId
      * @param agentId agentId
@@ -49,7 +50,7 @@ public interface AgentDiscoveryService {
     }
 
     /**
-     * List ONLINE/DEGRADED/DRAINING instances for {@code (tenantId, serviceId)}.
+     * List ONLINE/DEGRADED instances for {@code (tenantId, serviceId)}.
      *
      * @param tenantId tenantId
      * @param serviceId serviceId
@@ -60,7 +61,7 @@ public interface AgentDiscoveryService {
     List<AgentCardDto> searchByServiceId(String tenantId, String serviceId, String contractVersion);
 
     /**
-     * List ONLINE/DEGRADED/DRAINING instances declaring {@code capability}.
+     * List ONLINE/DEGRADED instances declaring {@code capability}.
      *
      * @param tenantId tenantId
      * @param capability capability

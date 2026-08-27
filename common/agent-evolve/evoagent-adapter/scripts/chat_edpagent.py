@@ -70,12 +70,12 @@ def _parse_sse_frame(line: str) -> dict[str, Any] | None:
     line = line.strip()
     if not line or not line.startswith("data: "):
         return None
-    data_str = line[len("data: ") :]
+    data_str = line[len("data: "):]
     if data_str.strip() == "[DONE]":
         return None
     try:
         parsed = json.loads(data_str)
-    except (json.JSONDecodeError, ValueError):
+    except ValueError:
         return None
     return parsed if isinstance(parsed, dict) else None
 

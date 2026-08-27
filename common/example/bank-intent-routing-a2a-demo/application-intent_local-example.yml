@@ -1,0 +1,22 @@
+# Copy this file to application-intent_local.yml and fill in local credentials.
+# The copied file is loaded by all five runtimes and ignored by Git.
+bank:
+  demo:
+    llm:
+      provider: OpenAI
+      api-key: your-chat-api-key
+      api-base: https://your-chat-endpoint/v1
+      model-name: your-chat-model
+      ssl-verify: true
+      temperature: 0.0
+      top-p: 0.8
+      timeout: 120s
+      completion-timeout: 600s
+      max-iterations: 12
+    reranker:
+      api-key: your-reranker-api-key
+      api-base: https://your-reranker-endpoint/v1
+      model-name: your-reranker-model
+      timeout-seconds: 30
+      max-retries: 3
+      extra-body: {}

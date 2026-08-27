@@ -38,7 +38,8 @@ def _cfg(**kwargs):
 class TestSplitScriptsIntoFrames:
     """TC-01 ~ TC-04"""
 
-    def test_tc01_basic_chinese(self):
+    @staticmethod
+    def test_tc01_basic_chinese():
         """TC-01：基本中文字符切片。"""
         from EDPAgent.fixed_script_feeder import split_scripts_into_frames
 
@@ -48,19 +49,22 @@ class TestSplitScriptsIntoFrames:
         assert all(len(f) <= 4 for f in frames)
         assert len(frames) == math.ceil(len(s) / 4)
 
-    def test_tc02_zero_defense(self):
+    @staticmethod
+    def test_tc02_zero_defense():
         """TC-02：chars_per_frame=0 防御。"""
         from EDPAgent.fixed_script_feeder import split_scripts_into_frames
 
         assert split_scripts_into_frames(["Hello", "World"], 0) == ["Hello", "World"]
 
-    def test_tc03_negative_defense(self):
+    @staticmethod
+    def test_tc03_negative_defense():
         """TC-03：chars_per_frame<0 防御。"""
         from EDPAgent.fixed_script_feeder import split_scripts_into_frames
 
         assert split_scripts_into_frames(["Hi"], -1) == ["Hi"]
 
-    def test_tc04_empty_list(self):
+    @staticmethod
+    def test_tc04_empty_list():
         """TC-04：空列表。"""
         from EDPAgent.fixed_script_feeder import split_scripts_into_frames
 
@@ -74,7 +78,8 @@ class TestSplitScriptsIntoFrames:
 class TestSelectFixedScripts:
     """TC-05 ~ TC-10"""
 
-    def test_tc05_planning_query_match(self):
+    @staticmethod
+    def test_tc05_planning_query_match():
         """TC-05：planning 阶段 query 匹配。"""
         from EDPAgent.fixed_script_feeder import select_fixed_scripts
         from EDPAgent.agent_rule import QueryPatternScripts
@@ -89,7 +94,8 @@ class TestSelectFixedScripts:
         )
         assert out == ["正在为您搜索相关内容..."]
 
-    def test_tc06_planning_no_match_default(self):
+    @staticmethod
+    def test_tc06_planning_no_match_default():
         """TC-06：planning 无匹配走 default。"""
         from EDPAgent.fixed_script_feeder import select_fixed_scripts
         from EDPAgent.agent_rule import QueryPatternScripts
@@ -106,7 +112,8 @@ class TestSelectFixedScripts:
         )
         assert out == ["默认话术"]
 
-    def test_tc07_executing_stage(self):
+    @staticmethod
+    def test_tc07_executing_stage():
         """TC-07：executing 阶段。"""
         from EDPAgent.fixed_script_feeder import select_fixed_scripts
 
@@ -117,7 +124,8 @@ class TestSelectFixedScripts:
         )
         assert out == ["正在分析执行结果..."]
 
-    def test_tc08_resuming_4_level_fallback(self):
+    @staticmethod
+    def test_tc08_resuming_4_level_fallback():
         """TC-08：resuming 启用 4 级降级链。"""
         from EDPAgent.fixed_script_feeder import select_fixed_scripts
 
@@ -140,7 +148,8 @@ class TestSelectFixedScripts:
         cfg4 = _cfg(scripts=["S"])
         assert select_fixed_scripts("c", cfg4, is_resume=True) == ["S"]
 
-    def test_tc09_resuming_disabled_short_circuit(self):
+    @staticmethod
+    def test_tc09_resuming_disabled_short_circuit():
         """TC-09：resuming 关闭短路返回 []。"""
         from EDPAgent.fixed_script_feeder import select_fixed_scripts
 
@@ -152,7 +161,8 @@ class TestSelectFixedScripts:
         out = select_fixed_scripts("continue", cfg, is_resume=True)
         assert out == []
 
-    def test_tc10_executing_fallback_chain(self):
+    @staticmethod
+    def test_tc10_executing_fallback_chain():
         """TC-10：is_first_thinking_round=False 且非 resume 走 executing 降级链。"""
         from EDPAgent.fixed_script_feeder import select_fixed_scripts
 
@@ -176,7 +186,8 @@ class TestSelectFixedScripts:
 class TestFixedScriptFeeder:
     """TC-11 ~ TC-17"""
 
-    def _feeder(self, **kwargs):
+    @staticmethod
+    def _feeder(**kwargs):
         from EDPAgent.fixed_script_feeder import FixedScriptFeeder
 
         defaults = dict(
@@ -261,7 +272,8 @@ class TestFixedScriptFeeder:
 class TestMinIntervalThrottle:
     """TC-18 ~ TC-19"""
 
-    def test_tc18_throttle_interval_not_reached(self, monkeypatch):
+    @staticmethod
+    def test_tc18_throttle_interval_not_reached(monkeypatch):
         """TC-18：间隔不足不发帧。"""
         from EDPAgent import fixed_script_feeder as mod
         from EDPAgent.fixed_script_feeder import FixedScriptFeeder
@@ -283,7 +295,8 @@ class TestMinIntervalThrottle:
         out2 = feeder.feed_token(1)
         assert out2 == []
 
-    def test_tc19_throttle_interval_reached(self, monkeypatch):
+    @staticmethod
+    def test_tc19_throttle_interval_reached(monkeypatch):
         """TC-19：间隔足够正常发帧。"""
         from EDPAgent import fixed_script_feeder as mod
         from EDPAgent.fixed_script_feeder import FixedScriptFeeder
@@ -319,14 +332,16 @@ class TestMinIntervalThrottle:
 class TestConfigModels:
     """TC-20 ~ TC-24"""
 
-    def test_tc20_enable_resume_scripts_default_true(self):
+    @staticmethod
+    def test_tc20_enable_resume_scripts_default_true():
         """TC-20：FixedScriptsConfig enable_resume_scripts 默认 True。"""
         from EDPAgent.agent_rule import FixedScriptsConfig
 
         cfg = FixedScriptsConfig()
         assert cfg.enable_resume_scripts is True
 
-    def test_tc21_load_missing_enable_resume_scripts(self, tmp_path):
+    @staticmethod
+    def test_tc21_load_missing_enable_resume_scripts(tmp_path):
         """TC-21：ScriptsConfigData 解析缺 enable_resume_scripts 字段。"""
         from EDPAgent.agent_rule import load_scripts_config
 
@@ -353,7 +368,8 @@ class TestConfigModels:
         data = load_scripts_config(p)
         assert data.think_chunk_fixed_scripts.enable_resume_scripts is True
 
-    def test_tc22_think_chunk_mode_field(self, tmp_path):
+    @staticmethod
+    def test_tc22_think_chunk_mode_field(tmp_path):
         """TC-22：ScriptsConfigData think_chunk_mode 字段。"""
         from EDPAgent.agent_rule import load_scripts_config, ThinkChunkMode
 
@@ -376,7 +392,8 @@ class TestConfigModels:
         data = load_scripts_config(p)
         assert data.think_chunk_mode == ThinkChunkMode.FIXED_SCRIPT
 
-    def test_tc23_full_field_construction(self):
+    @staticmethod
+    def test_tc23_full_field_construction():
         """TC-23：FixedScriptsConfig 完整字段构造。"""
         from EDPAgent.agent_rule import FixedScriptsConfig, QueryPatternScripts
 
@@ -399,7 +416,8 @@ class TestConfigModels:
         assert cfg.min_interval_ms == 200
         assert cfg.enable_resume_scripts is False
 
-    def test_tc24_all_pools_empty_returns_empty(self):
+    @staticmethod
+    def test_tc24_all_pools_empty_returns_empty():
         """TC-24：空场景所有池为空返回 []。"""
         from EDPAgent.fixed_script_feeder import select_fixed_scripts
 

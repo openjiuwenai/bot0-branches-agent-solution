@@ -56,12 +56,14 @@ openjiuwen:
     service-id: ${RUNTIME_SERVICE_ID}
     bus:
       consumer:
-        enabled: true
+        enabled: ${AGENT_BUS_ENABLED:false}
 
 agent-bus:
   role:
     runtime:
-      enabled: true
+      enabled: ${openjiuwen.service.bus.consumer.enabled}
+    caller:
+      enabled: ${openjiuwen.service.bus.consumer.enabled}
   nameserver: ${AGENT_BUS_NAMESERVER:127.0.0.1:9876}
   tenant: ${AGENT_BUS_TENANT}
   event-bus-service-id: ${AGENT_BUS_EVENT_BUS_SERVICE_ID}
@@ -72,8 +74,9 @@ agent-bus:
 | 配置项 | 作用 |
 |---|---|
 | `openjiuwen.service.service-id` | Runtime 的稳定逻辑服务 ID，用来匹配目标为本 Runtime 的请求事件 |
-| `openjiuwen.service.bus.consumer.enabled` | 启用 Runtime 的总线事件消费和响应投影 |
-| `agent-bus.role.runtime.enabled` | 让 Agent Bus SDK 装配 Runtime 角色的请求 consumer 和响应 producer |
+| `openjiuwen.service.bus.consumer.enabled` | Runtime 对外唯一的 Agent Bus 开关；同时启用入站消费和 Runtime 间 Bus Caller |
+| `agent-bus.role.runtime.enabled` | SDK 内部映射项，值引用公共开关，装配请求 consumer 和响应 producer |
+| `agent-bus.role.caller.enabled` | SDK 内部映射项，值引用公共开关，装配请求 submitter 和响应 consumer |
 | `agent-bus.nameserver` | Broker 名称服务地址 |
 | `agent-bus.tenant` | 本 Runtime 订阅和发布事件时使用的租户范围 |
 | `agent-bus.event-bus-service-id` | Agent Bus Relay 的逻辑服务 ID |
@@ -146,8 +149,8 @@ Agent Bus 只传输流式控制面事件，不传输 token chunk 或 SSE frame�
 
 | 现象 | 检查项 |
 |---|---|
-| 启动提示缺少 delivery adapter | 确认 `agent-bus.role.runtime.enabled=true`，并检查 Agent Bus SDK 是否成功装配 |
-| 启动提示缺少 response publisher | 检查 runtime role 的 producer、Broker 地址和 Agent Bus SDK 配置 |
+| 启动提示缺少 delivery adapter | 确认两个 SDK role 属性均引用公共开关，并检查 Agent Bus SDK 是否成功装配 |
+| 启动提示缺少 response publisher | 检查公共开关、Broker 地址和 Agent Bus SDK 装配结果 |
 | Runtime 收不到事件 | 检查 tenant、目标 `service-id`、Relay 和 Topic 是否一致 |
 | 请求被判定为 Task 不存在 | 查询/订阅 payload 必须携带真实 `taskId`，不能使用 client invocation ID 代替 |
 | 流式请求只有 `STREAM_READY` | 这是控制面预期行为；后续数据应从 A2A `SubscribeToTask` SSE 获取 |
@@ -156,6 +159,6 @@ Agent Bus 只传输流式控制面事件，不传输 token chunk 或 SSE frame�
 
 ## 8. 示例与相关文档
 
-- [agent-bus-consumer-demo](../../../example/agent-bus-consumer-demo)
+- [Agent Bus caller/callee 独立 Demo](../../../example/agent-bus-consumer-demo)
 - [Agent Bus Consumer 特性](../features/agent-bus-consumer.md)
 - [扩展模块 README](../../README.md)

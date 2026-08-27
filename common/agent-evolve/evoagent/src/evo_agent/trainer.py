@@ -645,8 +645,7 @@ class EvoTrainer(Trainer):  # type: ignore[misc]
         # Each asyncio.run() creates a new loop; httpx.AsyncClient.is_closed
         # stays False after the loop closes, so the stale client gets reused
         # and raises "Event loop is closed".
-        self._adapter_client._async_http = None
-        self._adapter_client._async_http_loop = None
+        self._adapter_client.clear_async_http()
 
         try:
             return asyncio.run(_run())

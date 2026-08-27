@@ -6,17 +6,14 @@ package com.openjiuwen.agents.edpa.e2e;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.openjiuwen.agents.edpa.EdpaRails;
+import com.openjiuwen.agents.edpa.autoconfigure.EdpaProperties;
 import com.openjiuwen.agents.edpa.explore.ExploreBudget;
-import com.openjiuwen.agents.edpa.explore.ExploreToolRegistrar;
 import com.openjiuwen.agents.edpa.explore.Explorer;
 import com.openjiuwen.agents.edpa.explore.LlmExplorer;
-import com.openjiuwen.agents.edpa.rail.UserInputCaptureRail;
 import com.openjiuwen.agents.edpa.util.LlmResponseExtractor;
-import com.openjiuwen.agents.edpa.verification.ProactiveConvergenceRail;
 import com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel;
-import com.openjiuwen.agents.reactrails.replan.ReplanRail;
-import com.openjiuwen.agents.reactrails.replan.ReplanTool;
-import com.openjiuwen.agents.reactrails.verification.CriteriaReplanBridgeRail;
+import com.openjiuwen.agents.reactrails.observability.ObservingRail;
 import com.openjiuwen.agents.reactrails.verification.RuleBasedCriteriaVerifier;
 import com.openjiuwen.core.foundation.llm.model_clients.DefaultModelClientFactories;
 import com.openjiuwen.core.foundation.llm.schema.ModelClientConfig;
@@ -46,7 +43,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -80,9 +76,10 @@ import java.util.logging.Logger;
  *
  * <p><b>Per config the full EDPA stack runs</b>: ExploreTool (Species E) + stub
  * market_data tool + CriteriaReplanBridgeRail (Action verify) + ReplanRail (Decision
- * reactive) + ProactiveConvergenceRail (Decision proactive). Collected signals:
- * exploreCount, toolCalls, criteria verified, convergence triggerCount, output length,
- * reasoning observed, completion status.
+ * reactive) + ProactiveConvergenceRail (Decision proactive) + RootCauseRail (device
+ * degrade). 装配经 {@code EdpaRails.registerOnto}（单一装配真源）。
+ * Collected signals: exploreCount, toolCalls, criteria verified, convergence
+ * triggerCount, output length, reasoning observed, completion status.
  *
  * <p>Env-gated opt-in: {@code EDPA_FULL_MATRIX_ENABLED=true} +
  * {@code OPENROUTER_API_KEY}. Each config is isolated in try/catch so one failure does
@@ -290,21 +287,20 @@ class FullEdpaMatrixRealLlmE2eTest {
             AtomicInteger toolCalls = new AtomicInteger(0);
             registerMarketDataTool(agent, toolCalls);
 
-            AtomicReference<String> userInputRef = new AtomicReference<>();
-            agent.registerRail(new UserInputCaptureRail(userInputRef));
-
             AtomicInteger exploreCount = new AtomicInteger(0);
             Function<String, String> explorerFn = buildExplorerFn(orKey, model, thinking, exploreCount);
             Explorer explorer = new LlmExplorer(explorerFn, ExploreBudget.DEFAULT);
-            ExploreToolRegistrar.registerOnto(agent, explorer, ExploreBudget.DEFAULT, userInputRef::get);
 
-            ReplanRail sharedCounter = new ReplanRail(3);
-            agent.registerRail(new CriteriaReplanBridgeRail(new RuleBasedCriteriaVerifier(), CRITERIA, sharedCounter));
-            ProactiveConvergenceRail convergence = new ProactiveConvergenceRail(new RuleBasedCriteriaVerifier(),
-                    CRITERIA, 2, ProactiveConvergenceRail.DEFAULT_COVERAGE_CRITICAL);
-            agent.registerRail(convergence);
-            agent.registerRail(new ReplanRail(3));
-            ReplanTool.registerOnto(agent);
+            // 装配经 EdpaRails.registerOnto（单一装配真源）：shared ReplanRail 单实例（预算×1）+
+            // SteeringProvisionRail（pushSteering 不再静默丢弃）+ UserInputCaptureRail/ExploreTool 闭包内建。
+            // 原手动构造 ProactiveConvergenceRail(verifier, CRITERIA, 2, DEFAULT_COVERAGE_CRITICAL)
+            // 与 registerOnto 内部参数完全一致，无差异。
+            EdpaProperties props = new EdpaProperties();
+            props.setCriteria(CRITERIA);
+            props.setMaxReplan(3);
+            props.setProactiveConvergenceEnabled(true);
+            props.setProactiveConvergenceStallWindow(2);
+            EdpaRails.registerOnto(agent, props, new RuleBasedCriteriaVerifier(), explorer);
 
             Object result = agent.invoke(TASK, null);
             recordRunSignals(r, result, exploreCount, toolCalls);
@@ -365,7 +361,7 @@ class FullEdpaMatrixRealLlmE2eTest {
         r.put("exploreCount", exploreCount.get());
         r.put("toolCalls", toolCalls.get());
         r.put("convergenceTrigger", -1); // 状态隔离后 invoke 不可读 (RailInvocationState per-invocation)
-        r.put("verified", result instanceof Map<?, ?> rm ? rm.get(CriteriaReplanBridgeRail.VERIFIED_KEY) : null);
+        r.put("verified", result instanceof Map<?, ?> rm ? rm.get(ObservingRail.VERIFIED_KEY) : null);
         r.put("outputLen", output.length());
         r.put("status", output.isBlank() ? "empty" : "completed");
     }

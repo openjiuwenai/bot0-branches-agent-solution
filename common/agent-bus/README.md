@@ -23,12 +23,21 @@ client ──POST /a2a──▶ agent-gateway ──┐
 
 ## 构建
 
-3 个子目录均为独立 Maven 工程（无 root pom），分别在各自目录构建：
+3 个子目录均为独立 Maven 工程（无 root pom），按**依赖顺序**分别构建：
+`registry-discovery-center`（无依赖）→ `event-bus`（relay 依赖 RDC lib jar）→ `agent-gateway`（依赖 event-bus-spi）。
 
 ```bash
-cd common/agent-bus/event-bus && mvn install -DskipTests                      # event-bus reactor（4 模块）
-mvn -f common/agent-bus/agent-gateway/pom.xml install -Dmaven.test.skip=true # agent-gateway
-cd common/agent-bus/registry-discovery-center && mvn install -DskipTests       # registry-discovery-center
+# 1. RDC（无依赖，必须先构建——event-bus-relay 依赖其 lib jar）
+cd common/agent-bus/registry-discovery-center && mvn install -DskipTests
+
+# 2. event-bus reactor（4 模块，event-bus-relay 依赖 RDC）
+cd ../event-bus && mvn install -DskipTests
+
+# 3. agent-gateway（依赖 event-bus-spi）
+mvn -f ../agent-gateway/pom.xml install -Dmaven.test.skip=true
+
+# 4.（可选）agent-gateway-demo 胖 jar（依赖 agent-gateway + event-bus-sdk）
+cd ../../example/agent-gateway-demo && mvn clean package -DskipTests
 ```
 
 详细构建 / 运行 / 配置见各子目录 README。

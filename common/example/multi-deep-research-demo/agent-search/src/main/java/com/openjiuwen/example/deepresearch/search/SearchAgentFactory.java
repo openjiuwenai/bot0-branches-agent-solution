@@ -24,7 +24,7 @@ import java.util.function.Function;
  * {@code AbilityManager}.
  *
  * <p>The {@code use-stub} flag in {@link SearchAgentProperties} decides which
- * static method backs the tool: {@link WebSearchTool#search} for prod (Tavily)
+ * implementation backs the tool: {@link WebSearchTool#search} for prod (Tavily)
  * or {@link StubWebSearchTool#search} for stub (fixture).
  *
  * @since 2026-07-06
@@ -91,7 +91,7 @@ public final class SearchAgentFactory {
                 .build();
         Function<Map<String, Object>, Object> toolFn = props.isUseStub()
                 ? StubWebSearchTool::search
-                : WebSearchTool::search;
+                : new WebSearchTool(props.getTavilyApiKey())::search;
         Tool webSearchTool = new LocalFunction(toolCard, toolFn);
         Runner.resourceMgr().addTool(webSearchTool, agent.getCard().getId());
         agent.getAbilityManager().add(toolCard);

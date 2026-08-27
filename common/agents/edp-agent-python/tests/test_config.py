@@ -11,26 +11,29 @@ from EDPAgent.config import SubAgentEntry, SubAgentsConfig, load_sub_agents_conf
 class TestSubAgentsConfig:
     """Test SubAgentsConfig model."""
 
-    def test_default_values(self):
+    @staticmethod
+    def test_default_values():
         config = SubAgentsConfig()
         assert config.sub_agents == []
 
-    def test_with_entries(self):
+    @staticmethod
+    def test_with_entries():
         config = SubAgentsConfig(
             sub_agents=[
-                SubAgentEntry(entity_type="ABC", url="http://abc-agent:8080", name="SubEDPAgent"),
+                SubAgentEntry(entity_type="ABC", url="https://abc-agent:8080", name="SubEDPAgent"),
             ]
         )
         assert len(config.sub_agents) == 1
         assert config.sub_agents[0].entity_type == "ABC"
-        assert config.sub_agents[0].url == "http://abc-agent:8080"
+        assert config.sub_agents[0].url == "https://abc-agent:8080"
         assert config.sub_agents[0].name == "SubEDPAgent"
 
 
 class TestSubAgentEntry:
     """Test SubAgentEntry model."""
 
-    def test_default_values(self):
+    @staticmethod
+    def test_default_values():
         entry = SubAgentEntry()
         assert entry.entity_type == "default"
         assert entry.url == ""
@@ -40,15 +43,16 @@ class TestSubAgentEntry:
 class TestLoadSubAgentsConfig:
     """Test load_sub_agents_config function."""
 
-    def test_load_valid_yaml(self, tmp_path):
+    @staticmethod
+    def test_load_valid_yaml(tmp_path):
         """TC-26: sub_agents.yaml 加载与校验"""
         yaml_content = """
 sub_agents:
   - entity_type: ABC
-    url: http://abc-agent:8080
+    url: https://abc-agent:8080
     name: SubEDPAgent
   - entity_type: FUND
-    url: http://fund-agent:8080
+    url: https://fund-agent:8080
     name: FundAgent
 """
         yaml_file = tmp_path / "sub_agents.yaml"
@@ -58,17 +62,19 @@ sub_agents:
 
         assert len(config.sub_agents) == 2
         assert config.sub_agents[0].entity_type == "ABC"
-        assert config.sub_agents[0].url == "http://abc-agent:8080"
+        assert config.sub_agents[0].url == "https://abc-agent:8080"
         assert config.sub_agents[0].name == "SubEDPAgent"
         assert config.sub_agents[1].entity_type == "FUND"
-        assert config.sub_agents[1].url == "http://fund-agent:8080"
+        assert config.sub_agents[1].url == "https://fund-agent:8080"
 
-    def test_load_nonexistent_file(self, tmp_path):
+    @staticmethod
+    def test_load_nonexistent_file(tmp_path):
         """文件不存在时返回空配置"""
         config = load_sub_agents_config(config_path=str(tmp_path / "nonexistent.yaml"))
         assert config.sub_agents == []
 
-    def test_load_empty_yaml(self, tmp_path):
+    @staticmethod
+    def test_load_empty_yaml(tmp_path):
         """空 YAML 文件返回空配置"""
         yaml_file = tmp_path / "empty.yaml"
         yaml_file.write_text("", encoding="utf-8")
@@ -76,7 +82,8 @@ sub_agents:
         config = load_sub_agents_config(config_path=str(yaml_file))
         assert config.sub_agents == []
 
-    def test_load_invalid_yaml(self, tmp_path):
+    @staticmethod
+    def test_load_invalid_yaml(tmp_path):
         """无效 YAML 内容返回空配置"""
         yaml_file = tmp_path / "invalid.yaml"
         yaml_file.write_text("not: valid: yaml: {{{", encoding="utf-8")
@@ -85,7 +92,8 @@ sub_agents:
         # 加载失败时返回空配置
         assert isinstance(config, SubAgentsConfig)
 
-    def test_sub_agent_not_load_sub_agents_yaml(self):
+    @staticmethod
+    def test_sub_agent_not_load_sub_agents_yaml():
         """TC-27: 子 Agent 场景不加载 sub_agents.yaml
 
         验证逻辑：子 Agent 场景的 scenario_tools 不包含 'call_multiagent'，

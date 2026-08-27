@@ -50,8 +50,10 @@ def test_parse_emits_start_n_items_end_in_order():
 
 def test_item_content_matches_talking_points_format():
     """talking_points L11: '1.推荐理财产品（待执行）<br/>'。
+
     visible 编号用 1-based 数组下标（连续编号，避免跳号）；
-    canonical step_id 在 item.id 里给后端用。"""
+    canonical step_id 在 item.id 里给后端用。
+    """
     from EDPAgent.agent import _StreamProcessor
 
     proc = _StreamProcessor(scripts=_scripts())

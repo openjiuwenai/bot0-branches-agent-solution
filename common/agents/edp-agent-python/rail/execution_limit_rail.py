@@ -15,12 +15,11 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from common.logger import Extra, Tag, to_logger, TagObservation, ObservationType, Level
-
 from loguru import logger
 from openjiuwen.core.session.stream import OutputSchema
 from openjiuwen.core.single_agent.rail.base import AgentRail, AgentCallbackContext
 
+from common.logger import Extra, Tag, to_logger, TagObservation, ObservationType, Level
 from .. import state_keys
 from ..agent_rule import AgentRuleConfig
 
@@ -146,9 +145,6 @@ class ExecutionLimitRail(AgentRail):
 
         counts[tool_name] = current + 1
         ctx.session.update_state({state_keys.EXEC_COUNTS: counts})
-
-        if tool_name == "lite_todo_write":
-            ctx.session.update_state({"lite_todo_stream_ready": False})
 
         # 补发 tool_start 事件（含业务话术）
         # 内部工具不暴露给前端：lite_todo_write 派生 todolist_*；read_file 读 SKILL.md

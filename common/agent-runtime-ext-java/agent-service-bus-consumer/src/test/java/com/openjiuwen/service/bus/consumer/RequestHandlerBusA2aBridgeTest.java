@@ -7,12 +7,12 @@ package com.openjiuwen.service.bus.consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.openjiuwen.service.app.controller.a2a.A2aJsonRpcController;
 import com.openjiuwen.service.bus.consumer.a2a.RequestHandlerBusA2aBridge;
 import com.openjiuwen.service.bus.consumer.model.AgentBusEventEnvelope;
 
 import org.a2aproject.sdk.server.ServerCallContext;
 import org.a2aproject.sdk.server.requesthandlers.RequestHandler;
-import org.a2aproject.sdk.spec.InvalidRequestError;
 import org.a2aproject.sdk.spec.Message;
 import org.a2aproject.sdk.spec.StreamingEventKind;
 import org.a2aproject.sdk.spec.Task;
@@ -21,6 +21,7 @@ import org.a2aproject.sdk.spec.TaskStatus;
 import org.a2aproject.sdk.spec.TaskStatusUpdateEvent;
 import org.a2aproject.sdk.spec.UnsupportedOperationError;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.lang.reflect.Proxy;
 import java.time.Instant;
@@ -34,6 +35,25 @@ import java.util.concurrent.atomic.AtomicReference;
  * @since 2026-07-22
  */
 class RequestHandlerBusA2aBridgeTest {
+    @Test
+    void serializesBusResponseWithTheRuntimeHttpSerializer() throws Exception {
+        Task responseTask = task("task-1");
+        RequestHandler handler = requestHandlerProxy((proxy, method, args) -> responseTask);
+        RequestHandlerBusA2aBridge bridge = new RequestHandlerBusA2aBridge(handler);
+        A2aJsonRpcController controller = new A2aJsonRpcController(handler);
+        byte[] payload = bytes("""
+                {"jsonrpc":"2.0","id":"request-1","method":"SendMessage","params":{"message":{
+                "role":"ROLE_USER","parts":[{"text":"hi"}],"messageId":"m1"}}}
+                """);
+
+        var result = bridge.handle(event("CLIENT_INVOCATION_REQUESTED"), payload);
+        var httpResponse = controller.handleJsonRpc(new String(payload, java.nio.charset.StandardCharsets.UTF_8),
+                new MockHttpServletRequest("POST", "/a2a"));
+
+        assertThat(bridge.requestId(payload)).isEqualTo("request-1");
+        assertThat(bridge.response(payload, result)).isEqualTo(httpResponse.getBody());
+    }
+
     @Test
     void mapsFeat001MethodNamesToRequestHandler() {
         AtomicReference<String> called = new AtomicReference<>();
@@ -125,7 +145,7 @@ class RequestHandlerBusA2aBridgeTest {
         assertThatThrownBy(() -> bridge.handle(event("CLIENT_INVOCATION_REQUESTED"), bytes("""
                 {"method":"SendMessage","params":{"message":{"role":"user",
                 "parts":[{"text":"invalid"}],"messageId":"m-invalid"}}}
-                """))).isInstanceOf(IllegalArgumentException.class).hasMessage("PAYLOAD_INVALID");
+                """))).isInstanceOf(org.a2aproject.sdk.spec.InvalidParamsError.class);
     }
 
     @Test
@@ -176,10 +196,10 @@ class RequestHandlerBusA2aBridgeTest {
         assertThatThrownBy(() -> bridge.handle(event("CLIENT_INVOCATION_REQUESTED"), bytes("""
                 {"method":"message/send","params":{"message":{"role":"ROLE_USER",
                 "parts":[{"text":"hi"}],"messageId":"m1"}}}
-                """))).isInstanceOf(InvalidRequestError.class);
+                """))).isInstanceOf(org.a2aproject.sdk.spec.MethodNotFoundError.class);
         assertThatThrownBy(() -> bridge.handle(event("CLIENT_INVOCATION_QUERY_REQUESTED"), bytes("""
                 {"method":"tasks/get","params":{"id":"task-1"}}
-                """))).isInstanceOf(InvalidRequestError.class);
+                """))).isInstanceOf(org.a2aproject.sdk.spec.MethodNotFoundError.class);
     }
 
     @Test
@@ -188,7 +208,21 @@ class RequestHandlerBusA2aBridgeTest {
         var bridge = new RequestHandlerBusA2aBridge(handler);
         assertThatThrownBy(() -> bridge.handle(event("CLIENT_INVOCATION_QUERY_REQUESTED"), bytes("""
                 {"method":"GetTask","params":{"id":"task-1","tenant":"tenant-b"}}
-                """))).isInstanceOf(IllegalArgumentException.class).hasMessage("TASK_NOT_FOUND");
+                """))).isInstanceOf(org.a2aproject.sdk.spec.InvalidParamsError.class)
+                .hasMessageContaining("tenant does not match");
+    }
+
+    @Test
+    void preservesRequestIdWhenParamsAreInvalid() {
+        var bridge = new RequestHandlerBusA2aBridge(requestHandler(new AtomicReference<>()));
+        byte[] payload = bytes("""
+                {"jsonrpc":"2.0","id":4294967297,"method":"GetTask",
+                 "params":{"id":"task-1","unknownField":true}}
+                """);
+
+        assertThat(bridge.requestId(payload)).isEqualTo(new java.math.BigInteger("4294967297"));
+        assertThat(bridge.errorResponseJson(-32602, "Invalid params", payload))
+                .contains("\"id\":4294967297");
     }
 
     private static Task task(String id) {
@@ -257,7 +291,22 @@ class RequestHandlerBusA2aBridgeTest {
     }
 
     private static byte[] bytes(String value) {
-        return value.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode document = mapper.readTree(value);
+            if (!(document instanceof com.fasterxml.jackson.databind.node.ObjectNode request)) {
+                throw new AssertionError("Request fixture must be a JSON object");
+            }
+            if (!request.has("jsonrpc")) {
+                request.put("jsonrpc", "2.0");
+            }
+            if (!request.has("id")) {
+                request.put("id", "request-test");
+            }
+            return mapper.writeValueAsBytes(request);
+        } catch (java.io.IOException failure) {
+            throw new AssertionError(failure);
+        }
     }
 
     private static AgentBusEventEnvelope event(String type) {

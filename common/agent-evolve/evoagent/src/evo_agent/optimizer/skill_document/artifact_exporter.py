@@ -396,7 +396,8 @@ class ArtifactExporter:
         trajectories: list[dict[str, Any]] = []
         for outcome in batch.outcomes:
             if outcome.evaluated is None:
-                assert outcome.failure is not None
+                if outcome.failure is None:
+                    raise RuntimeError("failure must be set when evaluated is None")
                 failures.append(
                     {
                         "case_id": outcome.case_id,

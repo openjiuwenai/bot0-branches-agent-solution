@@ -18,18 +18,20 @@ import java.util.List;
  * <p><b>Layered verification</b>: injected {@link DeterministicChecker}s (zero-LLM 算子:
  * 金额/阈值/规则计算) own the criteria they match → keyword-based
  * {@link RuleBasedCriteriaVerifier} fallback for the rest. The deterministic layer never
- * guesses; it computes. This is the 一等公民 — EdpaAutoConfiguration defaults to it
- * (replacing bare RuleBasedCriteriaVerifier), so injected deterministic checkers take
- * priority over keyword coverage.
+ * guesses; it computes. Hosts wanting deterministic-first verification should
+ * explicitly construct {@code new GroundTruthVerifier(List.of(myChecker))} and
+ * register it as their {@code CriteriaVerifier} bean — injected deterministic
+ * checkers take priority over keyword coverage.
  *
  * <p>Layer order: deterministic (compute) &gt; keyword (coverage proxy) &gt; LLM-judge
  * (probabilistic, future). Each criterion is verified by exactly one layer — the first
  * that matches.
  *
- * <p><b>诚实边界（4-lens 校正）</b>：EdpaAutoConfiguration 默认注入 {@code new GroundTruthVerifier()}
- * （空 checkers）→ 生产 100% 走 keyword fallback。确定性优先层需注入 DeterministicChecker
- * 实现（如 ClaimDeterministicChecker）才生效；当前全仓零生产 DeterministicChecker 实现
- * （SPI 占位，等待业务接线）。
+ * <p><b>诚实边界（C5 校正）</b>：EdpaAutoConfiguration 默认注入的是
+ * {@code RuleBasedCriteriaVerifier}（keyword），不再默认注入本类。宿主需显式构造
+ * {@code new GroundTruthVerifier(List.of(myChecker))} 才启用确定性层。空 checkers 的
+ * GroundTruthVerifier 100% 走 keyword fallback。当前全仓零生产 DeterministicChecker
+ * 实现（SPI 占位，等待业务接线）。
  *
  * @since 2026-07
  */

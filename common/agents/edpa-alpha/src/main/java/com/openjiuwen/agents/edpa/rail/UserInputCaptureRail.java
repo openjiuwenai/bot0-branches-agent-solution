@@ -28,6 +28,21 @@ import java.util.concurrent.atomic.AtomicReference;
  * AtomicReference. The ExploreTool reads via {@code atomicRef::get} (a
  * Supplier<String> method reference).
  *
+ * <p><b>Cross-invocation reset (4-lens BLOCKER fix, 2026-08-15)</b>: rails live on
+ * the agent while {@code ReActAgent.invoke} builds a fresh context per call — a
+ * singleton agent serving REST traffic would otherwise keep exploring the FIRST
+ * user's query forever ({@code captured} never resets, supplier stays stale).
+ * {@link #beforeInvoke} now resets both the flag and the reference at the start of
+ * every invocation.
+ *
+ * <p><b>Honest boundary</b>: a full {@code RailInvocationState} migration (as done
+ * for ExploreRail/ProactiveConvergenceRail) is structurally impossible for tool
+ * mode — {@code Tool#invoke} receives only tool-call arguments, not the invocation
+ * context, so the ExploreTool supplier can never read per-invocation state.
+ * Consequence: concurrent invokes on ONE agent still share the reference; hosts
+ * needing per-request isolation must use one agent per request. Sequential
+ * invokes (the common REST case) are fully fixed by the reset.
+ *
  * <p>Zero pushSteering, zero requestForceFinish — pure observation, no
  * control-flow side effects. This rail does NOT steer the loop.
  *
@@ -55,10 +70,25 @@ public class UserInputCaptureRail extends AgentRail {
     }
 
     /**
+     * Resets the capture state at the start of every invocation, so a singleton
+     * agent re-captures each new request instead of exploring the previous
+     * user's query.
+     *
+     * @param ctx invocation callback context (unused — reset is unconditional)
+     */
+    @Override
+    public synchronized void beforeInvoke(AgentCallbackContext ctx) {
+        captured = false;
+        userInputRef.set(null);
+    }
+
+    /**
      * Captures the first UserMessage content into the AtomicReference.
      *
-     * <p>Runs once — after the first successful capture, subsequent calls are
-     * no-ops (the query doesn't change mid-conversation).
+     * <p>Runs once per invocation — after the first successful capture,
+     * subsequent calls within the SAME invocation are no-ops (the query does
+     * not change mid-conversation); the next invocation resets via
+     * {@link #beforeInvoke}.
      *
      * @param ctx callback context for the pending model call; if {@code null}
      *            or lacking messages this is a silent no-op

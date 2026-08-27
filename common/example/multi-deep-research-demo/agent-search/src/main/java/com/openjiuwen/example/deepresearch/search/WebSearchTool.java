@@ -16,21 +16,32 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Prod {@code web_search} tool bridge. Wraps {@link TavilyWebSearchProvider}
- * keyed by the {@code TAVILY_API_KEY} env var.
+ * Prod {@code web_search} tool bridge. Wraps a configured
+ * {@link TavilyWebSearchProvider} without reading process environment variables.
  *
- * <p>Tool contract: {@code public static Object search(Map<String,Object>)},
- * matching the {@code LocalFunction} signature expected by agent-core-java's
- * {@code AbilityManager}.
+ * <p>Tool contract: {@code public Object search(Map<String,Object>)}, matching
+ * the {@code LocalFunction} signature expected by agent-core-java's
+ * {@code AbilityManager}. Runtime configuration is supplied through the constructor.
  *
  * @since 2026-07-06
  */
 public final class WebSearchTool {
-    private static final String API_KEY_ENV = "TAVILY_API_KEY";
+    private final WebSearchProvider provider;
 
-    private static volatile WebSearchProvider provider;
+    /**
+     * Creates a production Tavily-backed web-search tool.
+     *
+     * @param apiKey configured Tavily API key
+     */
+    public WebSearchTool(String apiKey) {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalArgumentException("Tavily API key must be configured");
+        }
+        this.provider = new TavilyWebSearchProvider(apiKey.trim());
+    }
 
-    private WebSearchTool() {
+    WebSearchTool(WebSearchProvider provider) {
+        this.provider = java.util.Objects.requireNonNull(provider, "provider");
     }
 
     /**
@@ -41,7 +52,7 @@ public final class WebSearchTool {
      * @return a serialised search response, or an error map with an empty
      *     {@code results} list when the provider call fails
      */
-    public static Object search(Map<String, Object> inputs) {
+    public Object search(Map<String, Object> inputs) {
         String query = stringInput(inputs, "query", "");
         if (query.isBlank()) {
             return error("query is required");
@@ -52,37 +63,11 @@ public final class WebSearchTool {
 
         SearchResponse response;
         try {
-            response = provider().search(new SearchRequest(query, topK, timeRange, language));
+            response = provider.search(new SearchRequest(query, topK, timeRange, language));
         } catch (IllegalStateException ex) {
             return error("tavily_failed: " + ex.getMessage());
         }
         return WebSearchResultSerializer.serialize(response);
-    }
-
-    /**
-     * Visible for tests — override the provider with an in-memory fake.
-     *
-     * @param override the replacement provider (must not be {@code null} in tests)
-     */
-    static void useProvider(WebSearchProvider override) {
-        provider = override;
-    }
-
-    private static WebSearchProvider provider() {
-        WebSearchProvider local = provider;
-        if (local != null) {
-            return local;
-        }
-        synchronized (WebSearchTool.class) {
-            if (provider == null) {
-                String key = System.getenv(API_KEY_ENV);
-                if (key == null || key.isBlank()) {
-                    throw new IllegalStateException(API_KEY_ENV + " env var is required for prod search-agent");
-                }
-                provider = new TavilyWebSearchProvider(key);
-            }
-            return provider;
-        }
     }
 
     private static String stringInput(Map<String, Object> inputs, String key, String fallback) {

@@ -227,7 +227,7 @@ def render_text(convs: dict[str, ConvAgg], meta: dict, only_bad: bool) -> str:
     out.append("")
 
     # 异常会话明细
-    bad_labels = [l for l in _LABEL_ORDER if l.startswith("⚠") or l.startswith("?")]
+    bad_labels = [label for label in _LABEL_ORDER if label.startswith("⚠") or label.startswith("?")]
     out.append("─── 异常 / 未分类会话明细 ───")
     saw_any = False
     for label in bad_labels:
@@ -249,7 +249,7 @@ def render_text(convs: dict[str, ConvAgg], meta: dict, only_bad: bool) -> str:
 
     if not only_bad:
         out.append("\n─── 正常会话明细 ───")
-        ok_labels = [l for l in _LABEL_ORDER if l.startswith("✓")]
+        ok_labels = [label for label in _LABEL_ORDER if label.startswith("✓")]
         for label in ok_labels:
             items = by_label.get(label, [])
             if not items:

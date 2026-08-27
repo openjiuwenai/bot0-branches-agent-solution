@@ -35,7 +35,8 @@ relay 启动需 Postgres（outbox/inbox + Flyway）+ RocketMQ nameserver/broker 
 ```bash
 cd common/agent-bus/event-bus/event-bus-relay/src/test/java/com/openjiuwen/bus/conf
 docker compose up -d          # postgres(agentbus:5432) + rocketmq-nameserver(9876) + broker(10909/10911) + rocketmq-init
-docker compose ps             # 4 容器 healthy
+docker compose ps -a          # postgres/nameserver/broker=healthy；rocketmq-init=exited(0)（一次性，需 -a 可见）
+# 就绪判据：nameserver/broker health=healthy 且 init 已 Exited(0) 再启动 relay（勿以"进程已启动"替代协议可用性）
 # 重置（清积压 + 损坏的 consumer-group 订阅元数据）：docker compose down -v
 ```
 
@@ -69,11 +70,29 @@ cd common/agent-bus/event-bus
 mvn clean test                 # ECJ 会掩盖跨模块 stale-class，务必带 clean
 ```
 
-broker 集成测试（`RealBroker*IT`）按 env 守卫跳过（无 `ROCKETMQ_NAMESERVER` 时 skip，suite 保持 green）。对真实 broker 跑：
+broker 集成测试（`RealBroker*IT`）以 `@EnabledIfEnvironmentVariable(ROCKETMQ_NAMESERVER)` 守卫：**开发模式**下未设置环境变量时跳过、suite 保持 green（默认 green **不等于**真实 Broker 部署验收通过——被跳过的测试未触达 NameServer/Broker/Topic/SQL92 属性过滤）。对真实 broker 跑单个切片：
 
 ```bash
 ROCKETMQ_NAMESERVER=host:9876 mvn -pl event-bus-relay test -Dtest=RealBrokerTwoHopRelayIntegrationTest
 ```
+
+**验收模式（fail-closed）**：缺少 nameserver 立即非零退出，且要求三个 `RealBroker*IT` 执行数 > 0、`Skipped=0`：
+
+```bash
+# 位置参数（Windows/PowerShell 最简单，无需 env 透传）
+bash common/agent-bus/event-bus/broker-acceptance.sh 127.0.0.1:9876
+# 或环境变量
+ROCKETMQ_NAMESERVER=127.0.0.1:9876 bash common/agent-bus/event-bus/broker-acceptance.sh
+```
+
+Windows/PowerShell（`bash` 不便时可用 `broker-acceptance.ps1`：交互模式默认末尾暂停避免窗口一闪而过；ASCII-only 以规避 Windows PowerShell 5.1 把无 BOM UTF-8 当 ANSI 误解析）：
+
+```powershell
+powershell -File common\agent-bus\event-bus\broker-acceptance.ps1 127.0.0.1:9876
+# CI/无交互：加 -CI，不暂停、以退出码表达结果（失败=1）
+```
+
+> `RealBroker*IT` 属组件级真实 Broker 集成切片，不等同于已部署应用间的产品端到端验收。
 
 ## 配置
 

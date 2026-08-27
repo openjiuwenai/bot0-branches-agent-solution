@@ -1,0 +1,623 @@
+{% extends "base.html" %}
+
+{% set active_page = 'extract' %}
+{% block title %}知识萃取 - DFW-RAG 知识处理平台{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="static/css/extract.css">
+{% endblock %}
+
+{% block sidebar %}
+<aside class="extract-sidebar" id="extractSidebar">
+    <div class="sidebar-brand">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>
+        </svg>
+        <span>知识萃取</span>
+    </div>
+    <nav class="sidebar-nav">
+        <button type="button" class="sidebar-link" data-panel="collections">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+            </svg>
+            <span>Collection 管理</span>
+        </button>
+        <button type="button" class="sidebar-link active" data-panel="execute">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>
+            </svg>
+            <span>萃取执行</span>
+        </button>
+        <button type="button" class="sidebar-link" data-panel="verify">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <span>召回验证</span>
+        </button>
+        <button type="button" class="sidebar-link" data-panel="output">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="4 17 10 11 4 5"/>
+                <line x1="12" y1="19" x2="20" y2="19"/>
+            </svg>
+            <span>日志记录</span>
+        </button>
+    </nav>
+</aside>
+{% endblock %}
+
+{% block content %}
+<div class="extract-layout">
+    <main class="extract-main">
+        <!-- Panel: 萃取执行 -->
+        <div id="panel-execute" class="extract-panel active">
+            <div class="panel-header">
+                <h2 class="page-header__title">萃取执行</h2>
+            </div>
+            <div class="panel-body">
+                <div class="execute-cards">
+                    <!-- Step 1: Import Base -->
+                    <div class="execute-card card">
+                        <div class="card-body">
+                            <div class="pipeline-card-header">
+                                <span class="pipeline-card-title">基础语料导入</span>
+                                <p class="pipeline-card-description">上传基础语料文件并导入到指定 Collection，作为后续萃取的知识库来源。</p>
+                            </div>
+                            <form id="form-import-base" data-endpoint="api/extract/import_base">
+                                <div class="pipeline-form-row">
+                                    <div class="pipeline-file-col">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                            <label class="form-label" style="margin-bottom: 0;">语料文件</label>
+                                            <div class="file-source-tabs" role="group" data-target="import-base">
+                                                <button type="button" class="tab-btn active" data-source="upload" data-target="import-base">本地上传</button>
+                                                <button type="button" class="tab-btn" data-source="outputs" data-target="import-base">outputs</button>
+                                            </div>
+                                        </div>
+                                        <div class="file-source-panel">
+                                            <div class="dropzone" id="drop-import-base">
+                                                <input type="file" class="file-input" name="file" id="file-import-base" required>
+                                                <div class="dropzone-hint">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                                        <polyline points="17 8 12 3 7 8"/>
+                                                        <line x1="12" y1="3" x2="12" y2="15"/>
+                                                    </svg>
+                                                    <p>拖拽或点击上传</p>
+                                                </div>
+                                            </div>
+                                            <div class="outputs-select hidden" id="select-wrapper-import-base">
+                                                <select class="form-select" id="select-import-base" name="path" disabled>
+                                                    <option value="">选择 outputs 文件...</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="file-info">
+                                            <span class="selected-filename" id="name-import-base">未选择文件</span>
+                                            <button type="button" class="clear-file-btn" data-target="import-base" title="清除选择">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="pipeline-other-col">
+                                        <div class="form-group">
+                                            <label for="collection-import-base" class="form-label">Collection</label>
+                                            <input type="text" class="form-input" id="collection-import-base" name="collection" placeholder="例如：kb_base" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="embedding-config-import-base" class="form-label">Embedding 配置</label>
+                                            <select class="form-select embedding-config-select" id="embedding-config-import-base" name="embedding_config_name">
+                                                <option value="">加载中...</option>
+                                            </select>
+                                        </div>
+                                        <label class="form-check">
+                                            <input class="replace-checkbox" type="checkbox" id="replace-import-base" name="replace">
+                                            <span>覆盖已有 Collection</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                        <polyline points="7 10 12 15 17 10"/>
+                                        <line x1="12" y1="15" x2="12" y2="3"/>
+                                    </svg>
+                                    导入基础语料
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Run Extract -->
+                    <div class="execute-card card">
+                        <div class="card-body">
+                            <div class="pipeline-card-header">
+                                <span class="pipeline-card-title">执行萃取</span>
+                                <p class="pipeline-card-description">选择 Excel 输入文件并指定目标 Collection，运行萃取流程生成结构化结果。</p>
+                            </div>
+                            <form id="form-extract-run" data-endpoint="api/extract/run">
+                                <div class="pipeline-form-row">
+                                    <div class="pipeline-file-col">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                            <label class="form-label" style="margin-bottom: 0;">Excel 输入文件</label>
+                                            <div class="file-source-tabs" role="group" data-target="extract-run">
+                                                <button type="button" class="tab-btn active" data-source="upload" data-target="extract-run">本地上传</button>
+                                                <button type="button" class="tab-btn" data-source="outputs" data-target="extract-run">outputs</button>
+                                            </div>
+                                        </div>
+                                        <div class="file-source-panel">
+                                            <div class="dropzone" id="drop-extract-run">
+                                                <input type="file" class="file-input" name="file" id="file-extract-run" required>
+                                                <div class="dropzone-hint">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                                        <polyline points="17 8 12 3 7 8"/>
+                                                        <line x1="12" y1="3" x2="12" y2="15"/>
+                                                    </svg>
+                                                    <p>拖拽或点击上传</p>
+                                                </div>
+                                            </div>
+                                            <div class="outputs-select hidden" id="select-wrapper-extract-run">
+                                                <select class="form-select" id="select-extract-run" name="path" disabled>
+                                                    <option value="">选择 outputs 文件...</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="file-info">
+                                            <span class="selected-filename" id="name-extract-run">未选择文件</span>
+                                            <button type="button" class="clear-file-btn" data-target="extract-run" title="清除选择">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="pipeline-other-col">
+                                        <div class="form-row" style="margin-bottom: var(--space-sm);">
+                                            <div class="form-group">
+                                                <label for="target-kb" class="form-label">Collection</label>
+                                                <input type="text" class="form-input" id="target-kb" name="target_kb" placeholder="例如：intent_kb" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="completion-mode" class="form-label">Completion Mode</label>
+                                                <select class="form-select" id="completion-mode" name="completion_mode">
+                                                    <option value="cluster" selected>cluster</option>
+                                                    <option value="llm">llm</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="extract-llm-config-name" class="form-label">LLM 配置（LLM 模式生效）</label>
+                                                <div style="display: flex; gap: var(--space-xs);">
+                                                    <select class="form-select llm-config-select" id="extract-llm-config-name" name="llm_config_name">
+                                                        <option value="">加载中...</option>
+                                                    </select>
+                                                    <a href="llm-configs/" class="btn btn-secondary" target="_blank" title="管理 LLM 配置" style="padding: 9px 12px;">
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                            <circle cx="12" cy="12" r="3"/>
+                                                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                                                        </svg>
+                                                    </a>
+                                                </div>
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="out-path" class="form-label">输出文件名</label>
+                                                <input type="text" class="form-input output-filename" id="out-path" name="out" placeholder="例如：extracted.xlsx" value="">
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="embedding-config-extract-run" class="form-label">Embedding 配置</label>
+                                                <div style="display: flex; gap: var(--space-xs);">
+                                                    <select class="form-select embedding-config-select" id="embedding-config-extract-run" name="embedding_config_name">
+                                                        <option value="">加载中...</option>
+                                                    </select>
+                                                    <a href="embedding-configs/" class="btn btn-secondary" target="_blank" title="管理 Embedding 配置" style="padding: 9px 12px;">
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                            <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                                                            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+                                                            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                                                        </svg>
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polygon points="5 3 19 12 5 21 5 3"/>
+                                    </svg>
+                                    执行萃取
+                                </button>
+                                <div id="extract-run-download" class="result-download hidden">
+                                    <a href="#" class="btn btn-secondary w-100" download>
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                            <polyline points="7 10 12 15 17 10"/>
+                                            <line x1="12" y1="15" x2="12" y2="3"/>
+                                        </svg>
+                                        <span class="download-label">下载生成文件</span>
+                                    </a>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Import Result -->
+                    <div class="execute-card card">
+                        <div class="card-body">
+                            <div class="pipeline-card-header">
+                                <span class="pipeline-card-title">结果入库</span>
+                                <p class="pipeline-card-description">将萃取结果 XLSX 导入到目标 Collection，并导出新增数据ID文件用于追踪。</p>
+                            </div>
+                            <form id="form-import-result" data-endpoint="api/extract/import_result">
+                                <div class="pipeline-form-row">
+                                    <div class="pipeline-file-col">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                            <label class="form-label" style="margin-bottom: 0;">萃取结果 XLSX</label>
+                                            <div class="file-source-tabs" role="group" data-target="import-result">
+                                                <button type="button" class="tab-btn active" data-source="upload" data-target="import-result">本地上传</button>
+                                                <button type="button" class="tab-btn" data-source="outputs" data-target="import-result">outputs</button>
+                                            </div>
+                                        </div>
+                                        <div class="file-source-panel">
+                                            <div class="dropzone" id="drop-import-result">
+                                                <input type="file" class="file-input" name="file" id="file-import-result" required>
+                                                <div class="dropzone-hint">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                                        <polyline points="17 8 12 3 7 8"/>
+                                                        <line x1="12" y1="3" x2="12" y2="15"/>
+                                                    </svg>
+                                                    <p>拖拽或点击上传</p>
+                                                </div>
+                                            </div>
+                                            <div class="outputs-select hidden" id="select-wrapper-import-result">
+                                                <select class="form-select" id="select-import-result" name="path" disabled>
+                                                    <option value="">选择 outputs 文件...</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="file-info">
+                                            <span class="selected-filename" id="name-import-result">未选择文件</span>
+                                            <button type="button" class="clear-file-btn" data-target="import-result" title="清除选择">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="pipeline-other-col">
+                                        <div class="form-group">
+                                            <label for="collection-result" class="form-label">Collection</label>
+                                            <input type="text" class="form-input" id="collection-result" name="collection" placeholder="例如：kb_result" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="embedding-config-import-result" class="form-label">Embedding 配置</label>
+                                            <select class="form-select embedding-config-select" id="embedding-config-import-result" name="embedding_config_name">
+                                                <option value="">加载中...</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="export-ids" class="form-label">新增数据ID文件</label>
+                                            <input type="text" class="form-input output-filename" id="export-ids" name="export_ids" placeholder="例如：outputs/imported_ids_xxx.xlsx" value="">
+                                            <p class="form-hint">结果文件会自动保存到 outputs/ 目录，包含 id 与对应 collection 信息</p>
+                                        </div>
+                                        <label class="form-check">
+                                            <input class="replace-checkbox" type="checkbox" id="replace-result" name="replace">
+                                            <span>覆盖已有 Collection</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                        <polyline points="7 10 12 15 17 10"/>
+                                        <line x1="12" y1="15" x2="12" y2="3"/>
+                                    </svg>
+                                    结果入库
+                                </button>
+                                <div id="import-result-download" class="result-download hidden">
+                                    <a href="#" class="btn btn-secondary w-100" download>
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                            <polyline points="7 10 12 15 17 10"/>
+                                            <line x1="12" y1="15" x2="12" y2="3"/>
+                                        </svg>
+                                        <span class="download-label">下载生成文件</span>
+                                    </a>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Cleanup -->
+                    <div class="execute-card card">
+                        <div class="card-body">
+                            <div class="pipeline-card-header">
+                                <span class="pipeline-card-title">语料清理</span>
+                                <p class="pipeline-card-description">导入“新增数据ID文件”，按文件中记录的 collection 与 id 列表删除已入库的部分语料。</p>
+                            </div>
+                            <form id="form-cleanup" data-endpoint="api/extract/cleanup">
+                                <div class="pipeline-form-row">
+                                    <div class="pipeline-file-col">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                            <label class="form-label" style="margin-bottom: 0;">数据ID文件</label>
+                                            <div class="file-source-tabs" role="group" data-target="cleanup">
+                                                <button type="button" class="tab-btn active" data-source="upload" data-target="cleanup">本地上传</button>
+                                                <button type="button" class="tab-btn" data-source="outputs" data-target="cleanup">outputs</button>
+                                            </div>
+                                        </div>
+                                        <div class="file-source-panel">
+                                            <div class="dropzone" id="drop-cleanup">
+                                                <input type="file" class="file-input" name="file" id="file-cleanup" accept=".xlsx,.xls,.csv,.json" required>
+                                                <div class="dropzone-hint">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                                        <polyline points="17 8 12 3 7 8"/>
+                                                        <line x1="12" y1="3" x2="12" y2="15"/>
+                                                    </svg>
+                                                    <p>拖拽或点击上传</p>
+                                                </div>
+                                            </div>
+                                            <div class="outputs-select hidden" id="select-wrapper-cleanup">
+                                                <select class="form-select" id="select-cleanup" name="path" disabled>
+                                                    <option value="">选择 outputs 文件...</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="file-info">
+                                            <span class="selected-filename" id="name-cleanup">未选择文件</span>
+                                            <button type="button" class="clear-file-btn" data-target="cleanup" title="清除选择">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="pipeline-other-col">
+                                        <div class="form-group">
+                                            <label for="cleanup-collection" class="form-label">Collection（可选）</label>
+                                            <input type="text" class="form-input" id="cleanup-collection" name="collection" placeholder="留空时自动从数据ID文件中读取">
+                                            <p class="form-hint">若数据ID文件中包含 collection 列，将自动使用该列值</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-danger w-100">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="3 6 5 6 21 6"/>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                    </svg>
+                                    清理选中语料
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel: Collection 管理 -->
+        <div id="panel-collections" class="extract-panel">
+            <div class="panel-header">
+                <h2 class="page-header__title">Collection 管理</h2>
+                <button class="btn btn-sm btn-secondary" id="refresh-collections" type="button">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"/>
+                        <polyline points="1 20 1 14 7 14"/>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                    </svg>
+                    刷新
+                </button>
+            </div>
+            <div class="panel-body">
+                <div class="card" style="height: 100%;">
+                    <div class="card-body" style="padding: 0;">
+                        <div class="table-container">
+                            <table class="data-table" id="collections-table">
+                                <thead>
+                                    <tr>
+                                        <th>Collection 名称</th>
+                                        <th>语料数量</th>
+                                        <th>Embedding 配置</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="4" class="empty-state">点击刷新按钮加载 collections...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel: 召回验证 -->
+        <div id="panel-verify" class="extract-panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="page-header__title">召回验证</h2>
+                    <p class="page-header__subtitle" style="margin-bottom: 0;">验证 query 在指定 Collection 中的召回效果</p>
+                </div>
+            </div>
+            <div class="panel-body">
+                <div class="verify-tabs">
+                    <button type="button" class="verify-tab active" data-verify-tab="single">单条 query 验证</button>
+                    <button type="button" class="verify-tab" data-verify-tab="batch">批量验证</button>
+                </div>
+
+                <!-- Single Query Verification -->
+                <div id="verify-single" class="verify-content active">
+                    <div class="card verify-card">
+                        <div class="card-body">
+                            <form id="form-verify-single" data-endpoint="api/verify/query">
+                                <div class="form-row" style="grid-template-columns: repeat(2, 1fr);">
+                                    <div class="form-group">
+                                        <label for="verify-single-collection" class="form-label">Collection</label>
+                                        <select class="form-select" id="verify-single-collection" name="collection" required>
+                                            <option value="" disabled selected>请选择 Collection</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="verify-single-topk" class="form-label">Top-K</label>
+                                        <input type="number" class="form-input" id="verify-single-topk" name="top_k" value="3" min="1" max="20" required>
+                                    </div>
+                                    <div class="form-group" style="grid-column: 1 / -1;">
+                                        <label for="verify-single-query" class="form-label">Query 文本</label>
+                                        <textarea class="form-textarea" id="verify-single-query" name="input_single" rows="4" placeholder="例如：如何查询我的订单" required></textarea>
+                                    </div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <button type="submit" class="btn btn-primary">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <circle cx="11" cy="11" r="8"/>
+                                            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                                        </svg>
+                                        执行单条验证
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div id="verify-single-result" class="card verify-card hidden">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                    <line x1="9" y1="9" x2="15" y2="9"/>
+                                    <line x1="9" y1="15" x2="15" y2="15"/>
+                                </svg>
+                                验证结果
+                            </h5>
+                            <div class="verify-result-meta text-secondary"></div>
+                            <pre class="verify-result-output"></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Batch Verification -->
+                <div id="verify-batch" class="verify-content">
+                    <div class="card verify-card">
+                        <div class="card-body">
+                            <form id="form-verify-batch" data-endpoint="api/verify/query">
+                                <div class="form-row" style="grid-template-columns: repeat(2, 1fr);">
+                                    <div class="form-group">
+                                        <label for="verify-batch-collection" class="form-label">Collection</label>
+                                        <select class="form-select" id="verify-batch-collection" name="collection" required>
+                                            <option value="" disabled selected>请选择 Collection</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="verify-batch-topk" class="form-label">Top-K</label>
+                                        <input type="number" class="form-input" id="verify-batch-topk" name="top_k" value="3" min="1" max="20" required>
+                                    </div>
+                                    <div class="form-group" style="grid-column: 1 / -1;">
+                                        <label class="form-label">验证文件</label>
+                                        <div class="dropzone" id="drop-verify-batch">
+                                            <input type="file" class="file-input" name="file" id="file-verify-batch" accept=".xlsx,.xls,.csv" required>
+                                            <div class="dropzone-hint">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                                    <polyline points="17 8 12 3 7 8"/>
+                                                    <line x1="12" y1="3" x2="12" y2="15"/>
+                                                </svg>
+                                                <p>拖拽 Excel/CSV 到此处或点击上传</p>
+                                            </div>
+                                        </div>
+                                        <p class="form-hint">文件需包含 query 与 answer 两列，用于计算召回率</p>
+                                        <div class="file-info">
+                                            <span class="selected-filename" id="name-verify-batch">未选择文件</span>
+                                            <button type="button" class="clear-file-btn" data-target="verify-batch" title="清除选择">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="form-group" style="grid-column: 1 / -1;">
+                                        <label for="verify-batch-output" class="form-label">输出文件名 <span class="required">*</span></label>
+                                        <input type="text" class="form-input output-filename" id="verify-batch-output" name="output" placeholder="选择文件后自动生成" value="" required>
+                                        <p class="form-hint">选择验证文件后将自动填充为“{输入文件名}_test_result_{时间戳}.xlsx”</p>
+                                    </div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <button type="submit" class="btn btn-primary">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <circle cx="11" cy="11" r="8"/>
+                                            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                                        </svg>
+                                        执行批量验证
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div id="verify-batch-result" class="card verify-card hidden">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                    <polyline points="14 2 14 8 20 8"/>
+                                    <line x1="16" y1="13" x2="8" y2="13"/>
+                                    <line x1="16" y1="17" x2="8" y2="17"/>
+                                    <polyline points="10 9 9 9 8 9"/>
+                                </svg>
+                                批量验证结果
+                            </h5>
+                            <div class="verify-result-meta text-secondary"></div>
+                            <a id="verify-batch-download" href="#" class="btn btn-primary" download>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/>
+                                    <line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                                下载结果文件
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel: 日志记录 -->
+        <div id="panel-output" class="extract-panel">
+            <div class="panel-header">
+                <h2 class="page-header__title">日志记录</h2>
+                <button class="btn btn-sm btn-secondary" id="clear-output" type="button">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                    清空
+                </button>
+            </div>
+            <div class="panel-body">
+                <div class="card console-card">
+                    <div class="card-body">
+                        <pre id="console-output" class="console-output"><code>等待执行...</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="static/js/app.js"></script>
+{% endblock %}

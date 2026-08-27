@@ -30,8 +30,8 @@ def test_format_reads_artifact_dir(tmp_path: Path) -> None:
     assert report.skills == ("test_skill",)
     assert report.dataset == "test_dataset"
     assert report.epochs_completed == 3
-    assert report.train.score_before == 0.4
-    assert report.train.score_after == 0.7
+    assert report.train.score_before == pytest.approx(0.4)
+    assert report.train.score_after == pytest.approx(0.7)
     assert report.edits_applied == 5
 
 
@@ -50,8 +50,8 @@ def test_format_handles_missing_epochs(tmp_path: Path) -> None:
     # 空 artifact 目录
     report = ReportFormatter(tmp_path).format()
 
-    assert report.train.score_before == 0.0
-    assert report.train.score_after == 0.0
+    assert report.train.score_before == pytest.approx(0.0)
+    assert report.train.score_after == pytest.approx(0.0)
     assert report.train.improvement == "0%"
     assert report.gate_results == ()
     assert report.edits_applied == 0
@@ -147,7 +147,7 @@ def test_format_single_skill_backward_compat(tmp_path: Path) -> None:
 
     report = ReportFormatter(tmp_path, skills=("test_skill",)).format()
 
-    assert report.train.score_after == 0.7
+    assert report.train.score_after == pytest.approx(0.7)
     assert report.skill_scores == ()
 
 
@@ -159,7 +159,7 @@ def test_missing_skill_dir_defaults(tmp_path: Path) -> None:
 
     assert len(report.skill_scores) == 1
     assert report.skill_scores[0].name == "missing_skill"
-    assert report.skill_scores[0].score_after == 0.0
+    assert report.skill_scores[0].score_after == pytest.approx(0.0)
 
 
 # ── W10.2: pass_rate + train/val ──
@@ -167,22 +167,22 @@ def test_missing_skill_dir_defaults(tmp_path: Path) -> None:
 
 def test_compute_pass_rate_all_pass() -> None:
     """所有 score >= 0.5 → pass_rate = 1.0。"""
-    assert ReportFormatter._compute_pass_rate([0.6, 0.7, 0.8]) == 1.0
+    assert ReportFormatter.compute_pass_rate([0.6, 0.7, 0.8]) == pytest.approx(1.0)
 
 
 def test_compute_pass_rate_all_fail() -> None:
     """所有 score < 0.5 → pass_rate = 0.0。"""
-    assert ReportFormatter._compute_pass_rate([0.1, 0.2]) == 0.0
+    assert ReportFormatter.compute_pass_rate([0.1, 0.2]) == pytest.approx(0.0)
 
 
 def test_compute_pass_rate_empty() -> None:
     """空列表 → pass_rate = 0.0。"""
-    assert ReportFormatter._compute_pass_rate([]) == 0.0
+    assert ReportFormatter.compute_pass_rate([]) == pytest.approx(0.0)
 
 
 def test_compute_pass_rate_mixed() -> None:
     """混合分数，0.5 算 pass。"""
-    result = ReportFormatter._compute_pass_rate([0.6, 0.3, 0.5])
+    result = ReportFormatter.compute_pass_rate([0.6, 0.3, 0.5])
     assert abs(result - 2 / 3) < 1e-6
 
 
@@ -220,10 +220,10 @@ def test_format_train_result_from_eval_results(tmp_path: Path) -> None:
     )
 
     report = ReportFormatter(tmp_path).format()
-    assert report.train.score_before == 0.4
-    assert report.train.score_after == 0.8
-    assert report.train.pass_rate_before == 0.5  # 1/2 >= 0.5
-    assert report.train.pass_rate_after == 1.0  # 2/2 >= 0.5
+    assert report.train.score_before == pytest.approx(0.4)
+    assert report.train.score_after == pytest.approx(0.8)
+    assert report.train.pass_rate_before == pytest.approx(0.5)  # 1/2 >= 0.5
+    assert report.train.pass_rate_after == pytest.approx(1.0)  # 2/2 >= 0.5
     assert report.train.num_cases == 2
 
 
@@ -234,17 +234,17 @@ def test_format_val_result_from_injected_scores(tmp_path: Path) -> None:
         val_per_epoch_scores=(0.6, 0.7, 0.8),
         num_val_cases=10,
     ).format()
-    assert report.val.final_score == 0.8
-    assert report.val.best_score == 0.8
-    assert report.val.per_epoch_scores == (0.6, 0.7, 0.8)
+    assert report.val.final_score == pytest.approx(0.8)
+    assert report.val.best_score == pytest.approx(0.8)
+    assert report.val.per_epoch_scores == pytest.approx((0.6, 0.7, 0.8))
     assert report.val.num_cases == 10
 
 
 def test_format_val_result_empty_scores(tmp_path: Path) -> None:
     """无 val 数据时 per_epoch_scores 为空，final/best 为 0.0。"""
     report = ReportFormatter(tmp_path).format()
-    assert report.val.final_score == 0.0
-    assert report.val.best_score == 0.0
+    assert report.val.final_score == pytest.approx(0.0)
+    assert report.val.best_score == pytest.approx(0.0)
     assert report.val.per_epoch_scores == ()
     assert report.val.num_cases == 0
 
@@ -261,10 +261,10 @@ def test_format_val_result_best_includes_baseline(tmp_path: Path) -> None:
         val_score_before=0.9,
         num_val_cases=8,
     ).format()
-    assert report.val.per_epoch_scores == (0.5, 0.6)  # 候选波动，非赢家直线
-    assert report.val.best_score == 0.9  # 基线主导，committed 最佳
-    assert report.val.final_score == 0.9  # final = best
-    assert report.val.score_before == 0.9
+    assert report.val.per_epoch_scores == pytest.approx((0.5, 0.6))  # 候选波动，非赢家直线
+    assert report.val.best_score == pytest.approx(0.9)  # 基线主导，committed 最佳
+    assert report.val.final_score == pytest.approx(0.9)  # final = best
+    assert report.val.score_before == pytest.approx(0.9)
     assert report.val.num_cases == 8
 
 
@@ -275,9 +275,9 @@ def test_format_val_result_best_is_candidate_peak_when_improved(tmp_path: Path) 
         val_per_epoch_scores=(0.65, 0.72, 0.82),  # 候选波动，末轮峰值
         val_score_before=0.6,
     ).format()
-    assert report.val.per_epoch_scores == (0.65, 0.72, 0.82)
-    assert report.val.best_score == 0.82  # max(0.6, 0.82)
-    assert report.val.final_score == 0.82
+    assert report.val.per_epoch_scores == pytest.approx((0.65, 0.72, 0.82))
+    assert report.val.best_score == pytest.approx(0.82)  # max(0.6, 0.82)
+    assert report.val.final_score == pytest.approx(0.82)
 
 
 def test_format_skill_scores_have_pass_rate(tmp_path: Path) -> None:
@@ -311,7 +311,7 @@ def test_format_skill_scores_have_pass_rate(tmp_path: Path) -> None:
         assert hasattr(s, "pass_rate_before")
         assert hasattr(s, "pass_rate_after")
         # 共享 eval_results → 各 skill pass_rate 相同
-        assert s.pass_rate_before == 0.5  # 1/2 >= 0.5
+        assert s.pass_rate_before == pytest.approx(0.5)  # 1/2 >= 0.5
 
 
 # ── train pass_rate_after argmax（A3）：取 avg_score 最高份通过率，非末份 ──
@@ -345,11 +345,11 @@ def test_train_pass_rate_after_uses_argmax_not_last(tmp_path: Path) -> None:
     _write_eval(tmp_path / "epoch_3" / "step_0" / "eval_results.json", 0.5, [0.4, 0.4])
 
     report = ReportFormatter(tmp_path).format()
-    assert report.train.score_before == 0.4  # first avg
-    assert report.train.score_after == 0.6  # max avg（不变，已正确）
-    assert report.train.pass_rate_before == 0.5  # first per-case
+    assert report.train.score_before == pytest.approx(0.4)  # first avg
+    assert report.train.score_after == pytest.approx(0.6)  # max avg（不变，已正确）
+    assert report.train.pass_rate_before == pytest.approx(0.5)  # first per-case
     # 关键：argmax 份（epoch_2）通过率 1.0，非末份 0.0
-    assert report.train.pass_rate_after == 1.0
+    assert report.train.pass_rate_after == pytest.approx(1.0)
 
 
 def test_train_pass_rate_after_max_in_last_no_regression(tmp_path: Path) -> None:
@@ -358,8 +358,8 @@ def test_train_pass_rate_after_max_in_last_no_regression(tmp_path: Path) -> None
     _write_eval(tmp_path / "epoch_2" / "step_0" / "eval_results.json", 0.8, [0.8, 0.8])
 
     report = ReportFormatter(tmp_path).format()
-    assert report.train.score_after == 0.8
-    assert report.train.pass_rate_after == 1.0  # 末份即 max 份
+    assert report.train.score_after == pytest.approx(0.8)
+    assert report.train.pass_rate_after == pytest.approx(1.0)  # 末份即 max 份
 
 
 def test_train_pass_rate_after_no_avg_falls_back_to_last(tmp_path: Path) -> None:
@@ -377,7 +377,7 @@ def test_train_pass_rate_after_no_avg_falls_back_to_last(tmp_path: Path) -> None
 
     report = ReportFormatter(tmp_path).format()
     # 无 avg → best_data None → best_scores 回退 last_scores
-    assert report.train.pass_rate_after == 1.0  # 末份 [0.7,0.7] → 2/2
+    assert report.train.pass_rate_after == pytest.approx(1.0)  # 末份 [0.7,0.7] → 2/2
 
 
 # ── val 三字段（A2）：improvement / pass_rate_before / pass_rate_after ──
@@ -401,8 +401,8 @@ def test_val_result_normal_case(tmp_path: Path) -> None:
         val_per_epoch_case_scores=[[0.4, 0.5], [0.7, 0.7]],
     ).format()
     assert report.val.improvement == "+75%"  # (0.7-0.4)/0.4*100
-    assert report.val.pass_rate_before == 0.5  # 1/2 >= 0.5
-    assert report.val.pass_rate_after == 1.0  # argmax=epoch 1: [0.7,0.7] → 2/2
+    assert report.val.pass_rate_before == pytest.approx(0.5)  # 1/2 >= 0.5
+    assert report.val.pass_rate_after == pytest.approx(1.0)  # argmax=epoch 1: [0.7,0.7] → 2/2
 
 
 def test_val_result_degenerate_no_improvement(tmp_path: Path) -> None:
@@ -419,11 +419,11 @@ def test_val_result_degenerate_no_improvement(tmp_path: Path) -> None:
         val_baseline_case_scores=[0.5, 0.3],
         val_per_epoch_case_scores=[[0.4, 0.4], [0.3, 0.3]],
     ).format()
-    assert report.val.best_score == 0.5  # 基线主导
+    assert report.val.best_score == pytest.approx(0.5)  # 基线主导
     assert report.val.improvement == "+0%"
-    assert report.val.pass_rate_before == 0.5  # [0.5,0.3] → 1/2
+    assert report.val.pass_rate_before == pytest.approx(0.5)  # [0.5,0.3] → 1/2
     # best(0.5) > score_before(0.5) 为假 → 回退 pass_rate_before
-    assert report.val.pass_rate_after == report.val.pass_rate_before
+    assert report.val.pass_rate_after == pytest.approx(report.val.pass_rate_before)
 
 
 def test_val_result_argmax_not_last_epoch(tmp_path: Path) -> None:
@@ -440,11 +440,11 @@ def test_val_result_argmax_not_last_epoch(tmp_path: Path) -> None:
         val_baseline_case_scores=[0.3, 0.3],
         val_per_epoch_case_scores=[[0.8, 0.8], [0.3, 0.3]],
     ).format()
-    assert report.val.best_score == 0.8  # max(0.5, 0.8, 0.6)
+    assert report.val.best_score == pytest.approx(0.8)  # max(0.5, 0.8, 0.6)
     assert report.val.improvement == "+60%"  # (0.8-0.5)/0.5*100
-    assert report.val.pass_rate_before == 0.0  # [0.3,0.3] → 0/2
+    assert report.val.pass_rate_before == pytest.approx(0.0)  # [0.3,0.3] → 0/2
     # argmax=epoch 0（非末轮）→ [0.8,0.8] → 2/2 = 1.0；末轮会是 0.0
-    assert report.val.pass_rate_after == 1.0
+    assert report.val.pass_rate_after == pytest.approx(1.0)
 
 
 def test_val_result_no_per_case_data(tmp_path: Path) -> None:
@@ -460,9 +460,9 @@ def test_val_result_no_per_case_data(tmp_path: Path) -> None:
         num_val_cases=2,
     ).format()
     assert report.val.improvement == "+100%"  # (0.8-0.4)/0.4*100
-    assert report.val.pass_rate_before == 0.0  # 空 baseline → 0.0
+    assert report.val.pass_rate_before == pytest.approx(0.0)  # 空 baseline → 0.0
     # best(0.8) > score_before(0.4) 但无 per-case → 回退 pass_rate_before
-    assert report.val.pass_rate_after == 0.0
+    assert report.val.pass_rate_after == pytest.approx(0.0)
 
 
 # ── managed-doc formatter artifact（spec F8）──

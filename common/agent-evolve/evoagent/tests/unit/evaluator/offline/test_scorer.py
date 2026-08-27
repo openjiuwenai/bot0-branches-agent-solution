@@ -96,7 +96,8 @@ def _cs(case_id: str, group: str, per_metric: dict[str, float]) -> CaseScore:
 def test_aggregate_exact_match_group_mean_and_macro_confusion() -> None:
     """exact_match 组：mean 出 exact_match 均值+_overall；混淆按真实标签 macro 平均，
     四项一般互异（非退化）。4 条否/否否/否是/是 hit3 miss1 → accuracy=0.75；
-    类不平衡(否3是1)下 precision/recall/f1 互不相等。"""
+    类不平衡(否3是1)下 precision/recall/f1 互不相等。
+    """
     g = _em_group()
     scorer = _scorer([g])
     case_scores = [
@@ -157,7 +158,8 @@ def test_aggregate_keyword_group_all_miss() -> None:
 
 def test_aggregate_selective_metrics_only_emits_requested() -> None:
     """batch_metrics 只勾 ``["f1","accuracy"]`` → 只输出这两项，不含 mean/precision/
-    recall/_overall/<per-case 指标名>。键顺序固定（与勾选顺序无关）。"""
+    recall/_overall/<per-case 指标名>。键顺序固定（与勾选顺序无关）。
+    """
     g = GroupConfig(
         name="是否属实",
         kind="exact_match",

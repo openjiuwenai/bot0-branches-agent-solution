@@ -102,7 +102,8 @@ class ExperienceLibrary:
             reverse=True,
         )
         for op in deletes:
-            assert op.index is not None
+            if op.index is None:
+                raise RuntimeError("Delete operation requires an index")
             if 0 <= op.index < len(self.experiences):
                 deleted = self.experiences[op.index].content
                 self.delete(op.index)

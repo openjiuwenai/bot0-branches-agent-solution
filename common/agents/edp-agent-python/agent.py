@@ -19,12 +19,12 @@ import tempfile
 import zipfile
 from dataclasses import asdict, is_dataclass
 from typing import Any, AsyncGenerator, Optional
-
-from loguru import logger
-from openjiuwen.core.single_agent.interrupt.state import INTERRUPTION_KEY
 import uuid
 from datetime import datetime, timezone
 import time
+
+from loguru import logger
+from openjiuwen.core.single_agent.interrupt.state import INTERRUPTION_KEY
 import httpx
 
 from .agent_rule import (
@@ -77,8 +77,9 @@ from common.logger import (
     build_http_request_tag_context,
     build_http_trace,
     to_logger,
-    get_real_ip, Level, ResultEnum,TagObservation,ObservationType
+    get_real_ip, Level, ResultEnum, TagObservation, ObservationType
 )
+
 
 def _log_stream_payload(evt: AgentEvent) -> None:
     """在每次 yield AgentEvent 前打一条日志（对齐抓包的 stream payload 行）。"""
@@ -440,6 +441,20 @@ def _is_placeholder_only(required_skills: set[str]) -> bool:
     if not required_skills:
         return False
     return all(name == _PLACEHOLDER_SKILL_NAME for name in required_skills)
+
+
+def _count_local_skills(skills_root: Path) -> int:
+    """统计本地 skills 目录下的真实 skill 数量（含 SKILL.md 的子目录，排除 scenarios）。
+
+    仅用于整目录注册后的日志提示，不参与注册逻辑。
+    """
+    count = 0
+    for entry in skills_root.iterdir():
+        if not entry.is_dir() or entry.name == "scenarios":
+            continue
+        if (entry / "SKILL.md").exists():
+            count += 1
+    return count
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -881,11 +896,7 @@ async def initialize_dpa() -> None:
         if not required:
             # 路径 1 fallback：场景未加载或场景未声明 required_skills → 整目录注册
             await agent.register_skill(remote_skills_root)
-            skill_count = sum(
-                1 for d in local_skills_root.iterdir()
-                if d.is_dir() and d.name != "scenarios"
-                and (d / "SKILL.md").exists()
-            )
+            skill_count = _count_local_skills(local_skills_root)
             logger.warning(
                 f"[DPA] sandbox 未找到场景配置或场景未声明所需 Skill，"
                 f"回退到整目录注册：{remote_skills_root}（共 {skill_count} 个 skill）"
@@ -899,11 +910,7 @@ async def initialize_dpa() -> None:
             #   1) 防御场景生成工具误产出 _placeholder_ skill 名
             #   2) 让 _placeholder_ 字符串在日志中保持"运维警觉"信号（v2.1.1 D3 设计）
             await agent.register_skill(remote_skills_root)
-            skill_count = sum(
-                1 for d in local_skills_root.iterdir()
-                if d.is_dir() and d.name != "scenarios"
-                and (d / "SKILL.md").exists()
-            )
+            skill_count = _count_local_skills(local_skills_root)
             logger.warning(
                 "[DPA] sandbox 当前 required_skills 仅含占位（_placeholder_），"
                 "说明场景配置未加载或加载失败；按 v2.1.1 D3 设计走整目录注册；"
@@ -1086,9 +1093,14 @@ async def _agent_event_stream(
     if mode_to_use == ThinkChunkMode.FIXED_SCRIPT:
         cfg = scripts_config_data.think_chunk_fixed_scripts
         is_resume = cascade_result is not None
+        scenario_query_patterns = (
+            _agent_rule.active_scenario.query_patterns
+            if _agent_rule and _agent_rule.active_scenario
+            else None
+        )
         selected = _select_fixed_scripts(
             query, cfg,
-            scenario_query_patterns=_agent_rule.active_scenario.query_patterns if _agent_rule and _agent_rule.active_scenario else None,
+            scenario_query_patterns=scenario_query_patterns,
             is_resume=is_resume,
             is_first_thinking_round=True,
         )
@@ -1124,12 +1136,6 @@ async def _agent_event_stream(
             if getattr(raw_event, "type", None) == "tool_end":
                 raw_payload = getattr(raw_event, "payload", None) or {}
                 raw_plugin = raw_payload.get("plugin", "") if isinstance(raw_payload, dict) else ""
-                if (
-                    raw_plugin == "lite_todo_write"
-                    and any(evt.__class__.__name__ == "TodoListEndEvent" for evt in events)
-                ):
-                    session.update_state({"lite_todo_stream_ready": True})
-                    logger.info("[DPA] lite_todo_write todolist events yielded, stream_ready=True")
                 for evt in _drain_ui_notices(session, "tool_end", plugin=raw_plugin):
                     _log_stream_payload(evt)
                     yield evt
@@ -1756,7 +1762,11 @@ class _StreamProcessor:
                             "status": t.get("status", "pending"),
                             "tool_name": "lite_todo_write",
                             "skill_name": skill_map.get(t.get("step_id"), "<未知技能>"),
-                            "content": f"{visible_pos}.{canonical_map.get(t.get('step_id'), '<未知步骤>')}（{TODO_STATUS_CN.get(t.get('status', 'pending'), t.get('status', 'pending'))}）"
+                            "content": (
+                                f"{visible_pos}."
+                                f"{canonical_map.get(t.get('step_id'), '<未知步骤>')}（"
+                                f"{TODO_STATUS_CN.get(t.get('status', 'pending'), t.get('status', 'pending'))}）"
+                            ),
                         }
                         for visible_pos, t in enumerate(todos, start=1)
                     ]},

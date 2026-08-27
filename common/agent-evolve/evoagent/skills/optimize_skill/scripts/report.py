@@ -116,12 +116,13 @@ def _selected_pass_rate(epoch_dir: Path, gate: dict[str, Any]) -> float | None:
     rows = results_data.get("results")
     if threshold is None or not isinstance(rows, list):
         return None
-    scores = [
-        score
-        for row in rows
-        if isinstance(row, dict)
-        if (score := _as_float(row.get("score"))) is not None
-    ]
+    scores = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        score = _as_float(row.get("score"))
+        if score is not None:
+            scores.append(score)
     if not scores:
         return None
     return sum(score >= threshold for score in scores) / len(scores)
@@ -139,7 +140,8 @@ def _collect_validations(run_dir: Path) -> tuple[ValidationSummary, ...]:
         epoch = _as_int(gate.get("epoch"))
         if epoch is None:
             epoch = _epoch_number(epoch_dir)
-        assert epoch is not None
+        if epoch is None:
+            raise RuntimeError("无法确定 epoch 编号")
 
         base_score = _as_float(gate.get("base_score"))
         candidate_score = _as_float(gate.get("candidate_score"))
@@ -187,37 +189,44 @@ def _summary_skills(run_dir: Path) -> tuple[str, ...]:
 
 
 def _skill_dirs(run_dir: Path) -> list[Path]:
-    return sorted(
-        path
-        for path in run_dir.iterdir()
-        if path.is_dir()
-        and _epoch_number(path) is None
-        and any(child.is_dir() and _epoch_number(child) is not None for child in path.iterdir())
-    )
+    # 显式 for 循环：三段 and 过滤含嵌套 any(...) 生成器，过复杂不宜压进推导式 (G.EXP.04)
+    dirs: list[Path] = []
+    for path in run_dir.iterdir():
+        if not path.is_dir():
+            continue
+        if _epoch_number(path) is not None:
+            continue
+        if any(child.is_dir() and _epoch_number(child) is not None for child in path.iterdir()):
+            dirs.append(path)
+    return sorted(dirs)
 
 
 def _artifact_epoch_offset(run_dir: Path, skill_dirs: list[Path]) -> int:
     """Map gate epoch numbers to patch epoch numbers across artifact schemas."""
-    gate_epochs = [
-        number
-        for path in _epoch_dirs(run_dir)
-        if (path / "gate_result.json").exists()
-        if (number := _epoch_number(path)) is not None
-    ]
-    skill_epochs = [
-        number
-        for skill_dir in skill_dirs
-        for path in _epoch_dirs(skill_dir)
-        if (number := _epoch_number(path)) is not None
-    ]
+    gate_epochs = []
+    for path in _epoch_dirs(run_dir):
+        if not (path / "gate_result.json").exists():
+            continue
+        number = _epoch_number(path)
+        if number is not None:
+            gate_epochs.append(number)
+    skill_epochs = []
+    for skill_dir in skill_dirs:
+        for path in _epoch_dirs(skill_dir):
+            number = _epoch_number(path)
+            if number is not None:
+                skill_epochs.append(number)
     if not skill_dirs:
-        skill_epochs = [
-            number
-            for path in _epoch_dirs(run_dir)
-            if any(path.glob("step_*/applied_diff.patch"))
-            if (number := _epoch_number(path)) is not None
-        ]
-    if gate_epochs and skill_epochs and min(gate_epochs) == 1 and min(skill_epochs) == 0:
+        skill_epochs = []
+        for path in _epoch_dirs(run_dir):
+            if not any(path.glob("step_*/applied_diff.patch")):
+                continue
+            number = _epoch_number(path)
+            if number is not None:
+                skill_epochs.append(number)
+    gate_aligned = bool(gate_epochs) and min(gate_epochs) == 1
+    skill_aligned = bool(skill_epochs) and min(skill_epochs) == 0
+    if gate_aligned and skill_aligned:
         return 1
     return 0
 
@@ -387,7 +396,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     run_dir = args.run_dir or args.artifact_dir
-    assert run_dir is not None
+    if run_dir is None:
+        raise RuntimeError("run_dir or --artifact-dir is required")
     try:
         report = render_markdown(summarize_run(run_dir))
     except ValueError as exc:

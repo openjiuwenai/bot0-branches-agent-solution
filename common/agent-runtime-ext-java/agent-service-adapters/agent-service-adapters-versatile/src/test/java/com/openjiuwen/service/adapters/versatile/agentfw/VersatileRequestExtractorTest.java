@@ -217,7 +217,7 @@ class VersatileRequestExtractorTest {
         Map<String, Object> inputs = (Map<String, Object>) remote.body().get("inputs");
         assertThat(inputs).isNotNull();
         assertThat(inputs).containsEntry("query", "订酒店");
-        assertThat(inputs).doesNotContainKey("intents");
+        assertThat(inputs).doesNotContainKeys("intents", "messages");
     }
 
     @Test
@@ -305,6 +305,54 @@ class VersatileRequestExtractorTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> inputs = (Map<String, Object>) remote.body().get("inputs");
         assertThat(inputs).doesNotContainKey("messages");
+    }
+
+    @Test
+    void replacesAgentIdPlaceholderInUrlTemplate() {
+        VersatileProperties properties = new VersatileProperties();
+        properties.setUrlTemplate("https://example.test/agents/{agent_id}/conversations/{conversation_id}");
+
+        ServeRequest request = new ServeRequest();
+        request.setConversationId("c-1");
+        request.setMessages(List.of(Map.of("role", "user", "content", "q")));
+        request.setMetadata(Map.of("agent_id", "agent_card_L2_hotel"));
+
+        VersatileRequestExtractor.RemoteRequest remote =
+                new VersatileRequestExtractor(properties).extract(request);
+
+        assertThat(remote.url()).isEqualTo("https://example.test/agents/agent_card_L2_hotel/conversations/c-1");
+    }
+
+    @Test
+    void replacesAgentIdPlaceholderWithEmptyWhenAbsent() {
+        VersatileProperties properties = new VersatileProperties();
+        properties.setUrlTemplate("https://example.test/agents/{agent_id}/conversations/{conversation_id}");
+
+        ServeRequest request = new ServeRequest();
+        request.setConversationId("c-1");
+        request.setMessages(List.of(Map.of("role", "user", "content", "q")));
+        request.setMetadata(new LinkedHashMap<>());
+
+        VersatileRequestExtractor.RemoteRequest remote =
+                new VersatileRequestExtractor(properties).extract(request);
+
+        assertThat(remote.url()).isEqualTo("https://example.test/agents//conversations/c-1");
+    }
+
+    @Test
+    void leavesUrlWithoutAgentIdPlaceholderUnchangedWhenAgentIdPresent() {
+        VersatileProperties properties = new VersatileProperties();
+        properties.setUrlTemplate("https://example.test/conversations/{conversation_id}");
+
+        ServeRequest request = new ServeRequest();
+        request.setConversationId("c-1");
+        request.setMessages(List.of(Map.of("role", "user", "content", "q")));
+        request.setMetadata(Map.of("agent_id", "agent_card_L2_hotel"));
+
+        VersatileRequestExtractor.RemoteRequest remote =
+                new VersatileRequestExtractor(properties).extract(request);
+
+        assertThat(remote.url()).isEqualTo("https://example.test/conversations/c-1");
     }
 
     @Test

@@ -139,3 +139,11 @@ rdc:
       #     -----BEGIN PUBLIC KEY-----
       #     ...
       #     -----END PUBLIC KEY-----
+
+# FEAT-016 level-1: RDC process-local route cache when PostgreSQL is briefly down
+# (bound via @Value agent-bus.registry.mvp.local-cache.ttl-ms — not under rdc.*)
+agent-bus:
+  registry:
+    mvp:
+      local-cache:
+        ttl-ms: 5000

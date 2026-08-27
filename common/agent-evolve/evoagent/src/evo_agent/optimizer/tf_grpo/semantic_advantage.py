@@ -217,7 +217,7 @@ def parse_library_operations(raw: str) -> list[LibraryOperation]:
         if start < 0 or end <= start:
             return [LibraryOperation(operation="Keep")]
         try:
-            data = json.loads(text[start : end + 1])
+            data = json.loads(text[start: end + 1])
         except json.JSONDecodeError:
             return [LibraryOperation(operation="Keep")]
 

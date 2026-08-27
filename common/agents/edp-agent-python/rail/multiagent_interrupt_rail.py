@@ -92,7 +92,10 @@ class MultiagentInterruptRail(BaseInterruptRail):
             ctx.session.update_state({"cascade_result": None})
             result = await self._handle_cascade_resume(ctx, cascade_result)
             tool_context = ctx.session.get_state("pending_tool_context") or {}
-            self._create_intercepted_tool_span(ctx, tool_context.get("tool_name", ""), tool_context.get("tool_args", {}), result)
+            self._create_intercepted_tool_span(
+                ctx, tool_context.get("tool_name", ""),
+                tool_context.get("tool_args", {}), result,
+            )
             return result
 
         # 检查是否已派发过，防止重复调用
@@ -193,7 +196,11 @@ class MultiagentInterruptRail(BaseInterruptRail):
             })
 
         # 正常路径：清除防重入标记
-        ctx.session.update_state({"pending_tool_context": None, "pending_dispatch": None, "multiagent_dispatched": None})
+        ctx.session.update_state({
+            "pending_tool_context": None,
+            "pending_dispatch": None,
+            "multiagent_dispatched": None,
+        })
 
         # 构造 message：有截断时明确告知 LLM
         skipped = business_data.get("skipped_entities", [])

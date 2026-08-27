@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.openjiuwen.example</groupId>
+    <artifactId>instance-route-query-demo</artifactId>
+    <version>0.1.0</version>
+    <packaging>jar</packaging>
+
+    <name>instance-route-query-demo</name>
+    <description>FEAT-016 运行时实例路由查询 AgentDemo — 测试 route-handle 解析与错误码映射，发现并输出 Bug</description>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.0.7</version>
+        <relativePath/>
+    </parent>
+
+    <properties>
+        <java.version>17</java.version>
+        <maven.compiler.release>17</maven.compiler.release>
+        <flyway.version>11.19.1</flyway.version>
+        <agent-service.version>0.1.2</agent-service.version>
+        <!-- A 桶 properties：Boot-property override（对齐 runtime 0.1.2 / core 0.1.15） -->
+        <slf4j.version>2.0.12</slf4j.version>
+        <logback.version>1.5.37</logback.version>
+        <snakeyaml.version>2.2</snakeyaml.version>
+        <byte-buddy.version>1.15.11</byte-buddy.version>
+        <commons-lang3.version>3.18.0</commons-lang3.version>
+        <commons-codec.version>1.20.0</commons-codec.version>
+        <postgresql.version>42.7.12</postgresql.version>
+        <h2.version>2.2.224</h2.version>
+        <sqlite-jdbc.version>3.53.2.1</sqlite-jdbc.version>
+        <pulsar.version>4.2.3</pulsar.version>
+        <lombok.version>1.18.32</lombok.version>
+        <gson.version>2.11.0</gson.version>
+    </properties>
+
+  <dependencyManagement>
+    <dependencies>
+        <!-- import runtime BOM：A 桶 + C 桶 + openjiuwen 全部版本管理（BOM import 时用 BOM 自己的 properties 解析 ${...}） -->
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-runtime-java</artifactId>
+            <version>0.1.2</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-service-app</artifactId>
+            <version>${agent-service.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>registry-discovery-center</artifactId>
+            <version>0.1.0</version>
+            <classifier>lib</classifier>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.flywaydb</groupId>
+                    <artifactId>flyway-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.flywaydb</groupId>
+                    <artifactId>flyway-database-postgresql</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.postgresql</groupId>
+                    <artifactId>postgresql</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springdoc</groupId>
+                    <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.zaxxer</groupId>
+                    <artifactId>HikariCP</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <release>17</release>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.4</version>
+                <configuration>
+                    <argLine>-Dfile.encoding=UTF-8 -Djava.net.useSystemProxies=false</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

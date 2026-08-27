@@ -1,0 +1,218 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
+package com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory;
+
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.audit.AuditEventBridge;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.audit.AuditEventCollector;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.audit.AuditSecurityDecisionAspect;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.audit.AuditSnapshotStore;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity.TraceContextCarrier;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.query.TrajectoryQueryController;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity.TraceIdentityFilter;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.runtree.RunTreeRegistrar;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.store.AsyncTrajectoryWriter;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.store.RedisTrajectoryStore;
+import com.openjiuwen.service.spec.spi.RuntimeRedisClient;
+
+import org.a2aproject.sdk.server.tasks.TaskStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+/**
+ * 全链路轨迹（第二批）装配：仅在 {@code openjiuwen.service.trajectory.link.enabled=true}
+ * 时生效，不启用时宿主零行为变化。与第一批 OTel 相互独立，可分别启停。
+ *
+ * <p>enabled=true 但 Redis 未配置（{@link RuntimeRedisClient} 未注册 Bean）时启动 WARN
+ * 并保持关闭（V-8 口径）——依赖 Redis 的 Bean 集中在 {@link RedisAssembly} 经
+ * {@link ConditionalOnBean} 条件化，缺失即整体不装配。@AutoConfigureAfter 保证求值
+ * 时 provider（adapters-common 的 RedisMiddlewareAutoConfiguration，FQN 字典序排在本类之后）
+ * 的 bean definition 已注册——{@code @ConditionalOnBean} 只看得见已处理的定义。
+ *
+ * @since 2026-08-26
+ */
+@AutoConfiguration
+@AutoConfigureAfter(name = "com.openjiuwen.service.adapters.common.middleware.redis.RedisMiddlewareAutoConfiguration")
+@ConditionalOnProperty(prefix = "openjiuwen.service.trajectory.link", name = "enabled", havingValue = "true")
+@EnableConfigurationProperties(TrajectoryLinkProperties.class)
+public class TrajectoryLinkAutoConfiguration {
+    private static final Logger LOGGER = LoggerFactory.getLogger(TrajectoryLinkAutoConfiguration.class);
+
+    /**
+     * Provides the shared trace context carrier.
+     *
+     * @param props link properties
+     * @return the carrier
+     */
+    @Bean
+    TraceContextCarrier traceContextCarrier(TrajectoryLinkProperties props) {
+        return TraceContextCarrier.create(props.getCarrierTtlSeconds());
+    }
+
+    /**
+     * Registers the run-tree TaskStore decorator post processor (static BPP declaration
+     * to avoid early-instantiation warnings).
+     *
+     * @param carrierProvider carrier provider
+     * @param storeProvider   store provider
+     * @param writerProvider  writer provider
+     * @param auditProvider   audit collector provider
+     * @return the registrar
+     */
+    @Bean
+    static RunTreeRegistrar runTreeRegistrar(ObjectProvider<TraceContextCarrier> carrierProvider,
+                                             ObjectProvider<RedisTrajectoryStore> storeProvider,
+                                             ObjectProvider<AsyncTrajectoryWriter> writerProvider,
+                                             ObjectProvider<AuditEventCollector> auditProvider) {
+        return new RunTreeRegistrar(carrierProvider, storeProvider, writerProvider, auditProvider);
+    }
+
+    /**
+     * Emits the V-8 WARN exactly once when enabled without Redis.
+     *
+     * @param redisClientProvider redis client provider
+     * @return warning marker bean
+     */
+    @Bean
+    Object trajectoryLinkRedisGuard(ObjectProvider<RuntimeRedisClient> redisClientProvider) {
+        if (redisClientProvider.getIfAvailable() == null) {
+            LOGGER.warn("trajectory.link enabled but RuntimeRedisClient is not available; "
+                    + "capability stays OFF (configure FEAT-003 Redis to enable)");
+        }
+        return new Object();
+    }
+
+    /**
+     * Redis-dependent assembly: only created when a {@link RuntimeRedisClient} bean
+     * exists (V-8 — otherwise the capability stays off with a single WARN).
+     *
+     * @since 2026-08-26
+     */
+    static final class AuditBridgeRegistration {
+        private void clear() {
+            AuditEventBridge.clear();
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnBean(RuntimeRedisClient.class)
+    static class RedisAssembly {
+        /**
+         * Provides the Redis key-space store.
+         *
+         * @param client redis client
+         * @param props  link properties
+         * @return the store
+         */
+        @Bean
+        RedisTrajectoryStore redisTrajectoryStore(RuntimeRedisClient client, TrajectoryLinkProperties props) {
+            return new RedisTrajectoryStore(client, props.effectiveTtlSeconds());
+        }
+
+        /**
+         * Provides the async batch writer (started).
+         *
+         * @param store trajectory store
+         * @param props link properties
+         * @return the started writer
+         */
+        @Bean
+        AsyncTrajectoryWriter asyncTrajectoryWriter(RedisTrajectoryStore store, TrajectoryLinkProperties props) {
+            AsyncTrajectoryWriter writer = new AsyncTrajectoryWriter(props.getQueueCapacity(),
+                    props.getFlushIntervalMs());
+            writer.start();
+            return writer;
+        }
+
+        /**
+         * Provides the audit snapshot store.
+         *
+         * @param store  trajectory store
+         * @param writer async writer
+         * @return snapshot store
+         */
+        @Bean
+        AuditSnapshotStore auditSnapshotStore(RedisTrajectoryStore store, AsyncTrajectoryWriter writer) {
+            return new AuditSnapshotStore(store, writer);
+        }
+
+        /**
+         * Provides the audit event collector.
+         *
+         * @param snapshots snapshot store
+         * @param store     trajectory store
+         * @param writer    async writer
+         * @return event collector
+         */
+        @Bean
+        AuditEventCollector auditEventCollector(AuditSnapshotStore snapshots, RedisTrajectoryStore store,
+                                                AsyncTrajectoryWriter writer) {
+            return new AuditEventCollector(snapshots, store, writer);
+        }
+
+        /**
+         * Provides the security-decision audit aspect.
+         *
+         * @return the aspect
+         */
+        @Bean
+        AuditSecurityDecisionAspect auditSecurityDecisionAspect() {
+            return new AuditSecurityDecisionAspect();
+        }
+
+        /**
+         * Registers the collector into the static audit bridge (rail / aspect access).
+         *
+         * @param collector audit collector
+         * @return registration marker
+         */
+        @Bean(destroyMethod = "clear")
+        AuditBridgeRegistration auditBridgeRegistrar(AuditEventCollector collector) {
+            AuditEventBridge.register(collector);
+            return new AuditBridgeRegistration();
+        }
+
+        /**
+         * Provides the read-only trajectory query controller.
+         *
+         * @param store     trajectory store
+         * @param snapshots audit snapshot store
+         * @return the controller
+         */
+        @Bean
+        TrajectoryQueryController trajectoryQueryController(RedisTrajectoryStore store,
+                                                            AuditSnapshotStore snapshots) {
+            return new TrajectoryQueryController(store, snapshots);
+        }
+
+        /**
+         * Registers the trace identity filter ahead of the batch-1 http span filter
+         * (batch-1 uses order 0; a smaller value runs first).
+         *
+         * @param carrier           trace context carrier
+         * @param taskStoreProvider SDK task store provider (nullable)
+         * @param store             trajectory store
+         * @return filter registration
+         */
+        @Bean
+        FilterRegistrationBean<TraceIdentityFilter> traceIdentityFilter(
+                TraceContextCarrier carrier, ObjectProvider<TaskStore> taskStoreProvider,
+                RedisTrajectoryStore store) {
+            FilterRegistrationBean<TraceIdentityFilter> registration = new FilterRegistrationBean<>();
+            registration.setFilter(new TraceIdentityFilter(carrier, taskStoreProvider.getIfAvailable(), store));
+            registration.addUrlPatterns("/a2a", "/a2a/*", "/v1/*");
+            registration.setOrder(-10);
+            return registration;
+        }
+    }
+}

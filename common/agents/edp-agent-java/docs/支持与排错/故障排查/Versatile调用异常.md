@@ -103,7 +103,7 @@ curl -X POST "http://your-a2a-adapter:8191/a2a" \
 | 环境变量 | 默认值 | 检查要点 |
 |----------|--------|----------|
 | `EDP_AGENT_VERSATILE_URL` | `http://localhost:30001/v1/0/agent-manager/workflows/{workflow_id}/conversations/{conversation_id}` | URL模板必须包含`{workflow_id}`和`{conversation_id}`占位符 |
-| `EDP_AGENT_VERSATILE_A2A_URL` | `http://localhost:8191/a2a` | A2A适配器地址，配置此项优先使用A2A模式 |
+| `EDP_AGENT_VERSATILE_A2A_URL` | `http://localhost:8191` | A2A适配器地址（勿带 `/a2a` 路径），配置此项优先使用A2A模式 |
 | `EDP_AGENT_VERSATILE_TIMEOUT` | `30s` | 超时时间，支持s(秒)/m(分钟)格式，生产环境建议60s |
 
 **URL模板注意事项：**
@@ -276,7 +276,7 @@ EDP_AGENT_VERSATILE_TIMEOUT=60s
 **生产环境A2A模式：**
 ```bash
 EDP_AGENT_VERSATILE_URL=http://versatile.internal.example.com/...  # 可保留但不使用
-EDP_AGENT_VERSATILE_A2A_URL=http://versatile-a2a.internal.example.com/a2a
+EDP_AGENT_VERSATILE_A2A_URL=http://versatile-a2a.internal.example.com
 EDP_AGENT_VERSATILE_TIMEOUT=60s
 ```
 

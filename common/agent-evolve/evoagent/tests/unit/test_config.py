@@ -32,7 +32,7 @@ class TestEvolveConfig:
         assert config.llm_api_key == ""
         assert config.llm_base_url == "https://api.openai.com/v1"
         assert config.optimizer_model == "gpt-4o"
-        assert config.remote_timeout == 300.0
+        assert config.remote_timeout == pytest.approx(300.0)
         assert config.remote_max_retries == 2
         assert config.remote_parallel == 4
         assert config.default_epochs == 3
@@ -48,9 +48,38 @@ class TestEvolveConfig:
         config = EvolveConfig()
         assert config.llm_api_key == "test-key"
         assert config.optimizer_model == "gpt-4o-mini"
-        assert config.remote_timeout == 600.0
+        assert config.remote_timeout == pytest.approx(600.0)
 
-    def test_no_remote_endpoint_field(self) -> None:
+    # --- GEPA vision model 配置 ---
+
+    @staticmethod
+    def test_vision_model_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+        """vision_model 默认空，回退到 target_model。"""
+        for key in (
+            "EVO_VISION_MODEL",
+            "EVO_VISION_API_KEY",
+            "EVO_VISION_BASE_URL",
+        ):
+            monkeypatch.delenv(key, raising=False)
+        config = EvolveConfig(_env_file=None)
+        assert config.vision_model == ""
+        assert config.vision_api_key == ""
+        assert config.vision_base_url == ""
+
+    @staticmethod
+    def test_vision_model_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+        """EVO_VISION_* 环境变量被正确读取。"""
+        monkeypatch.setenv("EVO_VISION_MODEL", "gpt-4o-vision")
+        monkeypatch.setenv("EVO_VISION_API_KEY", "vision-key-123")
+        monkeypatch.setenv("EVO_VISION_BASE_URL", "https://vision.api.com/v1")
+
+        config = EvolveConfig()
+        assert config.vision_model == "gpt-4o-vision"
+        assert config.vision_api_key == "vision-key-123"
+        assert config.vision_base_url == "https://vision.api.com/v1"
+
+    @staticmethod
+    def test_no_remote_endpoint_field() -> None:
         """remote_endpoint 字段已从 EvolveConfig 移除。"""
         config = EvolveConfig(_env_file=None)
         assert not hasattr(config, "remote_endpoint")
@@ -245,14 +274,14 @@ class TestEvolveConfig:
         """managed_doc_apply_deadline 默认 600s（spec 部署契约）。"""
         monkeypatch.delenv("EVO_MANAGED_DOC_APPLY_DEADLINE", raising=False)
         config = EvolveConfig(_env_file=None)
-        assert config.managed_doc_apply_deadline == 600.0
+        assert config.managed_doc_apply_deadline == pytest.approx(600.0)
 
     def test_managed_doc_apply_deadline_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """EVO_MANAGED_DOC_APPLY_DEADLINE 环境变量注入。"""
         monkeypatch.setenv("EVO_MANAGED_DOC_APPLY_DEADLINE", "1200.0")
         monkeypatch.setenv("EVO_MANAGED_DOC_CANCEL_ROLLBACK_DEADLINE", "1500.0")
         config = EvolveConfig()
-        assert config.managed_doc_apply_deadline == 1200.0
+        assert config.managed_doc_apply_deadline == pytest.approx(1200.0)
 
     def test_cancel_rollback_deadline_must_exceed_apply_deadline(self) -> None:
         with pytest.raises(ValueError, match="cancel_rollback_deadline"):
@@ -274,7 +303,8 @@ class TestEvolveConfig:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """EVO_MANAGED_DOC_PROTECTED_SECTIONS JSON 注入：dict[str, list[ProtectedSectionConfig]]，
-        key 为精确 doc_kind。"""
+        key 为精确 doc_kind。
+        """
         monkeypatch.setenv(
             "EVO_MANAGED_DOC_PROTECTED_SECTIONS",
             '{"agent_rule": [{"start_marker": "<a>", "end_marker": "</a>"}]}',

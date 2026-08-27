@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
 
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -69,14 +70,39 @@ public final class BusProjectionRepairScheduler implements SmartLifecycle {
     public void start() {
         if (!running) {
             running = true;
-            executor.scheduleWithFixedDelay(this::repair, intervalMillis, intervalMillis, TimeUnit.MILLISECONDS);
+            scheduleNext();
+        }
+    }
+
+    /**
+     * Schedules exactly one repair round.
+     *
+     * <p>Deliberately not {@code scheduleWithFixedDelay}: repair rounds hit the projection store, and
+     * a single storage failure would otherwise cancel the whole schedule while {@link #isRunning()}
+     * keeps reporting {@code true}. Re-arming from the {@code finally} block of {@link #repair()}
+     * survives any throwable, including the storage exceptions this class cannot name.
+     */
+    private void scheduleNext() {
+        if (!running || executor.isShutdown()) {
+            return;
+        }
+        try {
+            executor.schedule(this::repair, intervalMillis, TimeUnit.MILLISECONDS);
+        } catch (RejectedExecutionException rejected) {
+            LOG.debug("Projection repair stopped; no further rounds scheduled", rejected);
         }
     }
 
     private void repair() {
-        repairer.repair(100);
-        if (taskProjector != null && tenantId != null) {
-            taskProjector.repair(tenantId, 100);
+        try {
+            repairer.repair(100);
+            if (taskProjector != null && tenantId != null) {
+                taskProjector.repair(tenantId, 100);
+            }
+        } catch (IllegalArgumentException | IllegalStateException failure) {
+            LOG.warn("Projection repair round failed; the next round will retry", failure);
+        } finally {
+            scheduleNext();
         }
     }
 

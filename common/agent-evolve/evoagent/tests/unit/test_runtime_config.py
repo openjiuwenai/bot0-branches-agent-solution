@@ -392,7 +392,8 @@ def test_optimizer_runtime_dependencies_excludes_managed_doc_kind(
 ) -> None:
     """managed_doc_kind 不属于 SkillDocumentOptimizer 构造参数，
     不进入 optimizer_runtime_dependencies()——operator 在 optimizer dependencies
-    构造前已创建，该字段供 runner builder 分支用。"""
+    构造前已创建，该字段供 runner builder 分支用。
+    """
     resolved = _resolver(tmp_path, scenarios_dir).resolve(
         OptimizeRequest(
             scenario="edp_agent",

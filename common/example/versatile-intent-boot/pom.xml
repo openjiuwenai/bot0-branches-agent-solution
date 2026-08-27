@@ -15,17 +15,30 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.0.6</version>
+        <version>4.0.7</version>
         <relativePath/>
     </parent>
 
     <properties>
         <java.version>17</java.version>
         <maven.compiler.release>17</maven.compiler.release>
-        <agent-runtime-java.version>0.1.1.post1</agent-runtime-java.version>
+        <agent-runtime-java.version>0.1.2</agent-runtime-java.version>
         <agent-runtime-ext-java.version>0.1.0</agent-runtime-ext-java.version>
         <wiremock.version>3.9.1</wiremock.version>
-        <agent-core-java.version>0.1.14.post1</agent-core-java.version>
+        <agent-core-java.version>0.1.15</agent-core-java.version>
+        <!-- A 桶 properties：Boot-property override（对齐 runtime 0.1.2 / core 0.1.15） -->
+        <slf4j.version>2.0.12</slf4j.version>
+        <logback.version>1.5.37</logback.version>
+        <snakeyaml.version>2.2</snakeyaml.version>
+        <byte-buddy.version>1.15.11</byte-buddy.version>
+        <commons-lang3.version>3.18.0</commons-lang3.version>
+        <commons-codec.version>1.20.0</commons-codec.version>
+        <postgresql.version>42.7.12</postgresql.version>
+        <h2.version>2.2.224</h2.version>
+        <sqlite-jdbc.version>3.53.2.1</sqlite-jdbc.version>
+        <pulsar.version>4.2.3</pulsar.version>
+        <lombok.version>1.18.32</lombok.version>
+        <gson.version>2.11.0</gson.version>
     </properties>
 
     <dependencies>
@@ -43,6 +56,10 @@
             <groupId>com.openjiuwen</groupId>
             <artifactId>agent-core-java</artifactId>
             <version>${agent-core-java.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-core</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -63,6 +80,14 @@
 
     <dependencyManagement>
         <dependencies>
+        <!-- import runtime BOM：A 桶 + C 桶 + openjiuwen 全部版本管理（BOM import 时用 BOM 自己的 properties 解析 ${...}） -->
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-runtime-java</artifactId>
+            <version>0.1.2</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
             <!-- agent-core-java pulls milvus-sdk-java -> protobuf-java:3.25.5, which downgrades
                  the a2a SDK's protobuf-java-util:4.33.2 (needs RuntimeVersion$RuntimeDomain).
                  Align protobuf-java with protobuf-java-util so a2a gRPC classes initialize. -->

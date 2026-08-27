@@ -34,14 +34,13 @@ import java.util.stream.Collectors;
  *
  * <p><b>1-round-delay alignment</b>: findings are pushed in
  * {@link #afterModelCall} so they are consumed by
- * {@code injectPendingSteering} (offset 675) at the START of the next
- * iteration, before {@code callModel} (offset 687). Pushing in beforeModelCall
- * would miss the 675 site (it has already run for the current iteration) and
- * delay by 2 rounds.
+ * {@code injectPendingSteering} at the START of the next iteration, before
+ * {@code callModel}. Pushing in beforeModelCall would miss the injection
+ * site (it has already run for the current iteration) and delay by 2 rounds.
  *
  * <p><b>Honest boundary (铁律①)</b>: only pushes on tool-call rounds within
  * the explore window. Final-answer rounds are skipped — ReActAgent's own loop-limit
- * steering cannot redirect a loop terminating at offset 844/857.
+ * steering cannot redirect a terminating loop (max-iterations guard).
  *
  * <p><b>IFF 契约</b>:
  * <ul>
@@ -126,14 +125,15 @@ public class ExploreRail extends AgentRail {
      * <p>Final-answer rounds are skipped (steering cannot redirect a
      * terminating loop — proven by ReActAgent's max-iterations guard).
      *
-     * <p>Timing (bytecode-verified against agent-core-java 0.1.12):
+     * <p>Timing (order-of-operations, holds across agent-core versions; pinned
+     * 0.1.12 offsets had drifted from 0.1.14.post1 — 4-lens NIT, replaced with
+     * order statements):
      * <ul>
-     *   <li>This hook fires after {@code callModel}(offset 687) returned.</li>
-     *   <li>{@code consumeForceFinish}(offset 700) has NOT yet run.</li>
-     *   <li>Next iteration: {@code injectPendingSteering}(offset 675) drains
-     *       the steering queue into a UserMessage BEFORE
-     *       {@code callModel}(offset 687) — so the pushed findings reach the
-     *       LLM exactly one round later.</li>
+     *   <li>This hook fires after {@code callModel} returned.</li>
+     *   <li>{@code consumeForceFinish} has NOT yet run.</li>
+     *   <li>Next iteration: {@code injectPendingSteering} drains the steering
+     *       queue into a UserMessage BEFORE {@code callModel} — so the pushed
+     *       findings reach the LLM exactly one round later.</li>
      * </ul>
      *
      * @param ctx callback context carrying model-call inputs
@@ -172,7 +172,7 @@ public class ExploreRail extends AgentRail {
         s.exploreRound++;
 
         // [5] Push findings into steering queue → consumed by
-        //     injectPendingSteering(offset 675) NEXT iteration
+        //     injectPendingSteering NEXT iteration
         String findings = formatFindings(result);
         ctx.pushSteering(findings);
         RailTelemetry.current().fire(new RailEvent.SteeringEvent("ExploreRail",

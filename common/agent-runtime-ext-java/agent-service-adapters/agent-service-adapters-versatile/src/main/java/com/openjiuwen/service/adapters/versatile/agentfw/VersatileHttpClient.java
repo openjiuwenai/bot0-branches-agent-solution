@@ -42,7 +42,7 @@ import javax.net.ssl.X509TrustManager;
  *
  * @since 2026-06-30
  */
-final class VersatileHttpClient {
+public final class VersatileHttpClient {
     private static final Logger log = LoggerFactory.getLogger(VersatileHttpClient.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String MASKED_VALUE = "***masked***";
@@ -52,7 +52,7 @@ final class VersatileHttpClient {
     private final HttpClient httpClient;
     private final SSLSocketFactory insecureSslSocketFactory;
 
-    VersatileHttpClient(VersatileProperties properties) {
+    public VersatileHttpClient(VersatileProperties properties) {
         this.properties = properties;
         this.httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
@@ -65,7 +65,15 @@ final class VersatileHttpClient {
         }
     }
 
-    void postStream(VersatileRequestExtractor.RemoteRequest request, LineConsumer consumer)
+    /**
+     * 以流式 POST 调用 Versatile 兼容端点，逐行消费响应。
+     *
+     * @param request 远端请求（url/headers/params/body）
+     * @param consumer 逐行消费者（非空行）
+     * @throws IOException HTTP 或流读取失败
+     * @throws InterruptedException 调用线程被中断
+     */
+    public void postStream(VersatileRequestExtractor.RemoteRequest request, LineConsumer consumer)
             throws IOException, InterruptedException {
         String body = OBJECT_MAPPER.writeValueAsString(request.body());
         String url = withQueryParams(request.url(), request.params());
@@ -191,7 +199,7 @@ final class VersatileHttpClient {
                     return new X509Certificate[0];
                 }
             };
-            SSLContext context = SSLContext.getInstance("TLS");
+            SSLContext context = SSLContext.getInstance("TLSv1.3");
             context.init(null, new TrustManager[]{trustAll}, new SecureRandom());
             return context.getSocketFactory();
         } catch (GeneralSecurityException exception) {
@@ -242,7 +250,7 @@ final class VersatileHttpClient {
      * @since 2026-06-30
      */
     @FunctionalInterface
-    interface LineConsumer {
+    public interface LineConsumer {
         /**
          * Accepts one decoded response line.
          *

@@ -1,3 +1,7 @@
+spring:
+  application:
+    name: agent-a
+
 server:
   port: ${AGENT_A_PORT:18090}
 

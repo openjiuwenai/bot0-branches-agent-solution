@@ -70,6 +70,20 @@ public class EnvelopeBuilder {
      * @return the forwarding envelope ready for outbox enqueue
      */
     public ForwardingEnvelope buildEnvelope(BuildRequest request, String inlinePayload) {
+        return buildEnvelope(request, inlinePayload, AgentBusEventType.CLIENT_INVOCATION_REQUESTED);
+    }
+
+    /**
+     * Build a forwarding envelope with a custom event type (v0830 S6/S7/S8 —
+     * QUERY/CANCEL/SUBSCRIBE events differ from create REQUESTED).
+     *
+     * @param request       envelope field bundle
+     * @param inlinePayload bounded small A2A body (null for control-only)
+     * @param eventType    bus event type (QUERY/CANCEL/SUBSCRIBE/REQUESTED)
+     * @return the forwarding envelope ready for outbox enqueue
+     */
+    public ForwardingEnvelope buildEnvelope(BuildRequest request, String inlinePayload,
+                                             AgentBusEventType eventType) {
         String correlationId = "gw-correlation-" + UUID.randomUUID();
         ForwardingMessageId messageId = new ForwardingMessageId("gw-" + UUID.randomUUID());
         ForwardingRouteHandle routeHandle = new ForwardingRouteHandle(
@@ -80,7 +94,7 @@ public class EnvelopeBuilder {
                 ? ForwardingEnvelope.PayloadPolicy.DATA_BEARING
                 : ForwardingEnvelope.PayloadPolicy.CONTROL_ONLY;
         return new ForwardingEnvelope(
-                messageId, AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
+                messageId, eventType,
                 request.tenantId(), request.traceId(), correlationId, request.idempotencyKey(),
                 routeHandle, "client-invocation", request.sourceServiceId(), request.targetServiceId(),
                 request.deadlineMillisEpoch(), policy, request.payloadRef(), inlinePayload,

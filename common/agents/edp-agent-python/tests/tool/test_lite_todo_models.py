@@ -6,7 +6,8 @@ import pytest
 
 def test_todo_status_has_two_values():
     """v2 status：pending / done（in_progress 与 skip_optional 都已下线；
-    不打算做的步骤直接不放进 todos 即可，不需要"跳过"状态）。"""
+    不打算做的步骤直接不放进 todos 即可，不需要"跳过"状态）。
+    """
     from EDPAgent.tool.lite_todo.models import TodoStatus
 
     assert TodoStatus.PENDING.value == "pending"

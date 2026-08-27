@@ -18,6 +18,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -49,8 +50,19 @@ public class HttpAgentRuntimeClient implements AgentRuntimeClient {
                 .POST(HttpRequest.BodyPublishers.ofString(jsonRpcBody, StandardCharsets.UTF_8)).build();
         try {
             HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            // Pass the body through (A2A errors arrive as 200 + JSON-RPC error; we don't fake success).
+            int code = resp.statusCode();
+            if (code >= 400) {
+                // Runtime returned non-2xx (e.g., 503 Service Unavailable) — this is a service-level
+                // failure, NOT a method error (which arrives as 200 + JSON-RPC error per the runtime
+                // contract). Surface as FORWARD_FAILED so the client sees 502, not 200 + raw error body.
+                // 200 + JSON-RPC error (e.g., -32001/-32004) is passed through below as-is.
+                throw new GovernanceException(HttpStatus.BAD_GATEWAY, "FORWARD_FAILED",
+                        "Runtime returned HTTP " + code + ": " + resp.body(), null);
+            }
+            // 200 — transparent passthrough (success body OR JSON-RPC error envelope, e.g., -32001/-32004).
             return resp.body();
+        } catch (GovernanceException ex) {
+            throw ex;
         } catch (IOException | InterruptedException ex) {
             // G.CON.10 forbids Thread.interrupt(); map transport failure to FORWARD_FAILED.
             throw new GovernanceException(HttpStatus.BAD_GATEWAY, "FORWARD_FAILED",
@@ -71,6 +83,17 @@ public class HttpAgentRuntimeClient implements AgentRuntimeClient {
             HttpResponse<Stream<String>> resp = http.send(req, HttpResponse.BodyHandlers.ofLines());
             log.info("openStream status={}", resp.statusCode());
             requireStreamOk(resp, "stream subscription");
+            // A runtime that rejects the subscription with a JSON-RPC error (HTTP 200 + a non-SSE
+            // body, e.g. SubscribeToTask on a terminal task → -32004) must be surfaced verbatim,
+            // not swallowed as an empty SSE stream (the data: filter below would drop the JSON body).
+            // Throw carrying the body; the DIRECT subscribe handler returns it to the client as-is,
+            // unifying DIRECT with the BUS path (which folds the runtime's failure to -32004).
+            String contentType = resp.headers().firstValue("Content-Type").orElse("");
+            if (!contentType.toLowerCase(Locale.ROOT).contains("text/event-stream")) {
+                String body = resp.body().collect(java.util.stream.Collectors.joining("\n"));
+                log.info("openStream non-SSE 200 body={}", body);
+                throw new GovernanceException(HttpStatus.OK, "RUNTIME_JSONRPC_ERROR", body);
+            }
             return resp.body()
                     .filter(line -> line.startsWith("data:"))
                     .map(line -> line.substring("data:".length()).strip())
@@ -126,5 +149,15 @@ public class HttpAgentRuntimeClient implements AgentRuntimeClient {
                     "Runtime rejected " + what + ": HTTP " + status
                             + (firstLine.isBlank() ? "" : " " + firstLine));
         }
+    }
+
+    @Override
+    public String getTask(String endpointUrl, String taskId, String tenantId, Integer historyLength) {
+        String body = "{\"jsonrpc\":\"2.0\",\"id\":\"" + UUID.randomUUID()
+                + "\",\"method\":\"GetTask\",\"params\":{\"id\":\"" + taskId
+                + "\",\"tenant\":\"" + tenantId + "\""
+                + (historyLength != null ? ",\"historyLength\":" + historyLength : "")
+                + "}}";
+        return invokeSync(endpointUrl, body);
     }
 }

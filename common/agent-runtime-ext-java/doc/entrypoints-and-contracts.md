@@ -260,27 +260,34 @@ data: {"type":"error","error":"具体错误信息"}
 | 一轮产生多个远端委派 | 同一批成员并发 fan-out，全部收敛后按原工具调用顺序 fan-in；流式远端业务输出可在完成前逐条返回，因此不同成员的中间输出可能交错 |
 | 超过远端并发上限 | 全局最多同时运行 `max-concurrency` 个远端成员，其余进入 FIFO 队列；队列满或等待超时的成员以 `REMOTE_OVERLOADED` 失败 |
 
-以下示例限定为 `resume=false`、一个远端 Agent 只产生一个普通文本 Part。Query 入口先返回带来源信息的远端原始输出，再返回批次聚合终值，随后关闭连接；完整业务事件序列为：
+过程事件只有在当前用户入口为流式、且下游实际使用流式 A2A 调用时才进入用户响应。任一侧为非流式时，Runtime 只从最终 Task 形成 outcome，不投影 delegation，也不回放 Task 快照中的 Artifact 或状态。
+
+Gateway caller 与默认 caller 使用相同的 observer/outcome 边界：实际流式下游的远端 answer 通过 `EventObserver.onArtifact` 进入统一的 `content + metadata.agentEvent` 投影，不由 caller 另发普通 `TYPE_CHUNK`；非流式 Task 快照只通过 outcome 返回。远端 `INPUT_REQUIRED` 只先形成 member outcome，待同批成员收敛后由 `RemoteInvocationBatchCoordinator` 统一生成带 `items[].toolCallId/toolName/message` 的批次中断。这样并行成员不会各自向用户流发送无法统一恢复的中断。
+
+以下示例限定为流式 REST、`resume=false`、一个远端 Agent 只产生一个普通文本 Part。Runtime 先发布委派关系，再发布远端状态和原始输出，最后返回批次聚合终值：
 
 ```text
-data: {"content":"【远端 Agent 原始输出】","projection":{"kind":"remote_agent_output","batchId":"batch-1","toolCallId":"call-1","target":"remote-agent"}}
+data: {"content":"【委派给远端 Agent 的输入】","metadata":{"agentEvent":{"type":"delegation","source":{"agentId":"agent-a","taskId":"conversation-1"},"target":{"agentId":"remote-agent","taskId":"remote-task-1"}}}}
+
+data: {"content":"working","metadata":{"agentEvent":{"type":"status","source":{"agentId":"remote-agent","taskId":"remote-task-1"},"state":"working"}}}
+
+data: {"content":"【远端 Agent 原始输出】","metadata":{"agentEvent":{"type":"output","source":{"agentId":"remote-agent","taskId":"remote-task-1"}}}}
 
 data: "【从远端 Task artifacts 提取并聚合的业务终值】"
 
 ```
 
-第一条事件的 `content` 和 `projection` 由 `RemoteInvocationBatchCoordinator.forwardRemoteOutput` 明确定义：
+前三条事件都使用 Runtime 保留的 `metadata.agentEvent` 命名空间：
 
 | 字段路径 | 来源和含义 |
 |---|---|
-| `content` | 远端 Agent artifact Part 的原始 `text` 或 `data`；上例已在值中标出 |
-| `projection` | Runtime 生成的来源信息，不是远端 Agent 原始输出的一部分 |
-| `projection.kind` | 固定为 `remote_agent_output` |
-| `projection.batchId` | Runtime 远端调用批次 ID |
-| `projection.toolCallId` | 触发该远端调用的工具调用 ID |
-| `projection.target` | 目标 Agent 注册名；注册名为空时使用工具名 |
+| `content` | delegation 展示文本、status message，或远端 Artifact Parts 的原始业务内容 |
+| `metadata.agentEvent.type` | `delegation`、`output` 或 `status` |
+| `metadata.agentEvent.source` | 产生该事件的逻辑 Agent ID 与其 Task ID |
+| `metadata.agentEvent.target` | 仅 delegation 存在，标识直接下游 Agent 与远端 Task |
+| `metadata.agentEvent.state` | 仅 status 存在，使用规范化的小写 TaskState |
 
-第一条事件的 `content` 是远端流式 Artifact Part 的原始 `text` 或 `data`。第二条事件由 `A2AEnabledServeOrchestrator.streamBatchResolution` 明确产生；单成员、单个普通 TextPart 时它通常与远端最终文本相同，多个 Part 或成员时则是聚合值。如果 `resume=true`，远端原始输出之后会恢复父 Handler，后续业务事件由父 Handler 产生，不能预设固定结构。
+REST 入口使用当前 `conversation_id` 作为委派源的关联 ID，不额外生成根执行 ID，也不增加 TaskStore 扫描。Agent A 的本地 Handler chunk 仍按原业务数据直接输出，不添加 `agentEvent`；只有委派控制事件和下游事件使用上述 envelope。聚合终值由 `A2AEnabledServeOrchestrator.streamBatchResolution` 产生；单成员、单个普通 TextPart 时通常与远端最终文本相同，多个 Part 或成员时按成员顺序聚合。如果 `resume=true`，远端结果用于恢复父 Handler，后续本地业务事件仍保持原结构。
 
 如果该委派配置为不恢复父 Handler，远端调用完成后，非流式 Query 的完整响应如下。该示例限定为一个远端 Agent 的 Task 只包含一个普通 TextPart：
 
@@ -480,35 +487,33 @@ data:{"jsonrpc":"2.0","id":"request-2","result":{"statusUpdate":{"taskId":"task-
 | `result.statusUpdate.status` | 当前 Task 状态 | A2A 执行器 |
 | `result.statusUpdate.status.state` | `TASK_STATE_COMPLETED`、`TASK_STATE_INPUT_REQUIRED` 或 `TASK_STATE_FAILED` 等 A2A Task 状态 | A2A 执行器 |
 
-Handler 普通 chunk 转换为 artifact；`type=interrupt` 转换为 `TASK_STATE_INPUT_REQUIRED`；`type=error` 转换为 `TASK_STATE_FAILED`；正常完成转换为 `TASK_STATE_COMPLETED`。远端并发调用的中间输出还会带 `_remote_invocation` Part metadata，用于标识 `batchId`、`toolCallId` 和目标 Agent。
+Handler 普通 chunk 转换为 artifact；`type=interrupt` 转换为 `TASK_STATE_INPUT_REQUIRED`；`type=error` 转换为 `TASK_STATE_FAILED`；正常完成转换为 `TASK_STATE_COMPLETED`。A2A 第一跳的本地 Artifact 保持原结构，不添加 `agentEvent`；只有远端委派、状态和输出使用 Artifact 级 `metadata.agentEvent`。
 
-以下示例同样限定为 `resume=false`、一个远端 Agent 只产生一个普通文本 Part。除 SDK 在新 Task 启动时可能先发送的提交/工作状态事件外，与远端业务结果直接相关的完整事件序列依次为远端原始输出、批次聚合终值和完成状态；Runtime 生成的可选空字段不会出现在 JSON 中：
+以下示例限定为一个父 Task 委派一个远端 Task。所有投影事件的外层 `artifactUpdate.taskId` 仍是父 Task；下游来源由 Artifact metadata 表达：
 
 ```text
 event:jsonrpc
-data:{"jsonrpc":"2.0","id":"request-2","result":{"artifactUpdate":{"taskId":"task-1","artifact":{"artifactId":"artifact-1","parts":[{"text":"【远端 Agent 原始输出】","metadata":{"_remote_invocation":{"kind":"remote_agent_output","batchId":"batch-1","toolCallId":"call-1","target":"remote-agent"}}}]},"contextId":"conversation-1"}}}
+data:{"jsonrpc":"2.0","id":"request-2","result":{"artifactUpdate":{"taskId":"task-a","artifact":{"artifactId":"delegation-1","parts":[{"text":"【委派给远端 Agent 的输入】"}],"metadata":{"agentEvent":{"type":"delegation","source":{"agentId":"agent-a","taskId":"task-a"},"target":{"agentId":"remote-agent","taskId":"task-b"}}}},"contextId":"conversation-1","append":false,"lastChunk":true}}}
 
 event:jsonrpc
-data:{"jsonrpc":"2.0","id":"request-2","result":{"artifactUpdate":{"taskId":"task-1","artifact":{"artifactId":"artifact-2","parts":[{"text":"【从远端 Task artifacts 提取并聚合的业务终值】"}]},"contextId":"conversation-1"}}}
+data:{"jsonrpc":"2.0","id":"request-2","result":{"artifactUpdate":{"taskId":"task-a","artifact":{"artifactId":"status-1","parts":[{"text":"working"}],"metadata":{"agentEvent":{"type":"status","source":{"agentId":"remote-agent","taskId":"task-b"},"state":"working"}}},"contextId":"conversation-1","append":false,"lastChunk":true}}}
 
 event:jsonrpc
-data:{"jsonrpc":"2.0","id":"request-2","result":{"statusUpdate":{"taskId":"task-1","status":{"state":"TASK_STATE_COMPLETED"},"contextId":"conversation-1"}}}
+data:{"jsonrpc":"2.0","id":"request-2","result":{"artifactUpdate":{"taskId":"task-a","artifact":{"artifactId":"output-1","parts":[{"text":"【远端 Agent 原始输出】"}],"metadata":{"agentEvent":{"type":"output","source":{"agentId":"remote-agent","taskId":"task-b"}}}},"contextId":"conversation-1","append":false,"lastChunk":false}}}
 
 ```
 
-第一个 `artifactUpdate` 中：
+关键字段如下：
 
 | 字段路径 | 来源 |
 |---|---|
-| `result.artifactUpdate.artifact.parts[0].text` | 远端 Agent artifact 的原始 `TextPart.text`；上例已在值中标出 |
-| `result.artifactUpdate.artifact.parts[0].data` | 远端 Agent 输出为普通结构化值时使用；与 `text` 二选一 |
-| `result.artifactUpdate.artifact.parts[0].metadata._remote_invocation` | Runtime 生成的来源信息，不是远端 Agent 原始报文的一部分 |
-| `_remote_invocation.kind` | 固定为 `remote_agent_output` |
-| `_remote_invocation.batchId` | Runtime 远端调用批次 ID |
-| `_remote_invocation.toolCallId` | 触发该远端调用的工具调用 ID |
-| `_remote_invocation.target` | 目标 Agent 注册名；注册名为空时使用工具名 |
+| `result.artifactUpdate.taskId` | 始终是当前 Runtime 的父 Task ID |
+| `result.artifactUpdate.artifact.metadata.agentEvent.source` | 实际产生事件的 Agent/Task 节点 |
+| `result.artifactUpdate.artifact.metadata.agentEvent.target` | 仅 delegation 存在，建立直接委派边 |
+| `result.artifactUpdate.artifact.metadata.agentEvent.state` | 仅 status 存在；同一节点的 status Artifact ID 稳定复用 |
+| `result.artifactUpdate.artifact.parts` | 下游 Artifact Parts；Runtime 不解包业务载荷，只换挂外层 Artifact ID |
 
-第一个 `artifactUpdate` 的 `parts[0].text` 是远端原始 `TextPart.text`；第二个 `artifactUpdate` 是 `A2AEnabledServeOrchestrator.streamBatchResolution` 产生的聚合终值。远端协议外层、Task、Artifact、`statusUpdate` 和来源 metadata 都由当前 Runtime 重新构造。对于结构化输出，`ChunkMapper` 会保留普通值，但会对 Runtime 明确认识的 `answer`/`workflow_final` 终态 envelope 提取其中的业务值，所以不能把 A2A Part 一概描述成远端 JSON-RPC 报文的逐字节副本。`resume=true` 时，原始远端输出之后由恢复后的父 Handler 继续产生业务事件，后续结构不固定。
+下游已经携带的合法 `agentEvent` 会逐跳保留，因此多跳来源不会被直接父节点覆盖。无标签的直接下游 Artifact 使用 `remote:<agentId>:<taskId>:<artifactId>` 作为父 Artifact ID；已有标签的嵌套 Artifact 保留原 ID。投影副本会移除仅用于远端终值提取的 `_agentcore_terminal`。只有 A2A 用户入口和下游实际调用均为流式时才发布这些过程事件；任一侧非流式时只返回最终 Task 或 Message，并且不为最终 Artifact 补来源标签，也不回放下游 Task 快照中的 Artifact 或状态。
 
 ### 3.5 GetTask 与 SubscribeToTask
 

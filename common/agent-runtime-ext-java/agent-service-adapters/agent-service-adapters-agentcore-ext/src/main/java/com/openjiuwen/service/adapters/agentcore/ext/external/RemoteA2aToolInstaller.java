@@ -6,7 +6,8 @@ package com.openjiuwen.service.adapters.agentcore.ext.external;
 
 import com.openjiuwen.core.singleagent.BaseAgent;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
-import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentCardRegistry;
+import com.openjiuwen.service.app.a2a.catalog.A2ARemoteAgentCardRegistry;
+import com.openjiuwen.service.app.a2a.catalog.RemoteAgentEntry;
 
 import org.a2aproject.sdk.spec.AgentCard;
 import org.a2aproject.sdk.spec.AgentSkill;
@@ -111,7 +112,7 @@ public class RemoteA2aToolInstaller {
         }
     }
 
-    private static Optional<RemoteA2aToolSpec> toSpec(A2ARemoteAgentCardRegistry.RemoteAgentEntry entry) {
+    private static Optional<RemoteA2aToolSpec> toSpec(RemoteAgentEntry entry) {
         AgentCard card = entry.card();
         if (card == null) {
             log.warn("Remote A2A agent card is unavailable for '{}', skip tool injection", entry.name());

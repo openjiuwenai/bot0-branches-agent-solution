@@ -61,8 +61,8 @@ class TestShortCircuit:
         result = evaluator.evaluate(_case(_TRAJECTORY), {"answer": "x"})
 
         assert isinstance(result, EvaluatedCase)
-        assert result.score == 0.0
-        assert result.per_metric == {"filter_failure": 0.0}
+        assert result.score == pytest.approx(0.0)
+        assert result.per_metric == {"filter_failure": pytest.approx(0.0)}
         delegate.evaluate.assert_not_called()
 
         reason_data = json.loads(result.reason)
@@ -158,7 +158,7 @@ class TestBatchEvaluate:
         case = _case(_TRAJECTORY)
         results = evaluator.batch_evaluate([case], [{"answer": "x"}])
         assert len(results) == 1
-        assert results[0].score == 0.0
+        assert results[0].score == pytest.approx(0.0)
 
     def test_delegate_errors_dropped(self) -> None:
         delegate = MagicMock()
@@ -196,11 +196,11 @@ class TestBatchEvaluate:
         # 第 1 个走 delegate（ok），第 2 个走 delegate（fail），第 3 个走 filtered
         results = evaluator.batch_evaluate([case_ok, case_fail], [{"a": 1}, {"fail": True}])
         assert len(results) == 1
-        assert results[0].score == 0.7
+        assert results[0].score == pytest.approx(0.7)
 
         results2 = evaluator_filtered.batch_evaluate([case_filtered], [{"a": 1}])
         assert len(results2) == 1
-        assert results2[0].score == 0.0
+        assert results2[0].score == pytest.approx(0.0)
 
     def test_detailed_batch_preserves_delegate_failure_identity(self) -> None:
         """Filtering seam 也要提供与 LLM evaluator 相同的无损 outcome 契约。"""

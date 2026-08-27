@@ -1,0 +1,35 @@
+# L1 层：agent_card_l1，对接 mock 控制器 agent_L1_controller。
+# 意图映射：3→agent_card_l2（正常转调）、5→agent_card_dead（目标不可达，端口 9 无 card，
+# 发现失败仅告警重试，调用时报 Unknown remote agent → TARGET_UNAVAILABLE）、
+# 6→agent_card_forbidden（不在 allowed-agents，产出 TARGET_NOT_ALLOWED）。
+# 不配置 fixed-l1-entry：intent 解析失败（如意图 "99"）时产出 TARGET_MISSING。
+# L1 收到下游 not-in-scope 标记信封后重跑自身控制器重新识别（upstream-signal，
+# 经 runtime 协调器 remoteToolResults re-invoke 链）。
+# 转调出站由 runtime 协调器执行（a2a_delegate 中断）：remote-agents 在启动时拉取
+# 对端 /.well-known/agent-card.json 注册进 A2ARemoteAgentCardRegistry；
+# agent_card_l2 的 timeout-seconds=3 即原 handoff.timeout 语义（场景10：L2 睡 10s）。
+openjiuwen:
+  service:
+    agent-id: agent_card_l1
+    a2a:
+      public-url: http://127.0.0.1:${versatile-demo.l1-port}
+      remote-agents:
+        - name: agent_card_l2
+          url: http://127.0.0.1:${versatile-demo.l2-port}
+          streaming: true
+          timeout-seconds: 3
+        - name: agent_card_dead
+          url: http://127.0.0.1:9
+    versatile:
+      url-template: http://127.0.0.1:${versatile-demo.l1-port}/v1/proj/agents/agent_L1_controller/conversations/${versatile-demo.conversation-id-placeholder}
+      handoff:
+        target:
+          intent-mapping:
+            "3": agent_card_l2
+            "5": agent_card_dead
+            "6": agent_card_forbidden
+        forward:
+          # 转发出站 contextId 改写为 <目标agentId>-<原contextId>（确定性派生，
+          # INPUT_REQUIRED 续调改写结果一致）；不配置则透传原 contextId
+          # （adapter 的 ForwardContextIdRemoteAgentCaller 装饰器）
+          context-id-prefix-target: true

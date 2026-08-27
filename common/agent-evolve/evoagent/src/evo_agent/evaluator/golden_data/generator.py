@@ -36,7 +36,6 @@ from openjiuwen.core.foundation.llm import (
 
 from evo_agent.config import EvolveConfig
 from evo_agent.evaluator.domain.scoring import EvaluationError
-from evo_agent.llm.invocation import _get_invocation_loop
 from evo_agent.evaluator.golden_data.gu_store import (
     OUT_OF_SCOPE_SKILL,
     load_flat,
@@ -58,6 +57,7 @@ from evo_agent.evaluator.golden_data.trajectory_format import (
     _extract_customer_inputs,
     _format_history_rich,
 )
+from evo_agent.llm.invocation import _get_invocation_loop
 
 logger = logging.getLogger(__name__)
 
@@ -198,8 +198,8 @@ class ExpectedBehaviorGenerator:
             logger.warning("%s 第 %d/%d 次返回空响应", label, attempt, max_retries)
         raise EvaluationError(f"{label} LLM 调用 {max_retries} 次全失败: {last_err}")
 
+    @staticmethod
     def _parse_eb(
-        self,
         raw: str,
         first_input: str,
         customer_turns: list[str],
@@ -274,7 +274,7 @@ def _strip_field(line: str, prefixes: tuple[str, ...], cut_markers: tuple[str, .
     val = line
     for p in prefixes:
         if val.startswith(p):
-            val = val[len(p) :].strip()
+            val = val[len(p):].strip()
             break
     for marker in cut_markers:
         idx = val.find(marker)

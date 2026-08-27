@@ -1,0 +1,62 @@
+excel:
+  intent_sheet: 意图信息
+  question_sheet: 相似问信息
+  intent_name_col: 意图名称
+  intent_description_col: 意图描述
+  question_col: 相似问
+csv:
+  question_col: 用户问题
+  intent_name_col: 意图名称
+  intent_description_col: 意图描述
+  encoding: utf-8-sig
+id:
+  strategy: uuid
+  column: ''
+length:
+  min_chars: 2
+  max_chars: 50
+similarity:
+  duplicate_threshold: 0.88
+  conflict_threshold: 0.78
+  top_k: 5
+  query_batch_size: 32
+chroma:
+  production_collection: kb_production
+  staging_collection: kb_staging
+  intent_production_collection: kb_intent_production
+  intent_staging_collection: kb_intent_staging
+  upsert_batch_size: 100
+intent_qc:
+  recall_top_k: 3
+  duplicate_threshold: 0.7
+  llm_max_tokens: 512
+detection_mode:
+  batch: true
+  production: false
+checkers:
+  format: true
+  compliance: true
+  duplicate: true
+  conflict: true
+  semantic: true
+  # 默认关闭 LLM 裁决，无需配置 API Key 即可运行基础质检
+  llm_semantic: false
+  llm_dup_conflict: false
+compliance:
+  enable_pii: true
+  enable_regulatory: true
+  enable_prohibited: true
+semantic:
+  llm_max_tokens: 1024
+  skip_llm_when_blocked: true
+  vague_patterns:
+  - ^好的?$
+  - ^嗯+$
+  - ^那个功能$
+  - ^这个$
+  - ^怎么办$
+qc:
+  checkpoint_interval: 20
+  worker_count: 4
+  row_start: 0
+  row_end: 0

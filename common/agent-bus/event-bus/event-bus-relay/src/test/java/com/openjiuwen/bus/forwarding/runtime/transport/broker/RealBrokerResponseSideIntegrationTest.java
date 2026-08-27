@@ -195,6 +195,59 @@ class RealBrokerResponseSideIntegrationTest {
     void setUp() {
         tempRuntime.setResponseMode(TempRuntime.ResponseMode.BLOCKING);
         wireGateway(ACCEPT_TIMEOUT_MS, RESPONSE_TIMEOUT_MS);
+        awaitConsumersReady();
+    }
+
+    /**
+     * Warm the three fresh consumer groups (T=req, A=GROUP_RESP, V=GROUP_VERIFY) past the
+     * DefaultLitePullConsumer cold-start rebalance (~16-30s; see memory
+     * agent-bus-e2e-rocketmq-quirks) before each test runs. The class's 15s accept/poll windows
+     * lose that race otherwise (UC-4/7 → DEFERRED, UC-6/10 → empty).
+     *
+     * <p>(1) round-trip a throwaway RUN_CREATE through req→T→resp_out→A until acceptWindow
+     * returns ACCEPTED — proves T (req consumer) and A (GROUP_RESP) are assigned.
+     * <p>(2) loop a direct probe onto resp_out and {@link #pollNext} it until received — proves
+     * V (GROUP_VERIFY) is assigned. Probes produced before a consumer is assigned are skipped by
+     * CONSUME_FROM_LAST_OFFSET, so we re-produce until one lands post-assignment.
+     *
+     * <p>The first test pays the cold-start cost (~30-60s here); later tests find the consumers
+     * already assigned and return fast.
+     */
+    private void awaitConsumersReady() {
+        long deadline = System.currentTimeMillis() + 90_000L;
+        String why = "not ready within 90s";
+
+        // (1) warm T (req) + A (GROUP_RESP) via a round-trip.
+        boolean roundTrip = false;
+        while (System.currentTimeMillis() < deadline && !roundTrip) {
+            UUID probe = UUID.randomUUID();
+            gateway.dispatchRequest(runCreate(probe));              // onto ascend_bus_invocation_req
+            IngressResponse r = gateway.acceptWindow(probe, TENANT); // drains A; 15s window per attempt
+            if (r.status() == IngressResponse.IngressStatus.ACCEPTED) {
+                roundTrip = true;
+            }
+        }
+        if (!roundTrip) {
+            throw new IllegalStateException(
+                    "response-side warmup: round-trip (req-consumer / responseAdapter) " + why);
+        }
+
+        // (2) warm V (GROUP_VERIFY) via a direct probe + pollNext (re-produce until V receives).
+        boolean verify = false;
+        while (System.currentTimeMillis() < deadline && !verify) {
+            String corrId = "warm-v-" + UUID.randomUUID();
+            tempRuntime.produceResponse(AgentBusEventType.INVOCATION_RESPONSE, "warm", corrId);
+            try {
+                BrokerInboundMessage m = pollNext(corrId); // 15s; throws if V missed it
+                verifyAdapter.commit(m);
+                verify = true;
+            } catch (AssertionError ignored) {
+                // V not yet assigned (probe produced pre-assignment, skipped) — re-produce + retry.
+            }
+        }
+        if (!verify) {
+            throw new IllegalStateException("response-side warmup: verifyAdapter " + why);
+        }
     }
 
     /**
@@ -541,8 +594,14 @@ class RealBrokerResponseSideIntegrationTest {
 
         TempRuntime(String nameserver) {
             DefaultBrokerTopicResolver reqResolver = new DefaultBrokerTopicResolver();
+            // suffix "req": this response-side IT has NO forward relay (it exercises the
+            // gateway→runtime single hop in isolation and produces resp_out directly), so T
+            // consumes the gateway's dispatched request on ascend_bus_invocation_req directly.
+            // ("deliver" would require a forward relay to bridge req→deliver first — see
+            // RealBrokerTwoHopRelayIntegrationTest, which runs that relay; without it the
+            // gateway's req is never consumed → no resp_out → acceptWindow always DEFERRED.)
             this.consumer = new RocketMqBrokerForwardingConsumer(
-                    reqResolver, "deliver",
+                    reqResolver, "req",
                     RocketMqBrokerForwardingConsumer.defaultPollerFactory(nameserver), POLL_WAIT_MS);
             this.producer = new DefaultMQProducer("it-temp-runtime-producer");
             producer.setNamesrvAddr(nameserver);

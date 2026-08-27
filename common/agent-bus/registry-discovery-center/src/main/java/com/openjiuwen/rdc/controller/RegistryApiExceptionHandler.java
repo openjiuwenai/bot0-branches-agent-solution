@@ -17,20 +17,14 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.util.Map;
 
 /**
- * Shared HTTP mapping for registry API failures across
- * {@link MvpRegistryController} and {@link InstanceRouteController}.
+ * HTTP mapping for discover/register failures on {@link MvpRegistryController}.
  *
- * <p>Controller-local {@code @ExceptionHandler} methods only apply to that
- * controller — after instance/resolve endpoints moved off
- * {@code MvpRegistryController}, failures such as {@code TENANT_SCOPE_DENIED}
- * otherwise fell through to Spring Boot's default 500 error body.
+ * <p>Instance/resolve endpoints use {@link InstanceRouteApiExceptionHandler}.
+ * {@code TENANT_SCOPE_DENIED} → 403 is unchanged on discover/register.
  *
  * @since 0.1.0 (2026)
  */
-@RestControllerAdvice(basePackageClasses = {
-        MvpRegistryController.class,
-        InstanceRouteController.class
-})
+@RestControllerAdvice(basePackageClasses = MvpRegistryController.class)
 public class RegistryApiExceptionHandler {
     /**
      * Maps {@link RegistryFailureException} to an HTTP status and body.

@@ -1,0 +1,201 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
+package com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.egress;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.OtelRuntimeSupport;
+import com.openjiuwen.service.adapters.agentcore.ext.middleware.trajectory.identity.TraceContextCarrier;
+import com.openjiuwen.service.app.a2a.catalog.A2ARemoteAgentCardRegistry;
+import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
+import com.openjiuwen.service.app.controller.a2a.client.RemoteCall;
+import com.openjiuwen.service.app.controller.a2a.client.RemoteCallOutcome;
+
+import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;
+import io.opentelemetry.sdk.trace.SdkTracerProvider;
+import io.opentelemetry.sdk.trace.data.SpanData;
+import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
+
+/**
+ * OtelRemoteAgentCallerDecorator 出站委托 span 的单元测试。
+ */
+class OtelRemoteAgentCallerDecoratorTest {
+    private final InMemorySpanExporter exporter = InMemorySpanExporter.create();
+    private final SdkTracerProvider provider = SdkTracerProvider.builder()
+            .addSpanProcessor(SimpleSpanProcessor.create(exporter))
+            .build();
+    private final A2ARemoteAgentCardRegistry registry = new A2ARemoteAgentCardRegistry() {
+        @Override
+        public String resolveUrl(String name) {
+            return "http://remote:9001/a2a";
+        }
+    };
+
+    @AfterEach
+    void cleanup() {
+        EgressContextStash.remove("conv-1");
+    }
+
+    @Test
+    void realAsyncBoundaryResolvesBridgeAndStampsOutbound() {
+        // 真实异步边界回归：不手工写 stash——父上下文仅由 HTTP bridge 提供（组合 contextId 前缀命中），
+        // 委托完成后 OUTBOUND 槽必须有 dispatch 上下文（异步发送线程经它解析 traceparent）
+        String conversation = "conv-1";
+        io.opentelemetry.api.trace.Span root = provider.get("test").spanBuilder("http.request").startSpan();
+        com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.HttpContextBridge bridge =
+                new com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.HttpContextBridge();
+        bridge.put(conversation, new com.openjiuwen.service.adapters.agentcore.ext.middleware.otel
+                .HttpContextBridge.Entry(root));
+        OtelRuntimeSupport.activate(bridge);
+        java.util.concurrent.atomic.AtomicReference<String> outboundSeen =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        RemoteAgentCaller asyncDelegate = (call, observer) ->
+                CompletableFuture.supplyAsync(() -> {
+                    java.util.Optional<io.opentelemetry.context.Context> outbound =
+                            EgressContextStash.findOutbound(call.contextId());
+                    outboundSeen.set(outbound.map(ctx -> io.opentelemetry.api.trace.Span.fromContext(ctx)
+                            .getSpanContext().getTraceId()).orElse(null));
+                    return new RemoteCallOutcome("task-1", org.a2aproject.sdk.spec.TaskState.TASK_STATE_COMPLETED,
+                            "COMPLETED", "done", null);
+                });
+        try {
+            new OtelRemoteAgentCallerDecorator(asyncDelegate, provider.get("test"), registry, null)
+                    .callOutcome(versatileCall(), null).join();
+        } finally {
+            root.end();
+            OtelRuntimeSupport.deactivate();
+            bridge.remove(conversation);
+        }
+        org.assertj.core.api.Assertions.assertThat(outboundSeen.get())
+                .isEqualTo(root.getSpanContext().getTraceId());
+    }
+
+    private OtelRemoteAgentCallerDecorator decorator(RemoteAgentCaller delegate) {
+        return new OtelRemoteAgentCallerDecorator(delegate, provider.get("test"), registry, null);
+    }
+
+    private RemoteCall versatileCall() {
+        return new RemoteCall("versatile-agent",
+                "{\"query_intent\":\"理财推荐\",\"query_description\":\"推荐基金\",\"query\":\"推荐基金\",\"intent\":\"理财推荐\"}",
+                "conv-1", null, Map.of());
+    }
+
+    @Test
+    void parentRunIdIsInjectedIntoOutboundMetadata() {
+        // carrier 有本轮 run 标记时，出站 RemoteCall metadata 注入 parent_run_id
+        TraceContextCarrier carrier = TraceContextCarrier.create(86400L);
+        carrier.put("conv-1", new TraceContextCarrier.Entry("t", false, "a2a", "tenant",
+                java.time.Instant.now()));
+        carrier.updateCurrentRunId("conv-1", "task-1#2");
+        AtomicReference<RemoteCall> seen = new AtomicReference<>();
+        OtelRemoteAgentCallerDecorator decorator = new OtelRemoteAgentCallerDecorator(
+                (call, observer) -> {
+                    seen.set(call);
+                    return java.util.concurrent.CompletableFuture.completedFuture(null);
+                },
+                provider.get("test"), registry, carrier);
+        decorator.callOutcome(versatileCall(), null);
+        org.assertj.core.api.Assertions.assertThat(seen.get().metadata())
+                .containsEntry("parent_run_id", "task-1#2");
+    }
+
+    @Test
+    void versatileCall_producesVaSpanWithStashedParent() {
+        io.opentelemetry.api.trace.Span parentSpan = provider.get("test").spanBuilder("chain.X").startSpan();
+        EgressContextStash.put("conv-1", parentSpan.storeInContext(Context.root()));
+
+        RemoteAgentCaller delegate = (call, observer) -> CompletableFuture.completedFuture(
+                new RemoteCallOutcome("rt-1", null, "ok", "工作流结果", null));
+        decorator(delegate).callOutcome(versatileCall(), null).join();
+        parentSpan.end();
+
+        assertThat(exporter.getFinishedSpanItems()).hasSize(2);
+        SpanData va = exporter.getFinishedSpanItems().stream()
+                .filter(s -> "service.versatile_adapter".equals(s.getName())).findFirst().orElseThrow();
+        SpanData chain = exporter.getFinishedSpanItems().stream()
+                .filter(s -> "chain.X".equals(s.getName())).findFirst().orElseThrow();
+        assertThat(va.getKind()).isEqualTo(SpanKind.CLIENT);
+        assertThat(va.getTraceId()).isEqualTo(chain.getTraceId());
+        assertThat(va.getParentSpanId()).isEqualTo(chain.getSpanId());
+        var attrs = va.getAttributes();
+        assertThat(attrs.get(AttributeKey.stringKey("openjiuwen.va.query_intent"))).isEqualTo("理财推荐");
+        assertThat(attrs.get(AttributeKey.stringKey("openjiuwen.va.query_description"))).isEqualTo("推荐基金");
+        assertThat(attrs.get(AttributeKey.stringKey("openjiuwen.va.status"))).isEqualTo("completed");
+        assertThat(attrs.get(AttributeKey.stringKey("openjiuwen.va.response_summary"))).isEqualTo("工作流结果");
+        assertThat(attrs.get(AttributeKey.longKey("openjiuwen.va.elapsed_ms"))).isNotNull();
+    }
+
+    @Test
+    void dispatchCall_producesDispatchSpanWithRegistryUrl() {
+        EgressContextStash.put("conv-1", Context.root());
+        RemoteAgentCaller delegate = (call, observer) -> CompletableFuture.completedFuture(
+                new RemoteCallOutcome("rt-2", null, "ok", "ok", null));
+        RemoteCall call = new RemoteCall("fund_agent", "查询基金", "conv-1", null, Map.of());
+        decorator(delegate).callOutcome(call, null).join();
+
+        SpanData span = exporter.getFinishedSpanItems().get(0);
+        assertThat(span.getName()).isEqualTo("sub_agent.dispatch");
+        var attrs = span.getAttributes();
+        assertThat(attrs.get(AttributeKey.stringKey("openjiuwen.subagent.entity_id"))).isEqualTo("fund_agent");
+        assertThat(attrs.get(AttributeKey.stringKey("openjiuwen.subagent.query"))).isEqualTo("查询基金");
+        assertThat(attrs.get(AttributeKey.stringKey("openjiuwen.subagent.sub_agent_url")))
+                .isEqualTo("http://remote:9001/a2a");
+        assertThat(attrs.get(AttributeKey.stringKey("openjiuwen.subagent.context_id"))).isEqualTo("conv-1");
+        assertThat(attrs.get(AttributeKey.stringKey("openjiuwen.subagent.sub_task_path")))
+                .isEqualTo("[\"conv-1\",\"fund_agent\"]");
+    }
+
+    @Test
+    void futureException_marksError() {
+        EgressContextStash.put("conv-1", Context.root());
+        RemoteAgentCaller delegate = (call, observer) -> {
+            CompletableFuture<RemoteCallOutcome> f = new CompletableFuture<>();
+            f.completeExceptionally(new IllegalStateException("remote down"));
+            return f;
+        };
+        decorator(delegate).callOutcome(versatileCall(), null)
+                .handle((o, e) -> null).join();
+        SpanData span = exporter.getFinishedSpanItems().get(0);
+        assertThat(span.getStatus().getStatusCode()).isEqualTo(StatusCode.ERROR);
+        assertThat(span.getAttributes().get(AttributeKey.stringKey("openjiuwen.va.status"))).isEqualTo("error");
+    }
+
+    @Test
+    void delegateThrows_spanEndedAndRethrown() {
+        EgressContextStash.put("conv-1", Context.root());
+        RemoteAgentCaller delegate = (call, observer) -> {
+            throw new IllegalStateException("boom");
+        };
+        assertThatThrownBy(() -> decorator(delegate).callOutcome(versatileCall(), null))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(exporter.getFinishedSpanItems()).hasSize(1);
+        assertThat(exporter.getFinishedSpanItems().get(0).getStatus().getStatusCode())
+                .isEqualTo(StatusCode.ERROR);
+    }
+
+    @Test
+    void stash_prefixMatchForCombinedContextId() {
+        Context ctx = Context.root();
+        EgressContextStash.put("conv-1", ctx);
+        assertThat(EgressContextStash.find("conv-1")).contains(ctx);
+        assertThat(EgressContextStash.find("conv-1_batch-uuid_call_1")).contains(ctx);
+        assertThat(EgressContextStash.findConversationId("conv-1_batch-uuid_call_1")).contains("conv-1");
+        assertThat(EgressContextStash.find("other")).isEmpty();
+        EgressContextStash.remove("conv-1");
+        assertThat(EgressContextStash.find("conv-1")).isEmpty();
+    }
+}

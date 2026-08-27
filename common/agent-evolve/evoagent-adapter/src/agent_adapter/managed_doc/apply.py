@@ -49,7 +49,8 @@ class ApplyStrategy(Protocol):
 
 class FileOnlyApply:
     """placeholder, not yet in use (spec D7). File writes are already atomic; no
-    further effect needed. Returns success immediately."""
+    further effect needed. Returns success immediately.
+    """
 
     async def apply(self) -> ApplyResult:
         return ApplyResult(ok=True, down_seen=None, error=None)
@@ -170,7 +171,8 @@ class RestartApply:
                 await proc.wait()
             raise
         rc = proc.returncode
-        assert rc is not None  # set after wait()/kill() in every path above
+        if rc is None:  # set after wait()/kill() in every path above
+            raise RuntimeError("returncode not available after wait/kill")
         return rc
 
     @staticmethod

@@ -18,5 +18,6 @@ OTEL_SPANS_JSONL = Path(__file__).resolve().parent / "data" / "otel_spans.jsonl"
 
 def otel_spans_jsonl() -> Path:
     """返回归档在 tests/data 下的 jsonl 路径, 缺失时断言失败。"""
-    assert OTEL_SPANS_JSONL.exists(), f"测试数据缺失: {OTEL_SPANS_JSONL}"
+    if not OTEL_SPANS_JSONL.exists():
+        raise FileNotFoundError(f"测试数据缺失: {OTEL_SPANS_JSONL}")
     return OTEL_SPANS_JSONL

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    {% set path_clean = request.path.rstrip('/').lstrip('/') %}
+    {% set path_depth = path_clean.split('/')|length if path_clean else 0 %}
+    {% set rel_prefix = '../' * path_depth if path_depth > 0 else './' %}
+    <base href="{{ rel_prefix }}">
+    <script>window.REL_PREFIX = "{{ rel_prefix }}";</script>
+    <title>{% block title %}DFW-RAG 知识处理平台{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="static/img/logo.svg">
+    <link rel="stylesheet" href="static/css/main.css">
+    <link rel="stylesheet" href="static/css/layout.css">
+    <link rel="stylesheet" href="static/css/components.css">
+    {% block extra_css %}{% endblock %}
+    {% block extra_head %}{% endblock %}
+</head>
+<body {% block body_attrs %}{% endblock %}>
+
+    <!-- Top Navigation Bar -->
+    {% if not hide_navbar %}
+    <header class="top-navbar" id="topNavbar">
+        <div class="navbar-left">
+            <button class="sidebar-toggle" id="sidebarToggle" aria-label="切换侧边栏">
+                <span class="hamburger-bar"></span>
+                <span class="hamburger-bar"></span>
+                <span class="hamburger-bar"></span>
+            </button>
+            <a class="navbar-brand" href="{{ rel_prefix }}" title="返回首页">
+                <svg class="brand-logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="2" y="2" width="12" height="12" rx="2" fill="var(--color-primary)" opacity="0.9"/>
+                    <rect x="18" y="2" width="12" height="12" rx="2" fill="var(--color-secondary)" opacity="0.9"/>
+                    <rect x="2" y="18" width="12" height="12" rx="2" fill="var(--color-secondary)" opacity="0.7"/>
+                    <rect x="18" y="18" width="12" height="12" rx="2" fill="var(--color-primary)" opacity="0.6"/>
+                </svg>
+                <span class="brand-name">DFW-RAG</span>
+                <span class="brand-separator">/</span>
+                <span class="brand-name-cn">知识处理</span>
+            </a>
+        </div>
+
+        <nav class="navbar-center" aria-label="主导航">
+            <a class="nav-link {{ 'active' if active_page == 'extract' }}" href="extract/">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>
+                </svg>
+                知识萃取
+            </a>
+            <a class="nav-link {{ 'active' if active_page == 'synthesize' }}" href="synthesize/">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                </svg>
+                知识合成
+            </a>
+            <a class="nav-link {{ 'active' if active_page == 'qc' }}" href="qc/">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 11 12 14 22 4"/>
+                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                </svg>
+                知识质检
+            </a>
+            <a class="nav-link {{ 'active' if active_page == 'llm-configs' }}" href="llm-configs/">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="4" y="4" width="16" height="16" rx="2" ry="2"/>
+                    <rect x="9" y="9" width="6" height="6"/>
+                    <line x1="9" y1="1" x2="9" y2="4"/>
+                    <line x1="15" y1="1" x2="15" y2="4"/>
+                    <line x1="9" y1="20" x2="9" y2="23"/>
+                    <line x1="15" y1="20" x2="15" y2="23"/>
+                </svg>
+                环境配置
+            </a>
+        </nav>
+
+        <div class="navbar-right"></div>
+    </header>
+    {% endif %}
+
+    <!-- Sidebar (placeholder, pages can override via block sidebar) -->
+    {% if not hide_sidebar %}
+    {% block sidebar %}{% endblock %}
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+    {% endif %}
+
+    <!-- Main Content -->
+    <main class="main-content" id="mainContent" role="main">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay" role="status" aria-hidden="true">
+        <div class="loading-spinner">
+            <div class="spinner-ring"></div>
+            <p class="loading-text">加载中...</p>
+        </div>
+    </div>
+
+    <!-- Confirm Dialog -->
+    <div class="confirm-overlay" id="confirmOverlay" role="dialog" aria-modal="true" aria-hidden="true">
+        <div class="confirm-dialog">
+            <div class="confirm-header">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <span class="confirm-title">请确认</span>
+            </div>
+            <p class="confirm-message" id="confirmMessage">确定要执行此操作吗？</p>
+            <div class="confirm-actions">
+                <button class="btn btn-secondary" id="confirmCancel">取消</button>
+                <button class="btn btn-primary" id="confirmOk">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="static/js/main.js"></script>
+    <script src="static/js/api.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

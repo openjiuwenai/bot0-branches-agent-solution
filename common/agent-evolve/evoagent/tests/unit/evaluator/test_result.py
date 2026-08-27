@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock
 
+import pytest
 from openjiuwen.agent_evolving.dataset import Case, EvaluatedCase
 
 from evo_agent.evaluator.domain.result import EvaluationResult
@@ -33,9 +34,9 @@ class TestEvaluatedStatus:
         evaluated = _evaluated(score=0.9, per_metric={"safety": 1.0})
         result = EvaluationResult.from_evaluated_case(evaluated)
         assert result.status == "evaluated"
-        assert result.score == 0.9
+        assert result.score == pytest.approx(0.9)
         assert result.is_pass is True
-        assert result.per_metric == {"safety": 1.0}
+        assert result.per_metric == {"safety": pytest.approx(1.0)}
         assert result.filter_matches == []
 
     def test_evaluated_reason_with_pass_and_attribution(self) -> None:
@@ -120,7 +121,7 @@ class TestFilteredStatus:
 
         assert result.status == "filtered"
         assert result.is_pass is False
-        assert result.score == 0.0
+        assert result.score == pytest.approx(0.0)
         assert len(result.filter_matches) == 1
         assert isinstance(result.filter_matches[0], FilterMatch)
         assert result.filter_matches[0].rule_id == "structured_failure"
@@ -202,5 +203,5 @@ class TestDuckTypedEvaluated:
         fake.per_metric = {"m": 0.5}
         fake.reason = ""
         result = EvaluationResult.from_evaluated_case(fake)
-        assert result.score == 0.5
-        assert result.per_metric == {"m": 0.5}
+        assert result.score == pytest.approx(0.5)
+        assert result.per_metric == {"m": pytest.approx(0.5)}

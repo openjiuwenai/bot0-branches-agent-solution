@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.app.custom.rest.CustomRestProtocolAdapter;
 
 import org.a2aproject.sdk.spec.Artifact;
+import org.a2aproject.sdk.spec.DataPart;
 import org.a2aproject.sdk.spec.Message;
 import org.a2aproject.sdk.spec.MessageSendParams;
 import org.a2aproject.sdk.spec.Part;
@@ -112,17 +113,24 @@ public final class EdpaAbcdeCustomRestAdapter implements CustomRestProtocolAdapt
                 abbreviate(task.contextId(), 8));
 
         Map<String, Object> flatData = unwrapTaskToFlat(task);
-        return envelope(true, "", flatData, context);
+        Map<String, Object> result = envelope(true, "", flatData, context);
+        LOGGER.debug("[EDP-CUSTOM-REST-RSP] Sync response envelope: dataKeys={}",
+                flatData != null ? flatData.keySet() : "null");
+        return result;
     }
 
     @Override
     public SseEvent fromA2AStreamEvent(StreamingEventKind event, Context context) {
         String sseType = detectEventType(event);
-
-        LOGGER.debug("[EDP-CUSTOM-REST-RSP] Processing stream event: eventType={}",
-                event.getClass().getSimpleName());
-
+        String eventType = event.getClass().getSimpleName();
         Map<String, Object> flatData = unwrapToFlat(event);
+
+        // 合并 3 行 DEBUG 为 1 行：事件类型 + flatData 的 event 字段 + dataKeys
+        LOGGER.debug("[EDP-CUSTOM-REST-RSP] Stream event: type={}, flatEvent={}, dataKeys={}",
+                eventType,
+                flatData != null ? flatData.getOrDefault("event", "?") : "null",
+                flatData != null ? flatData.keySet() : "null");
+
         return new SseEvent(sseType, envelope(true, "", flatData, context));
     }
 
@@ -190,13 +198,25 @@ public final class EdpaAbcdeCustomRestAdapter implements CustomRestProtocolAdapt
     private Map<String, Object> unwrapArtifactToFlat(TaskArtifactUpdateEvent artifactEvent) {
         Artifact artifact = artifactEvent.artifact();
         if (artifact == null || artifact.parts() == null || artifact.parts().isEmpty()) {
-            LOGGER.debug("[EDP-CUSTOM-REST-RSP] Received empty artifact in TaskArtifactUpdateEvent");
             return Map.of("event", "artifact_empty", "content", "");
         }
 
         String text = concatArtifactText(artifact);
+
+        // TextPart 提取为空时，尝试从 DataPart 提取结构化事件数据
         if (text.isEmpty()) {
-            LOGGER.debug("[EDP-CUSTOM-REST-RSP] Received empty artifact in TaskArtifactUpdateEvent");
+            String dataPartJson = extractDataPartJson(artifact);
+            if (!dataPartJson.isEmpty()) {
+                Map<String, Object> parsed = parseArtifactJsonEnvelope(dataPartJson);
+                if (!parsed.isEmpty()) {
+                    return parsed;
+                }
+                // DataPart JSON 解析失败，回退为 summary
+                Map<String, Object> flat = new LinkedHashMap<>();
+                flat.put("event", "summary");
+                flat.put("content", dataPartJson);
+                return flat;
+            }
             return Map.of("event", "artifact_empty", "content", "");
         }
 
@@ -230,6 +250,29 @@ public final class EdpaAbcdeCustomRestAdapter implements CustomRestProtocolAdapt
     }
 
     /**
+     * 从 Artifact 的 parts 中提取 DataPart 的 data() 内容，序列化为 JSON 字符串。
+     * DataPart 的 data() 返回一个 Map，结构如：
+     *   {type:"custom", index:0, payload:{event, content, data, ...}}
+     * 序列化后可直接传入 parseArtifactJsonEnvelope 进行解析。
+     *
+     * @param artifact A2A SDK Artifact 对象
+     * @return 第一个 DataPart 的 data 序列化后的 JSON 字符串；无 DataPart 时返回空字符串
+     */
+    private String extractDataPartJson(Artifact artifact) {
+        for (Part<?> part : artifact.parts()) {
+            if (part instanceof DataPart dataPart && dataPart.data() != null) {
+                try {
+                    return objectMapper.writeValueAsString(dataPart.data());
+                } catch (JsonProcessingException e) {
+                    LOGGER.warn("[EDP-CUSTOM-REST] Failed to serialize DataPart data. error={}",
+                            e.getMessage());
+                }
+            }
+        }
+        return "";
+    }
+
+    /**
      * 解析 artifact text 为 JSON 信封格式，返回扁平 Map。
      * 支持3种 JSON 结构：custom payload、flat event、LLM output。
      * 解析失败时返回 null（由调用方决定回退策略）。
@@ -245,11 +288,16 @@ public final class EdpaAbcdeCustomRestAdapter implements CustomRestProtocolAdapt
             Object type = parsed.get("type");
             Object payload = parsed.get("payload");
 
-            // Shape 1: {type:"custom", payload:{event, content, data}}
-            if ("custom".equals(type) && payload instanceof Map) {
+            // Shape 1: {type:"custom"|"llm_usage"|"llm_output", payload:{event, content, data}}
+            if (type instanceof String && payload instanceof Map) {
                 Map<String, Object> payloadMap = (Map<String, Object>) payload;
                 Map<String, Object> flat = new LinkedHashMap<>();
-                flat.put("event", String.valueOf(payloadMap.getOrDefault("event", "unknown")));
+                // 优先使用 payload 中的 event 字段，回退到 type 字段
+                Object eventVal = payloadMap.get("event");
+                if (eventVal == null) {
+                    eventVal = type;
+                }
+                flat.put("event", String.valueOf(eventVal));
                 flat.put("content", String.valueOf(payloadMap.getOrDefault("content", "")));
                 if (payloadMap.get("data") != null) {
                     flat.put("data", payloadMap.get("data"));
@@ -438,9 +486,6 @@ public final class EdpaAbcdeCustomRestAdapter implements CustomRestProtocolAdapt
      */
     private static Map<String, Object> envelope(boolean success, String error,
             Object flatData, Context context) {
-        LOGGER.debug("[EDP-CUSTOM-REST-RSP] Building response envelope: success={}, dataKeys={}",
-                success, flatData != null ? ((Map<String, Object>) flatData).keySet() : "null");
-
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("success", success);
         result.put("agent_id", stringValue(context.body().get("agent_id"),

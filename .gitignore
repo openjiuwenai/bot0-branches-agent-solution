@@ -30,6 +30,8 @@ target/
 .env
 .env.local
 .env.*.local
+# Local intent demo model configuration; keep the example template tracked.
+**/application-intent_local.yml
 *.key
 *.pem
 
@@ -55,9 +57,6 @@ checkstyle-result.xml
 
 # MR description working copies (not production code)
 MR_*.md
-
-# EDPA-alpha — local exploration, not in MR
-common/agents/edpa-alpha/
 
 # TestRun artifacts — local/manual only, do not commit or merge
 TestRun/

@@ -155,15 +155,16 @@ public final class TaskStoreProjectionPostProcessor implements BeanPostProcessor
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("taskState", state);
         data.put("revision", revision);
-        data.put("task", task);
         try {
+            data.put("a2aResponse", A2aJsonRpcResponseSerializer.streamingEvent(admission.requestId(), task));
             coordinator.get()
                     .project(new BusResponseProjection(eventId(admission.tenantId(), task.id(), kind, revision),
                             prefix + kind, admission.tenantId(), admission.correlationId(), task.id(), Instant.now(),
                             Map.copyOf(data), admission.traceId(), admission.targetServiceId(),
                             admission.sourceServiceId(), admission.routeHandle(), admission.idempotencyKey(), null,
                             kind, revision));
-        } catch (IllegalArgumentException | IllegalStateException failure) {
+        } catch (org.a2aproject.sdk.jsonrpc.common.json.JsonProcessingException
+                | IllegalArgumentException | IllegalStateException failure) {
             LOG.log(Level.WARNING, "Failed to project Task state " + task.id(), failure);
         }
     }

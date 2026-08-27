@@ -253,13 +253,14 @@ class LLMEvaluator(EvaluateInputMixin, BaseEvaluator):  # type: ignore[misc]
             )
             response = result.text
         except Exception as e:
-            if (
+            is_retryable_unusable = (
                 isinstance(e, LLMInvocationError)
                 and e.category == "unusable_response"
                 and invalid_error is not None
                 and invalid_response is not None
                 and e.result is not None
-            ):
+            )
+            if is_retryable_unusable:
                 _attach_invocation_diagnostics(
                     invalid_error,
                     response=invalid_response,
@@ -495,11 +496,13 @@ class LLMEvaluator(EvaluateInputMixin, BaseEvaluator):  # type: ignore[misc]
 
         # --- Essential field validation (critical path) ---
         raw_score = data["score"]
-        assert isinstance(raw_score, (int, float)) and not isinstance(raw_score, bool)
+        if not isinstance(raw_score, (int, float)) or isinstance(raw_score, bool):
+            raise TypeError("evaluator response 'score' must be a number")
         score = max(0.0, min(1.0, float(raw_score)))
 
         raw_is_pass = data["is_pass"]
-        assert isinstance(raw_is_pass, bool)
+        if not isinstance(raw_is_pass, bool):
+            raise TypeError("evaluator response 'is_pass' must be a bool")
         is_pass = raw_is_pass
 
         attributed_skill = data.get("attributed_skill", "")
@@ -569,11 +572,12 @@ def _validate_evaluator_output(data: dict[str, Any]) -> ValidationResult:
         return ValidationResult(False, "field_type", "attributed_skill must be a string")
     for dimension in _DIM_KEYS:
         value = data.get(dimension)
-        if value is not None and (
+        is_invalid_number = (
             isinstance(value, bool)
             or not isinstance(value, (int, float))
             or not math.isfinite(value)
-        ):
+        )
+        if value is not None and is_invalid_number:
             return ValidationResult(
                 False,
                 "field_type",

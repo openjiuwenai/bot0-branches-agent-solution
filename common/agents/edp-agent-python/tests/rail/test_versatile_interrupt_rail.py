@@ -50,7 +50,8 @@ class MockToolCall:
 class MockScriptsConfig:
     """Mock scripts config for testing."""
     
-    def get_response_template(self, key):
+    @staticmethod
+    def get_response_template(key):
         templates = {
             "success_key": "操作成功",
             "fail_key": "操作失败"
@@ -71,11 +72,9 @@ class TestVersatileInterruptRail:
     @pytest.fixture
     def ctx(self):
         ctx = MockContext()
-        # Pre-set lite_todo stream-ready state so the rail's preconditions
-        # (_has_lite_todolist / _is_lite_todo_stream_ready) pass and the
-        # first-intercept path writes pending_delegate as expected.
+        # Pre-set lite_todolist so the rail's precondition (_has_lite_todolist)
+        # passes and the first-intercept path writes pending_delegate as expected.
         ctx.session._state["lite_todolist"] = [{"step_id": 1, "content": "test"}]
-        ctx.session._state["lite_todo_stream_ready"] = True
         return ctx
     
     @pytest.fixture
@@ -253,7 +252,8 @@ class TestVersatileInterruptRail:
         pending_delegate = ctx.session.get_state("pending_delegate")
         assert pending_delegate["task_description"] == "cached query description"
     
-    def test_normalize_tool_args(self, rail):
+    @staticmethod
+    def test_normalize_tool_args(rail):
         """Test tool args normalization."""
         # Test dict input
         args = rail._normalize_tool_args({"key": "value"}, "test_tool")
@@ -271,7 +271,8 @@ class TestVersatileInterruptRail:
         args = rail._normalize_tool_args(None, "test_tool")
         assert args == {}
     
-    def test_extract_business_data(self):
+    @staticmethod
+    def test_extract_business_data():
         """Test business data extraction."""
         # Test workflow_result as dict
         cascade_result = {"workflow_result": {"products": ["WM001"]}}
@@ -292,7 +293,8 @@ class TestVersatileInterruptRail:
         data = VersatileInterruptRail._extract_business_data("not a dict")
         assert data == {}
     
-    def test_build_delegate(self):
+    @staticmethod
+    def test_build_delegate():
         """Test delegate building."""
         tool_args = {
             "query_intent": "test_intent",
@@ -305,7 +307,8 @@ class TestVersatileInterruptRail:
             "task_description": "test description"
         }
     
-    def test_build_skill_input(self):
+    @staticmethod
+    def test_build_skill_input():
         """Test skill input building."""
         tool_args = {
             "query_intent": "test_intent",

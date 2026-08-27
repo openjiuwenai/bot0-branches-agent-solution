@@ -16,12 +16,10 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime
-from pathlib import Path
+from datetime import datetime, timezone
 from typing import Any
 
 if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
     from config import HotUpdateConfig, parse_hotupdate_args
 else:
     from .config import HotUpdateConfig, parse_hotupdate_args
@@ -31,7 +29,7 @@ VERIFY_END = "<!-- ADAPTER_HOTUPDATE_VERIFY_END -->"
 
 
 def make_marker() -> str:
-    return f"【SKILL热更-{datetime.now().strftime('%Y%m%d-%H%M%S')}】"
+    return f"【SKILL热更-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}】"
 
 
 def split_frontmatter(content: str) -> tuple[str, str]:

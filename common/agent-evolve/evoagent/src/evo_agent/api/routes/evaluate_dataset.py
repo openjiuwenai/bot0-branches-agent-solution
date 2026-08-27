@@ -253,7 +253,7 @@ async def submit_dataset_eval(
     """
     try:
         parsed = DatasetEvalConfig.model_validate_json(config)
-    except (ValueError, json.JSONDecodeError) as e:
+    except ValueError as e:
         raise HTTPException(status_code=422, detail=f"Invalid config: {e}") from e
 
     # 校验每组配置（batch 名、kind、gold/keywords 完备性）。
@@ -272,7 +272,8 @@ async def submit_dataset_eval(
         )
     judge_model: Any = None
     if has_judge:
-        assert parsed.llm_config is not None  # 上面已校验
+        if parsed.llm_config is None:  # 上面已校验，理论不可达
+            raise RuntimeError("llm_config 已校验非空")
         judge_model = _build_judge_model(parsed.llm_config)
 
     data = await file.read()
@@ -306,7 +307,8 @@ async def submit_dataset_eval(
     # 同步返回 500（与 /evaluate 的「LLM 失败→500」契约一致）；不替代 judge 阶段
     # 单条降级逻辑。放最后以确保 422 数据/配置校验优先于 LLM 调用。
     if has_judge:
-        assert judge_model is not None
+        if judge_model is None:
+            raise RuntimeError("judge_model 已构建")
         await _probe_judge_model(judge_model)
 
     groups = [_to_group_config(g) for g in parsed.groups]

@@ -1,1 +1,2 @@
 com.openjiuwen.edp.autoconfigure.EdpaSandboxAutoConfiguration
+com.openjiuwen.edp.autoconfigure.EdpAgentFactoryAutoConfiguration

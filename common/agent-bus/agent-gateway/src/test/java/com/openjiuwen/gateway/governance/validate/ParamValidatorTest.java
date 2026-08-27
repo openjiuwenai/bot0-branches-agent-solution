@@ -34,7 +34,24 @@ class ParamValidatorTest {
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"message/send\",\"params\":{}}";
     private static final String STREAMING =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendStreamingMessage\","
-                    + "\"params\":{\"message\":{\"messageId\":\"m3\",\"parts\":[{\"text\":\"hi\"}]}}}";
+                    + "\"params\":{\"message\":{\"messageId\":\"m3\",\"parts\":[{\"text\":\"hi\"}]},"
+                    + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
+
+    // --- T1: S6/S8 whitelist + params.id (v0830) ---
+    private static final String GET_TASK =
+            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"GetTask\","
+                    + "\"params\":{\"id\":\"task-123\"}}";
+    private static final String SUBSCRIBE =
+            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SubscribeToTask\","
+                    + "\"params\":{\"id\":\"task-123\"}}";
+    private static final String GET_TASK_MISSING_ID =
+            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"GetTask\",\"params\":{}}";
+    private static final String GET_TASK_TASK_ID_PATH =
+            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"GetTask\","
+                    + "\"params\":{\"taskId\":\"task-123\"}}";
+    private static final String CANCEL_TASK =
+            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"CancelTask\","
+                    + "\"params\":{\"taskId\":\"task-123\"}}";
 
     private final ParamValidator validator = new ParamValidator();
 
@@ -63,16 +80,44 @@ class ParamValidatorTest {
     }
 
     @Test
-    void createWithoutAgentIdIsAccepted() {
-        GovernanceContext ctx = validate(validator, CREATE_NO_AGENT);
-        assertThat(ctx.method()).isEqualTo("SendMessage");
-        assertThat(ctx.agentId()).isNull();
-        assertThat(ctx.taskId()).isNull();
+    void createWithoutAgentIdReturns400ValidationAgentId() {
+        // DF-Q01: create-type MUST carry an explicit agentId (no default-Agent fallback).
+        GovernanceException ge = govern(() -> validate(validator, CREATE_NO_AGENT));
+        assertThat(ge.code()).isEqualTo("VALIDATION_AGENT_ID");
+        assertThat(ge.httpStatus().value()).isEqualTo(400);
     }
 
     @Test
     void createWithEmptyAgentIdReturns400ValidationAgentId() {
         GovernanceException ge = govern(() -> validate(validator, CREATE_EMPTY_AGENT));
+        assertThat(ge.code()).isEqualTo("VALIDATION_AGENT_ID");
+        assertThat(ge.httpStatus().value()).isEqualTo(400);
+    }
+
+    @Test
+    void missingMessageReturns400ValidationMessage() {
+        // ISSUE-98: 无 params.message → G3 拒绝 400 VALIDATION_MESSAGE(修复前放行→200 COMPLETED)
+        String body = "{\"jsonrpc\":\"2.0\",\"id\":\"msg-020\",\"method\":\"SendMessage\"}";
+        GovernanceException ge = govern(() -> validate(validator, body));
+        assertThat(ge.code()).isEqualTo("VALIDATION_MESSAGE");
+        assertThat(ge.httpStatus().value()).isEqualTo(400);
+    }
+
+    @Test
+    void missingPartsReturns400ValidationMessage() {
+        // ISSUE-98: params.message 存在但无 parts → 400
+        String body = "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\"}}}";
+        GovernanceException ge = govern(() -> validate(validator, body));
+        assertThat(ge.code()).isEqualTo("VALIDATION_MESSAGE");
+    }
+
+    @Test
+    void emptyAgentIdAtParamsTopLevelReturns400ValidationAgentId() {
+        // ISSUE-99: agentId="" 放 params 顶层(非 metadata) → 400 VALIDATION_AGENT_ID(修复前放行→200)
+        String body = "{\"jsonrpc\":\"2.0\",\"id\":\"msg-021\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m21\",\"parts\":[{\"text\":\"hello\"}]},\"agentId\":\"\"}}";
+        GovernanceException ge = govern(() -> validate(validator, body));
         assertThat(ge.code()).isEqualTo("VALIDATION_AGENT_ID");
         assertThat(ge.httpStatus().value()).isEqualTo(400);
     }
@@ -86,8 +131,8 @@ class ParamValidatorTest {
 
     @Test
     void resumeMissingTaskIdIsTreatedAsCreate() {
-        // No taskId -> classified as create (no failure, agentId absent is OK).
-        GovernanceContext ctx = validate(validator, CREATE_NO_AGENT);
+        // No taskId -> classified as create (agentId required for create per DF-Q01).
+        GovernanceContext ctx = validate(validator, CREATE_WITH_AGENT);
         assertThat(ctx.taskId()).isNull();
     }
 
@@ -108,5 +153,103 @@ class ParamValidatorTest {
     void streamingMethodIsAccepted() {
         GovernanceContext ctx = validate(validator, STREAMING);
         assertThat(ctx.method()).isEqualTo("SendStreamingMessage");
+    }
+
+    @Test
+    void fingerprintExcludesJsonRpcRequestId() {
+        // ISSUE-84/85: 同一业务正文,仅顶层 id 不同(JSON-RPC 客户端重试惯例) → 同指纹 → 幂等复用而非 409
+        String idA = "{\"jsonrpc\":\"2.0\",\"id\":\"A\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]},"
+                + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
+        String idB = "{\"jsonrpc\":\"2.0\",\"id\":\"B\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]},"
+                + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
+        assertThat(validate(validator, idA).idempotencyFingerprint())
+                .isEqualTo(validate(validator, idB).idempotencyFingerprint());
+    }
+
+    @Test
+    void fingerprintIsStableAcrossFieldOrder() {
+        // ISSUE-84: 同一业务正文,JSON 字段顺序不同 → 同指纹(规范化键序排序)
+        String orderA = "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]},"
+                + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
+        String orderB = "{\"jsonrpc\":\"2.0\",\"id\":\"2\",\"method\":\"SendMessage\","
+                + "\"params\":{\"metadata\":{\"agentId\":\"agent-9\"},"
+                + "\"message\":{\"parts\":[{\"text\":\"hi\"}],\"messageId\":\"m1\"}}}";
+        assertThat(validate(validator, orderA).idempotencyFingerprint())
+                .isEqualTo(validate(validator, orderB).idempotencyFingerprint());
+    }
+
+    @Test
+    void fingerprintReflectsBusinessBody() {
+        // 不同业务正文 → 不同指纹 → 幂等冲突 409(保留冲突检测)
+        String body1 = "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]},"
+                + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
+        String body2 = "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"bye\"}]},"
+                + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
+        assertThat(validate(validator, body1).idempotencyFingerprint())
+                .isNotEqualTo(validate(validator, body2).idempotencyFingerprint());
+    }
+
+    @Test
+    void inlineAtExactLimitIsAccepted() {
+        // ISSUE-86 缺陷①: rawBody 正好 65536 字节(规格上限,对齐 ForwardingEnvelope) → G3 通过,不抛 413
+        String prefix = "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"";
+        String suffix = "\"}]},\"metadata\":{\"agentId\":\"agent-9\"}}}";
+        int textLen = 65536 - prefix.length() - suffix.length();
+        String body = prefix + "a".repeat(textLen) + suffix;
+        GovernanceContext ctx = validate(validator, body);
+        assertThat(ctx.messageId()).isEqualTo("m1");
+    }
+
+    @Test
+    void inlineOverLimitReturns413PayloadTooLarge() {
+        // ISSUE-86 缺陷①: text 70000B → rawBody > 65536(超规格上限) → G3 拒绝 413 PAYLOAD_TOO_LARGE
+        String body = "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\""
+                + "a".repeat(70000) + "\"}]}}}";
+        GovernanceException ge = govern(() -> validate(validator, body));
+        assertThat(ge.code()).isEqualTo("PAYLOAD_TOO_LARGE");
+        assertThat(ge.httpStatus().value()).isEqualTo(413);
+    }
+
+    @Test
+    void getTaskWithParamsIdIsAccepted() {
+        GovernanceContext ctx = validate(validator, GET_TASK);
+        assertThat(ctx.method()).isEqualTo("GetTask");
+        assertThat(ctx.taskId()).isEqualTo("task-123");
+    }
+
+    @Test
+    void subscribeToTaskWithParamsIdIsAccepted() {
+        GovernanceContext ctx = validate(validator, SUBSCRIBE);
+        assertThat(ctx.method()).isEqualTo("SubscribeToTask");
+        assertThat(ctx.taskId()).isEqualTo("task-123");
+    }
+
+    @Test
+    void getTaskMissingParamsIdReturns400ValidationTaskId() {
+        GovernanceException ge = govern(() -> validate(validator, GET_TASK_MISSING_ID));
+        assertThat(ge.code()).isEqualTo("VALIDATION_TASK_ID");
+        assertThat(ge.httpStatus().value()).isEqualTo(400);
+    }
+
+    @Test
+    void getTaskWithParamsTaskIdDoesNotSatisfy() {
+        // Gateway reads params.id, NOT params.taskId — wrong path → VALIDATION_TASK_ID
+        GovernanceException ge = govern(() -> validate(validator, GET_TASK_TASK_ID_PATH));
+        assertThat(ge.code()).isEqualTo("VALIDATION_TASK_ID");
+    }
+
+    @Test
+    void cancelTaskNotInWhitelistReturns400ValidationMethod() {
+        // S7 not implemented — CancelTask rejected (not faked success)
+        GovernanceException ge = govern(() -> validate(validator, CANCEL_TASK));
+        assertThat(ge.code()).isEqualTo("VALIDATION_METHOD");
+        assertThat(ge.httpStatus().value()).isEqualTo(400);
     }
 }

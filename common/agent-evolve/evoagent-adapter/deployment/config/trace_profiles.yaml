@@ -1,0 +1,185 @@
+profiles:
+  edp_agent:
+    service_name: "edp_agent"          # 对齐真实 Python EDPAgent 上报的 resource.service.name
+    service_language: "python"         # telemetry.sdk.language 消歧（与 Java 版区分）
+    ingest_filter:
+      include_prefixes: ["llm.", "tool.", "http.request", "chain."]
+      exclude_prefixes: []
+    query_filter:
+      include_prefixes: []
+      exclude_prefixes: []
+    llm_span_prefix: "llm."
+    tool_span_prefix: "tool."
+    root_span_name: "http.request"
+    prompt_extraction:
+      attr: "gen_ai.prompt"
+      sub_key: "messages"
+      format: "python_repr"
+    response_extraction:
+      fields:
+        - attr: "gen_ai.completion"
+          sub_key: "outputs"
+          format: "python_repr"
+      combine_as: "assistant_message"
+    tool_args_extraction:
+      attr: "gen_ai.completion"
+      sub_key: "outputs"
+      format: "python_repr"
+    tool_result_extraction:
+      attr: "gen_ai.completion"
+      sub_key: "outputs"
+      format: "python_repr"
+    request_summary_attr: "openjiuwen.http.request_body"
+    response_summary_span_prefix: "chain."
+    response_summary_attr: "openjiuwen.agent.outputs"
+
+  opencode:
+    service_name: "opencode"
+    ingest_filter:
+      include_prefixes: ["ai.streamText", "ai.toolCall", "Tool.execute"]
+      exclude_prefixes:
+        - "sql."
+        - "Session"
+        - "http.server"
+        - "Config."
+        - "ConfigPaths."
+        - "ConfigHttpApi."
+        - "Snapshot."
+        - "MessageV2."
+        - "Plugin.trigger"
+        - "Plugin.add"
+        - "Plugin.list"
+        - "Plugin.state"
+        - "Plugin.init"
+        - "PluginInternal."
+        - "Instruction."
+        - "FileSystem."
+        - "Env."
+        - "Auth."
+        - "Provider."
+        - "ProviderHttpApi."
+        - "Agent."
+        - "MCP."
+        - "McpHttpApi."
+        - "ToolRegistry."
+        - "Skill."
+        - "SystemPrompt."
+        - "Reference."
+        - "ShellTool."
+        - "ReadTool."
+        - "LSP."
+        - "Truncate."
+        - "Todo."
+        - "InstanceStore."
+        - "InstanceHttpApi."
+        - "InstanceBootstrap"
+        - "Permission."
+        - "PermissionHttpApi."
+        - "LLMRequestPrep."
+        - "LLM.run"
+        - "State."
+        - "AISDK."
+        - "Credential."
+        - "Git."
+        - "Integration."
+        - "CatalogV2."
+        - "Npm."
+        - "Project."
+        - "ProjectDirectories."
+        - "ProjectCopy."
+        - "ProjectHttpApi."
+        - "AccountRepo."
+        - "ShareNext."
+        - "Format."
+        - "Vcs."
+        - "ModelsDev."
+        - "Policy."
+        - "PluginHost."
+        - "OpencodePlugin."
+        - "Bom."
+        - "SQLiteDrizzle."
+        - "Flock."
+        - "EffectFlock."
+        - "GlobalHttpApi."
+        - "ExperimentalHttpApi."
+        - "Question."
+        - "QuestionHttpApi."
+        - "Command."
+        - "BackgroundJob."
+        - "TaskTool."
+      exclude_names:
+        - "Tool.assertExternalDirectory"
+    query_filter:
+      include_prefixes: ["ai.streamText", "ai.toolCall", "Tool.execute"]
+      exclude_prefixes: []
+    llm_span_prefix: "ai.streamText"
+    tool_span_prefix: "ai.toolCall"
+    root_span_name: ""
+    prompt_extraction:
+      attr: "ai.prompt"
+      sub_key: "messages"
+      format: "json"
+    response_extraction:
+      fields:
+        - attr: "ai.response.text"
+          sub_key: "text"
+          format: "json"
+        - attr: "ai.response.toolCalls"
+          sub_key: "toolCalls"
+          format: "json"
+        - attr: "ai.response.reasoning"
+          sub_key: "reasoning"
+          format: "json"
+      combine_as: "assistant_message"
+    tool_args_extraction:
+      attr: "ai.toolCall.args"
+      format: "json"
+    tool_result_extraction:
+      attr: "ai.toolCall.result"
+      format: "json"
+    request_summary_attr: ""
+    response_summary_span_prefix: "ai.streamText"
+    response_summary_attr: "ai.response"
+
+  # ── EDPAgent Java 服务版本 ──
+  # 与 edp_agent (Python) 的差异：
+  #   - prompt/completion 上报为 JSON（非 Python repr）→ format: json
+  #   - gen_ai.completion 无 "outputs" 键，结构为 {role,content,tool_calls,usage_metadata,finish_reason}；
+  #     模型回复文本在 "content" → response_extraction 取 content
+  #     （tool_call 迭代 content 为空，工具调用另由 tool.* span 的 args/result 记录）
+  #   - 工具参数/结果在 tool.* span 的 gen_ai.tool.input / gen_ai.tool.output
+  #   - http.request body 为 A2A/jsonrpc（params.message.parts[].text），非 V3 input.query
+  # 前置条件：Java per-span 导出格式（int kind / start_time_unix_nano / 嵌套 resource）
+  # 须经转换器先扁平化为 adapter 统一 span 形状（见《EDPAgent_Java_trace_接入adapter_可行性分析》），
+  # 本 profile 描述扁平化后的字段提取规则。
+  edp_agent_java:
+    service_name: "edp_agent"
+    service_language: "java"            # telemetry.sdk.language 消歧
+    ingest_filter:
+      include_prefixes: ["llm.", "tool.", "http.request", "chain."]
+      exclude_prefixes: []
+    query_filter:
+      include_prefixes: []
+      exclude_prefixes: []
+    llm_span_prefix: "llm."
+    tool_span_prefix: "tool."
+    root_span_name: "http.request"
+    prompt_extraction:
+      attr: "gen_ai.prompt"
+      sub_key: "messages"
+      format: "json"
+    response_extraction:
+      fields:
+        - attr: "gen_ai.completion"
+          sub_key: "content"
+          format: "json"
+      combine_as: "assistant_message"
+    tool_args_extraction:
+      attr: "gen_ai.tool.input"
+      format: "json"
+    tool_result_extraction:
+      attr: "gen_ai.tool.output"
+      format: "json"
+    request_summary_attr: "openjiuwen.http.request_body"
+    response_summary_span_prefix: "chain."
+    response_summary_attr: "openjiuwen.agent.outputs"

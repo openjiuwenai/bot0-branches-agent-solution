@@ -1,0 +1,6 @@
+.git
+target/*
+!target/versatile-a2a-adapter-demo-*.jar
+!target/image-extra
+src/main/java
+src/test

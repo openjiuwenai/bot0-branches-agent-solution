@@ -42,6 +42,7 @@ scripts:
 from __future__ import annotations
 
 import re
+import warnings
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -266,8 +267,6 @@ class AgentRuleConfig(BaseModel):
 
 _FRONTMATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
-
-import warnings
 
 def load_agent_rule(rule_path: str | Path) -> AgentRuleConfig:
     """从 AgentRule.md 加载完整规则。

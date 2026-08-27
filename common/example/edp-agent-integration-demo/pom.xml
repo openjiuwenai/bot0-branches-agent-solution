@@ -11,7 +11,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.0.6</version>
+        <version>4.0.7</version>
         <relativePath/>
     </parent>
 
@@ -23,9 +23,35 @@
     <properties>
         <java.version>17</java.version>
         <edp-agent-engine.version>0.1.0</edp-agent-engine.version>
-        <agent-core-java.version>0.1.14.post1</agent-core-java.version>
-        <agent-runtime-java.version>0.1.1.post1</agent-runtime-java.version>
+        <agent-core-java.version>0.1.15</agent-core-java.version>
+        <agent-runtime-java.version>0.1.2</agent-runtime-java.version>
+        <!-- A 桶 properties：Boot-property override（对齐 runtime 0.1.2 / core 0.1.15） -->
+        <slf4j.version>2.0.12</slf4j.version>
+        <logback.version>1.5.37</logback.version>
+        <snakeyaml.version>2.2</snakeyaml.version>
+        <byte-buddy.version>1.15.11</byte-buddy.version>
+        <commons-lang3.version>3.18.0</commons-lang3.version>
+        <commons-codec.version>1.20.0</commons-codec.version>
+        <postgresql.version>42.7.12</postgresql.version>
+        <h2.version>2.2.224</h2.version>
+        <sqlite-jdbc.version>3.53.2.1</sqlite-jdbc.version>
+        <pulsar.version>4.2.3</pulsar.version>
+        <lombok.version>1.18.32</lombok.version>
+        <gson.version>2.11.0</gson.version>
     </properties>
+
+  <dependencyManagement>
+    <dependencies>
+        <!-- import runtime BOM：A 桶 + C 桶 + openjiuwen 全部版本管理（BOM import 时用 BOM 自己的 properties 解析 ${...}） -->
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-runtime-java</artifactId>
+            <version>0.1.2</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+  </dependencyManagement>
 
     <dependencies>
         <!-- ============================================================ -->
@@ -44,6 +70,71 @@
             <groupId>com.openjiuwen</groupId>
             <artifactId>agent-core-java</artifactId>
             <version>${agent-core-java.version}</version>
+            <exclusions>
+                <!-- ========== A 组：RAG/检索相关 ========== -->
+                <exclusion>
+                    <groupId>org.apache.poi</groupId>
+                    <artifactId>poi-ooxml</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.milvus</groupId>
+                    <artifactId>milvus-sdk-java</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.alibaba</groupId>
+                    <artifactId>dashscope-sdk-java</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.pdfbox</groupId>
+                    <artifactId>pdfbox</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.postgresql</groupId>
+                    <artifactId>postgresql</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.pgvector</groupId>
+                    <artifactId>pgvector</artifactId>
+                </exclusion>
+                <!-- ========== B 组：Memory 相关 ========== -->
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcprov-jdk18on</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcpkix-jdk18on</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcutil-jdk18on</artifactId>
+                </exclusion>
+                <!-- ========== C 组：其他重型依赖 ========== -->
+                <exclusion>
+                    <groupId>org.apache.pulsar</groupId>
+                    <artifactId>pulsar-client</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.grpc</groupId>
+                    <artifactId>grpc-netty-shaded</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.xerial</groupId>
+                    <artifactId>sqlite-jdbc</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.openai</groupId>
+                    <artifactId>openai-java</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-exporter-sender-jdk</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-exporter-sender-grpc-managed-channel</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- OpenJiuwen agent-service-app（A2A Runtime） -->
@@ -58,6 +149,20 @@
             <groupId>com.openjiuwen</groupId>
             <artifactId>agent-service-adapters-agentcore-ext</artifactId>
             <version>0.1.0</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.openjiuwen</groupId>
+                    <artifactId>agent-core-java</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- DFX-001 OTel 轨迹上报（runtime ext middleware/otel）运行时必需。
+             禁止排除/删除：缺失时 otel.enabled=true 启动即 NoClassDefFoundError。
+             opentelemetry-exporter-sender-jdk / sender-grpc-managed-channel 由本依赖传递引入，无需单独声明。 -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
         </dependency>
 
         <!-- OpenJiuwen agent-service-spec（SPI 接口） -->

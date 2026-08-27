@@ -6,7 +6,17 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-SkillAction = Literal["skill_list", "skill_content", "update_skill", "restore_skill"]
+SkillAction = Literal[
+    "skill_list",
+    "skill_content",
+    "update_skill",
+    "restore_skill",
+    "list_hub_skills",
+    "get_hub_version",
+    "pull_skill",
+    "publish_skill",
+    "delete_hub_version",
+]
 
 ManagedDocAction = Literal["content", "update", "restore"]
 
@@ -57,9 +67,15 @@ class SkillActionRequest(BaseModel):
 
     agent_name: str = Field(min_length=1, description="Target business agent name")
     action: SkillAction = Field(
-        description="skill_list | skill_content | update_skill | restore_skill",
+        description=(
+            "skill_list | skill_content | update_skill | restore_skill | "
+            "list_hub_skills | get_hub_version | pull_skill | publish_skill | delete_hub_version"
+        ),
     )
-    skill_name: str | None = Field(default=None, description="Required for skill_content / update_skill")
+    skill_name: str | None = Field(
+        default=None,
+        description="Required for skill_content / update_skill / publish_skill",
+    )
     skill_names: list[str] | None = Field(
         default=None,
         description="Required for restore_skill; skill names to restore from snapshot",
@@ -68,6 +84,16 @@ class SkillActionRequest(BaseModel):
         default=None,
         description="Full SKILL.md body; required for update_skill",
     )
+    # SkillHub fields
+    asset_id: str | None = Field(default=None, description="SkillHub asset id for hub actions")
+    plugin_version: str | None = Field(default=None, description="Semantic version x.y.z for publish_skill")
+    version_desc: str | None = Field(default=None, description="Changelog for publish_skill")
+    force: bool = Field(default=False, description="Force overwrite same version on publish_skill")
+    version: str | None = Field(default=None, description="Target version for pull/get/delete hub actions")
+    page: int = Field(default=1, ge=1, description="Page for list_hub_skills")
+    page_size: int = Field(default=20, ge=1, le=200, description="Page size for list_hub_skills")
+    keyword: str | None = Field(default=None, description="Search keyword for list_hub_skills")
+    overwrite: bool = Field(default=True, description="Overwrite local skill dir on pull_skill")
 
     @model_validator(mode="after")
     def _validate_action_fields(self) -> SkillActionRequest:
@@ -81,6 +107,17 @@ class SkillActionRequest(BaseModel):
         if self.action == "restore_skill":
             if not self.skill_names:
                 raise ValueError("skill_names is required when action is restore_skill")
+        if self.action == "publish_skill":
+            if not self.skill_name:
+                raise ValueError("skill_name is required when action is publish_skill")
+        if self.action in ("get_hub_version", "pull_skill", "delete_hub_version"):
+            if not self.asset_id:
+                raise ValueError("asset_id is required for hub version actions")
+            if not self.version:
+                raise ValueError("version is required for hub version actions")
+        if self.action == "pull_skill" and not self.skill_name:
+            # skill_name optional for pull; derived from zip
+            pass
         return self
 
 

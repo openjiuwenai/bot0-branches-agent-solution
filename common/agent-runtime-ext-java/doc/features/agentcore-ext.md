@@ -121,6 +121,9 @@ AgentCore-ext 不负责：
 
 这些工作由基础 Runtime 的 A2A Orchestrator 和远端批次协调器完成。Handler 只产生带真实
 `toolCallId` 的 interrupt，并在 Runtime 准备好每个工具结果后一次性恢复 AgentCore。
+Runtime 对实际流式下游建立直接委派边后，会把同一 `toolCallId` 写入
+`Artifact.metadata.agentEvent` 的 `type=delegation` 事件，用于关联 ToolCall 与远端 Task；
+非流式下游不产生该事件，普通 `output/status` 事件也不携带该字段。
 
 单成员与多成员使用同一批次模型。多成员续轮必须使用每个成员真实的 `toolCallId`，不能依赖完成顺序
 或把一条输入广播给所有成员。

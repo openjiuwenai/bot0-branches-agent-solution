@@ -8,17 +8,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.openjiuwen.gateway.direct.FakeAgentRuntimeClient;
+import com.openjiuwen.gateway.governance.ErrorCodes;
 import com.openjiuwen.gateway.governance.GovernanceContext;
 import com.openjiuwen.gateway.governance.GovernanceException;
+import com.openjiuwen.gateway.governance.MethodResultException;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 
 import java.util.List;
 
 /**
  * Unit tests for {@link Router} create path (FEAT-011 L2 §4 T-S2-1/2/5/6/7 +
- * routing-failure branches). Uses fake RDC + fake runtime; real StickyIndex +
- * DefaultAgentResolver.
+ * routing-failure branches). Uses fake RDC + fake runtime; real StickyIndex.
  */
 class RouterTest {
     private static final String ENDPOINT = "http://runtime-1:8000";
@@ -29,8 +31,7 @@ class RouterTest {
     private final FakeRdcRouteClient rdc = new FakeRdcRouteClient();
     private final FakeAgentRuntimeClient runtime = new FakeAgentRuntimeClient();
     private final StickyIndex sticky = new StickyIndex();
-    private final DefaultAgentResolver defaultAgent = new DefaultAgentResolver("default-agent-1");
-    private final Router router = new Router(rdc, runtime, sticky, defaultAgent);
+    private final Router router = new Router(rdc, runtime, sticky);
 
     private static GovernanceContext createCtx(String agentId) {
         GovernanceContext ctx = new GovernanceContext();
@@ -42,8 +43,8 @@ class RouterTest {
     }
 
     @Test
-    void explicitAgentRoutesToFirstCandidateAndWritesSticky() {
-        rdc.setCandidates(List.of(new AgentCardRoute("h1"), new AgentCardRoute("h2")));
+    void explicitAgentRoutesToSingleCandidateAndWritesSticky() {
+        rdc.setCandidates(List.of(new AgentCardRoute("h1")));
         rdc.setResolved(new ResolvedRoute(ENDPOINT));
         runtime.setResponse(TASK_BODY);
 
@@ -51,30 +52,55 @@ class RouterTest {
 
         assertThat(response).isEqualTo(TASK_BODY);
         assertThat(rdc.lastAgentId()).isEqualTo("agent-9");
-        // picked the first candidate
         // forwarded to the resolved endpoint with the authoritative tenant injected
         assertThat(runtime.lastEndpoint()).isEqualTo(ENDPOINT);
-        assertThat(runtime.lastBody()).contains("\"tenantId\":\"tenant-1\"");
-        // sticky bound taskId -> first candidate's handle
+        assertThat(runtime.lastBody()).contains("\"tenant\":\"tenant-1\"");
+        // sticky bound taskId -> the single candidate's handle
         assertThat(sticky.find("task-7")).contains("h1");
     }
 
     @Test
-    void multiInstancePicksFirstCandidate() {
+    void multiInstanceWeightedSelectsOneAndWritesSticky() {
         rdc.setCandidates(List.of(new AgentCardRoute("first"), new AgentCardRoute("second")));
         rdc.setResolved(new ResolvedRoute(ENDPOINT));
         runtime.setResponse(TASK_BODY);
         router.routeCreate(createCtx("agent-9"));
-        assertThat(sticky.find("task-7")).contains("first");
+        // weighted selection: either "first" or "second" (not always first)
+        assertThat(sticky.find("task-7")).isPresent();
+        assertThat(sticky.find("task-7").orElseThrow()).isIn("first", "second");
     }
 
     @Test
-    void noAgentIdFallsBackToDefaultAgent() {
-        rdc.setCandidates(List.of(new AgentCardRoute("h1")));
-        rdc.setResolved(new ResolvedRoute(ENDPOINT));
-        runtime.setResponse(TASK_BODY);
-        router.routeCreate(createCtx(null));
-        assertThat(rdc.lastAgentId()).isEqualTo("default-agent-1");
+    void equalWeightInstancesSelectRandomly() {
+        // supplement info: when weights are equal, each instance is selected randomly
+        // Run 1000 selections; both should be selected a reasonable number of times (~500±150)
+        List<AgentCardRoute> candidates = List.of(
+                new AgentCardRoute("a", "svc-a", 1),
+                new AgentCardRoute("b", "svc-b", 1));
+        int countA = 0;
+        for (int i = 0; i < 1000; i++) {
+            if ("a".equals(Router.selectByWeight(candidates).routeHandle())) {
+                countA++;
+            }
+        }
+        // Both selected; "a" should be ~500 (±150 tolerance for randomness)
+        assertThat(countA).isBetween(350, 650);
+    }
+
+    @Test
+    void weightedSelectionRespectsWeightRatio() {
+        // weight 3:1 → "heavy" selected ~75%, "light" ~25% of the time
+        List<AgentCardRoute> candidates = List.of(
+                new AgentCardRoute("heavy", "svc-heavy", 3),
+                new AgentCardRoute("light", "svc-light", 1));
+        int countHeavy = 0;
+        for (int i = 0; i < 1000; i++) {
+            if ("heavy".equals(Router.selectByWeight(candidates).routeHandle())) {
+                countHeavy++;
+            }
+        }
+        // heavy ~750 (±100 tolerance)
+        assertThat(countHeavy).isBetween(650, 850);
     }
 
     @Test
@@ -111,12 +137,26 @@ class RouterTest {
     }
 
     @Test
-    void defaultAgentUnconfiguredIsConfigError() {
-        Router unconfigured = new Router(rdc, runtime, sticky, new DefaultAgentResolver(""));
-        GovernanceException ge = asGovernanceException(catchThrowable(() -> unconfigured.routeCreate(createCtx(null))));
+    void searchFailureReturnsRdcUnavailableAndDoesNotCallRuntime() {
+        // L2-014: RDC search-stage failure (network down / empty cache) is distinct from
+        // "no candidates" (empty business list) and "resolve failed".
+        rdc.setSearchFails(true);
+        GovernanceException ge = asGovernanceException(catchThrowable(() -> router.routeCreate(createCtx("agent-9"))));
 
         assertThat(ge).isNotNull();
-        assertThat(ge.code()).isEqualTo("DEFAULT_AGENT_UNCONFIGURED");
+        assertThat(ge.code()).isEqualTo("RDC_UNAVAILABLE");
+        assertThat(ge.httpStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        // S5 invariant: no runtime call, no topology in the failure message.
+        assertThat(runtime.lastEndpoint()).isNull();
+        assertThat(ge.getMessage()).doesNotContain("http");
+    }
+
+    @Test
+    void searchFailureOnStreamReturnsRdcUnavailable() {
+        rdc.setSearchFails(true);
+        GovernanceException ge = asGovernanceException(catchThrowable(() -> router.routeStream(createCtx("agent-9"))));
+        assertThat(ge).isNotNull();
+        assertThat(ge.code()).isEqualTo("RDC_UNAVAILABLE");
     }
 
     @Test
@@ -165,28 +205,29 @@ class RouterTest {
 
     @Test
     void resumeReachesStickyOwnerWithoutSearch() {
-        sticky.put("task-7", "h1");
+        sticky.put("task-7", "h1", "svc-rt");
         rdc.setResolved(new ResolvedRoute(ENDPOINT));
         runtime.setResponse(TASK_BODY);
         String resp = router.routeResume(resumeCtx("task-7"));
         assertThat(resp).isEqualTo(TASK_BODY);
         assertThat(runtime.lastEndpoint()).isEqualTo(ENDPOINT);
-        assertThat(runtime.lastBody()).contains("\"tenantId\":\"tenant-1\"");
+        assertThat(runtime.lastBody()).contains("\"tenant\":\"tenant-1\"");
         // resume must NOT re-select via search (S3 invariant)
         assertThat(rdc.lastAgentId()).isNull();
     }
 
     @Test
-    void stickyMissReturnsResumeOwnerUnknown() {
-        GovernanceException ge = asGovernanceException(catchThrowable(() -> router.routeResume(resumeCtx("ghost"))));
-
-        assertThat(ge).isNotNull();
-        assertThat(ge.code()).isEqualTo("RESUME_OWNER_UNKNOWN");
+    void stickyMissReturnsContinuationFailed() {
+        Throwable thrown = catchThrowable(() -> router.routeResume(resumeCtx("ghost")));
+        assertThat(thrown).isInstanceOf(MethodResultException.class);
+        if (thrown instanceof MethodResultException mre) {
+            assertThat(mre.errorCode()).isEqualTo(ErrorCodes.CONTINUATION_FAILED);
+        }
     }
 
     @Test
     void resumePassesThroughRuntimeAssociationError() {
-        sticky.put("task-7", "h1");
+        sticky.put("task-7", "h1", "svc-rt");
         rdc.setResolved(new ResolvedRoute(ENDPOINT));
         runtime.setResponse("{\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"error\":{\"code\":-32001,"
                 + "\"message\":\"Task not found\"}}");

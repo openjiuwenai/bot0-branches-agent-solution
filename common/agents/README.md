@@ -190,7 +190,7 @@ EDP_AGENT_MODEL_NAME=deepseek-v4-pro
 EDP_AGENT_MODEL_BASE_URL=https://api.deepseek.com/v1
 EDP_AGENT_MODEL_API_KEY=替换为真实API密钥
 
-EDP_AGENT_VERSATILE_A2A_URL=http://127.0.0.1:8191/a2a
+EDP_AGENT_VERSATILE_A2A_URL=http://127.0.0.1:8191
 EDP_AGENT_VERSATILE_URL=http://127.0.0.1:30001/v1/0/agent-manager/workflows/{workflow_id}/conversations/{conversation_id}
 EDP_AGENT_SCENARIO_HOME=../scenarios/wealth-demo
 
@@ -405,7 +405,7 @@ EDP 常用：
 Docker 网络：agent-net
 Adapter 网络别名：adapter-versatile
 Adapter 容器端口：8191
-EDP 访问地址：http://adapter-versatile:8191/a2a
+EDP 访问地址：http://adapter-versatile:8191
 ```
 
 推荐部署顺序：准备真实 Versatile → 部署 Adapter → 验证 Adapter Agent Card → 准备 Redis → 部署 EDP → 验证 EDP Agent Card → 发真实业务请求。
@@ -449,7 +449,7 @@ EDP 访问地址：http://adapter-versatile:8191/a2a
 **本地开发**时，两个 Java 服务都直接跑在 Windows 上，所有东西都共享 Windows 的网络栈，所以都用 `127.0.0.1`：
 
 ```text
-EDP ──▶ http://127.0.0.1:8191/a2a   (Adapter)
+EDP ──▶ http://127.0.0.1:8191      (Adapter)
 EDP ──▶ 127.0.0.1:6379              (Memurai)
 Adapter ──▶ http://127.0.0.1:30001  (Versatile/Mock)
 ```
@@ -457,7 +457,7 @@ Adapter ──▶ http://127.0.0.1:30001  (Versatile/Mock)
 **Docker 部署**时，每个容器都是一台"独立的小电脑"，容器里的 `localhost` / `127.0.0.1` 只代表它自己，既不代表 Linux 宿主机，也不代表旁边的另一个容器。所以同机容器之间必须走共享网络 `agent-net` 里的 DNS 别名：
 
 ```text
-EDP 容器 ──▶ http://adapter-versatile:8191/a2a   (Adapter 容器别名)
+EDP 容器 ──▶ http://adapter-versatile:8191   (Adapter 容器别名)
 EDP 容器 ──▶ edp-redis:6379                      (Redis 容器别名)
 ```
 

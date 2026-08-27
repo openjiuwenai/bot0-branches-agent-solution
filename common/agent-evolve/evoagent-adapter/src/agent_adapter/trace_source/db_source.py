@@ -11,18 +11,25 @@ from typing import Any
 from agent_adapter.repository.base import TraceRepository
 from agent_adapter.trace_source.base import TraceSource
 from agent_adapter.trace_source.spans_to_records import spans_to_records
+from agent_adapter.trace_profile.loader import ProfileRegistry
+from agent_adapter.trace_profile.filters import filter_spans_by_service
 
 
 class DbTraceSource:
     """standard 模式 TraceSource: PG spans → records。"""
 
-    def __init__(self, repo: TraceRepository) -> None:
+    def __init__(
+        self,
+        repo: TraceRepository,
+        registry: ProfileRegistry | None = None,
+        agents: list | None = None,
+    ) -> None:
         self._repo = repo
+        self._registry = registry
+        self._agents = agents or []
 
     async def list_conversations(self, agent_name: str | None = None) -> list[str]:
         rows = await self._repo.list_sessions(agent_name=agent_name)
-        # repo 返回 trace 汇总 dict 列表; 取 session_id (去重保序)。
-        # 桥接: TraceSource 接口层用 conversation_id 抽象 (值=session.id), DB 层用 session_id 列。
         seen: set[str] = set()
         ids: list[str] = []
         for row in rows:
@@ -33,7 +40,13 @@ class DbTraceSource:
         return ids
 
     async def get_records(self, agent_name: str | None, conversation_id: str) -> list[dict[str, Any]]:
-        # conversation_id 即 session.id (TraceSource 抽象层); DB 层按 session_id 索引。
-        # agent_name 在 DB 模式下不参与查询 (DB 按 session_id 索引)
         spans = await self._repo.get_spans_by_session(conversation_id)
-        return spans_to_records(spans)
+        profile = self._resolve_profile(agent_name)
+        if profile is not None and self._registry is not None:
+            spans = filter_spans_by_service(spans, self._registry, "query")
+        return spans_to_records(spans, profile)
+
+    def _resolve_profile(self, agent_name: str | None):
+        if self._registry is None or agent_name is None:
+            return None
+        return self._registry.get_by_agent_name(agent_name, self._agents)

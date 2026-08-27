@@ -26,6 +26,8 @@ public class GovernanceContext {
     private String messageId;
     private String contextId;
     private String rawBody;
+    private String idempotencyFingerprint;
+    private Integer historyLength;
 
     /**
      * Get trace correlation id.
@@ -187,5 +189,42 @@ public class GovernanceContext {
      */
     public void setRawBody(String rawBody) {
         this.rawBody = rawBody;
+    }
+
+    /**
+     * Get the idempotency fingerprint (normalized {@code params} body, excluding
+     * the JSON-RPC envelope {@code id}; populated by G3 ParamValidator).
+     *
+     * @return idempotency fingerprint, or {@code null} if G3 did not run
+     */
+    public String idempotencyFingerprint() {
+        return idempotencyFingerprint;
+    }
+
+    /**
+     * Set the idempotency fingerprint.
+     *
+     * @param idempotencyFingerprint normalized params body fingerprint
+     */
+    public void setIdempotencyFingerprint(String idempotencyFingerprint) {
+        this.idempotencyFingerprint = idempotencyFingerprint;
+    }
+
+    /**
+     * Get the optional GetTask history length (v0830 S6).
+     *
+     * @return history length, or {@code null} if not specified
+     */
+    public Integer historyLength() {
+        return historyLength;
+    }
+
+    /**
+     * Set the optional GetTask history length.
+     *
+     * @param historyLength history length (may be null)
+     */
+    public void setHistoryLength(Integer historyLength) {
+        this.historyLength = historyLength;
     }
 }

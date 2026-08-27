@@ -12,8 +12,6 @@ import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
@@ -31,11 +29,6 @@ class BrokerProjectionFeedTest {
     // 20ms poll timeout keeps the empty-poll tests fast (production uses the 500ms default).
     private final FakeBrokerForwardingConsumerPort consumer = new FakeBrokerForwardingConsumerPort();
     private final BrokerProjectionFeed feed = new BrokerProjectionFeed(consumer, "gateway-01", 20L);
-
-    private static String b64Url(String json) {
-        return Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(json.getBytes(StandardCharsets.UTF_8));
-    }
 
     private static BrokerInboundMessage msg(String correlationId, AgentBusEventType type,
                                             String source, String inlinePayload) {
@@ -76,21 +69,42 @@ class BrokerProjectionFeedTest {
 
     @Test
     void drainOnceRoutesMatchingEventAndPollReadsIt() {
-        String a2a = b64Url("{\"result\":{\"id\":\"t1\"}}");
+        String a2a = "{\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"result\":{\"task\":{"
+                + "\"id\":\"t1\",\"status\":{\"state\":\"completed\"},"
+                + "\"artifacts\":[{\"parts\":[{\"text\":\"answer\"}]}]}}}";
         consumer.enqueue(msg("c1", AgentBusEventType.INVOCATION_RESPONSE, "runtime-01",
-                "taskId=t1;a2aResponseType=Task;a2aResponse=" + a2a));
+                projection("RESPONSE", "\"taskId\":\"t1\",\"a2aResponse\":" + a2a)));
         feed.drainOnce(); // dispatcher routes c1's event to c1's staging queue + commits
         Optional<ProjectionFeed.ProjectionEvent> evt = feed.poll("c1");
         assertThat(evt).isPresent();
         assertThat(evt.get().eventType()).isEqualTo(AgentBusEventType.INVOCATION_RESPONSE);
         assertThat(evt.get().taskId()).isEqualTo("t1");
-        assertThat(evt.get().body()).isEqualTo("{\"result\":{\"id\":\"t1\"}}");
+        assertThat(evt.get().body()).isEqualTo("{\"jsonrpc\":\"2.0\",\"id\":\"req-1\","
+                + "\"result\":{\"task\":{\"id\":\"t1\",\"status\":{\"state\":\"completed\"},"
+                        + "\"artifacts\":[{\"parts\":[{\"text\":\"answer\"}]}]}}}");
+        assertThat(evt.get().a2aResponsePresent()).isTrue();
         assertThat(consumer.committed()).hasSize(1);
     }
 
     @Test
+    void messageProjectionPreservesCompleteJsonRpcResponse() {
+        String a2a = "{\"jsonrpc\":\"2.0\",\"id\":\"req-message\",\"result\":{\"message\":{"
+                + "\"messageId\":\"m1\",\"role\":\"ROLE_AGENT\",\"parts\":[]}}}";
+        consumer.enqueue(msg("c-message", AgentBusEventType.INVOCATION_RESPONSE, "runtime-01",
+                projection("RESPONSE", "\"a2aResponse\":" + a2a)));
+
+        feed.drainOnce();
+
+        assertThat(feed.poll("c-message")).get()
+                .extracting(ProjectionFeed.ProjectionEvent::body)
+                .isEqualTo("{\"jsonrpc\":\"2.0\",\"id\":\"req-message\",\"result\":{\"message\":{"
+                        + "\"messageId\":\"m1\",\"role\":\"ROLE_AGENT\",\"parts\":[]}}}");
+    }
+
+    @Test
     void drainOnceRoutesNonMatchingToItsOwnerAndOtherCorrIdPollsEmpty() {
-        consumer.enqueue(msg("c2", AgentBusEventType.INVOCATION_RESPONSE, "runtime-01", "taskId=t2"));
+        consumer.enqueue(msg("c2", AgentBusEventType.INVOCATION_ACCEPTED, "runtime-01",
+                projection("ACCEPTED", "\"taskId\":\"t2\",\"idempotencyResult\":\"NEW\"")));
         feed.drainOnce(); // routes c2's event to c2's staging (not c1's) + commits
         // c1 has no event — poll reads c1's (empty) staging, does NOT pull c2 from the consumer
         assertThat(feed.poll("c1")).isEmpty();
@@ -120,8 +134,28 @@ class BrokerProjectionFeedTest {
         // issue E-layer2: poll(corrId) reads its own per-corrId staging queue — it does NOT pull (and
         // commit) another corrId's event from the shared consumer. The dispatcher / drainOnce owns
         // the shared consumer; servlet threads no longer contend on it (no 14-15s stage-retry).
-        consumer.enqueue(msg("c2", AgentBusEventType.INVOCATION_RESPONSE, "runtime-01", "taskId=t2"));
+        consumer.enqueue(msg("c2", AgentBusEventType.INVOCATION_ACCEPTED, "runtime-01",
+                projection("ACCEPTED", "\"taskId\":\"t2\",\"idempotencyResult\":\"NEW\"")));
         assertThat(feed.poll("c1")).isEmpty();          // c1 has no event
         assertThat(consumer.committed()).isEmpty();     // poll(c1) did NOT pull c2 — decoupled
+    }
+
+    @Test
+    void malformedProjectionIsCommittedAndStagedAsProtocolFailure() {
+        consumer.enqueue(msg("bad", AgentBusEventType.INVOCATION_RESPONSE, "runtime-01",
+                "taskId=legacy"));
+
+        feed.drainOnce();
+
+        assertThat(feed.poll("bad")).get().satisfies(event -> {
+            assertThat(event.eventType()).isEqualTo(AgentBusEventType.INVOCATION_FAILED);
+            assertThat(event.protocolFailure()).isEqualTo("PROJECTION_PAYLOAD_INVALID");
+        });
+        assertThat(consumer.committed()).hasSize(1);
+    }
+
+    private static String projection(String kind, String fields) {
+        return "{\"schemaVersion\":\"1.0\",\"projectionKind\":\"" + kind
+                + "\",\"revision\":0," + fields + "}";
     }
 }

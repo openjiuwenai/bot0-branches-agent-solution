@@ -121,8 +121,10 @@ def _parse_slow_update_response(raw: str) -> SlowUpdateResult:
 
     reasoning = parsed.get("reasoning", "")
     content = parsed.get("slow_update_content", "")
-    assert isinstance(reasoning, str)
-    assert isinstance(content, str)
+    if not isinstance(reasoning, str):
+        raise TypeError("reasoning must be a string")
+    if not isinstance(content, str):
+        raise TypeError("slow_update_content must be a string")
     return SlowUpdateResult(
         reasoning=reasoning,
         slow_update_content=content,

@@ -1,0 +1,324 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
+package com.openjiuwen.agents.intent.api;
+
+import com.openjiuwen.agents.intent.exception.IntentInitializationException;
+import com.openjiuwen.agents.intent.exception.IntentMatchException;
+import com.openjiuwen.agents.intent.model.FinishAction;
+import com.openjiuwen.agents.intent.model.InitializedIntents;
+import com.openjiuwen.agents.intent.model.IntentAction;
+import com.openjiuwen.agents.intent.model.IntentCatalogInput;
+import com.openjiuwen.agents.intent.model.IntentCatalogSnapshot;
+import com.openjiuwen.agents.intent.model.IntentDecision;
+import com.openjiuwen.agents.intent.model.IntentDecisionStatus;
+import com.openjiuwen.agents.intent.model.IntentDefinition;
+import com.openjiuwen.agents.intent.model.IntentSuiteConfig;
+import com.openjiuwen.agents.intent.model.InvokeToolAction;
+import com.openjiuwen.agents.intent.model.ReturnAction;
+import com.openjiuwen.agents.intent.spi.IntentInitializer;
+import com.openjiuwen.agents.intent.spi.IntentMatcher;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
+
+/**
+ * Public entry point for intent catalog replacement and single-intent resolution.
+ *
+ * @since 0.1.0
+ */
+public final class IntentSuite {
+    /** Tool kwargs key carrying the active session identifier for diagnostics. */
+    public static final String SESSION_ID_KWARG = "sessionId";
+
+    private static final Logger log = LoggerFactory.getLogger(IntentSuite.class);
+
+    private static final String INTENT_TOOL_NAME = "intent_match";
+
+    private final IntentSuiteConfig config;
+    private final IntentInitializer initializer;
+    private final IntentMatcher matcher;
+    private final AtomicReference<IntentCatalogSnapshot> current;
+    private final ReentrantLock updateLock = new ReentrantLock();
+
+    private IntentSuite(IntentSuiteConfig config, IntentInitializer initializer, IntentMatcher matcher,
+            InitializedIntents initialIntents) {
+        this.config = config;
+        this.initializer = initializer;
+        this.matcher = matcher;
+        current = new AtomicReference<>(new IntentCatalogSnapshot(0L, initialIntents));
+    }
+
+    /**
+     * Creates a strict suite builder.
+     *
+     * @param config static suite configuration
+     * @return suite builder
+     */
+    public static Builder builder(IntentSuiteConfig config) {
+        return new Builder(config);
+    }
+
+    /**
+     * Returns the static suite configuration.
+     *
+     * @return suite configuration
+     */
+    public IntentSuiteConfig config() {
+        return config;
+    }
+
+    /**
+     * Resolves one intent and executes its bound result function.
+     *
+     * @param inputs intent Tool inputs
+     * @param kwargs Tool execution kwargs
+     * @return decision
+     */
+    public IntentDecision resolve(Map<String, Object> inputs, Map<String, Object> kwargs) {
+        IntentCatalogSnapshot snapshot = current.get();
+        String sessionId = sessionId(kwargs);
+        IntentExecutionContext context;
+        try {
+            context = IntentExecutionContext.create(config, snapshot, inputs, kwargs);
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            log.info("Intent resolution rejected invalid input sessionId={} catalogVersion={}", sessionId,
+                    snapshot.version());
+            return failed(null, "intent call inputs are invalid");
+        }
+        log.info("Intent resolution started sessionId={} catalogVersion={} candidates={} fallback={} semantic={}",
+                sessionId, snapshot.version(), snapshot.initializedIntents().matchableIntents().size(),
+                snapshot.initializedIntents().fallback() != null, context.routingSemantic());
+
+        // FutureTask runs the extension inline and republishes its unchecked failures as
+        // ExecutionException, which keeps SPI defects mappable without catching RuntimeException.
+        // get() cannot block after run() completed, so the InterruptedException branch is only
+        // required by the checked signature and is unreachable at runtime.
+        Optional<IntentDefinition> matched;
+        FutureTask<Optional<IntentDefinition>> matching = new FutureTask<>(
+                () -> Optional.ofNullable(matcher.match(context))
+                        .orElseThrow(() -> new IntentMatchException("matcher result must not be null")));
+        matching.run();
+        try {
+            matched = matching.get();
+        } catch (InterruptedException exception) {
+            log.warn("Intent matching interrupted sessionId={} catalogVersion={}", sessionId, snapshot.version(),
+                    exception);
+            return failed(null, "intent matching failed");
+        } catch (ExecutionException exception) {
+            Throwable cause = executionCause(exception);
+            log.warn("Intent matching failed sessionId={} catalogVersion={}", sessionId, snapshot.version(), cause);
+            return failed(null, "intent matching failed");
+        }
+        if (!isValidMatch(matched, snapshot.initializedIntents())) {
+            log.warn("Intent matcher returned an intent outside the catalog sessionId={} catalogVersion={}", sessionId,
+                    snapshot.version());
+            return failed(null, "intent matching result is invalid");
+        }
+
+        IntentDefinition selected = matched.orElse(snapshot.initializedIntents().fallback());
+        if (selected == null) {
+            log.info("Intent resolution completed sessionId={} status={} catalogVersion={}", sessionId,
+                    IntentDecisionStatus.UNMATCHED, snapshot.version());
+            return new IntentDecision(IntentDecisionStatus.UNMATCHED, null, null, "no intent matched");
+        }
+        IntentDecisionStatus status = matched.isPresent()
+                ? IntentDecisionStatus.MATCHED
+                : IntentDecisionStatus.FALLBACK;
+        log.info("Intent selected sessionId={} status={} intentId={} catalogVersion={}", sessionId, status,
+                selected.id(), snapshot.version());
+        context.select(selected);
+        return applyResultFunction(status, selected, context, sessionId);
+    }
+
+    /**
+     * Replaces the complete dynamic catalog atomically.
+     *
+     * @param catalog complete catalog input
+     * @return new suite catalog version
+     */
+    public long replaceCatalog(IntentCatalogInput catalog) {
+        Objects.requireNonNull(catalog, "catalog");
+        updateLock.lock();
+        try {
+            InitializedIntents initialized = initializer.initialize(config, catalog);
+            validateInitialized(initialized, false);
+            long nextVersion = current.get().version() + 1L;
+            current.set(new IntentCatalogSnapshot(nextVersion, initialized));
+            log.info("Intent catalog replaced version={} matchableIntents={} fallback={}", nextVersion,
+                    initialized.matchableIntents().size(), initialized.fallback() != null);
+            return nextVersion;
+        } finally {
+            updateLock.unlock();
+        }
+    }
+
+    /**
+     * Returns the current immutable catalog snapshot.
+     *
+     * @return catalog snapshot
+     */
+    public IntentCatalogSnapshot snapshot() {
+        return current.get();
+    }
+
+    private IntentDecision applyResultFunction(IntentDecisionStatus status, IntentDefinition selected,
+            IntentExecutionContext context, String sessionId) {
+        // Same inline FutureTask boundary as resolve(): see the comment there before changing it.
+        FutureTask<IntentAction> generation = new FutureTask<>(() -> selected.resultFunction().apply(context));
+        generation.run();
+        try {
+            IntentAction action = generation.get();
+            if (!isValidAction(action)) {
+                log.warn("Intent result function returned invalid action sessionId={} intentId={}", sessionId,
+                        selected.id());
+                return failed(selected.id(), "intent action is invalid");
+            }
+            log.info("Intent result function completed sessionId={} intentId={} actionType={}", sessionId,
+                    selected.id(), action.getClass().getSimpleName());
+            return new IntentDecision(status, selected.id(), action, null);
+        } catch (InterruptedException exception) {
+            log.warn("Intent result function interrupted sessionId={} intentId={}", sessionId, selected.id(),
+                    exception);
+            return failed(selected.id(), "intent result function failed");
+        } catch (ExecutionException exception) {
+            Throwable cause = executionCause(exception);
+            log.warn("Intent result function failed sessionId={} intentId={}", sessionId, selected.id(), cause);
+            return failed(selected.id(), "intent result function failed");
+        }
+    }
+
+    private static String sessionId(Map<String, Object> kwargs) {
+        if (kwargs == null) {
+            return "";
+        }
+        return kwargs.get(SESSION_ID_KWARG) instanceof String value ? value : "";
+    }
+
+    private static Throwable executionCause(ExecutionException exception) {
+        Throwable cause = exception.getCause() != null ? exception.getCause() : exception;
+        if (cause instanceof Error error) {
+            throw error;
+        }
+        return cause;
+    }
+
+    private static boolean isValidMatch(Optional<IntentDefinition> matched, InitializedIntents intents) {
+        if (matched.isEmpty()) {
+            return true;
+        }
+        IntentDefinition selected = matched.orElseThrow();
+        return intents.matchableIntents().stream().anyMatch(candidate -> candidate == selected);
+    }
+
+    private static boolean isValidAction(IntentAction action) {
+        if (action instanceof ReturnAction returnAction) {
+            return !(returnAction.result() instanceof Throwable);
+        }
+        if (action instanceof FinishAction finishAction) {
+            return !(finishAction.result() instanceof Throwable) && finishAction.output() != null
+                    && !finishAction.output().isBlank();
+        }
+        if (action instanceof InvokeToolAction invokeAction) {
+            return invokeAction.toolName() != null && !invokeAction.toolName().isBlank()
+                    && !INTENT_TOOL_NAME.equals(invokeAction.toolName()) && invokeAction.arguments() != null;
+        }
+        return false;
+    }
+
+    private static IntentDecision failed(String intentId, String message) {
+        return new IntentDecision(IntentDecisionStatus.FAILED, intentId, null, message);
+    }
+
+    private static void validateInitialized(InitializedIntents initialized, boolean initialCatalog) {
+        if (initialized == null) {
+            throw new IntentInitializationException("initializer returned null");
+        }
+        if (initialCatalog && (!initialized.matchableIntents().isEmpty() || initialized.fallback() != null)) {
+            throw new IntentInitializationException("initial catalog must be empty");
+        }
+        Set<String> ids = new HashSet<>();
+        for (IntentDefinition intent : initialized.matchableIntents()) {
+            validateIntent(intent, true, ids);
+        }
+        if (initialized.fallback() != null) {
+            validateIntent(initialized.fallback(), false, ids);
+        }
+    }
+
+    private static void validateIntent(IntentDefinition intent, boolean matchable, Set<String> ids) {
+        if (intent == null || intent.id() == null || intent.id().isBlank()) {
+            throw new IntentInitializationException("intent id must not be blank");
+        }
+        if (!ids.add(intent.id())) {
+            throw new IntentInitializationException("duplicate intent id: " + intent.id());
+        }
+        if (matchable && (intent.description() == null || intent.description().isBlank())) {
+            throw new IntentInitializationException("matchable intent description must not be blank: " + intent.id());
+        }
+        if (intent.resultFunction() == null || intent.resultArguments() == null) {
+            throw new IntentInitializationException("intent result binding is incomplete: " + intent.id());
+        }
+    }
+
+    /**
+     * Strict builder requiring explicit initializer and matcher instances.
+     */
+    public static final class Builder {
+        private final IntentSuiteConfig config;
+
+        private IntentInitializer initializer;
+        private IntentMatcher matcher;
+
+        private Builder(IntentSuiteConfig config) {
+            this.config = Objects.requireNonNull(config, "config");
+        }
+
+        /**
+         * Sets the initializer.
+         *
+         * @param value initializer
+         * @return this builder
+         */
+        public Builder initializer(IntentInitializer value) {
+            initializer = value;
+            return this;
+        }
+
+        /**
+         * Sets the matcher.
+         *
+         * @param value matcher
+         * @return this builder
+         */
+        public Builder matcher(IntentMatcher value) {
+            matcher = value;
+            return this;
+        }
+
+        /**
+         * Builds a suite with an initialized version-zero empty catalog.
+         *
+         * @return suite
+         */
+        public IntentSuite build() {
+            IntentInitializer requiredInitializer = Objects.requireNonNull(initializer, "initializer");
+            IntentMatcher requiredMatcher = Objects.requireNonNull(matcher, "matcher");
+            InitializedIntents initial = requiredInitializer.initialize(config, IntentCatalogInput.empty());
+            validateInitialized(initial, true);
+            log.info("Intent suite initialized with empty catalog matchThreshold={}", config.matchThreshold());
+            return new IntentSuite(config, requiredInitializer, requiredMatcher, initial);
+        }
+    }
+}

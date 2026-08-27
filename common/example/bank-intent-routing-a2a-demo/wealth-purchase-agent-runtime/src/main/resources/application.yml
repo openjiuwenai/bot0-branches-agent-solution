@@ -1,0 +1,32 @@
+server:
+  port: ${WEALTH_PURCHASE_AGENT_PORT:18204}
+
+spring:
+  application:
+    name: wealth-purchase-agent
+  config:
+    import: optional:file:./application-intent_local.yml
+
+openjiuwen:
+  service:
+    agent-id: wealth-purchase-agent
+    handler: agentcore
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      agent-name: WealthPurchaseAgent
+      agent-description: 收集产品和金额，在用户确认后购买银行理财
+      provider-organization: OpenJiuwen
+      streaming: true
+      default-input-modes: ["text", "text/plain"]
+      default-output-modes: ["text", "text/plain", "application/json"]
+      skills:
+        - id: purchase_wealth
+          name: Purchase wealth product
+          description: 购买或认购理财产品：例如购买一万元稳盈90天。信息不足时追问产品或金额，执行前要求确认
+          tags: ["bank", "wealth", "purchase", "interrupt", "confirmation"]
+          examples: ["买一万元稳盈90天", "我要买理财"]
+          input-modes: ["text", "text/plain"]
+          output-modes: ["text", "text/plain", "application/json"]

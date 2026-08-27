@@ -393,6 +393,7 @@ public final class CloudClientVerification {
         // 产生真实的 INPUT_REQUIRED，验证 continueInput 续轮在真栈上能跑通。
         InvocationCall call = client.invoke(InvocationRequest.gatewayBuilder("demo-a2a-agent-a")
                 .conversationId(conversationId)
+                .agentId("demo-a2a-agent-a")
                 .mode(InvocationMode.STREAMING)
                 .input("Please calculate 1+1 through Agent B.")
                 .build());
@@ -478,6 +479,7 @@ public final class CloudClientVerification {
             throws InterruptedException, ExecutionException, TimeoutException {
         InvocationCall call = client.invoke(InvocationRequest.gatewayBuilder("demo-a2a-agent-a")
                 .conversationId("conv-async-1")
+                .agentId("demo-a2a-agent-a")
                 .mode(InvocationMode.ASYNC)
                 .input("async hello")
                 .exposure(ToolExposurePolicy.none())
@@ -518,6 +520,7 @@ public final class CloudClientVerification {
         List<InvocationEvent> seen = new ArrayList<>();
         InvocationCall call = client.invoke(InvocationRequest.gatewayBuilder("demo-a2a-agent-a")
                 .conversationId("conv-drop-recover")
+                .agentId("demo-a2a-agent-a")
                 .mode(InvocationMode.STREAMING)
                 .input("stream hello")
                 .exposure(ToolExposurePolicy.none())
@@ -552,6 +555,7 @@ public final class CloudClientVerification {
         List<InvocationEvent> seen = new ArrayList<>();
         InvocationCall call = client.invoke(InvocationRequest.gatewayBuilder("demo-a2a-agent-a")
                 .conversationId("conv-drop-uncertain")
+                .agentId("demo-a2a-agent-a")
                 .mode(InvocationMode.STREAMING)
                 .input("stream hello again")
                 .exposure(ToolExposurePolicy.none())
@@ -639,6 +643,7 @@ public final class CloudClientVerification {
         String traceId = "trace-" + UUID.randomUUID();
         InvocationCall call = client.invoke(InvocationRequest.gatewayBuilder("demo-a2a-agent-a")
                 .conversationId("conv-attributes")
+                .agentId("demo-a2a-agent-a")
                 .mode(InvocationMode.STREAMING)
                 .input("carry my trace")
                 .attribute("traceId", traceId)
@@ -726,6 +731,7 @@ public final class CloudClientVerification {
         // 窗口在过去就已关闭：授权本身允许这两个工具，但已过期。
         InvocationCall call = client.invoke(InvocationRequest.gatewayBuilder("demo-a2a-agent-a")
                 .conversationId("conv-expired-exposure")
+                .agentId("demo-a2a-agent-a")
                 .mode(InvocationMode.STREAMING)
                 .input("please read the page then submit the order")
                 .exposure(ToolExposurePolicy.allow(DemoTools.READ_PAGE, DemoTools.SUBMIT_ORDER)
@@ -832,6 +838,7 @@ public final class CloudClientVerification {
     private InvocationCall invokePlain(AgentClient client, String conversationId, String input) {
         InvocationRequest r = InvocationRequest.gatewayBuilder("demo-a2a-agent-a")
                 .conversationId(conversationId)
+                .agentId("demo-a2a-agent-a")
                 .mode(InvocationMode.STREAMING)
                 .input(input)
                 .build();

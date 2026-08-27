@@ -47,7 +47,7 @@ class HttpRdcRouteClientTest {
         mockRdc.start();
         String root = mockRdc.url("/").toString();
         String baseUrl = root.endsWith("/") ? root.substring(0, root.length() - 1) : root;
-        return new HttpRdcRouteClient(baseUrl);
+        return new HttpRdcRouteClient(baseUrl, 5_000L, System::currentTimeMillis);
     }
 
     /**
@@ -111,6 +111,77 @@ class HttpRdcRouteClientTest {
     void resolveErrorThrowsRouteResolutionException() {
         mockRdc.enqueue(new MockResponse().setResponseCode(404));
         Throwable thrown = catchThrowable(() -> client.resolveRouteHandle("v2:gone", "t"));
+        assertThat(thrown).isInstanceOf(RouteResolutionException.class);
+    }
+
+    @Test
+    void searchUsesCachedRouteWhenRdcReturns503() throws InterruptedException {
+        mockRdc.enqueue(new MockResponse()
+                .setBody("[{\"routeHandle\":\"h-cache\",\"serviceId\":\"svc-1\"}]")
+                .addHeader("Content-Type", "application/json"));
+        assertThat(client.searchInstancesByAgentId("tenant-1", "agent-9"))
+                .extracting(AgentCardRoute::routeHandle)
+                .containsExactly("h-cache");
+        mockRdc.takeRequest();
+
+        mockRdc.enqueue(new MockResponse().setResponseCode(503));
+        assertThat(client.searchInstancesByAgentId("tenant-1", "agent-9"))
+                .extracting(AgentCardRoute::routeHandle)
+                .containsExactly("h-cache");
+    }
+
+    @Test
+    void searchThrowsRouteResolutionExceptionWhenRdc503AndNoCache() {
+        // L2-014 ①: 5xx + no cache → RouteResolutionException (not List.of()), so Router maps to RDC_UNAVAILABLE.
+        mockRdc.enqueue(new MockResponse().setResponseCode(503));
+        Throwable thrown = catchThrowable(() -> client.searchInstancesByAgentId("t", "a"));
+        assertThat(thrown).isInstanceOf(RouteResolutionException.class);
+    }
+
+    @Test
+    void searchThrowsRouteResolutionExceptionWhenRdc400() {
+        // L2-014 ①: 400 (RDC rejected) → RouteResolutionException (not List.of()), distinct from business-empty.
+        mockRdc.enqueue(new MockResponse().setResponseCode(400));
+        Throwable thrown = catchThrowable(() -> client.searchInstancesByAgentId("t", "a"));
+        assertThat(thrown).isInstanceOf(RouteResolutionException.class);
+    }
+
+    @Test
+    void searchReturnsEmptyFor404AsGenuineNoCandidates() {
+        // 404 = agent not registered → genuine "no candidates" (business-empty, NOT a dependency fault).
+        mockRdc.enqueue(new MockResponse().setResponseCode(404));
+        assertThat(client.searchInstancesByAgentId("t", "a")).isEmpty();
+    }
+
+    @Test
+    void resolveUsesCachedEndpointWhenRdcReturns503() throws Exception {
+        mockRdc.enqueue(new MockResponse()
+                .setBody("{\"endpointUrl\":\"http://runtime-1:8000\"}")
+                .addHeader("Content-Type", "application/json"));
+        assertThat(client.resolveRouteHandle("v2:abc", "tenant-1").endpointUrl())
+                .isEqualTo("http://runtime-1:8000");
+        mockRdc.takeRequest();
+
+        mockRdc.enqueue(new MockResponse().setResponseCode(503));
+        assertThat(client.resolveRouteHandle("v2:abc", "tenant-1").endpointUrl())
+                .isEqualTo("http://runtime-1:8000");
+    }
+
+    @Test
+    void cachedRouteExpiresAfterTtl() throws InterruptedException {
+        HttpRdcRouteClient shortTtlClient = new HttpRdcRouteClient(
+                mockRdc.url("/").toString().replaceAll("/$", ""), 50L, () -> System.currentTimeMillis());
+        mockRdc.enqueue(new MockResponse()
+                .setBody("[{\"routeHandle\":\"h-expire\"}]")
+                .addHeader("Content-Type", "application/json"));
+        assertThat(shortTtlClient.searchInstancesByAgentId("tenant-1", "agent-9")).hasSize(1);
+        mockRdc.takeRequest();
+
+        Thread.sleep(60L);
+        mockRdc.enqueue(new MockResponse().setResponseCode(503));
+        // After TTL expiry, cache is empty → 503 throws RouteResolutionException (L2-014 ①).
+        Throwable thrown = catchThrowable(() ->
+                shortTtlClient.searchInstancesByAgentId("tenant-1", "agent-9"));
         assertThat(thrown).isInstanceOf(RouteResolutionException.class);
     }
 

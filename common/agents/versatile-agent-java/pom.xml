@@ -7,7 +7,8 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>4.0.6</version>
+    <version>4.0.7</version>
+    <relativePath/>
   </parent>
 
   <groupId>com.openjiuwen</groupId>
@@ -47,17 +48,39 @@
   <properties>
     <java.version>17</java.version>
     <maven.compiler.release>17</maven.compiler.release>
-    <agent-runtime-java.version>0.1.1.post1</agent-runtime-java.version>
+    <agent-runtime-java.version>0.1.2</agent-runtime-java.version>
     <agent-runtime-ext-java.version>0.1.0</agent-runtime-ext-java.version>
-    <!-- 修复 Tomcat 15 个 CVE -->
+    <!-- Tomcat CVE override（高于 Boot 4.0.7 的 11.0.22，保留） -->
     <tomcat.version>11.0.24</tomcat.version>
-    <!-- 修复 jackson-databind 5 个 CVE（Spring Boot 4.0.x 的 jackson-bom.version 控制 Jackson 3.x，不适用此处） -->
+    <!-- jackson-databind/core 显式 pin（与 jackson-2-bom 2.21.5 一致，CVE 历史 pin 保留） -->
     <jackson.version>2.21.5</jackson.version>
-    <!-- 修复 Logback 2 个 CVE -->
-    <logback.version>1.5.34</logback.version>
-    <!-- 修复 Log4j 1 个 CVE -->
-    <log4j2.version>2.25.5</log4j2.version>
+    <!-- A 桶 properties：Boot-property override（BOM import 的直接 pin 不覆盖 Boot parent depMgmt,需消费方 set 属性使 Boot BOM 解析到对齐值） -->
+    <slf4j.version>2.0.12</slf4j.version>
+    <logback.version>1.5.37</logback.version>
+    <snakeyaml.version>2.2</snakeyaml.version>
+    <byte-buddy.version>1.15.11</byte-buddy.version>
+    <commons-lang3.version>3.18.0</commons-lang3.version>
+    <commons-codec.version>1.20.0</commons-codec.version>
+    <postgresql.version>42.7.12</postgresql.version>
+    <h2.version>2.2.224</h2.version>
+    <sqlite-jdbc.version>3.53.2.1</sqlite-jdbc.version>
+    <pulsar.version>4.2.3</pulsar.version>
+    <lombok.version>1.18.32</lombok.version>
+    <gson.version>2.11.0</gson.version>
   </properties>
+
+  <dependencyManagement>
+    <dependencies>
+        <!-- import runtime BOM：A 桶 + C 桶 + openjiuwen 全部版本管理（BOM import 时用 BOM 自己的 properties 解析 ${...}） -->
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-runtime-java</artifactId>
+            <version>0.1.2</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <dependencies>
     <dependency>
@@ -110,6 +133,7 @@
         <artifactId>spring-boot-maven-plugin</artifactId>
         <configuration>
           <mainClass>com.openjiuwen.versatile.VersatileAgentApplication</mainClass>
+          <classifier>exec</classifier>
         </configuration>
         <executions>
           <execution>
@@ -124,7 +148,7 @@
         <artifactId>formatter-maven-plugin</artifactId>
         <version>2.23.0</version>
         <configuration>
-          <configFile>D:\JW\edpa-git\agent-solution\common\agents\.devtools\eclipse-java-formatter.xml</configFile>
+          <configFile>${project.basedir}/../.devtools/eclipse-java-formatter.xml</configFile>
           <includes>
             <include>**/*.java</include>
           </includes>

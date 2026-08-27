@@ -1,4 +1,4 @@
-﻿# Versatile 工作流调用特性
+# Versatile 工作流调用特性
 
 ## 特性概述
 
@@ -104,7 +104,7 @@ edpa:
       url: ${EDP_AGENT_VERSATILE_URL:http://localhost:30001/v1/0/agent-manager/workflows/{workflow_id}/conversations/{conversation_id}}
       
       # A2A 适配器地址
-      adapter-a2a-url: ${EDP_AGENT_VERSATILE_A2A_URL:http://localhost:8191/a2a}
+      adapter-a2a-url: ${EDP_AGENT_VERSATILE_A2A_URL:http://localhost:8191}
       
       # 调用超时时间
       timeout: ${EDP_AGENT_VERSATILE_TIMEOUT:30s}

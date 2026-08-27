@@ -15,7 +15,6 @@ gateway:
   path-mode: direct
   rdc:
     base-url: http://127.0.0.1:8092
-  default-agent-id: travel-hotel
   test-credential:
     token: mock-token
     principalId: test-principal

@@ -49,7 +49,7 @@ require_env() {
 
 # Load LLM params (and any port/SKIP_BUILD overrides) from a .env file. Real
 # environment variables win — .env only fills in vars that are not already set.
-# Search order: $LLM_DEMO_ENV, then $MODULE_DIR/.env. Mirrors cli-llm-intent.py.
+# Search order: $LLM_DEMO_ENV, then $MODULE_DIR/.env. Mirrors cli_llm_intent.py.
 load_dotenv() {
     local env_file="${LLM_DEMO_ENV:-$MODULE_DIR/.env}"
     [ -f "$env_file" ] || return 0

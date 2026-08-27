@@ -1,0 +1,494 @@
+#!/usr/bin/env bash
+#
+# Local end-to-end runbook for the FEAT-002 controller intent-handoff demo.
+# Verifies the L2 spec §7.2 场景旅程验收 journeys against real processes:
+#
+#   layer1 (port 18091, profiles layer1,mock-controller)
+#     agent_card_l1 — runtime + controller-handoff adapter, backed by the
+#     in-process mock controller (agent_L1_controller, message format).
+#   layer2 (port 18092, profiles layer2,mock-controller)
+#     agent_card_l2 — runtime + controller-handoff adapter, backed by
+#     agent_L2_controller. "不在范围" is a signal handoff type
+#     (handoff.signal.handoff-types): L2 answers its caller with the
+#     not-in-scope marker envelope — no outbound call (upstream-signal).
+#
+# Handoff outbound is delegated to the runtime coordinator: the handler emits a
+# single-item a2a_delegate interrupt (resume=true) and the coordinator performs
+# the A2A JSON-RPC call (POST /a2a), persists the shadow task and re-invokes the
+# handler with runtime.remoteToolResults once the remote batch settles.
+#
+# Outbound policy (layer1 yml):
+#   - contextId rewrite: openjiuwen.service.versatile.handoff.forward.context-id-prefix-target=true
+#     → adapter 的 ForwardContextIdRemoteAgentCaller 把出站 contextId 改写为
+#     <目标agentId>-<原contextId>（确定性派生，续调一致）
+#   - forward-after-done: mock L1 意图帧 flush 后延迟 2s 才终态，场景2 用日志
+#     时间戳断言 L2 收到调用的时刻 >= L1 控制器 workflow finished（先完成、后转发）
+#
+# Journeys (L2 spec §7.2, one scenario each):
+#   1  一级命中本地工作流        default query        → 本地答案, 无转调调用
+#   2  一级转调二级              query 转调            → 意图返回 "3" → a2a_delegate 中断 → 协调器 → 二级答案
+#   3  二级退回一级重新路由      query 退回            → L2 not-in-scope 信封 → re-invoke 重识别 → 本地答案
+#   4  控制器返回真正异常        query 异常            → FEAT-002 错误映射 FAILED
+#   5  转调消息缺少目标信息      query 无目标          → VERSATILE_HANDOFF_TARGET_MISSING
+#   6  未授权目标               query 越权            → VERSATILE_HANDOFF_TARGET_NOT_ALLOWED
+#   7  目标调用失败              query 不可达          → VERSATILE_HANDOFF_TARGET_UNAVAILABLE
+#   8  下游请求用户输入          query 补充信息        → 中断呈现（message=请补充入住日期, toolCallId=handoff:agent_card_l2:*）
+#   9  循环保护（弹回后同目标）  query 循环            → re-invoke 仍转调弹回目标 → DUPLICATE_TARGET
+#   10 调用超时                 query 超时            → VERSATILE_HANDOFF_TIMEOUT (timeout-seconds=3, L2 sleeps 10s)
+#   11 /a2a 多轮中断恢复        /a2a SendMessage      → 第二轮 message.taskId 引用 input-required task
+#                                                     → 影子任务恢复直呼 L2（L1 控制器仅一次），终答直通
+#   12 中断后续调二级退回       /a2a SendMessage      → 第一轮 L2 input-required；第二轮带 taskId 的
+#                                                     补充答复含「退回」→ L2 续调返回 not-in-scope 信封
+#                                                     → L1 检测信封重识别 → 本地答案（生产回归场景）
+#   13 流式中断后二级先答后退回  /a2a SendStreamingMessage → 同场景12但全程流式，L2 先流出部分
+#                                                     业务答案帧（terminal answer）再回退回信封 →
+#                                                     信封必须胜出，L1 重识别 → 本地答案（生产回归）
+#   14 转调目标无结果节点        /v1/query stream      → L2 流内无 result-node-name 结果帧、以 End
+#                                                     节点收尾、无转调信号（基线空终态）：L2 仍须发
+#                                                     终态事件，L1 以透传内容为终答，不得误报
+#                                                     TARGET_UNAVAILABLE（closed before terminal）
+#
+# Usage:
+#   ./scripts/local-e2e.sh              # build if needed, run all scenarios
+#   SKIP_BUILD=1 ./scripts/local-e2e.sh # reuse existing jar
+#
+# Prerequisites: Java 17, and agent-service-app + agent-service-adapters-versatile-*
+# installed in the local Maven repository (see repo CONTRIBUTING.md).
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MODULE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+L1_PORT="${L1_PORT:-18091}"
+L2_PORT="${L2_PORT:-18092}"
+HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-90}"
+JAR_FILE="$MODULE_DIR/target/versatile-controller-handoff-demo-0.1.0.jar"
+LOG_DIR="$MODULE_DIR/target"
+
+PIDS=()
+declare -A PID_BY_NAME=()
+
+cleanup() {
+  echo
+  echo "==> Stopping processes: ${PIDS[*]:-<none>}"
+  for pid in "${PIDS[@]:-}"; do
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+      kill "$pid" 2>/dev/null || true
+    fi
+  done
+  PIDS=()
+  wait 2>/dev/null || true
+}
+trap cleanup EXIT
+
+build_if_needed() {
+  if [ "${SKIP_BUILD:-0}" = "1" ]; then
+    echo "==> SKIP_BUILD=1, using existing jar"
+    return
+  fi
+  echo "==> Building jar: $JAR_FILE"
+  (cd "$MODULE_DIR" && mvn -q package -DskipTests)
+}
+
+start_process() {
+  local name="$1" port="$2" profiles="$3"
+  local log="$LOG_DIR/${name}.log"
+  echo "==> Starting $name (profiles=$profiles, port=$port)"
+  java -jar "$JAR_FILE" \
+    --spring.profiles.active="$profiles" \
+    --server.port="$port" \
+    >"$log" 2>&1 &
+  local pid=$!
+  PIDS+=("$pid")
+  PID_BY_NAME["$name"]="$pid"
+  echo "    pid=$pid log=$log"
+}
+
+# 就绪探测：/v1/query 缺 conversation_id 应返回 400，证明 servlet 与链路已就绪
+wait_for_health() {
+  local port="$1" name="$2"
+  local deadline=$(( $(date +%s) + HEALTH_TIMEOUT_SECONDS ))
+  printf "    %-10s " "$name:"
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    local status
+    status=$(curl -s -o /dev/null -w "%{http_code}" -X POST "http://127.0.0.1:${port}/v1/query" \
+      -H "Content-Type: application/json" -d '{}' 2>/dev/null || echo 000)
+    if [ "$status" = "400" ]; then
+      echo "UP (port $port)"
+      return 0
+    fi
+    printf "."
+    sleep 1
+  done
+  echo " TIMEOUT"
+  echo "ERROR: $name did not become healthy on port $port" >&2
+  tail -30 "$LOG_DIR/${name}.log" 2>/dev/null || true
+  return 1
+}
+
+# 发送一轮 /v1/query（默认非流式；SSE 用 send_query_sse）。SSE 在错误终态时连接被
+# completeWithError 关闭，curl 可能以非零码结束，统一 || true 兜底。
+send_query() {
+  local conv_id="$1" content="$2" stream="${3:-false}"
+  curl -s -X POST "http://127.0.0.1:${L1_PORT}/v1/query" \
+    -H "Content-Type: application/json" \
+    -H "X-User-ID: u-42" \
+    -d "{\"conversation_id\":\"${conv_id}\",\"stream\":${stream},\"messages\":[{\"role\":\"user\",\"content\":\"${content}\"}]}" || true
+}
+
+send_query_sse() {
+  curl -s -N -X POST "http://127.0.0.1:${L1_PORT}/v1/query" \
+    -H "Content-Type: application/json" \
+    -H "X-User-ID: u-42" \
+    -H "Accept: text/event-stream" \
+    -d "{\"conversation_id\":\"${1}\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"${2}\"}]}" || true
+}
+
+# 发送一轮 A2A JSON-RPC（openjiuwen 变体：method=SendMessage、ROLE_USER、TextPart）。
+# 非流式一次性 JSON 返回；JSON-RPC id 用数值，避免干扰从响应里提取字符串形态的 task id。
+send_a2a() {
+  local port="$1" body="$2"
+  curl -s -X POST "http://127.0.0.1:${port}/a2a" \
+    -H "Content-Type: application/json" \
+    -d "$body" || true
+}
+
+# 发送一轮 A2A 流式调用（SendStreamingMessage，SSE 返回事件序列）
+send_a2a_sse() {
+  local port="$1" body="$2"
+  curl -s -N -X POST "http://127.0.0.1:${port}/a2a" \
+    -H "Content-Type: application/json" \
+    -H "Accept: text/event-stream" \
+    -d "$body" || true
+}
+
+assert_contains() {
+  local label="$1" body="$2" pattern="$3"
+  if echo "$body" | grep -q "$pattern"; then
+    echo "    PASS: $label contains '$pattern'"
+    return 0
+  fi
+  echo "    FAIL: $label expected to contain '$pattern'" >&2
+  echo "    body: $(echo "$body" | head -c 800)" >&2
+  return 1
+}
+
+assert_not_contains() {
+  local label="$1" body="$2" pattern="$3"
+  if echo "$body" | grep -q "$pattern"; then
+    echo "    FAIL: $label expected NOT to contain '$pattern'" >&2
+    echo "    body: $(echo "$body" | head -c 800)" >&2
+    return 1
+  fi
+  echo "    PASS: $label does not contain '$pattern'"
+}
+
+assert_log_contains() {
+  local label="$1" logfile="$2" pattern="$3"
+  if grep -q "$pattern" "$logfile" 2>/dev/null; then
+    echo "    PASS: $label log contains '$pattern'"
+    return 0
+  fi
+  echo "    FAIL: $label log expected to contain '$pattern'" >&2
+  return 1
+}
+
+assert_log_not_contains() {
+  local label="$1" logfile="$2" pattern="$3"
+  if grep -q "$pattern" "$logfile" 2>/dev/null; then
+    echo "    FAIL: $label log expected NOT to contain '$pattern'" >&2
+    return 1
+  fi
+  echo "    PASS: $label log does not contain '$pattern'"
+}
+
+assert_eq() {
+  local expected="$1" actual="$2" label="$3"
+  if [ "$expected" = "$actual" ]; then
+    echo "    PASS: $label == $expected"
+    return 0
+  fi
+  echo "    FAIL: $label expected=$expected actual=$actual" >&2
+  return 1
+}
+
+# 取日志中首条匹配行的 ISO 时间戳（Spring 默认格式，同机时钟可直接字典序比较）
+log_timestamp() {
+  local logfile="$1" pattern="$2"
+  grep -m1 "$pattern" "$logfile" 2>/dev/null | awk '{print $1}'
+}
+
+# 断言 later >= earlier：L1 等控制器执行完成后才转发的时间序证明
+assert_log_order() {
+  local label="$1" earlier="$2" later="$3"
+  if [ -z "$earlier" ] || [ -z "$later" ]; then
+    echo "    FAIL: $label missing timestamp earlier='${earlier:-<none>}' later='${later:-<none>}'" >&2
+    return 1
+  fi
+  if [[ "$later" > "$earlier" || "$later" == "$earlier" ]]; then
+    echo "    PASS: $label ($later >= $earlier)"
+    return 0
+  fi
+  echo "    FAIL: $label later=$later < earlier=$earlier" >&2
+  return 1
+}
+
+# 等待静态发现完成：对端 card 已注册进 A2ARemoteAgentCardRegistry（默认
+# A2ARemoteAgentClient 依赖 registry 命中；失败每 30s 重试，这里等到成功为止）
+wait_for_discovery() {
+  local name="$1" pattern="$2"
+  local deadline=$(( $(date +%s) + HEALTH_TIMEOUT_SECONDS ))
+  printf "    %-10s " "$name:"
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    if grep -q "$pattern" "$LOG_DIR/${name}.log" 2>/dev/null; then
+      echo "DISCOVERED"
+      return 0
+    fi
+    printf "."
+    sleep 1
+  done
+  echo " TIMEOUT"
+  echo "ERROR: $name did not discover remote agent (pattern: $pattern)" >&2
+  return 1
+}
+
+main() {
+  echo "==> FEAT-002 控制器意图转调 场景旅程验收 (L2 §7.2)"
+  build_if_needed
+
+  echo
+  echo "==================== 启动 layer1 + layer2 ===================="
+  mkdir -p "$LOG_DIR"
+  # 先起 layer2：layer1 启动时的静态发现需要立刻拉到 layer2 的 card，
+  # 否则要等 30s 重试周期
+  start_process layer2 "$L2_PORT" "layer2,mock-controller"
+  wait_for_health "$L2_PORT" layer2
+  start_process layer1 "$L1_PORT" "layer1,mock-controller"
+  wait_for_health "$L1_PORT" layer1
+  wait_for_discovery layer1 "Discovered remote agent 'agent_card_l2'"
+  # wait_for_discovery layer2 "Discovered remote agent 'agent_card_l1'"
+
+  echo
+  echo "==================== 场景1: 一级命中本地工作流 ===================="
+  local resp
+  resp=$(send_query "c1-local" "查询本地工作流")
+  echo "    response: $(echo "$resp" | head -c 400)"
+  assert_contains "s1-local-answer" "$resp" "一级本地业务答案"
+  # 场景1最先执行：此时 layer1 日志不应有任何出站 A2A 转调调用
+  assert_log_not_contains "s1-no-handoff" "$LOG_DIR/layer1.log" "A2A call agent="
+  assert_log_contains "s1-controller-invoked" "$LOG_DIR/layer1.log" "Mock controller agentId=agent_L1_controller conversationId=c1-local"
+
+  echo
+  echo "==================== 场景2: 一级转调二级 (intent=3 → agent_card_l2) ===================="
+  resp=$(send_query "c2-handoff" "帮我转调订机票")
+  echo "    response: $(echo "$resp" | head -c 400)"
+  # 非流式：中断 → 协调器出站 → re-invoke 终答直通（remoteToolResults.joinedResults）
+  assert_contains "s2-l2-answer" "$resp" "二级本域业务答案"
+  assert_log_contains "s2-l1-interrupt" "$LOG_DIR/layer1.log" "handoff delegate interrupt emitted.*target=agent_card_l2"
+  assert_log_contains "s2-l1-caller" "$LOG_DIR/layer1.log" "A2A call agent=agent_card_l2"
+  assert_log_contains "s2-l2-received" "$LOG_DIR/layer2.log" "conversation_id=agent_card_l2-c2-handoff"
+  # L1 等控制器执行完成才转发：L2 mock 收到调用的时间戳 >= L1 "workflow finished"
+  # （mock 意图帧 flush 后延迟 2s 才终态，若命中即转发则该断言失败）
+  local l1_done l2_called
+  l1_done=$(log_timestamp "$LOG_DIR/layer1.log" "L1 controller workflow finished conversationId=c2-handoff invocation=1")
+  l2_called=$(log_timestamp "$LOG_DIR/layer2.log" "Mock controller agentId=agent_L2_controller conversationId=agent_card_l2-c2-handoff")
+  assert_log_order "s2-forward-after-controller-done" "$l1_done" "$l2_called"
+  # mock 在信号帧前发送生产形态的意图回显帧（无 summary 键）：应被整行抑制且不报错
+  assert_log_contains "s2-echo-suppressed" "$LOG_DIR/layer1.log" "handoff classify hit but no usable resolution source"
+  assert_log_not_contains "s2-no-contract-error" "$LOG_DIR/layer1.log" "VERSATILE_HANDOFF_MESSAGE_CONTRACT"
+
+  echo
+  echo "---- 场景2b: 同场景流式（SSE 增量透传） ----"
+  local sse
+  sse=$(send_query_sse "c2b-handoff-stream" "帮我转调订机票")
+  echo "    sse: $(echo "$sse" | head -c 400)"
+  # 流式：远端内容经协调器投影为 REMOTE_AGENT_OUTPUT（content 包裹）
+  assert_contains "s2b-stream-answer" "$sse" "二级本域业务答案"
+
+  echo
+  echo "==================== 场景3: 二级退回一级重新路由 ===================="
+  resp=$(send_query "c3-bounce" "退回：这个请求不属于二级业务域")
+  echo "    response: $(echo "$resp" | head -c 400)"
+  assert_contains "s3-final-local-answer" "$resp" "一级本地业务答案"
+  # L2 识别"不在范围"后不出站调用，直接回 not-in-scope 标记信封（upstream-signal）
+  assert_log_contains "s3-l2-signal-emitted" "$LOG_DIR/layer2.log" "handoff not-in-scope signal emitted"
+  assert_log_not_contains "s3-l2-no-outbound" "$LOG_DIR/layer2.log" "handoff delegate interrupt emitted"
+  # L1 re-invoke 入口检测到标记信封后重跑自身控制器重新识别
+  assert_log_contains "s3-l1-re-recognition" "$LOG_DIR/layer1.log" "handoff remote not-in-scope envelope detected, re-running controller"
+  # L1 同一会话被控制器执行两次：首次转调、二次本地命中
+  local l1_count
+  l1_count=$(grep -c "Mock controller agentId=agent_L1_controller conversationId=c3-bounce" "$LOG_DIR/layer1.log" || true)
+  assert_eq 2 "$l1_count" "s3-l1-invocations"
+
+  echo
+  echo "==================== 场景4: 控制器返回真正异常 ===================="
+  local http_code body
+  body=$(mktemp)
+  http_code=$(curl -s -o "$body" -w "%{http_code}" -X POST "http://127.0.0.1:${L1_PORT}/v1/query" \
+    -H "Content-Type: application/json" \
+    -d '{"conversation_id":"c4-exception","stream":false,"messages":[{"role":"user","content":"触发控制器异常"}]}')
+  resp=$(cat "$body")
+  echo "    http_status: $http_code  body: $(echo "$resp" | head -c 300)"
+  assert_eq 500 "$http_code" "s4-http-500"
+  assert_contains "s4-error-contract" "$resp" "AGENT_EXECUTION_FAILED"
+  assert_log_contains "s4-baseline-error-mapping" "$LOG_DIR/layer1.log" "controller query returned remote error.*c4-exception"
+  assert_log_contains "s4-handled" "$LOG_DIR/layer1.log" "Handling controller-handoff query conversation_id=c4-exception"
+
+  echo
+  echo "==================== 场景5: 转调消息缺少目标信息 (intent=99 未映射) ===================="
+  sse=$(send_query_sse "c5-missing" "无目标：意图没有映射")
+  echo "    sse: $(echo "$sse" | head -c 500)"
+  assert_contains "s5-target-missing" "$sse" "VERSATILE_HANDOFF_TARGET_MISSING"
+  assert_log_contains "s5-log-code" "$LOG_DIR/layer1.log" "handoff path failed code=VERSATILE_HANDOFF_TARGET_MISSING"
+
+  echo
+  echo "==================== 场景6: 未授权目标 (intent=6 → agent_card_forbidden) ===================="
+  sse=$(send_query_sse "c6-forbidden" "越权：目标不在允许范围")
+  echo "    sse: $(echo "$sse" | head -c 500)"
+  assert_contains "s6-not-allowed" "$sse" "VERSATILE_HANDOFF_TARGET_NOT_ALLOWED"
+  assert_log_contains "s6-log-code" "$LOG_DIR/layer1.log" "handoff path failed code=VERSATILE_HANDOFF_TARGET_NOT_ALLOWED"
+
+  echo
+  echo "==================== 场景7: 目标调用失败 (intent=5 → dead port) ===================="
+  sse=$(send_query_sse "c7-unreachable" "不可达：目标端口不通")
+  echo "    sse: $(echo "$sse" | head -c 500)"
+  assert_contains "s7-unavailable" "$sse" "VERSATILE_HANDOFF_TARGET_UNAVAILABLE"
+  assert_log_contains "s7-log-code" "$LOG_DIR/layer1.log" "handoff path failed code=VERSATILE_HANDOFF_TARGET_UNAVAILABLE"
+  assert_log_contains "s7-unknown-agent" "$LOG_DIR/layer1.log" "agent_card_dead"
+
+  echo
+  echo "==================== 场景8: 下游请求用户输入（中断呈现，可续接） ===================="
+  sse=$(send_query_sse "c8-input-required" "补充信息：下游要问用户")
+  echo "    sse: $(echo "$sse" | head -c 800)"
+  # L2 基线 need_user_input 中断经 A2A 回传，协调器以 publicInterrupt 形状呈现客户端
+  assert_contains "s8-input-prompt" "$sse" "请补充入住日期"
+  assert_contains "s8-toolcall-prefix" "$sse" "handoff:agent_card_l2:"
+  assert_log_contains "s8-l2-interrupt" "$LOG_DIR/layer2.log" "A2A interrupt detected.*c8-input-required"
+
+  echo
+  echo "==================== 场景9: 循环保护（弹回后重识别仍转调同目标） ===================="
+  sse=$(send_query_sse "c9-loop" "循环：二级始终不在范围")
+  echo "    sse: $(echo "$sse" | head -c 500)"
+  # L2 回 not-in-scope 信封 → L1 re-invoke 重识别仍转调同一（已弹回）目标 → 防环报错
+  assert_contains "s9-duplicate-target" "$sse" "VERSATILE_HANDOFF_DUPLICATE_TARGET"
+  assert_log_contains "s9-log-code" "$LOG_DIR/layer1.log" "handoff path failed code=VERSATILE_HANDOFF_DUPLICATE_TARGET"
+  # L2 只收到一次转调，且自身从不出站（upstream-signal 无反向调用）
+  assert_log_not_contains "s9-l2-no-outbound" "$LOG_DIR/layer2.log" "handoff delegate interrupt emitted"
+
+  echo
+  echo "==================== 场景10: 调用超时 (timeout-seconds=3, L2 延迟 10s) ===================="
+  sse=$(send_query_sse "c10-timeout" "超时：下游睡 10 秒")
+  echo "    sse: $(echo "$sse" | head -c 500)"
+  assert_contains "s10-timeout" "$sse" "VERSATILE_HANDOFF_TIMEOUT"
+  assert_log_contains "s10-log-code" "$LOG_DIR/layer1.log" "handoff path failed code=VERSATILE_HANDOFF_TIMEOUT"
+
+  echo
+  echo "==================== 场景11: /a2a 入口多轮中断恢复（第二轮引用 taskId） ===================="
+  # 第一轮：SendMessage（非流式）→ L1 意图转调 → L2 input-required → 中断呈现，
+  # L1 的 A2A task 终态 input-required，影子任务 shadow:<L1>:<taskId> 落库（WAITING_INPUT）
+  local r1 r2 task_id l1_count
+  r1=$(send_a2a "$L1_PORT" '{"jsonrpc":"2.0","id":111,"method":"SendMessage","params":{"message":{"role":"ROLE_USER","contextId":"c11-a2a-resume","parts":[{"text":"补充信息：下游要问用户"}]}}}')
+  echo "    r1: $(echo "$r1" | head -c 800)"
+  assert_contains "s11-r1-input-required" "$r1" "TASK_STATE_INPUT_REQUIRED"
+  assert_contains "s11-r1-input-prompt" "$r1" "请补充入住日期"
+  assert_contains "s11-r1-toolcall-prefix" "$r1" "handoff:agent_card_l2:"
+  # 响应 result.task.id 即 L1 的 input-required task id（JSON-RPC id 为数值不匹配该模式）
+  task_id=$(echo "$r1" | grep -o '"task":{"id":"[^"]*"' | head -1 | cut -d'"' -f6 || true)
+  if [ -z "$task_id" ]; then
+    echo "    FAIL: s11-task-id expected to extract taskId from r1 response" >&2
+    return 1
+  fi
+  echo "    task_id: $task_id"
+  # 第二轮：同 contextId、message.taskId 引用 input-required task → 协调器命中影子任务
+  # 直呼 L2 续调（remoteTaskId），不再重跑 L1 控制器 → 终答经 re-invoke 直通
+  r2=$(send_a2a "$L1_PORT" '{"jsonrpc":"2.0","id":112,"method":"SendMessage","params":{"message":{"role":"ROLE_USER","contextId":"c11-a2a-resume","taskId":"'"$task_id"'","parts":[{"text":"明天入住，两个晚上"}]}}}')
+  echo "    r2: $(echo "$r2" | head -c 800)"
+  assert_contains "s11-r2-final-answer" "$r2" "二级本域业务答案：机票已预订"
+  assert_contains "s11-r2-completed" "$r2" "TASK_STATE_COMPLETED"
+  # runtime 按 taskId 续入既有 task（A2A RESUME 日志），影子任务恢复生效
+  assert_log_contains "s11-a2a-resume-entry" "$LOG_DIR/layer1.log" "A2A RESUME taskId=$task_id"
+  # 核心断言：L1 控制器全程只被调用一次——第二轮恢复直呼 L2，未多余重跑 L1 控制器
+  l1_count=$(grep -c "Mock controller agentId=agent_L1_controller conversationId=c11-a2a-resume" "$LOG_DIR/layer1.log" || true)
+  assert_eq 1 "$l1_count" "s11-l1-controller-single-invocation"
+  # L2 侧：第一轮中断（invocation=1）、第二轮续接同一 task（A2A RESUME + invocation=2）
+  assert_log_contains "s11-l2-task-continuation" "$LOG_DIR/layer2.log" "A2A RESUME.*agent_card_l2-c11-a2a-resume"
+  assert_log_contains "s11-l2-resumed-call" "$LOG_DIR/layer2.log" "Mock controller agentId=agent_L2_controller conversationId=agent_card_l2-c11-a2a-resume invocation=2"
+
+  echo
+  echo "==================== 场景12: 中断后续调二级退回（第二轮带 taskId，L2 返回不在范围） ===================="
+  # 生产回归：L1→L2 中断后客户端带 taskId 续调 L1；续调答复触发 L2「不在范围」，
+  # L2 回 not-in-scope 信封，L1 必须捕获信封并重跑自身控制器重新识别（而非直通信封）
+  local r1b r2b task_id_b l1_count_b
+  r1b=$(send_a2a "$L1_PORT" '{"jsonrpc":"2.0","id":121,"method":"SendMessage","params":{"message":{"role":"ROLE_USER","contextId":"c12-a2a-bounce","parts":[{"text":"补充信息：下游要问用户"}]}}}')
+  echo "    r1: $(echo "$r1b" | head -c 800)"
+  assert_contains "s12-r1-input-required" "$r1b" "TASK_STATE_INPUT_REQUIRED"
+  # result.task.id 即 L1 的 input-required task id；续调引用的必须是 L1 自己的 task
+  task_id_b=$(echo "$r1b" | grep -o '"task":{"id":"[^"]*"' | head -1 | cut -d'"' -f6 || true)
+  if [ -z "$task_id_b" ]; then
+    echo "    FAIL: s12-task-id expected to extract taskId from r1 response" >&2
+    return 1
+  fi
+  echo "    task_id: $task_id_b"
+  # 第二轮：同 contextId、message.taskId 引用 input-required task；补充答复含「退回」
+  # → 协调器恢复直呼 L2 → L2 续调识别不在范围 → 回 not-in-scope 信封
+  r2b=$(send_a2a "$L1_PORT" '{"jsonrpc":"2.0","id":122,"method":"SendMessage","params":{"message":{"role":"ROLE_USER","contextId":"c12-a2a-bounce","taskId":"'"$task_id_b"'","parts":[{"text":"退回：这个请求不属于二级业务域"}]}}}')
+  echo "    r2: $(echo "$r2b" | head -c 800)"
+  # L2 续调识别不在范围后回信封（不出站调用）
+  assert_log_contains "s12-l2-signal-emitted" "$LOG_DIR/layer2.log" "handoff not-in-scope signal emitted"
+  # 核心断言：L1 捕获信封后重跑控制器重新识别 → 本地答案终态（信封不得作为终答泄漏给客户端）
+  assert_log_contains "s12-l1-envelope-caught" "$LOG_DIR/layer1.log" "handoff remote not-in-scope envelope detected, re-running controller"
+  assert_contains "s12-final-local-answer" "$r2b" "一级本地业务答案"
+  assert_contains "s12-r2-completed" "$r2b" "TASK_STATE_COMPLETED"
+  assert_log_contains "s12-l2-resumed-call" "$LOG_DIR/layer2.log" "Mock controller agentId=agent_L2_controller conversationId=agent_card_l2-c12-a2a-bounce invocation=2"
+  # L1 控制器两次：首次转调（第一轮）、信封后重识别（第二轮）
+  l1_count_b=$(grep -c "Mock controller agentId=agent_L1_controller conversationId=c12-a2a-bounce" "$LOG_DIR/layer1.log" || true)
+  assert_eq 2 "$l1_count_b" "s12-l1-invocations"
+
+  echo
+  echo "==================== 场景13: 流式中断后续调二级退回（L2 先流出部分答案再退回） ===================="
+  # 生产回归（流式变体）：第一轮流式触发 L2 input-required；第二轮 SendStreamingMessage
+  # 带 taskId 续调 → L1→L2 出站为流式 → L2 先流出业务答案帧（terminal answer）、
+  # 随后判定不在范围回信封 → L1 必须以 not-in-scope 信封为准重识别，不得把部分答案当终答
+  local r1c r2c task_id_c l1_count_c
+  r1c=$(send_a2a_sse "$L1_PORT" '{"jsonrpc":"2.0","id":131,"method":"SendStreamingMessage","params":{"message":{"role":"ROLE_USER","contextId":"c13-a2a-stream-bounce","parts":[{"text":"补充信息：下游要问用户"}]}}}')
+  echo "    r1: $(echo "$r1c" | head -c 500)"
+  # 取 L1 自身 statusUpdate 事件的 taskId（delegation artifact 内嵌的 target.taskId 是
+  # L2 远端任务的，不得误取）；续调 message.taskId 引用的必须是 L1 的 input-required task
+  task_id_c=$(echo "$r1c" | grep -o '"statusUpdate":{"taskId":"[^"]*"' | head -1 | grep -o '"[0-9a-f-]\{36\}"' | tr -d '"' || true)
+  if [ -z "$task_id_c" ]; then
+    echo "    FAIL: s13-task-id expected to extract taskId from r1 SSE events" >&2
+    return 1
+  fi
+  echo "    task_id: $task_id_c"
+  r2c=$(send_a2a_sse "$L1_PORT" '{"jsonrpc":"2.0","id":132,"method":"SendStreamingMessage","params":{"message":{"role":"ROLE_USER","contextId":"c13-a2a-stream-bounce","taskId":"'"$task_id_c"'","parts":[{"text":"先答后退回：这个请求不属于二级业务域"}]}}}')
+  echo "    r2: $(echo "$r2c" | head -c 800)"
+  # L2 先流出部分答案后仍判定不在范围并回信封
+  assert_log_contains "s13-l2-signal-emitted" "$LOG_DIR/layer2.log" "handoff not-in-scope signal emitted"
+  # 核心断言：L1 捕获信封重识别（部分答案不得被当作 L2 终答直通）
+  assert_log_contains "s13-l1-envelope-caught" "$LOG_DIR/layer1.log" "handoff remote not-in-scope envelope detected, re-running controller"
+  assert_contains "s13-final-local-answer" "$r2c" "一级本地业务答案"
+  assert_log_contains "s13-l2-resumed-call" "$LOG_DIR/layer2.log" "Mock controller agentId=agent_L2_controller conversationId=agent_card_l2-c13-a2a-stream-bounce invocation=2"
+  l1_count_c=$(grep -c "Mock controller agentId=agent_L1_controller conversationId=c13-a2a-stream-bounce" "$LOG_DIR/layer1.log" || true)
+  assert_eq 2 "$l1_count_c" "s13-l1-invocations"
+
+  echo
+  echo "==================== 场景14: 转调目标无结果节点流式收尾（生产回归） ===================="
+  # 生产回归（2026-08-25）：L1→L2 流式转调，L2 控制器流内无 result-node-name 结果帧
+  # （业务内容在非结果节点帧透传）、以 End 节点收尾、无转调信号 → 基线提取为空的空终态。
+  # L2 必须仍发出终态事件（COMPLETED），L1 以透传内容为终答；否则 L1 误报
+  # VERSATILE_HANDOFF_TARGET_UNAVAILABLE（closed the stream before a terminal event）
+  sse=$(send_query_sse "c14-no-result-node" "转调：无结果节点直通")
+  echo "    sse: $(echo "$sse" | head -c 800)"
+  assert_contains "s14-stream-answer" "$sse" "流式直通业务内容"
+  assert_not_contains "s14-no-unavailable" "$sse" "VERSATILE_HANDOFF_TARGET_UNAVAILABLE"
+  assert_log_contains "s14-l2-invoked" "$LOG_DIR/layer2.log" "Mock controller agentId=agent_L2_controller conversationId=agent_card_l2-c14-no-result-node"
+  # L2 出站调用正常终态：上游客户端不应看到 closed-before-terminal 报错
+  assert_log_not_contains "s14-l1-no-terminal-error" "$LOG_DIR/layer1.log" "closed the stream before a terminal event"
+
+  echo
+  echo "==> All §7.2 journeys passed."
+  echo "    Logs: $LOG_DIR/{layer1,layer2}.log"
+}
+
+main "$@"

@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import json
 import re
-import sys
 import time
 import urllib.error
 import urllib.parse
@@ -25,7 +24,6 @@ from pathlib import Path
 from typing import Any
 
 if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
     from config import SandboxModeConfig, parse_sandbox_args
 else:
     from .config import SandboxModeConfig, parse_sandbox_args
@@ -315,7 +313,7 @@ def main() -> int:
     print(f"合计: {passed}/{len(results)} 通过")
 
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     out = REPORT_DIR / f"api_suite_{stamp}.json"
     payload = {
         "meta": {

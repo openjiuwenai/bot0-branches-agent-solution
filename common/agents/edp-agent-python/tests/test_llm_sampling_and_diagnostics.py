@@ -11,7 +11,9 @@ EDPAgent 在 initialize_dpa() 里覆盖为 0.3 / 0.95，并在收到空 answer �
 """
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from loguru import logger
@@ -181,9 +183,6 @@ def test_stream_processor_raw_and_empty_both_fire_on_empty(captured_logs):
 
 
 # ── TOOL 日志（LogRail 入口处，覆盖所有工具含 suppress 的）────────────────
-
-import asyncio
-from unittest.mock import AsyncMock, MagicMock
 
 
 def _mk_rail_ctx(tool_name: str, tool_args):

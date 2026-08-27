@@ -1,0 +1,21 @@
+schema_version: "1.0"
+optimizer_class: optimizer.GepaScenarioAdapter
+adapter_url: "http://localhost:8900"
+skills: []
+rollout:
+  max_turns: 1
+  extra_data: {}
+hyperparams:
+  # GEPA 核心参数（对齐开源实现）
+  minibatch_size: 5              # 每轮采样的训练 case 数
+  num_epochs: 20                 # GEPA 最大迭代次数（= max_iterations）
+  perfect_score: 1.0             # 达到此分数提前停止
+  candidate_selection_strategy: "pareto"   # pareto | current_best
+  acceptance_criterion: "strict_improvement"  # strict_improvement | improvement_or_equal
+  enable_merge: true             # 启用交叉合并
+  merge_frequency: 3             # 每 N 个新候选触发一次 merge
+  seed: 0
+  component_name: "system_prompt"
+  # 基础设施参数
+  batch_size: 8
+  num_parallel: 4

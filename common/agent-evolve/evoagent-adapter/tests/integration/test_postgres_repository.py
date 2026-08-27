@@ -210,7 +210,8 @@ def _pick_mixed_trace(spans):
 
 async def test_bulk_insert_backfills_session_in_batch(repo, jsonl_spans):
     """A: bulk_insert 整批后, 非孤儿 trace 的空 session span 被同 trace 兄弟回填;
-    孤儿 trace (整 trace 无 session) 的 span 保留 NULL (不造值)。"""
+    孤儿 trace (整 trace 无 session) 的 span 保留 NULL (不造值)。
+    """
     spans = [dict(s) for s in jsonl_spans]  # 拷贝: A 原地改 session_id, 防污染共享 fixture
     await repo.bulk_insert_spans(spans)
     orphan_tids = {tid for tid, ts in _by_trace(spans).items()
@@ -234,7 +235,8 @@ async def test_bulk_insert_backfills_session_in_batch(repo, jsonl_spans):
 
 async def test_bulk_insert_backfills_cross_batch_straggler(repo, jsonl_spans):
     """B: 空 session span 的兄弟在前一批已入库时, 本批 in-memory 回填 (A) 看不到,
-    由 per-trace SQL 兜底 (_backfill_session_id_for_trace) 回填。"""
+    由 per-trace SQL 兜底 (_backfill_session_id_for_trace) 回填。
+    """
     tid, sess_spans, empty_spans = _pick_mixed_trace(jsonl_spans)
     assert tid, "jsonl 无同时含 session 与空 session span 的 trace"
     expected_sid = sess_spans[0]["session_id"]
@@ -249,7 +251,8 @@ async def test_bulk_insert_backfills_cross_batch_straggler(repo, jsonl_spans):
 
 async def test_backfill_session_id_full_table(repo, jsonl_spans):
     """公开全表回填: 用 insert_span (单条, 不走 bulk 的 A/B) 插入, 空行留 NULL;
-    调 backfill_session_id() 后用同 trace 兄弟补齐; 返回受影响行数。"""
+    调 backfill_session_id() 后用同 trace 兄弟补齐; 返回受影响行数。
+    """
     tid, sess_spans, empty_spans = _pick_mixed_trace(jsonl_spans)
     assert tid, "jsonl 无同时含 session 与空 session span 的 trace"
     expected_sid = sess_spans[0]["session_id"]

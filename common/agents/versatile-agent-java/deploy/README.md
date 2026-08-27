@@ -69,7 +69,7 @@ bash deploy/deploy.sh
 | Docker 网络 | `agent-net` | 同一台 Docker 主机上两个团队共同使用的 user-defined bridge |
 | Adapter 网络别名 | `adapter-versatile` | EDP 容器访问 adapter 时使用的 DNS 名 |
 | Adapter 容器端口 | `8191` | 固定，不允许通过本部署配置更改 |
-| A2A 地址 | `http://adapter-versatile:8191/a2a` | 同机、同网络的 EDP 配置值 |
+| A2A 地址 | `http://adapter-versatile:8191` | 同机、同网络的 EDP 配置值（Agent Card 拉取基准 URL，勿带 `/a2a` 路径） |
 | ownership label | `com.huawei.edpa.owner=adapter-versatile-agent-java` | 防止脚本误删其他团队的同名容器 |
 
 两个团队的启动脚本都可以执行“网络不存在则创建”。首次并发创建时，其中一方创建失败会重新检查网络；已有网络必须是 `bridge/local`。任意一方停止服务时都不得删除这个共享网络。
@@ -174,7 +174,7 @@ VERSATILE_URL=http://versatile-mock:30001/v1/0/agent-manager/workflows/wealth-in
 | `VERSATILE_RESULT_NODE` | `ABCDEResponseNode` | 真实工作流的结果节点名 |
 | `VERSATILE_AGENT_TENANT_ID` | `edp-tenant` | A2A 默认租户 |
 
-容器内部端口固定为 8191。即使宿主端口改成 18191，同机 EDP 仍应访问 `http://adapter-versatile:8191/a2a`，不能改成 18191。
+容器内部端口固定为 8191。即使宿主端口改成 18191，同机 EDP 仍应访问 `http://adapter-versatile:8191`，不能改成 18191。
 
 `VERSATILE_INSECURE_SKIP_VERIFY=false` 时，adapter 到 Versatile 的 HTTPS 请求使用 JVM 默认校验。
 设置为 `true` 后，会接受自签名、证书链不可信或主机名不匹配的证书。该模式不提供服务端身份认证，
@@ -231,7 +231,7 @@ curl -f http://127.0.0.1:8191/.well-known/agent-card.json
 EDP 团队也把容器接入字面量相同的 `agent-net`，并配置：
 
 ```env
-EDP_AGENT_VERSATILE_A2A_URL=http://adapter-versatile:8191/a2a
+EDP_AGENT_VERSATILE_A2A_URL=http://adapter-versatile:8191
 ```
 
 容器间使用网络别名和容器内部端口；不要使用 `localhost`、容器临时 IP 或宿主机映射端口。
@@ -243,7 +243,7 @@ EDP_AGENT_VERSATILE_A2A_URL=http://adapter-versatile:8191/a2a
 Docker bridge 只在单机有效，`agent-net` 不能跨主机提供 DNS。EDP 应通过 adapter 主机的可路由 DNS/IP 和发布端口访问，例如：
 
 ```env
-EDP_AGENT_VERSATILE_A2A_URL=http://adapter-host.example.com:8191/a2a
+EDP_AGENT_VERSATILE_A2A_URL=http://adapter-host.example.com:8191
 ```
 
 同时需要网络团队开放端口，并按环境要求配置 TLS、网关或访问控制。跨主机时仍可在各自主机保留本地 `agent-net`，但两个同名网络彼此不连通。

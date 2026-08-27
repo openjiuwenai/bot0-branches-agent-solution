@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from evo_agent.config import EvolveConfig
 
 
@@ -21,7 +23,7 @@ def test_llm_timeout_field_positive() -> None:
 
 def test_llm_timeout_env_override(monkeypatch) -> None:
     monkeypatch.setenv("EVO_LLM_TIMEOUT", "999")
-    assert EvolveConfig().llm_timeout == 999.0
+    assert EvolveConfig().llm_timeout == pytest.approx(999.0)
 
 
 def test_golden_data_dir_env_override(monkeypatch) -> None:

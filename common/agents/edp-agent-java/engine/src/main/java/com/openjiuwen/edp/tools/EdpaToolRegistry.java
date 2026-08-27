@@ -48,6 +48,7 @@ public final class EdpaToolRegistry {
     private static final Map<String, Function<EdpConfig, Tool>> BUILTIN_TOOLS = Map.of(
             EdpaBusinessTools.TOOL_CALL_MCP, cfg -> CallMcpTool.build(),
             EdpaBusinessTools.TOOL_CALL_VERSATILE, cfg -> CallVersatileTool.build(),
+            EdpaBusinessTools.TOOL_CALL_SUBAGENT, cfg -> CallSubagentTool.build(),
             EdpaBusinessTools.TOOL_ENHANCED_ASK_USER, cfg -> EnhancedAskUserTool.build(),
             EdpaBusinessTools.TOOL_CANCEL_TASK, cfg -> CancelTaskTool.build());
 

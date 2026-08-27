@@ -38,22 +38,34 @@
 
     <properties>
         <agent-runtime-ext.java.release>17</agent-runtime-ext.java.release>
-        <agent-runtime-java.version>0.1.1.post1</agent-runtime-java.version>
+        <agent-runtime-java.version>0.1.2</agent-runtime-java.version>
         <event-bus.version>0.1.0</event-bus.version>
         <a2a-sdk.version>1.0.0.Final</a2a-sdk.version>
         <agentscope.version>2.0.0</agentscope.version>
-        <spring-boot.version>4.0.6</spring-boot.version>
-        <jackson.version>2.20.1</jackson.version>
-        <junit-jupiter.version>6.0.1</junit-jupiter.version>
-        <assertj.version>3.27.6</assertj.version>
+        <spring-boot.version>4.0.7</spring-boot.version>
+        <!-- B 桶：junit/assertj 不 pin，靠 Boot 4.0.7 管 6.0.3/3.27.7 -->
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    </properties>
+        <!-- A 桶 properties：Boot-property override（BOM import 的直接 pin 不覆盖 Boot parent depMgmt,需消费方 set 属性使 Boot BOM 解析到对齐值） -->
+        <slf4j.version>2.0.12</slf4j.version>
+        <logback.version>1.5.37</logback.version>
+        <snakeyaml.version>2.2</snakeyaml.version>
+        <byte-buddy.version>1.15.11</byte-buddy.version>
+        <commons-lang3.version>3.18.0</commons-lang3.version>
+        <commons-codec.version>1.20.0</commons-codec.version>
+        <postgresql.version>42.7.12</postgresql.version>
+        <h2.version>2.2.224</h2.version>
+        <sqlite-jdbc.version>3.53.2.1</sqlite-jdbc.version>
+        <pulsar.version>4.2.3</pulsar.version>
+        <lombok.version>1.18.32</lombok.version>
+        <gson.version>2.11.0</gson.version>
+  </properties>
 
     <modules>
         <module>agent-service-spec-ext</module>
         <module>agent-service-app/agent-service-app-custom-rest</module>
         <module>agent-service-adapters/agent-service-adapters-versatile</module>
+        <module>agent-service-adapters/agent-service-adapters-versatile-controller-handoff</module>
         <module>agent-service-adapters/agent-service-adapters-agentcore-ext</module>
         <module>agent-service-adapters/agent-service-adapters-agentscope</module>
     </modules>
@@ -128,6 +140,14 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- import runtime BOM：A 桶 + C 桶 + openjiuwen 全部版本管理（BOM import 时用 BOM 自己的 properties 解析 ${...}） -->
+            <dependency>
+                <groupId>com.openjiuwen</groupId>
+                <artifactId>agent-runtime-java</artifactId>
+                <version>0.1.2</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
@@ -181,9 +201,14 @@
                 <version>${a2a-sdk.version}</version>
             </dependency>
             <dependency>
+                <groupId>org.a2aproject.sdk</groupId>
+                <artifactId>a2a-java-sdk-client</artifactId>
+                <version>${a2a-sdk.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>com.openjiuwen</groupId>
                 <artifactId>agent-core-java</artifactId>
-                <version>0.1.14.post1</version>
+                <version>0.1.15</version>
             </dependency>
             <dependency>
                 <groupId>io.agentscope</groupId>
@@ -194,23 +219,6 @@
                 <groupId>io.agentscope</groupId>
                 <artifactId>agentscope-harness</artifactId>
                 <version>${agentscope.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-databind</artifactId>
-                <version>${jackson.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.junit.jupiter</groupId>
-                <artifactId>junit-jupiter</artifactId>
-                <version>${junit-jupiter.version}</version>
-                <scope>test</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.assertj</groupId>
-                <artifactId>assertj-core</artifactId>
-                <version>${assertj.version}</version>
-                <scope>test</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -229,6 +237,26 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.5.4</version>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.13</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

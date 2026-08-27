@@ -92,6 +92,42 @@ class HttpAgentRuntimeClientTest {
     }
 
     @Test
+    void invokeSync503ReturnsForwardFailedNot200() {
+        // issue 139: runtime returns 503 (service unavailable) — must surface as FORWARD_FAILED (502),
+        // not masked as HTTP 200 + raw body.
+        mockRuntime.enqueue(new MockResponse().setResponseCode(503).setBody("runtime unavailable"));
+        Throwable thrown = catchThrowable(() -> client.invokeSync(endpoint, "{}"));
+        assertThat(thrown).isInstanceOf(GovernanceException.class);
+        GovernanceException ge = asGovernanceException(thrown);
+        assertThat(ge.code()).isEqualTo("FORWARD_FAILED");
+        assertThat(ge.getMessage()).contains("503");
+    }
+
+    @Test
+    void invokeSync200WithJsonRpcErrorPassesThrough() {
+        // 200 + JSON-RPC error (e.g., -32004 terminal task) is a method error, NOT a service failure.
+        // Must be transparently passed through as-is (the fix for >=400 must NOT touch 200).
+        String jsonRpcError = "{\"jsonrpc\":\"2.0\",\"id\":\"2\",\"error\":{\"code\":-32004,"
+                + "\"message\":\"Cannot subscribe to task - task is in terminal state: TASK_STATE_COMPLETED\"}}";
+        mockRuntime.enqueue(new MockResponse()
+                .setBody(jsonRpcError)
+                .addHeader("Content-Type", "application/json"));
+        String resp = client.invokeSync(endpoint, "{\"jsonrpc\":\"2.0\",\"method\":\"SubscribeToTask\"}");
+        assertThat(resp).isEqualTo(jsonRpcError);
+    }
+
+    @Test
+    void invokeSync404ReturnsForwardFailed() {
+        // 404 from runtime (non-2xx) → FORWARD_FAILED, not 200 + body.
+        mockRuntime.enqueue(new MockResponse().setResponseCode(404).setBody("not found"));
+        Throwable thrown = catchThrowable(() -> client.invokeSync(endpoint, "{}"));
+        assertThat(thrown).isInstanceOf(GovernanceException.class);
+        GovernanceException ge = asGovernanceException(thrown);
+        assertThat(ge.code()).isEqualTo("FORWARD_FAILED");
+        assertThat(ge.getMessage()).contains("404");
+    }
+
+    @Test
     void openStreamByRefReturnsDataFrames() throws InterruptedException {
         mockRuntime.enqueue(new MockResponse()
                 .setBody("event: jsonrpc\ndata: {\"id\":\"t1\"}\n\n")

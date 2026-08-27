@@ -434,7 +434,7 @@ class ManagedDocApplier:
             poll_start = self._clock()
             try:
                 task = self._client.get_managed_doc_task_sync(task_id, request_timeout=remaining)
-            except httpx.TransportError:
+            except httpx.TransportError as exc:
                 # 临时网络错误 → 继续轮询（sleep 耗时纳入 poll_time）
                 poll_time += self._clock() - poll_start
                 sleep_start = self._clock()
@@ -451,7 +451,7 @@ class ManagedDocApplier:
                         post_time=post_time,
                         poll_time=poll_time,
                         total_time=total,
-                    )
+                    ) from exc
                 continue
             except AdapterError as e:
                 poll_time += self._clock() - poll_start
@@ -561,7 +561,8 @@ class ManagedDocApplier:
         self._sleeper(min(self._poll_interval, remaining))
         return True
 
-    def _classify_task(self, task: TaskState, expected_hash: str) -> _TaskOutcome:
+    @staticmethod
+    def _classify_task(task: TaskState, expected_hash: str) -> _TaskOutcome:
         if task.status == "SUCCEEDED":
             if task.revision == expected_hash:
                 return _TaskOutcome(is_terminal_success=True)

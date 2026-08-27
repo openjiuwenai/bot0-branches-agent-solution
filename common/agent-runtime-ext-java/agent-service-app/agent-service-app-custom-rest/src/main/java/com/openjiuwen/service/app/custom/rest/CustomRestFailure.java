@@ -19,6 +19,12 @@ final class CustomRestFailure extends RuntimeException {
         this.code = code;
     }
 
+    CustomRestFailure(int httpStatus, String code, String message, Throwable cause) {
+        super(message, cause);
+        this.httpStatus = httpStatus;
+        this.code = code;
+    }
+
     int getHttpStatus() {
         return httpStatus;
     }

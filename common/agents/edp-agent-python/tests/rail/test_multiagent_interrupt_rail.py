@@ -15,7 +15,7 @@ def _make_sub_agents_config():
     """创建测试用的 sub_agents 配置"""
     return SubAgentsConfig(
         sub_agents=[
-            SubAgentEntry(entity_type="ABC", url="http://abc-agent:8080", name="SubEDPAgent"),
+            SubAgentEntry(entity_type="ABC", url="https://abc-agent:8080", name="SubEDPAgent"),
         ]
     )
 
@@ -103,7 +103,7 @@ class TestMultiagentInterruptRail:
         assert len(pending_dispatch) == 1
 
         # 验证 sub_agent_url 已映射
-        assert pending_dispatch[0]["sub_agent_url"] == "http://abc-agent:8080"
+        assert pending_dispatch[0]["sub_agent_url"] == "https://abc-agent:8080"
         assert pending_dispatch[0]["entity_id"] == "entity_001"
 
         # 验证防重入标记
@@ -210,7 +210,8 @@ class TestMultiagentInterruptRail:
 class TestExtractBusinessData:
     """Test _extract_business_data static method."""
 
-    def test_sub_agent_results_only(self):
+    @staticmethod
+    def test_sub_agent_results_only():
         """仅 sub_agent_results"""
         cascade = {
             "sub_agent_results": [{"entity_id": "A", "status": "done"}]
@@ -233,14 +234,16 @@ class TestExtractBusinessData:
         assert "concurrency_limit" in data
         assert data["concurrency_limit"] == 1
 
-    def test_workflow_result_dict(self):
+    @staticmethod
+    def test_workflow_result_dict():
         """兼容 workflow_result（dict）"""
         cascade = {"workflow_result": {"products": ["WM001"]}}
         data = MultiagentInterruptRail._extract_business_data(cascade)
         assert "sub_agent_results" in data
         assert len(data["sub_agent_results"]) == 1
 
-    def test_workflow_result_list(self):
+    @staticmethod
+    def test_workflow_result_list():
         """兼容 workflow_result（list）"""
         cascade = {"workflow_result": [{"a": 1}, {"b": 2}]}
         data = MultiagentInterruptRail._extract_business_data(cascade)
@@ -252,7 +255,8 @@ class TestExtractBusinessData:
         data = MultiagentInterruptRail._extract_business_data("not a dict")
         assert data == {}
 
-    def test_no_known_fields(self):
+    @staticmethod
+    def test_no_known_fields():
         """无已知字段时返回原始数据（过滤内部字段）"""
         cascade = {"custom_data": "value", "node_type": "End", "node_name": "test"}
         data = MultiagentInterruptRail._extract_business_data(cascade)

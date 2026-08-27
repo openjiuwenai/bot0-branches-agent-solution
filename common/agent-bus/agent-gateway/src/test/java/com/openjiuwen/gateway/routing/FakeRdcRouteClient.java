@@ -16,6 +16,7 @@ import java.util.List;
 public class FakeRdcRouteClient implements RdcRouteClient {
     private List<AgentCardRoute> candidates = List.of();
     private ResolvedRoute resolved = null;
+    private boolean searchFails;
     private String lastTenantId;
     private String lastAgentId;
 
@@ -35,6 +36,16 @@ public class FakeRdcRouteClient implements RdcRouteClient {
      */
     public void setResolved(ResolvedRoute resolved) {
         this.resolved = resolved;
+    }
+
+    /**
+     * Configure the next search to throw {@link RouteResolutionException} (simulating
+     * RDC network failure / empty cache), so the Router's search-stage catch is exercised.
+     *
+     * @param searchFails true to fail the next search
+     */
+    public void setSearchFails(boolean searchFails) {
+        this.searchFails = searchFails;
     }
 
     /**
@@ -67,6 +78,9 @@ public class FakeRdcRouteClient implements RdcRouteClient {
     public List<AgentCardRoute> searchInstancesByAgentId(String tenantId, String agentId) {
         this.lastTenantId = tenantId;
         this.lastAgentId = agentId;
+        if (searchFails) {
+            throw new RouteResolutionException("fake search failure");
+        }
         return candidates;
     }
 

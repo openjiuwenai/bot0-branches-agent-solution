@@ -11,8 +11,8 @@ import com.openjiuwen.agents.edpa.mcp.McpTool;
 import com.openjiuwen.agents.edpa.mcp.McpToolAdapter;
 import com.openjiuwen.agents.edpa.mcp.McpToolRegistrar;
 import com.openjiuwen.agents.edpa.mcp.StdioMcpClient;
-import com.openjiuwen.agents.edpa.subagent.SubAgentDispatcher.SubAgentExecutor;
 import com.openjiuwen.agents.edpa.subagent.SubAgentDispatcher;
+import com.openjiuwen.agents.edpa.subagent.SubAgentExecutor;
 import com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel;
 import com.openjiuwen.core.foundation.llm.model_clients.DefaultModelClientFactories;
 import com.openjiuwen.core.foundation.llm.schema.ModelClientConfig;
@@ -378,6 +378,15 @@ class SubAgentDispatchRealLlmE2eTest {
             try {
                 Object res = subAgent.invoke(subGoal, null);
                 String text = extractOutput(res);
+                // Transient content-empty retry (McpInvestment idiom): thinking-mode models
+                // can return an answer terminal with EMPTY content (reasoning absorbed the
+                // turn — pro+thinking hit this 3/3 on the sub-agent prompt in the 2026-08-16
+                // matrix; the 2026-08-17 rerun confirmed stable). One retry before failing.
+                if (text.isBlank()) {
+                    LOG.warning("[subagent-e2e] content-empty sub-agent terminal, retrying once");
+                    res = subAgent.invoke(subGoal, null);
+                    text = extractOutput(res);
+                }
                 subResultLen.set(text.length());
                 if (subResultOverflow != null && text.length() > 200) {
                     subResultOverflow.set(1);
@@ -458,6 +467,7 @@ class SubAgentDispatchRealLlmE2eTest {
                 .clientProvider("OpenAI").apiKey(key).apiBase(base).verifySsl(false).timeout(120000).build();
         var reqCfg = ModelRequestConfig.builder().modelName(modelName).temperature(0.3).topP(0.9).maxTokens(maxTokens)
                 .build();
+        applyThinkingMode(reqCfg);
         return new ToolCallingEnforcingModel(cliCfg, reqCfg);
     }
 
@@ -582,5 +592,17 @@ class SubAgentDispatchRealLlmE2eTest {
         Set<String> calledNames() {
             return new HashSet<>(called);
         }
+    }
+
+    /**
+     * Applies the {@code LLM_THINKING} env switch onto the request config (default
+     * {@code thinking-off} — identical to the pre-switch behavior). Mirrors the
+     * {@code EdpaCognitiveLoopRealLlmE2eTest} / unified-matrix thinking idiom.
+     *
+     * @param reqCfg the request config to decorate in place
+     */
+    static void applyThinkingMode(ModelRequestConfig reqCfg) {
+        String mode = System.getenv().getOrDefault("LLM_THINKING", "thinking-off");
+        ModelDialect.thinkingParams(mode).forEach(reqCfg::setExtraField);
     }
 }

@@ -22,7 +22,7 @@ import java.util.Optional;
  *
  * @since 2026-06-30
  */
-final class VersatileResponseExtractor {
+public final class VersatileResponseExtractor {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final VersatileProperties properties;
@@ -38,12 +38,18 @@ final class VersatileResponseExtractor {
     private String interruptInputRequirement;
     private String interruptResumeToken;
 
-    VersatileResponseExtractor(VersatileProperties properties, IntentAgentResolver agentResolver) {
+    public VersatileResponseExtractor(VersatileProperties properties, IntentAgentResolver agentResolver) {
         this.properties = Objects.requireNonNull(properties, "properties");
         this.agentResolver = Objects.requireNonNull(agentResolver, "agentResolver");
     }
 
-    List<QueryChunk> consumeLine(String line) {
+    /**
+     * 消费单行流式响应，产出透传 chunk（多数行即时透传，提取行暂存到 finish）。
+     *
+     * @param line 原始响应行（SSE data 行或普通行）
+     * @return 本行产出的 chunk 列表（可为空列表，不返回 {@code null}）
+     */
+    public List<QueryChunk> consumeLine(String line) {
         if (line == null || line.isBlank()) {
             return List.of();
         }
@@ -88,7 +94,12 @@ final class VersatileResponseExtractor {
         return List.of(new QueryChunk(QueryChunk.TYPE_CHUNK, data.get()));
     }
 
-    List<QueryChunk> finish() {
+    /**
+     * 流结束后产出终态事件：中断/错误/三字段答案信封/遗留答案/未识别终态错误。
+     *
+     * @return 终态 chunk 列表（可为空列表，不返回 {@code null}）
+     */
+    public List<QueryChunk> finish() {
         if (pendingInterrupt) {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("message", interruptPrompt);

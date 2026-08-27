@@ -119,7 +119,8 @@ def test_passthrough_policy_sends_content_as_is() -> None:
 
 def test_preserving_policy_normalizes_before_apply() -> None:
     """PreservingContentPolicy：candidate 经 normalize（恢复 baseline frontmatter +
-    protected section）后再传给 applier。"""
+    protected section）后再传给 applier。
+    """
     baseline = "---\ntitle: keep\n---\n# rule\n<!--P-->\nprotected\n<!--/P-->\nfree\n"
     applier = FakeApplier()
     policy = PreservingContentPolicy(

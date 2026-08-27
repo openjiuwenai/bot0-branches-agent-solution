@@ -37,12 +37,19 @@ mvn -f common/agent-bus/agent-gateway/pom.xml install -Dmaven.test.skip=true
 
 ### DIRECT 模式运行
 
+注入本地联调凭据（鉴权 fail-closed：未配置时所有 `/a2a` 请求返回 401 `AUTH_MISSING`/`AUTH_INVALID`）：
+
 ```bash
-java -jar common/agent-bus/agent-gateway/target/agent-gateway-0.1.0.jar
+java -jar common/agent-bus/agent-gateway/target/agent-gateway-0.1.0.jar \
+  --gateway.test-credential.token=mock-token \
+  --gateway.test-credential.principalId=test-principal \
+  --gateway.test-credential.tenantId=tenant-1
 # gateway.path-mode=direct：经 RDC 解析路由后直连 runtime /a2a（HTTP/SSE），不经总线
 ```
 
 成功标志：`Started GatewayApplication` + `Tomcat started on port 8080`。端口冲突用 `--server.port=NNNN` 覆盖。
+
+> `mock-token` 仅用于本地联调；生产必须接入正式 IdP / `CredentialDirectory`，不得发布真实 token。完整业务响应仍需 RDC(:8092) 与目标 runtime 就绪。
 
 ### BUS 模式运行
 
@@ -68,6 +75,8 @@ java -DGATEWAY_TEST_TENANT=tenant-a \
 
 成功标志：`Started GatewayApplication` + `SUBSCRIBE responseConsumer(filter targetServiceId=gateway-01)`。
 
+> **联合数据库拓扑**：event-bus relay 用 `localhost:5432/agentbus`；RDC 用 `localhost:5433/agent_rdc`（见 RDC README，宿主 `5433` 避免与 event-bus 的 `5432` 冲突）。本 launcher 的 `spring.datasource` 指向 event-bus 库（outbox），RDC 库由 RDC 进程独立连接。
+
 > 改 gateway 代码后：先 `mvn install` 重装 lib jar，**再** `clean package` 重打 launcher fat-jar（no-clean 的 `package` 是 no-op，会跑旧内嵌 lib）。launcher fat-jar 若被运行中的 gateway 进程锁，先停掉再重打。
 
 ## 配置
@@ -77,7 +86,6 @@ gateway:
   path-mode: direct             # direct | bus
   rdc:
     base-url: http://127.0.0.1:8092   # RDC 路由解析
-  default-agent-id: travel-hotel
   test-credential:              # 本地联调凭据
     token: mock-token
     principalId: test-principal
@@ -102,7 +110,7 @@ agent-bus:                       # BUS 模式复用 event-bus SDK 命名空间�
 
 ## A2A 调用
 
-`POST /a2a`，A2A JSON-RPC body：
+`POST /a2a`，每个请求必须携带 `Authorization: Bearer <token>`（与 DIRECT Quick Start 的 `gateway.test-credential.token` 一致；鉴权在路由/校验之前，fail-closed）。A2A JSON-RPC body：
 
 ```json
 {
@@ -114,7 +122,21 @@ agent-bus:                       # BUS 模式复用 event-bus SDK 命名空间�
 }
 ```
 
-- `metadata.agentId` 必填（BUS 模式按 `ctx.agentId()` 路由，不回退 `default-agent-id`）
+完整 curl（与上述 `mock-token` 配套）：
+
+```bash
+curl -i -H 'Authorization: Bearer mock-token' -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","id":"1","method":"SendMessage","params":{"message":{"role":"ROLE_USER","messageId":"m1","parts":[{"kind":"text","text":"hi"}]},"metadata":{"agentId":"travel-hotel"}}}' \
+  http://127.0.0.1:8080/a2a
+```
+
+预期结果（鉴权在前，不依赖 RDC/runtime 是否就绪）：
+
+- 缺 `Authorization` → `401 AUTH_MISSING`
+- 错误 token（与配置不一致）→ `401 AUTH_INVALID`
+- 正确 `mock-token` → 不再返回认证错误；此后再排查 RDC/runtime/路由
+
+- `metadata.agentId` 必填（C2 移除默认 Agent 兜底：DIRECT 与 BUS 创建类均按 `ctx.agentId()` 路由，缺/空 → 400 `VALIDATION_AGENT_ID`）
 - `message.role` 可省（默认 `ROLE_USER`）；显式给须是 `ROLE_USER` / `ROLE_AGENT` / `ROLE_UNSPECIFIED`
 - `parts[].kind` 必须是 `"text"`
 - 流式用 `SendStreamingMessage`（DIRECT 经 runtime `/a2a` SSE；BUS 经 `SubscribeToTask` SSE）

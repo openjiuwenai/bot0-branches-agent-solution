@@ -249,6 +249,11 @@ public class EdpaSpringBootConfig {
         private String clientId;
 
         /**
+         * 自定义请求头（用于模型服务鉴权，可选）。
+         */
+        private Map<String, String> headers = new LinkedHashMap<>();
+
+        /**
          * Gets the client provider.
          *
          * @return the result
@@ -390,6 +395,24 @@ public class EdpaSpringBootConfig {
          */
         public void setClientId(String clientId) {
             this.clientId = clientId;
+        }
+
+        /**
+         * Gets the headers.
+         *
+         * @return the result
+         */
+        public Map<String, String> getHeaders() {
+            return headers;
+        }
+
+        /**
+         * Sets the headers.
+         *
+         * @param headers the headers value
+         */
+        public void setHeaders(Map<String, String> headers) {
+            this.headers = headers != null ? headers : new LinkedHashMap<>();
         }
     }
 

@@ -1,3 +1,7 @@
+spring:
+  application:
+    name: versatile-agent
+
 server:
   port: ${AGENT_B_PORT:18091}
 

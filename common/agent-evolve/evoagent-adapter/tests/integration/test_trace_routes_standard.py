@@ -83,8 +83,12 @@ async def test_standard_cleaned_traces_matches_user_query(standard_app, repo, js
     await repo.bulk_insert_spans(jsonl_spans)
 
     conv = jsonl_spans[0]["session_id"]
-    root = next(s for s in jsonl_spans if s["session_id"] == conv
-                and s.get("kind") == "SERVER" and not s.get("parent_span_id"))
+    root = None
+    for s in jsonl_spans:
+        if s["session_id"] == conv and s.get("kind") == "SERVER" and not s.get("parent_span_id"):
+            root = s
+            break
+    assert root is not None, "no SERVER root span in conversation"
     rb_raw = (root.get("attributes") or {}).get("openjiuwen.http.request_body")
     request_body = json.loads(rb_raw) if isinstance(rb_raw, str) else rb_raw
     user_query = request_body["input"]["query"]  # V3 真实: input.query (非 user_query)

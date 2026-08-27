@@ -557,11 +557,7 @@ async def run_optimization(
 
         # 关闭 setup 阶段创建的 async client（绑定到 main thread event loop），
         # 让 worker thread 的 _async_client property 在自己的 event loop 中重建。
-        _setup_client = getattr(adapter_client, "_async_http", None)
-        if _setup_client is not None:
-            await _setup_client.aclose()
-            adapter_client._async_http = None
-            adapter_client._async_http_loop = None
+        await adapter_client.reset_async_http()
 
         # 3. 构建 RemoteAgent
         card = AgentCard(name=resolved.agent_name)
@@ -615,6 +611,14 @@ async def run_optimization(
         )
         _bind_evaluator_invocation(dataset.evaluator, evaluator_invocation)
 
+        # 5.5 构建 GEPA 视觉标注模型（被优化的目标模型，支持多模态输入）
+        vision_model = _create_vision_llm(config)
+        vision_model_name = (
+            config.vision_model.strip() or config.target_model
+            if vision_model is not None
+            else ""
+        )
+
         # 6. 构建依赖（run_artifact_dir 在进入 AdapterClient 前按模式计算：
         # managed-doc 用 canonical id 作目录名，Skill 用 run_id）。
         dependencies: dict[str, Any] = {
@@ -635,6 +639,9 @@ async def run_optimization(
             # Wave 10 新增：注入 phase_callback（SSE 阶段事件推送）
             "phase_callback": phase_callback or (lambda *a, **kw: None),
             "cancellation_token": token,
+            # GEPA 新增：注入视觉标注模型（被优化的目标模型）
+            "vision_model": vision_model,
+            "vision_model_name": vision_model_name,
         }
 
         # 7. 通过 ScenarioRegistry 构建场景 optimizer
@@ -680,8 +687,8 @@ async def run_optimization(
                     return len(cases)
                 return 0
 
-            progress_callback._num_train_cases = _case_count(dataset.train_cases)
-            progress_callback._num_val_cases = _case_count(dataset.val_cases)
+            setattr(progress_callback, "_num_train_cases", _case_count(dataset.train_cases))
+            setattr(progress_callback, "_num_val_cases", _case_count(dataset.val_cases))
 
         # 8.5 手动跑验证集基线评估（vendor Trainer 对 SkillDocumentOptimizer 跳过此步骤）
         # C6 (#2): 只要有 val_cases 即预热 baseline + record_validation_baseline，
@@ -709,8 +716,7 @@ async def run_optimization(
             # asyncio.run() 返回后该 loop 已关闭，但 client 仍挂在 _async_http 上
             # 且 is_closed == False。若不重置，train 的 worker thread 会复用这个
             # 绑定到已关闭 loop 的 client，导致 RuntimeError: Event loop is closed。
-            adapter_client._async_http = None
-            adapter_client._async_http_loop = None
+            adapter_client.clear_async_http()
 
         # 9. 训练（Trainer.train 是同步的，在独立线程中运行）
         # Prompt 的 expected revision 来自 Studio 持久化 baseline。baseline eval 可能
@@ -873,7 +879,7 @@ async def run_optimization_with_cancellation_recovery(
                     raise CancelRollbackError(
                         code="CANCEL_ROLLBACK_TIMEOUT",
                         diagnostics="total cancellation recovery deadline exhausted",
-                    )
+                    ) from original
                 baseline_revision = request.managed_doc_expected_revision or (
                     verified_baseline.file_revision if verified_baseline is not None else None
                 )
@@ -881,7 +887,7 @@ async def run_optimization_with_cancellation_recovery(
                     raise CancelRollbackError(
                         code="CANCEL_ROLLBACK_FAILED",
                         diagnostics="verified baseline revision unavailable",
-                    )
+                    ) from original
                 async with AdapterClient(
                     request.adapter_url,
                     agent_name=request.agent_name,
@@ -997,6 +1003,28 @@ def _create_llm(config: EvolveConfig) -> Model:
     return Model(client_config, model_config)
 
 
+def _create_vision_llm(config: EvolveConfig) -> Model | None:
+    """构建 GEPA 视觉标注模型实例。
+
+    空配置（vision_model 为空且未设独立凭证）时返回 None，
+    GEPA 场景可在 scenario 层提供 fallback。
+    """
+    model_name = (config.vision_model or "").strip() or config.target_model
+    api_key = (config.vision_api_key or "").strip() or config.llm_api_key
+    base_url = (config.vision_base_url or "").strip() or config.llm_base_url
+    if not api_key or not base_url:
+        return None
+    client_config = ModelClientConfig(
+        client_provider="OpenAI",
+        api_key=api_key,
+        api_base=base_url,
+        verify_ssl=False,
+        timeout=config.llm_timeout,
+    )
+    model_config = ModelRequestConfig(model_name=model_name)
+    return Model(client_config, model_config)
+
+
 def _create_llm_invocation(
     config: EvolveConfig,
     resolved: Any,
@@ -1044,7 +1072,7 @@ def _bind_evaluator_invocation(evaluator: Any, invocation: LLMInvocation) -> Non
         seen.add(id(current))
         attributes = vars(current)
         if "_invocation" in attributes or hasattr(type(current), "_invocation"):
-            current._invocation = invocation
+            setattr(current, "_invocation", invocation)
         # ``getattr(MagicMock, name)`` manufactures an endless chain of child
         # mocks.  A decorator link is valid only when the object really stores it.
         current = attributes.get("_delegate")

@@ -175,7 +175,8 @@ def _parse_goal_response(response: str) -> dict[str, Any]:
         )
 
     goal = data["goal"]
-    assert isinstance(goal, str)
+    if not isinstance(goal, str):
+        raise TypeError("goal must be a string")
     data["goal"] = goal.strip()
     return data
 
@@ -185,10 +186,11 @@ def _validate_goal_output(data: dict[str, Any]) -> ValidationResult:
     if not isinstance(goal, str) or not goal.strip():
         return ValidationResult(False, "field_type", "goal must be a non-empty string")
     confidence = data.get("confidence")
-    if confidence is not None and (
+    is_invalid_number = (
         isinstance(confidence, bool)
         or not isinstance(confidence, (int, float))
         or not math.isfinite(confidence)
-    ):
+    )
+    if confidence is not None and is_invalid_number:
         return ValidationResult(False, "field_type", "confidence must be a finite number")
     return ValidationResult(True)

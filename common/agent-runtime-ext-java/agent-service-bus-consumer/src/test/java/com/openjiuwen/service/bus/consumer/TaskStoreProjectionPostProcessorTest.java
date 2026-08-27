@@ -33,10 +33,25 @@ import java.util.Map;
  */
 class TaskStoreProjectionPostProcessorTest {
     @Test
+    void associatesTaskProjectionWithTheMostRecentContinuationRequest() {
+        var admissions = new InMemoryBusTaskAdmissionStore();
+        admissions.reserve(new Admission("tenant-a", "idem-1", "digest-1", "task-1", "CLIENT", "corr-1",
+                "trace-1", "caller", "runtime", null, "request-1", Admission.State.RESERVED));
+        admissions.markAdmitted("tenant-a", "idem-1", "task-1");
+        admissions.reserve(new Admission("tenant-a", "idem-2", "digest-2", "task-1", "CLIENT", "corr-2",
+                "trace-2", "caller", "runtime", null, "request-2", Admission.State.RESERVED));
+        admissions.markAdmitted("tenant-a", "idem-2", "task-1");
+
+        assertThat(admissions.findByTaskId("tenant-a", "task-1")).get()
+                .extracting(Admission::requestId, Admission::correlationId)
+                .containsExactly("request-2", "corr-2");
+    }
+
+    @Test
     void projectsTaskStatesWithPersistentRevision() {
         var admissions = new InMemoryBusTaskAdmissionStore();
         admissions.reserve(new Admission("tenant-a", "idem", "digest", "task-1", "CLIENT", "corr", "trace", "caller",
-                "runtime", null, Admission.State.RESERVED));
+                "runtime", null, "request-1", Admission.State.RESERVED));
         admissions.markAdmitted("tenant-a", "idem", "task-1");
         List<BusResponseProjection> seen = new ArrayList<>();
         var projectionStore = new InMemoryBusResponseProjectionStore();
@@ -57,7 +72,11 @@ class TaskStoreProjectionPostProcessorTest {
         assertThat(seen).singleElement().satisfies(p -> {
             assertThat(p.eventType()).isEqualTo("INVOCATION_INPUT_REQUIRED");
             assertThat(p.revision()).isEqualTo(OffsetDateTime.parse("2026-07-20T00:00:01Z").toInstant().toEpochMilli());
-            assertThat(p.data().get("task")).isInstanceOf(Task.class);
+            assertThat(p.data().get("a2aResponse")).asString()
+                    .contains("\"jsonrpc\":\"2.0\"")
+                    .contains("\"id\":\"request-1\"")
+                    .contains("\"task\":")
+                    .contains("\"id\":\"task-1\"");
         });
 
         store.save(task(TaskState.TASK_STATE_COMPLETED, "2026-07-20T00:00:02Z"), false);

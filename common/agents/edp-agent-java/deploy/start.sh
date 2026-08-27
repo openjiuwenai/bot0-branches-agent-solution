@@ -13,7 +13,7 @@ NETWORK="$(config_value AGENT_NETWORK agent-net)"
 DEPLOYMENT="$(config_value EDP_REDIS_DEPLOYMENT local)"
 API_KEY="$(config_value EDP_AGENT_MODEL_API_KEY '')"
 MODEL_BASE_URL="$(config_value EDP_AGENT_MODEL_BASE_URL https://api.deepseek.com/v1)"
-ADAPTER_A2A_URL="$(config_value EDP_AGENT_VERSATILE_A2A_URL http://adapter-versatile:8191/a2a)"
+ADAPTER_A2A_URL="$(config_value EDP_AGENT_VERSATILE_A2A_URL http://adapter-versatile:8191)"
 
 validate_image_ref "${IMAGE}"
 validate_resource_name "EDP 容器" "${EDP_CONTAINER}"
