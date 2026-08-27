@@ -119,7 +119,9 @@ class MockRuntimeServerTest {
         JsonNode terminalSubscribe = post("""
                 {"jsonrpc":"2.0","id":"again","method":"SubscribeToTask","params":{"id":"%s"}}
                 """.formatted(taskId));
-        assertEquals(-32004, terminalSubscribe.path("error").path("code").asInt());
+        assertEquals(-32602, terminalSubscribe.path("error").path("code").asInt());
+        assertEquals("TASK_NOT_SUBSCRIBABLE_TERMINAL",
+                terminalSubscribe.path("error").path("data").path("code").asText());
     }
 
     @Test

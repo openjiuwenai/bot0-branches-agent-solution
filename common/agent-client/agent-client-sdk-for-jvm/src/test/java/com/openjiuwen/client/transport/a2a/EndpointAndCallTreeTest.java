@@ -21,7 +21,6 @@ import com.openjiuwen.client.api.InvocationCall;
 import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.api.InvocationRequest;
 import com.openjiuwen.client.api.InvocationSnapshot;
-import com.openjiuwen.client.api.ConversationLimitExceededException;
 import com.openjiuwen.client.api.RetryPolicy;
 import com.openjiuwen.client.api.calltree.Completeness;
 import com.openjiuwen.client.api.calltree.SpeakingPhase;
@@ -300,7 +299,8 @@ class EndpointAndCallTreeTest {
                         frame("1", delegation("root-expired", "agent-a", "root-expired",
                                 "agent-b", "task-b")));
                 case 1 -> json(exchange, "{\"jsonrpc\":\"2.0\",\"id\":\"rpc\",\"error\":{"
-                        + "\"code\":-32004,\"message\":\"task is already terminal\"}}");
+                        + "\"code\":-32602,\"message\":\"invalid task state for subscription\","
+                        + "\"data\":{\"code\":\"TASK_NOT_SUBSCRIBABLE_TERMINAL\"}}}");
                 default -> json(exchange,
                         directTaskResponse("root-expired", "TASK_STATE_COMPLETED", "root done"));
             }
@@ -314,6 +314,37 @@ class EndpointAndCallTreeTest {
             assertEquals(java.util.List.of("SendStreamingMessage", "SubscribeToTask", "GetTask"), methods);
             assertEquals("root done", snapshot.outputText());
             assertEquals(Completeness.PARTIAL, snapshot.callTree().completeness());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void genuineInvalidSubscriptionParamsAreNotMisclassifiedAsTerminalState() throws Exception {
+        CopyOnWriteArrayList<String> methods = new CopyOnWriteArrayList<>();
+        HttpServer server = server(exchange -> {
+            JsonNode request = MAPPER.readTree(exchange.getRequestBody().readAllBytes());
+            methods.add(request.path("method").asText());
+            if (methods.size() == 1) {
+                sse(exchange, frame("1", delegation("root-invalid", "agent-a", "root-invalid",
+                        "agent-b", "task-b")));
+            } else {
+                json(exchange, "{\"jsonrpc\":\"2.0\",\"id\":\"rpc\",\"error\":{"
+                        + "\"code\":-32602,\"message\":\"params.id is invalid\","
+                        + "\"data\":{\"code\":\"VALIDATION_FAILED\"}}}");
+            }
+        });
+        try (AgentClient client = AgentClients.builder().endpointType(EndpointType.RUNTIME)
+                .endpointUrl(url(server)).build()) {
+            InvocationCall call = client.invoke(InvocationRequest.builder().conversationId("invalid-subscribe")
+                    .mode(InvocationMode.STREAMING).input("hello").build());
+            ExecutionException failure = assertThrows(ExecutionException.class,
+                    () -> call.completion().toCompletableFuture().get(5, TimeUnit.SECONDS));
+
+            assertEquals(java.util.List.of("SendStreamingMessage", "SubscribeToTask"), methods);
+            assertEquals(com.openjiuwen.client.api.ErrorCodes.VALIDATION_FAILED,
+                    failure.getCause() instanceof com.openjiuwen.client.api.ClassifiedError classified
+                            ? classified.code() : null);
         } finally {
             server.stop(0);
         }
@@ -410,7 +441,8 @@ class EndpointAndCallTreeTest {
             ExecutionException failure = assertThrows(ExecutionException.class,
                     () -> call.completion().toCompletableFuture().get(5, TimeUnit.SECONDS));
 
-            assertEquals(4, calls.get());
+            // create + three recovery cycles (Subscribe followed by GetTask)
+            assertEquals(7, calls.get());
             assertTrue(failure.getCause().getMessage().contains("recovery failed 3 times"));
             assertEquals("RECOVERY_RETRY_EXHAUSTED",
                     failure.getCause() instanceof com.openjiuwen.client.api.ClassifiedError classified
@@ -444,7 +476,8 @@ class EndpointAndCallTreeTest {
             ExecutionException failure = assertThrows(ExecutionException.class,
                     () -> call.completion().toCompletableFuture().get(5, TimeUnit.SECONDS));
 
-            assertEquals(2, calls.get());
+            // create + one Subscribe/GetTask reconciliation cycle
+            assertEquals(3, calls.get());
             assertTrue(failure.getCause().getMessage().contains("recovery failed 1 times"));
         } finally {
             server.stop(0);

@@ -241,8 +241,12 @@ public final class MockRuntimeServer {
             return;
         }
         if (task.isTerminal()) {
-            jsonRpcError(exchange, request.path("id").asText(), -32004, "UNSUPPORTED_OPERATION",
-                    "Cannot subscribe to task " + task.id + " in terminal state " + task.state);
+            // Match the Runtime contract: a terminal task is a deterministic
+            // subscription-state error, not an unsupported method.  The SDK
+            // uses the structured data.code to reconcile with GetTask.
+            jsonRpcError(exchange, request.path("id").asText(), -32602,
+                    "TASK_NOT_SUBSCRIBABLE_TERMINAL",
+                    "invalid task state for subscription: " + task.state);
             return;
         }
         int attempt = task.subscribeAttempts.incrementAndGet();

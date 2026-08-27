@@ -937,22 +937,13 @@ public class A2aHttpTransportProvider
      * @return 已分类的传输异常
      */
     private A2aTransportException governanceError(int status, String body) {
-        String code = null;
-        String message = body;
+        JsonNode node = null;
         try {
-            JsonNode node = codec.readTree(body);
-            if (node.hasNonNull("code")) {
-                code = node.get("code").asText(null);
-            }
-            if (node.hasNonNull("message")) {
-                message = node.get("message").asText(body);
-            }
+            node = codec.readTree(body);
         } catch (A2aTransportException ignore) {
             // 非 JSON 响应体：保留原始文本，错误码按状态码兜底。
         }
-        String resolved = (code != null && !code.isBlank()) ? code : ErrorCodes.fromHttpStatus(status);
-        return A2aTransportException.governance(
-                "gateway rejected request [" + status + "/" + resolved + "]: " + message, resolved, status);
+        return A2aErrorNormalizer.fromHttp(status, node, body);
     }
 
     // ---------- SSE ----------
@@ -1028,10 +1019,12 @@ public class A2aHttpTransportProvider
                 watchdog.cancel(false);
             }
         }
-        if (subscription && result.acceptedFrames() == 0 && !ch.terminal.get()
-                && ch.lastState != TaskState.INPUT_REQUIRED) {
-            onSubscriptionFailure(ch, "SubscribeToTask closed before a valid event",
-                    result.failure() != null ? result.failure() : new IOException("empty subscription stream"));
+        if (subscription && !ch.terminal.get() && ch.lastState != TaskState.INPUT_REQUIRED) {
+            String reason = result.acceptedFrames() == 0
+                    ? "SubscribeToTask closed before a valid event"
+                    : "SubscribeToTask closed before a settlement point";
+            onSubscriptionFailure(ch, reason,
+                    result.failure() != null ? result.failure() : new IOException("subscription stream closed"));
             return;
         }
         onSseStreamEnd(ch, result.failure());
@@ -1194,19 +1187,10 @@ public class A2aHttpTransportProvider
                         rawResponsePayload(resp.statusCode(), resp.headers(), body, null, true));
                 try {
                     extractResult(codec.readTree(body));
-                    onObservationFailure(ch, reason, new IllegalStateException("SubscribeToTask returned JSON"));
+                    onSubscriptionFailure(ch, reason,
+                            new IllegalStateException("SubscribeToTask returned JSON instead of SSE"));
                 } catch (A2aTransportException error) {
-                    if (ErrorCodes.REPLAY_CURSOR_EXPIRED.equals(error.code())
-                            || ErrorCodes.SUBSCRIPTION_UNAVAILABLE.equals(error.code())) {
-                        ch.recovering.set(false);
-                        pollTask(ch, reason + "; subscription requires current Task reconciliation");
-                    } else if (ErrorCodes.METHOD_NOT_SUPPORTED.equals(error.code())
-                            && endpointPolicy.type() == com.openjiuwen.client.api.EndpointType.GATEWAY) {
-                        ch.recovering.set(false);
-                        pollTask(ch, reason + "; gateway subscribe unsupported");
-                    } else {
-                        onSubscriptionFailure(ch, reason, error);
-                    }
+                    onSubscriptionFailure(ch, reason, error);
                 }
                 return;
             }
@@ -1216,23 +1200,37 @@ public class A2aHttpTransportProvider
     }
 
     private void onSubscriptionFailure(Channel ch, String reason, Throwable failure) {
-        if (endpointPolicy.type() == com.openjiuwen.client.api.EndpointType.RUNTIME && ch.taskRef != null) {
+        // 两种 Endpoint 统一：可由 Task 状态解释的 Subscribe 失败，以及基础设施/协议
+        // 中断，先以 GetTask 对账；真正的确定性请求错误（例如 INVALID_PARAMS）不能
+        // 因为对账返回 WORKING 而再次发起 Subscribe。
+        if (ch.taskRef != null && shouldReconcileSubscriptionFailure(failure)) {
             ch.recovering.set(false);
-            if (++ch.observationFailures >= retryPolicy.maxConsecutiveFailures()) {
-                publishUncertain(ch, reason + "; recovery failed " + ch.observationFailures
-                        + " times: " + rootMessage(failure), ErrorCodes.RECOVERY_RETRY_EXHAUSTED);
-                return;
-            }
             pollTask(ch, reason + "; SubscribeToTask failed: " + rootMessage(failure));
             return;
         }
         onObservationFailure(ch, reason, failure);
     }
 
+    private static boolean shouldReconcileSubscriptionFailure(Throwable failure) {
+        if (!(failure instanceof A2aTransportException classified)) {
+            return true; // 网络、SSE/JSON 协议异常：先向服务端对账。
+        }
+        return classified.retryable()
+                || classified.httpStatus() == 408
+                || classified.httpStatus() == 429
+                || classified.httpStatus() >= 500
+                || ErrorCodes.SUBSCRIPTION_UNAVAILABLE.equals(classified.code())
+                || ErrorCodes.REPLAY_CURSOR_EXPIRED.equals(classified.code())
+                || ErrorCodes.METHOD_NOT_SUPPORTED.equals(classified.code())
+                || ErrorCodes.TASK_NOT_FOUND.equals(classified.code())
+                || ErrorCodes.AGENT_ERROR.equals(classified.code()); // malformed protocol payload
+    }
+
     private void onObservationFailure(Channel ch, String reason, Throwable failure) {
         ch.recovering.set(false);
         if (failure instanceof A2aTransportException classified && !classified.retryable()) {
-            publishUncertain(ch, reason + "; deterministic recovery error: " + rootMessage(failure));
+            publishUncertain(ch, reason + "; deterministic recovery error: " + rootMessage(failure),
+                    classified.code());
             return;
         }
         int attempts = ++ch.observationFailures;
@@ -1763,23 +1761,9 @@ public class A2aHttpTransportProvider
      * @return result 节点
      */
     private static JsonNode extractResult(JsonNode root) {
-        if (root.has("error") && !root.path("error").isNull()) {
-            JsonNode err = root.get("error");
-            int rpcCode = err.path("code").asInt();
-            String message = err.path("message").asText();
-            // JSON-RPC 层错误一律不可重试：方法不支持、Task 不存在、已到终态都不会因重试改变。
-            String declaredCode = err.path("data").path("code").asText(null);
-            String code = "CURSOR_EXPIRED".equals(declaredCode)
-                    || ErrorCodes.REPLAY_CURSOR_EXPIRED.equals(declaredCode)
-                    ? ErrorCodes.REPLAY_CURSOR_EXPIRED
-                    : switch (rpcCode) {
-                        case -32601 -> ErrorCodes.METHOD_NOT_SUPPORTED;
-                        case -32001 -> ErrorCodes.TASK_NOT_FOUND;
-                        case -32004 -> ErrorCodes.SUBSCRIPTION_UNAVAILABLE;
-                        default -> "JSONRPC_" + rpcCode;
-                    };
-            throw new A2aTransportException(
-                    "JSON-RPC error: " + rpcCode + " " + message, null, code, 0, false);
+        A2aTransportException normalized = A2aErrorNormalizer.fromJsonRpc(root);
+        if (normalized != null) {
+            throw normalized;
         }
         return root.has("result") ? root.get("result") : root;
     }
