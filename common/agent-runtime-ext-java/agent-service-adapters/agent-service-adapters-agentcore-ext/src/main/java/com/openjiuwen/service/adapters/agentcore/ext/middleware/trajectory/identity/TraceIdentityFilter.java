@@ -77,40 +77,39 @@ public class TraceIdentityFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         CachedBodyRequest wrapped = request instanceof CachedBodyRequest cached
                 ? cached : new CachedBodyRequest(request);
-        Optional<byte[]> replacement = Optional.empty();
+        byte[] replacement = new byte[0];
         try {
             replacement = identify(request, new String(wrapped.cachedBody(), StandardCharsets.UTF_8));
         } catch (JsonProcessingException | IllegalStateException e) {
             LOGGER.warn("trace identity extraction failed, request continues without it: {}",
                     e.getClass().getSimpleName());
         }
-        HttpServletRequest toPass = replacement
-                .<HttpServletRequest>map(body -> new CachedBodyRequest(request, body))
-                .orElse(wrapped);
+        HttpServletRequest toPass = replacement.length > 0
+                ? new CachedBodyRequest(request, replacement) : wrapped;
         filterChain.doFilter(toPass, response);
     }
 
-    private Optional<byte[]> identify(HttpServletRequest request, String body) throws JsonProcessingException {
+    private byte[] identify(HttpServletRequest request, String body) throws JsonProcessingException {
         if (body.isBlank()) {
-            return Optional.empty();
+            return new byte[0];
         }
         JsonNode root = MAPPER.readTree(body);
         if (root == null || !root.isObject()) {
-            return Optional.empty();
+            return new byte[0];
         }
         IngressPayload payload = IngressPayload.from(root);
         Optional<String> contextId = payload.contextId();
-        Optional<byte[]> replacement = Optional.empty();
+        byte[] replacement = new byte[0];
         if (contextId.isEmpty() && payload.taskId().isEmpty()) {
             // 首跳双缺失：注入生成的 contextId 再放行（注入失败→本请求不采集）
             if (!(root.path("params").path("message") instanceof ObjectNode messageNode)) {
                 LOGGER.warn("trace identity: no JSON-RPC message to inject contextId, skip");
-                return Optional.empty();
+                return new byte[0];
             }
             String generated = UUID.randomUUID().toString();
             messageNode.put("contextId", generated);
             contextId = Optional.of(generated);
-            replacement = Optional.of(MAPPER.writeValueAsBytes(root));
+            replacement = MAPPER.writeValueAsBytes(root);
         } else if (contextId.isEmpty()) {
             contextId = resolveContextIdByTask(payload.taskId());
         } else {

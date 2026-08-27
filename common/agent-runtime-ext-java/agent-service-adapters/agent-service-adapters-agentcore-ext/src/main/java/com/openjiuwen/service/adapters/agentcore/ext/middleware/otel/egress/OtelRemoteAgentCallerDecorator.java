@@ -44,12 +44,12 @@ import java.util.concurrent.CompletableFuture;
  * @since 2026-08-17
  */
 public class OtelRemoteAgentCallerDecorator implements RemoteAgentCaller {
+    // 出站 metadata 约定键：parent_run_id（与 TraceIdentityFilter 的入站解析键一致）
+    private static final String PARENT_RUN_ID_METADATA = "parent_run_id";
+
     private static final Logger LOGGER = LoggerFactory.getLogger(OtelRemoteAgentCallerDecorator.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String VERSATILE_AGENT_NAME = "versatile-agent";
-
-    /** 出站 metadata 约定键：parent_run_id（与 TraceIdentityFilter 的入站解析键一致）。 */
-    static final String PARENT_RUN_ID_METADATA = "parent_run_id";
 
     private final RemoteAgentCaller delegate;
     private final Tracer tracer;

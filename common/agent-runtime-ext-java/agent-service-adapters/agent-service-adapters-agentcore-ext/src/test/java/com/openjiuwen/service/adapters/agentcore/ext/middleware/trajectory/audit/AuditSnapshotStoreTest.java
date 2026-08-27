@@ -24,7 +24,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-
 /**
  * AuditSnapshotStore 的单元测试：seq 预占有界重试、闭轮写快照+推进 latest、回放排序与缺洞标记、
  * Redis 故障降级。

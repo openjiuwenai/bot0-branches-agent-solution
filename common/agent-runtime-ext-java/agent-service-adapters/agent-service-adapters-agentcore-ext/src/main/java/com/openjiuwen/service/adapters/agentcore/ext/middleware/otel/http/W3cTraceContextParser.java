@@ -41,11 +41,10 @@ public final class W3cTraceContextParser {
      * @return parent context (root when not parseable)
      */
     public static Context parseToContext(String traceparent) {
-        Optional<String[]> parts = split(traceparent);
-        if (parts.isEmpty()) {
+        String[] segments = split(traceparent);
+        if (segments.length == 0) {
             return Context.root();
         }
-        String[] segments = parts.get();
         try {
             return Context.root().with(Span.wrap(SpanContext.createFromRemoteParent(
                     segments[1], segments[2], TraceFlags.fromHex(segments[3], 0), TraceState.getDefault())));
@@ -62,17 +61,20 @@ public final class W3cTraceContextParser {
      * @return trace id, or empty when absent/malformed
      */
     public static Optional<String> parseTraceId(String traceparent) {
-        return split(traceparent)
-                .filter(parts -> isLowerHex(parts[1], TRACE_ID_LENGTH) && isLowerHex(parts[2], SPAN_ID_LENGTH))
-                .map(parts -> parts[1]);
-    }
-
-    private static Optional<String[]> split(String traceparent) {
-        if (traceparent == null) {
+        String[] parts = split(traceparent);
+        if (parts.length == 0) {
             return Optional.empty();
         }
+        return isLowerHex(parts[1], TRACE_ID_LENGTH) && isLowerHex(parts[2], SPAN_ID_LENGTH)
+                ? Optional.of(parts[1]) : Optional.empty();
+    }
+
+    private static String[] split(String traceparent) {
+        if (traceparent == null) {
+            return new String[0];
+        }
         String[] parts = traceparent.trim().split("-");
-        return parts.length == PART_COUNT ? Optional.of(parts) : Optional.empty();
+        return parts.length == PART_COUNT ? parts : new String[0];
     }
 
     private static boolean isLowerHex(String value, int length) {
