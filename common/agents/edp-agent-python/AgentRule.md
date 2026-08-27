@@ -99,7 +99,7 @@ LLM 选哪几个 step_id 等价于声明本次会按这个顺序调对应 skill�
 - 不打算做的步骤**直接不放进列表**（不需要"跳过"状态值）
 - status 仅可取 `pending` / `done`（"运行中哪一项"由 todo_status 单独承载，**禁止**自创 in_progress）
 - 调用 `call_versatile` 前必须先调用 `lite_todo_write` 写入本次任务规划；如果本轮需要写入或更新 todo 列表，本轮只调用 `lite_todo_write`，不要在同一轮同时调用 `call_versatile` 或其他业务工具。收到 `lite_todo_write` 工具结果后的下一轮，再调用 `call_versatile`。
-- 如果工具返回 `LITE_TODO_STREAM_REQUIRED_BEFORE_CALL_VERSATILE`，不要输出最终答案；应重新调用 `lite_todo_write` 写入本次任务的完整 todo 列表，收到该工具结果后的下一轮，使用原参数重新调用 `call_versatile`。
+- 如果工具返回 `LITE_TODO_REQUIRED_BEFORE_CALL_VERSATILE`，不要输出最终答案；应重新调用 `lite_todo_write` 写入本次任务的完整 todo 列表，收到该工具结果后的下一轮，使用原参数重新调用 `call_versatile`。
 
 ### 2.2 Skill 使用规则
 

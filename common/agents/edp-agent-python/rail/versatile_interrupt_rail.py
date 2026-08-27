@@ -79,13 +79,6 @@ class VersatileInterruptRail(BaseInterruptRail):
         return isinstance(todos, list) and len(todos) > 0
 
     @staticmethod
-    def _is_lite_todo_stream_ready(ctx) -> bool:
-        try:
-            return ctx.session.get_state("lite_todo_stream_ready") is True
-        except Exception:
-            return False
-
-    @staticmethod
     def _create_intercepted_tool_span(ctx, tool_name: str, tool_args: dict, result: Any = None) -> None:
         """创建被拦截 tool 的 OTel span（SDK 不会触发 on_plugin_start，需手动创建）。"""
         tracer = get_tracer()
@@ -115,14 +108,13 @@ class VersatileInterruptRail(BaseInterruptRail):
                 extra=Extra(tag=Tag.TAG_TOOL_EXECUTE_END),
             )
 
-    def _reject_call_versatile_before_lite_todo_stream_ready(self):
+    def _reject_call_versatile_no_todolist(self):
         return self.reject(tool_result={
             "status": "failed",
-            "code": "LITE_TODO_STREAM_REQUIRED_BEFORE_CALL_VERSATILE",
+            "code": "LITE_TODO_REQUIRED_BEFORE_CALL_VERSATILE",
             "message": (
-                "调用 call_versatile 前，必须先完成 lite_todo_write 的任务规划，"
-                "并确保任务清单已经完成流式输出。请先调用 lite_todo_write，"
-                "等待 todolist_end 输出后，再重新调用 call_versatile。"
+                "调用 call_versatile 前，必须先完成 lite_todo_write 的任务规划。"
+                "请先调用 lite_todo_write，再重新调用 call_versatile。"
             ),
             "required_tool": "lite_todo_write",
         })
@@ -167,8 +159,8 @@ class VersatileInterruptRail(BaseInterruptRail):
             self._create_intercepted_tool_span(ctx, tool_name, tool_args, guard_decision)
             return guard_decision
 
-        if not self._has_lite_todolist(ctx) or not self._is_lite_todo_stream_ready(ctx):
-            result = self._reject_call_versatile_before_lite_todo_stream_ready()
+        if not self._has_lite_todolist(ctx):
+            result = self._reject_call_versatile_no_todolist()
             self._create_intercepted_tool_span(ctx, tool_name, tool_args, result)
             return result
 
