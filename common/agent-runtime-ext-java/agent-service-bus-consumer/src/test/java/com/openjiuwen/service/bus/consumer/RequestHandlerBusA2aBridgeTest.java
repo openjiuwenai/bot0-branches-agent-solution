@@ -25,7 +25,6 @@ import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.lang.reflect.Proxy;
 import java.time.Instant;
-import java.util.Map;
 import java.util.concurrent.Flow;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -311,6 +310,6 @@ class RequestHandlerBusA2aBridgeTest {
 
     private static AgentBusEventEnvelope event(String type) {
         return new AgentBusEventEnvelope(type, "message-1", "tenant-a", "source", "runtime-a", null, "corr-1",
-                "trace-1", "idem-1", Instant.now().plusSeconds(60), new byte[]{1}, null, Map.of());
+                "trace-1", "idem-1", Instant.now().plusSeconds(60), new byte[]{1}, null);
     }
 }

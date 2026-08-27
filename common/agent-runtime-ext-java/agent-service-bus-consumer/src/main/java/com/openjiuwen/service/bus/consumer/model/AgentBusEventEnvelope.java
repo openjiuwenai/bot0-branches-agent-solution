@@ -7,7 +7,6 @@ package com.openjiuwen.service.bus.consumer.model;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 
 import java.time.Instant;
-import java.util.Map;
 
 /**
  * Runtime-normalized view of the canonical agent-bus transport envelope. The wire contract is
@@ -18,7 +17,7 @@ import java.util.Map;
  */
 public record AgentBusEventEnvelope(String eventType, String messageId, String tenantId, String sourceServiceId,
         String targetServiceId, String routeHandle, String correlationId, String traceId, String idempotencyKey,
-        Instant deadline, byte[] inlinePayload, String payloadRef, Map<String, String> metadata) {
+        Instant deadline, byte[] inlinePayload, String payloadRef) {
 
     /**
      * Performs the hasPayload operation.
