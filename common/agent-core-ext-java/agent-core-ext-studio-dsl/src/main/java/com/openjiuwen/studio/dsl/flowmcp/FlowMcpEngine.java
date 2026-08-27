@@ -25,8 +25,8 @@ import java.util.concurrent.locks.ReentrantLock;
 /**
  * FlowMcp engine — strict 1:1 with Python {@code flow_mcp.FlowMcp}.
  *
- * <p>Uses core {@link McpClient} ({@code sse} / {@code streamable_http}) + {@link McpTool}. Tests stub via
- * {@link #installTestClient(McpClient)}.
+ * <p>Uses core {@link McpClient} ({@code sse} / {@code streamable_http}) + {@link McpTool}. Tests inject a stub
+ * {@link McpClient} via constructor or {@link com.openjiuwen.studio.dsl.exec.StudioEngineTestOverrides}.
  *
  * @since 2026-08-26
  */
@@ -40,9 +40,8 @@ public final class FlowMcpEngine {
     private static final String RESTFUL_DATA = "data";
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private static final ThreadLocal<McpClient> TEST_CLIENT = new ThreadLocal<>();
-
     private final String nodeId;
+    private final McpClient presetMcpClient;
     private Map<String, Object> conf = Map.of();
     private McpClient client;
     private List<McpToolParam> toolParams = List.of();
@@ -52,16 +51,13 @@ public final class FlowMcpEngine {
     private final ReentrantLock initLock = new ReentrantLock();
 
     public FlowMcpEngine(String nodeId) {
+        this(nodeId, null);
+    }
+
+    /** Test constructor — preset MCP client (mirrors Python patch on SSEClientNew). */
+    public FlowMcpEngine(String nodeId, McpClient presetMcpClient) {
         this.nodeId = nodeId == null ? "mcp" : nodeId;
-    }
-
-    /** Test-only: inject MCP client (mirrors Python patch on SSEClientNew). */
-    public static void installTestClient(McpClient client) {
-        TEST_CLIENT.set(client);
-    }
-
-    public static void clearTestClient() {
-        TEST_CLIENT.remove();
+        this.presetMcpClient = presetMcpClient;
     }
 
     /** Python {@code init}. */
@@ -375,9 +371,8 @@ public final class FlowMcpEngine {
         }
         this.toolParams = converted.toolParams();
 
-        McpClient test = TEST_CLIENT.get();
-        if (test != null) {
-            this.client = new RuntimeAwareMcpClient(test, config, toolParams);
+        if (presetMcpClient != null) {
+            this.client = new RuntimeAwareMcpClient(presetMcpClient, config, toolParams);
             return;
         }
         try {

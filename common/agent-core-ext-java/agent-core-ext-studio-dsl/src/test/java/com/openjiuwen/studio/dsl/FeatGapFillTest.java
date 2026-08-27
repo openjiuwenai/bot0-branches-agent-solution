@@ -130,7 +130,7 @@ class FeatGapFillTest {
 
     @Test
     void mcp_stubClient_invokes() {
-        com.openjiuwen.studio.dsl.flowmcp.FlowMcpEngine.installTestClient(
+        StudioEngineTestSupport.installMcp(
                 com.openjiuwen.studio.dsl.flowmcp.RecordingMcpClient.withContent(
                         List.of(Map.of("type", "text", "text", "echo-7"))));
         try {
@@ -162,7 +162,7 @@ class FeatGapFillTest {
             Map<String, Object> uf = (Map<String, Object>) out.get("userFields");
             assertThat(uf).containsEntry("isError", false).containsKey("content");
         } finally {
-            com.openjiuwen.studio.dsl.flowmcp.FlowMcpEngine.clearTestClient();
+            StudioEngineTestSupport.clear();
         }
     }
 

@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl.testsupport;
 
+import com.openjiuwen.core.foundation.tool.mcp.McpClient;
 import com.openjiuwen.studio.dsl.complexintent.ComplexIntentDetectionEngine;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.exec.StudioEngineTestOverrides;
@@ -13,6 +14,7 @@ import com.openjiuwen.studio.dsl.extractor.ExtractorLlmExtractor;
 import com.openjiuwen.studio.dsl.flowagent.FlowAgentConfig;
 import com.openjiuwen.studio.dsl.flowagent.FlowAgentEngine;
 import com.openjiuwen.studio.dsl.flowapi.FlowApiEngine;
+import com.openjiuwen.studio.dsl.flowmcp.FlowMcpEngine;
 import com.openjiuwen.studio.dsl.intentdetection.IntentDetectionEngine;
 import com.openjiuwen.studio.dsl.intentdetection.IntentDetectionLlmDetector;
 import com.openjiuwen.studio.dsl.llmchain.LlmChainConfig;
@@ -155,6 +157,19 @@ public final class StudioEngineTestSupport {
 
     public static FlowApiEngine createFlowApi(String nodeId, FlowApiEngine.TestBridge bridge) {
         return new FlowApiEngine(nodeId, bridge);
+    }
+
+    // --- FlowMcp ---
+
+    public static void installMcp(McpClient client) {
+        install(StudioEngineTestOverrides.builder().mcpClient(client).build());
+    }
+
+    public static FlowMcpEngine createFlowMcp(String nodeId, Map<String, Object> conf) {
+        McpClient client = bridge(StudioEngineTestOverrides::mcpClient);
+        FlowMcpEngine engine = client != null ? new FlowMcpEngine(nodeId, client) : new FlowMcpEngine(nodeId);
+        engine.init(conf);
+        return engine;
     }
 
     @FunctionalInterface

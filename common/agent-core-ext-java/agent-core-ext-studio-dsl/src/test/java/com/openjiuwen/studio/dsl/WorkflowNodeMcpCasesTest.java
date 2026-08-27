@@ -8,7 +8,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.core.workflow.ComponentExecutable;
-import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.flowmcp.FlowMcpEngine;
 import com.openjiuwen.studio.dsl.flowmcp.RecordingMcpClient;
@@ -16,6 +15,7 @@ import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.AssembledWorkflow;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 import com.openjiuwen.studio.dsl.testsupport.LinearWorkflowTestSupport;
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,12 +40,12 @@ class WorkflowNodeMcpCasesTest {
     @BeforeEach
     void setUp() {
         registry = NodeTypeRegistry.createWithBuiltins();
-        FlowMcpEngine.installTestClient(RecordingMcpClient.withContent(MOCK_CONTENT));
+        StudioEngineTestSupport.installMcp(RecordingMcpClient.withContent(MOCK_CONTENT));
     }
 
     @AfterEach
     void tearDown() {
-        FlowMcpEngine.clearTestClient();
+        StudioEngineTestSupport.clear();
     }
 
     @SuppressWarnings("unchecked")
@@ -73,7 +73,7 @@ class WorkflowNodeMcpCasesTest {
         @Test
         void invokePutsContentAndIsError() {
             ComponentExecutable exec =
-                    registry.create(AssembledNode.of("m", "jiuwen.mcp", mcpConf()), NodeBuildContext.defaults("wf"));
+                    registry.create(AssembledNode.of("m", "jiuwen.mcp", mcpConf()), StudioEngineTestSupport.context("wf"));
             Map<String, Object> fields =
                     uf(exec.invoke(Map.of("userFields", Map.of("query", "hello world")), null, null));
             assertThat(fields).containsEntry("isError", false).containsKey("content");
@@ -82,7 +82,7 @@ class WorkflowNodeMcpCasesTest {
         @Test
         void invalidConfigSurfaces() {
             ComponentExecutable exec = registry.create(
-                    AssembledNode.of("m", "jiuwen.mcp", Map.of("tool", "x")), NodeBuildContext.defaults("wf"));
+                    AssembledNode.of("m", "jiuwen.mcp", Map.of("tool", "x")), StudioEngineTestSupport.context("wf"));
             assertThatThrownBy(() -> exec.invoke(Map.of("userFields", Map.of()), null, null))
                     .isInstanceOf(NodeExecutionException.class);
         }
@@ -98,7 +98,7 @@ class WorkflowNodeMcpCasesTest {
             Map<String, Object> out = LinearWorkflowTestSupport.executeLinear(
                             registry,
                             wf,
-                            NodeBuildContext.defaults("wf_mcp_linear"),
+                            StudioEngineTestSupport.context("wf_mcp_linear"),
                             Map.of("userFields", Map.of("query", "hello world")),
                             null,
                             null);
@@ -110,7 +110,7 @@ class WorkflowNodeMcpCasesTest {
         @Test
         void aliasFlowMcp() {
             ComponentExecutable exec = registry.create(
-                    AssembledNode.of("m", "jiuwen.flowMcp", mcpConf()), NodeBuildContext.defaults("wf"));
+                    AssembledNode.of("m", "jiuwen.flowMcp", mcpConf()), StudioEngineTestSupport.context("wf"));
             assertThat(uf(exec.invoke(Map.of("userFields", Map.of("query", "q")), null, null)))
                     .containsEntry("isError", false);
         }

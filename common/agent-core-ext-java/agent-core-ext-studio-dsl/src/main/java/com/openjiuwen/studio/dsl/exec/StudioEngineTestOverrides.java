@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl.exec;
 
+import com.openjiuwen.core.foundation.tool.mcp.McpClient;
 import com.openjiuwen.studio.dsl.complexintent.ComplexIntentDetectionEngine;
 import com.openjiuwen.studio.dsl.extractor.ExtractorLlmExtractor;
 import com.openjiuwen.studio.dsl.flowagent.FlowAgentEngine;
@@ -25,6 +26,7 @@ public final class StudioEngineTestOverrides {
     private final FlowAgentEngine.ReactBridge flowAgentBridge;
     private final ComplexIntentDetectionEngine.TestBridge complexIntentBridge;
     private final FlowApiEngine.TestBridge flowApiBridge;
+    private final McpClient mcpClient;
 
     private StudioEngineTestOverrides(Builder builder) {
         this.llmBridge = builder.llmBridge;
@@ -33,6 +35,7 @@ public final class StudioEngineTestOverrides {
         this.flowAgentBridge = builder.flowAgentBridge;
         this.complexIntentBridge = builder.complexIntentBridge;
         this.flowApiBridge = builder.flowApiBridge;
+        this.mcpClient = builder.mcpClient;
     }
 
     public LlmChainEngine.ModelBridge llmBridge() {
@@ -59,6 +62,10 @@ public final class StudioEngineTestOverrides {
         return flowApiBridge;
     }
 
+    public McpClient mcpClient() {
+        return mcpClient;
+    }
+
     public static Builder builder() {
         return new Builder();
     }
@@ -70,6 +77,7 @@ public final class StudioEngineTestOverrides {
         private FlowAgentEngine.ReactBridge flowAgentBridge;
         private ComplexIntentDetectionEngine.TestBridge complexIntentBridge;
         private FlowApiEngine.TestBridge flowApiBridge;
+        private McpClient mcpClient;
 
         public Builder llmBridge(LlmChainEngine.ModelBridge bridge) {
             this.llmBridge = bridge;
@@ -98,6 +106,11 @@ public final class StudioEngineTestOverrides {
 
         public Builder flowApiBridge(FlowApiEngine.TestBridge bridge) {
             this.flowApiBridge = bridge;
+            return this;
+        }
+
+        public Builder mcpClient(McpClient client) {
+            this.mcpClient = client;
             return this;
         }
 

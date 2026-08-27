@@ -5,6 +5,7 @@
 package com.openjiuwen.studio.dsl.adapter.external;
 
 import com.openjiuwen.core.context.ModelContext;
+import com.openjiuwen.core.foundation.tool.mcp.McpClient;
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.adapter.AbstractStudioNode;
@@ -36,7 +37,7 @@ public final class McpNodeHandler implements NodeHandlerFactory {
 
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
-        return new McpExecutable(node);
+        return new McpExecutable(node, ctx);
     }
 
     static final class McpExecutable extends AbstractStudioNode {
@@ -44,9 +45,11 @@ public final class McpNodeHandler implements NodeHandlerFactory {
         private final Map<String, Object> nodeConfigs;
         private volatile boolean ready;
 
-        McpExecutable(AssembledNode node) {
+        McpExecutable(AssembledNode node, NodeBuildContext ctx) {
             super(node);
-            this.engine = new FlowMcpEngine(node.id());
+            McpClient testClient =
+                    ctx != null && ctx.testOverrides() != null ? ctx.testOverrides().mcpClient() : null;
+            this.engine = testClient != null ? new FlowMcpEngine(node.id(), testClient) : new FlowMcpEngine(node.id());
             this.nodeConfigs = node.configs() == null ? Map.of() : node.configs();
         }
 

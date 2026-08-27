@@ -10,7 +10,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -33,12 +32,10 @@ class FlowMcpParityTest {
     @BeforeEach
     void setUp() {
         stubClient = RecordingMcpClient.withContent(MOCK_CONTENT);
-        FlowMcpEngine.installTestClient(stubClient);
     }
 
-    @AfterEach
-    void tearDown() {
-        FlowMcpEngine.clearTestClient();
+    private FlowMcpEngine engine() {
+        return new FlowMcpEngine("n1", stubClient);
     }
 
     private static Map<String, Object> makeConf(boolean olderVersion) {
@@ -75,7 +72,7 @@ class FlowMcpParityTest {
     class InitAndInvoke {
         @Test
         void initCreatesClient_newVersion() {
-            FlowMcpEngine engine = new FlowMcpEngine("n1");
+            FlowMcpEngine engine = engine();
             engine.init(makeConf(false));
             assertThat(engine.client()).isNotNull();
             assertThat(engine.isOlderVersion()).isFalse();
@@ -83,14 +80,14 @@ class FlowMcpParityTest {
 
         @Test
         void initOlderVersion() {
-            FlowMcpEngine engine = new FlowMcpEngine("n1");
+            FlowMcpEngine engine = engine();
             engine.init(makeConf(true));
             assertThat(engine.isOlderVersion()).isTrue();
         }
 
         @Test
         void directInvoke_newVersion_skipsListTools() {
-            FlowMcpEngine engine = new FlowMcpEngine("n1");
+            FlowMcpEngine engine = engine();
             engine.init(makeConf(false));
             Map<String, Object> result =
                     engine.invoke(Map.of("userFields", Map.of("query", "hello world")), null, null);
@@ -104,7 +101,7 @@ class FlowMcpParityTest {
 
         @Test
         void olderVersion_callsListTools() {
-            FlowMcpEngine engine = new FlowMcpEngine("n1");
+            FlowMcpEngine engine = engine();
             engine.init(makeConf(true));
             engine.invoke(Map.of("userFields", Map.of("query", "hello", "extra_field", "x")), null, null);
             assertThat(stubClient.listToolsCalls()).isEqualTo(1);
@@ -115,7 +112,7 @@ class FlowMcpParityTest {
         void stdio_returnsDefaultWithoutClient() {
             Map<String, Object> conf = makeConf(false);
             conf.put("type", "stdio");
-            FlowMcpEngine engine = new FlowMcpEngine("n1");
+            FlowMcpEngine engine = engine();
             engine.init(conf);
             Map<String, Object> result = engine.invoke(Map.of("userFields", Map.of("query", "t")), null, null);
             @SuppressWarnings("unchecked")
@@ -129,7 +126,7 @@ class FlowMcpParityTest {
     class FormatAndValidate {
         @Test
         void formatOutputs_list() {
-            FlowMcpEngine engine = new FlowMcpEngine("n1");
+            FlowMcpEngine engine = engine();
             engine.init(makeConf(false));
             Map<String, Object> out = engine.formatApiOutputs(Map.of(
                     "errCode",
@@ -144,7 +141,7 @@ class FlowMcpParityTest {
 
         @Test
         void formatOutputs_dict() {
-            FlowMcpEngine engine = new FlowMcpEngine("n1");
+            FlowMcpEngine engine = engine();
             engine.init(makeConf(false));
             Map<String, Object> out = engine.formatApiOutputs(
                     Map.of("errCode", 0, "data", Map.of("structured_key", "structured_value"), "errMessage", "success"));
@@ -153,7 +150,7 @@ class FlowMcpParityTest {
 
         @Test
         void formatOutputs_none() {
-            FlowMcpEngine engine = new FlowMcpEngine("n1");
+            FlowMcpEngine engine = engine();
             engine.init(makeConf(false));
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("errCode", 0);
@@ -164,7 +161,7 @@ class FlowMcpParityTest {
 
         @Test
         void formatOutputs_unexpectedType() {
-            FlowMcpEngine engine = new FlowMcpEngine("n1");
+            FlowMcpEngine engine = engine();
             engine.init(makeConf(false));
             assertThatThrownBy(() -> engine.formatApiOutputs(Map.of("errCode", 0, "data", "unexpected_string")))
                     .isInstanceOf(NodeExecutionException.class);
@@ -172,14 +169,14 @@ class FlowMcpParityTest {
 
         @Test
         void formatApiInputs_ok() {
-            FlowMcpEngine engine = new FlowMcpEngine("n1");
+            FlowMcpEngine engine = engine();
             engine.init(makeConf(false));
             assertThat(engine.formatApiInputs(Map.of("query", "hello"))).isEqualTo(Map.of("query", "hello"));
         }
 
         @Test
         void formatApiInputs_unknownParam() {
-            FlowMcpEngine engine = new FlowMcpEngine("n1");
+            FlowMcpEngine engine = engine();
             engine.init(makeConf(false));
             assertThatThrownBy(() -> engine.formatApiInputs(Map.of("unknown_param", "v")))
                     .isInstanceOf(NodeExecutionException.class);
@@ -229,7 +226,7 @@ class FlowMcpParityTest {
             NodeSessionApi session =
                     new NodeSessionApi(new com.openjiuwen.core.session.internal.NodeSession(wf, "n1"));
 
-            FlowMcpEngine engine = new FlowMcpEngine("n1");
+            FlowMcpEngine engine = engine();
             engine.init(makeConf(false));
             engine.invoke(Map.of("userFields", Map.of("query", "hello")), session, null);
 
