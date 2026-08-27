@@ -1,0 +1,47 @@
+# 存量方式起真 EDPAgent 的受测镜像——也是 doc/deploy-edpagent.md §2.6「容器化」的可运行样本。
+#
+# 构建上下文由 run-legacy-edpagent.sh 临时拼装（本仓 .dockerignore 只放行三个目录，
+# 存量副本 .legacy-oracle/ 不在其中）：
+#   agent_runtime/   本版 runtime
+#   deploy/          参考宿主（兼容入口默认工厂依赖它）
+#   legacy/agents/   存量落位的宿主 Agent（agents/EDPAgent，来自 agent-solution）
+#   legacy/common/   EDPAgent 自己 import 的存量 common.logger / common.crypto
+#
+# 两种受测形态之一（另一种是 run-legacy-edpagent.sh 的 local：venv 里直接起进程）。
+# EDPAgent 未配置沙箱时 SysOperationCard 走 local 模式，`execute_cmd` 直接在进程所在机器上
+# 跑 shell（实测一次真模型回合就执行了 `find /`）；信任 Agent 的验证环境直跑即可，
+# 容器形态对应部署方的生产形态，也是不信任时的边界。
+FROM python:3.11-slim
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+RUN pip install --no-cache-dir uv
+ENV VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:$PATH" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# runtime 的依赖 + EDPAgent 顶层 import 到的三方包（loguru / dotenv / yaml / otel 由
+# openjiuwen[observability] 带入）。EDPAgent 的记忆后端（ES、GaussDB）只在开启记忆时才用，
+# 本样本不装。
+COPY agent_runtime/requirements.txt /tmp/requirements.txt
+RUN uv venv $VIRTUAL_ENV && \
+    uv pip install --no-cache --prerelease=allow -r /tmp/requirements.txt && \
+    uv pip install --no-cache --prerelease=allow \
+        "openjiuwen[observability]==0.1.16" "loguru>=0.7.0" "python-dotenv>=1.0" \
+        "pyyaml>=6.0" "pycryptodome>=3.20.0"
+
+COPY agent_runtime /app/agent_runtime
+COPY deploy /app/deploy
+COPY legacy /app/legacy
+
+# 与存量相同的导入面：a2a_service 目录（这里是 /app/legacy）在路径首位，
+# 参考宿主与本仓根随后。
+ENV PYTHONPATH=/app/legacy:/app:/app/deploy
+
+EXPOSE 8090
+# 启动命令只改模块名（存量：python main.py）。host/port 从 FASTAPI_* 读。
+CMD ["python", "-m", "agent_runtime.bootstrap.legacy_compat"]

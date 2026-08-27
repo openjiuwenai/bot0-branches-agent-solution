@@ -1,0 +1,11 @@
+openjiuwen:
+  service:
+    middleware:
+      endpoint_type: standalone
+      standalone:
+        host: 127.0.0.1
+        port: 6379
+        database: 0
+        timeout_ms: 3000
+    runtime_db:
+      runtime_db_enabled: true

@@ -1,0 +1,196 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# agent-runtime · Python SDK
+#
+# 这份文件是 Feat-Func-000b（框架基座）里 D2「标准入口点 + 薄门面」与 D5「启动器式打包」
+# 两条决策的落脚点：扩展点发现依赖包元数据，包若不可安装，那套装配机制就无处生效。
+#
+# 包边界：只打 agent_runtime/。仓内 foundation/ server/ service/ management/ cli/ 是
+# 存量子系统各自独立发包，runtime/ 是已废止的早期 MVP，均不属本包。
+# ─────────────────────────────────────────────────────────────────────────────
+[project]
+name = "openjiuwen-agent-runtime"
+version = "0.1.0"
+description = "Agent 托管运行时 SDK：框架中立的执行契约、标准服务入口与异构智能体适配"
+requires-python = ">=3.11"
+readme = "agent_runtime/README.md"
+
+# 版本精确钉死的理由与来源见 agent_runtime/requirements.txt 的文件头。
+# 这里与那份清单必须一致——两处漂移会让「本地装的」和「容器装的」再次分家。
+# **声明范围，不钉死确切版本**——本件是嵌入宿主的 SDK，不是应用。
+#
+# 钉死的代价是实测过的：曾把三个传递依赖钉在预发布版上（一个 rc、一个 alpha），
+# 而协议库自己要的只是下界（`protobuf>=5.29.5`、`pydantic>=2.11.3`）——那两个预发布版
+# 不是任何依赖的要求，只是解析当天恰好装到的最新版。后果有两层：**已用稳定版的宿主
+# 装不上**；且与同一生态内另一个包的约束直接对撞（其向量存储扩展要求 `protobuf<7.0`）。
+#
+# 确切版本该由宿主的锁文件定，那是宿主的职责；SDK 的职责是如实声明**能工作的范围**。
+# 上界只在主版本处设，防的是不兼容的大版本；不设更细的上界——那等于替宿主做决定。
+#
+# **协议库是唯一的例外，按总纲 §2 的裁定精确锁定**：对外 wire 形态由它决定
+# （帧结构、错误码、分派方法面、版本头门槛皆然），且本设计多处援引其内部实现的位置，
+# 换版本即举证失效。这一项**不可放宽为范围**。
+dependencies = [
+    "openjiuwen>=0.1.16",
+    "a2a-sdk==1.0.0",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sse-starlette>=2.1",
+    "httpx>=0.27",
+    "redis>=5.0",
+    # 配置文件的 YAML 承载。权威 `FEAT-001:74` 那一行的载体栏逐字是「YAML 配置」——
+    # 只解析 JSON 时，按权威写配置的部署方在启动期就会拿到解析失败。
+    "pyyaml>=6.0",
+    # 下界取自协议库自身的要求；不设上界，交由宿主与其余依赖共同解析。
+    "protobuf>=5.29.5",
+    "pydantic>=2.11.3",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "fakeredis==2.37.0",
+]
+
+# **本地框架适配是可选依赖，不进 `requirements.txt`**。
+#
+# 装它会把一整棵推理栈拖进运行时环境（anthropic、openai、dashscope、mcp、
+# numpy、tree_sitter……），而本 runtime 只在宿主真的托管这个框架时才碰它。
+# 适配件在函数体内导入框架，正是为了让它在没装时也不影响导入期。
+#
+# 之前这一组根本不存在——**没有声明入口，宿主就无从知道该装什么、装哪一版**，
+# 只能去读适配件的源码，而版本约束在源码里没有。
+agentscope = [
+    "agentscope==2.0.6",
+]
+
+# ── 扩展点分组 ───────────────────────────────────────────────────────────────
+# 组名格式由 Feat-Func-000b 定死：openjiuwen.agent_runtime.{扩展点名}。
+# 本 SDK 只**定义**分组，不在此注册具体实现——适配器由宿主工程或独立适配器包各自注册，
+# 这正是入口点机制的用法：SDK 声明契约，实现方声明自己。宿主注册示例：
+#
+#   [project.entry-points."openjiuwen.agent_runtime.handler"]
+#   my-agent = "my_pkg.handler:MyAgentHandler"
+#
+# 装配时按名精确选取，未指定名则按 priority 数值选一并记告警（裁定 2026-08-03）。
+
+[tool.setuptools]
+# **用自动发现，不写显式清单**：显式清单被当作完整的包列表、不展开子包——
+# 只写顶层包时，构建出的分发件里只有那一个 `__init__.py`（实测 wheel 里 `.py` 文件数为 1，
+# 而源码树有 21 个子包）。装进干净环境后 `import agent_runtime.bootstrap` 即失败，
+# 而本仓的两条验证路径都绕开了安装产物：容器拷源码树、本地是可编辑安装。
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["agent_runtime*"]
+# **兼容外观不进发行包**。它按存量的符号名把我方实现装配出来，只服务于
+# 跑权威白盒用例与迁移期并存，**不是交付面**：
+#   · 根设计的同形态裁定（`L2-overview.md` §7 卡片端点那条）——
+#     存量没有的东西若要提供，须作为新交付面单独立项；本外观未立项
+#   · 权威 L1 逻辑视图界定了 SPI 边界，明写不把具体客户端与协议对象提升为 SPI
+#   · 上游 Java 无同类设施
+# 留在发行包里，集成方 import 得到存量符号名，它就成了我方要维护的对外契约。
+exclude = ["agent_runtime.bootstrap.legacy_compat*"]
+
+[tool.setuptools.package-data]
+agent_runtime = ["py.typed", "requirements*.txt"]
+
+# ── 测试配置 ────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+# **两处都要收**：`tools/tests` 下是门禁自身的自测。
+# 独立复核实测：它此前不在收集面内，413 条判据从不参与任何门禁，
+# 而「全绿」这句话与它们无关——**从不执行的判据等于不存在**，
+# 且缺陷修好后挂账断言会反向失败却无人看见（实测积压 21 条）。
+# `oracle_support/regression_baseline`：转录件 vs 存量代码的快照判据。2026-08-26 检察官发现它们
+# 从未进收集面——「黄金基线 = 存量实测」这一环此前零机器判据。存量副本未导出时由该目录的 conftest 整体跳过。
+testpaths = ["agent_runtime/tests", "tools/tests", "oracle_support/regression_baseline"]
+# STRICT 模式下漏标 @pytest.mark.asyncio 的异步用例会**静默不执行**——曾实测收集数
+# 因依赖缺失从 325 掉到 187 而无人发觉。auto 模式让异步用例无需逐个标注即被执行。
+asyncio_mode = "auto"
+# 未注册的 marker 一律判错，避免拼错的 marker 让整组用例被静默跳过。
+#
+# **不开 --strict-config**：本节的 asyncio_mode 由 pytest-asyncio 提供，未装该插件时
+# 严格模式会把它判成「未知配置项」并以退出码 4 中止——报的是配置错误，而真实原因是
+# 缺依赖，排查方向被带偏。实测这条让 CI 上只装裸 pytest 的那一步连续两次失败。
+# 需要跑本仓测试的场景都会经 requirements-dev.txt 装齐插件；不需要的场景（如守门
+# 自身的测试）应显式 -c /dev/null 不读本配置，而不是靠严格模式去拦。
+addopts = "--strict-markers -q"
+markers = [
+    "slow: 耗时用例（容器或网络往返）",
+    "requires_llm: 需要真实 LLM 网关凭据，无凭据时跳过",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:starlette.*",
+    "ignore::DeprecationWarning:pydantic.*",
+    # openjiuwen 与存量副本（openjiuwen_runtime）用的是 pydantic v1 写法，弃用告警在它们的模块里发出；
+    # 不是我方代码、也改不了，按来源模块过滤，不整体关掉 DeprecationWarning
+    "ignore::DeprecationWarning:openjiuwen.*",
+    "ignore::DeprecationWarning:openjiuwen_runtime.*",
+]
+
+[tool.mypy]
+# 检查版本取**实际运行版本**，不是 requires-python 的下界。
+# 原因：传递依赖（numpy 等）的类型存根按 3.12 语法编写，用 3.11 解析会在第一个第三方
+# 文件上语法报错并中止全部检查——报的还不是我方代码的问题。
+# 3.11 兼容性由 CI 上用 3.11 跑测试来保证，不靠这个参数。
+python_version = "3.12"
+# **部署侧的两个目录必须在扫描面内**：`deploy/` 与 `deploy-e2e/` 是部署级验证的载体，
+# 写错了验证的就是错的东西。而全量单测跑不到它们——实测代价见 ISSUE-LEDGER 的 V-6：
+# 一处「给 keyword-only 参数传位置实参」的静态可查错误，只有真跑 E2E 才暴露，
+# 而那条 E2E 当时还没有执行点。
+files = ["agent_runtime", "deploy", "deploy-e2e"]
+# **模块名按仓根解析**，否则 `deploy/host_app.py` 会被同时认成顶层 `host_app`
+# 与 `deploy.host_app`，mypy 报「Source file found twice」并**中止全部检查**——
+# 报的还不是任何一处真实类型问题，整道门禁因此形同虚设。
+# `deploy/` 是部署脚本目录，不加 `__init__.py`（那会改变它在镜像里的形态）。
+explicit_package_bases = true
+namespace_packages = true
+mypy_path = "."
+ignore_missing_imports = true
+# 内圈（领域与契约）要求完整标注；适配器层与第三方交界处放宽。
+[[tool.mypy.overrides]]
+module = ["agent_runtime.domain.*", "agent_runtime.ports.*"]
+disallow_untyped_defs = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = ["applications", "runtime", "foundation", "server", "service", "management", "cli", ".venv"]
+
+[tool.ruff.lint]
+# 只选真能抓缺陷的规则族。刻意不开 UP（pyupgrade）——仓内统一带 `# coding: utf-8`
+# 声明、统一从 typing 导入容器类型，那是既有约定不是缺陷；开了它全仓 200+ 告警，
+# 而一个永远红的检查等于没有检查，团队第一天就会学会忽略它。
+select = ["E", "F", "W", "I", "B"]
+ignore = [
+    "E501",  # 行长由 formatter 保证；中文文档串按显示宽度算常超 100，硬卡会逼人写坏注释
+]
+
+[tool.ruff.lint.isort]
+# `demo_support` 是 `docs/ops/redis-demos/` 里的同目录模块，供各份 demo 共用。
+# 不声明时 ruff 按「不认识的名字 = 第三方库」归类，要求它排在 `agent_runtime` **之前**——
+# 那样排出来的导入块与事实相反（本仓的模块反而排在后面），且每份 demo 都会红一条。
+# 声明为 first-party 才是照实说，而不是顺着工具的错误分类改代码。
+known-first-party = ["agent_runtime", "demo_support"]
+# `oracle_support` 归三方组，是为了与社区门禁的 import 排序判定一致：
+# 引用它的那几份文件跑在**存量应用的进程里**（`deploy-e2e/legacy_boot.py` 拿存量
+# 起服务），从那个进程看它就是外部模块。ruff 默认按仓内目录判它 first-party、
+# 于是排成单独一组，而社区门禁要求它与 `app`／`common`／`config` 同组按字母序——
+# 两边各要一种排法时，无论怎么排都有一侧红。
+known-third-party = ["oracle_support"]
+# `common` 归本仓组、排在最后，同样是为了与社区门禁一致：上游仓的顶层就有一个
+# `common/` 目录（我方代码正落在 `common/agent-runtime-ext-python/` 下），
+# 那边的检查因此判它是本仓模块、要求其余导入统统排在它之前。ruff 默认判它三方、
+# 排在最前——两边恰好相反，无论怎么排都有一侧红。
+known-local-folder = ["common"]
+
+[tool.ruff.lint.per-file-ignores]
+# 测试树豁免两类**误报**，生产代码不放宽：
+#   F811：`import fakeredis` 后再 `import fakeredis.aioredis` 是导入子模块的标准写法，
+#         ruff 判成重定义。全部 12 处都是这一个形态。
+#   E402：测试中途导入是常见模式（先判是否跳过、再导入重依赖），不是缺陷。
+"agent_runtime/tests/*" = ["F811", "E402"]
