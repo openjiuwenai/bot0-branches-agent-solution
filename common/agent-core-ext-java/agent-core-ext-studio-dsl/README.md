@@ -81,6 +81,14 @@ FEAT-031 正式 MUST 为 21 种 `jiuwen.*`；3 种 `EI.*` 为 L2 扩展验收范
 
 **不做**：图调度、IR 引用解析、协议入口、远端 MCP/Agent/KB 真实现（由宿主注入 `contract` 或环境配置）。
 
+### 出站 URL 信任边界（SSRF）
+
+`FlowApi` / `MCP` / `SSE` 等节点会对 IR 配置中的 URL 做出站校验（默认拒绝私网/环回；可通过 `studio.dsl.outbound.allowPrivate=true` 放宽，**仅限开发/单测**）。
+
+- **信任假设**：URL 来自宿主已校验的工作流 IR，本模块不再做 DSL 级引用解析或二次鉴权。
+- **宿主职责**：生产环境应在网络层隔离出站（防火墙 / egress proxy / 专用 VPC），并限制谁可发布含外部 URL 的工作流。
+- **单测**：Surefire 默认设置 `studio.dsl.outbound.allowPrivate=true`，以便 mock `localhost` 端点。
+
 ## 测试
 
 模块烟雾：`StudioDslModuleTest`（含在默认 `mvn test` 中）。

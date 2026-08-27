@@ -15,6 +15,8 @@ package com.openjiuwen.studio.dsl.store;
 public final class ConversationValsStores {
     private static final InMemoryConversationValsStore MEMORY = new InMemoryConversationValsStore();
     private static volatile ConversationValsStore override;
+    private static volatile ConversationValsStore jedisStore;
+    private static volatile String jedisStoreKey;
 
     private ConversationValsStores() {}
 
@@ -44,7 +46,19 @@ public final class ConversationValsStores {
                 int port = parsePort(
                         firstNonBlank(System.getenv("REDIS_PORT"), System.getProperty("studio.dsl.redis.port")),
                         6379);
-                return JedisConversationValsStore.connect(host, port);
+                String key = host + ":" + port;
+                ConversationValsStore cached = jedisStore;
+                if (cached != null && key.equals(jedisStoreKey)) {
+                    return cached;
+                }
+                synchronized (ConversationValsStores.class) {
+                    if (jedisStore != null && key.equals(jedisStoreKey)) {
+                        return jedisStore;
+                    }
+                    jedisStore = new JedisConversationValsStore(SharedJedisPool.getOrConnect(host, port));
+                    jedisStoreKey = key;
+                    return jedisStore;
+                }
             } catch (Exception ignored) {
                 // fall through to memory — Python Start also soft-fails redis errors
             }

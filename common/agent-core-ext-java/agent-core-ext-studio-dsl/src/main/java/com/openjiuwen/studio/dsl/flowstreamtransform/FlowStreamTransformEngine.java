@@ -440,14 +440,23 @@ public final class FlowStreamTransformEngine {
     }
 
     /**
-     * JSON first, then Python {@code ast.literal_eval}-style dict literals ({@code {'a': 1}},
-     * {@code True}/{@code False}/{@code None}).
+     * Python {@code ast.literal_eval} first, then JSON (Studio tests may use JSON literals).
      */
     static Map<String, Object> parseLiteralOrJson(String s) {
+        Map<String, Object> literal = tryPythonLiteralMap(s);
+        if (literal != null) {
+            return literal;
+        }
         try {
             return MAPPER.readValue(s, MAP_TYPE);
         } catch (Exception ignored) {
-            // fall through
+            return null;
+        }
+    }
+
+    private static Map<String, Object> tryPythonLiteralMap(String s) {
+        if (s == null || s.isBlank() || !s.strip().startsWith("{")) {
+            return null;
         }
         try {
             String normalized = PY_BOOL_NONE.matcher(s).replaceAll(m -> {
@@ -460,8 +469,7 @@ public final class FlowStreamTransformEngine {
             if (!normalized.contains("\"")) {
                 normalized = normalized.replace('\'', '"');
             }
-            Map<String, Object> obj = MAPPER.readValue(normalized, MAP_TYPE);
-            return obj;
+            return MAPPER.readValue(normalized, MAP_TYPE);
         } catch (Exception ignored) {
             return null;
         }

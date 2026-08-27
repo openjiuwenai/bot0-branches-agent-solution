@@ -30,15 +30,14 @@ import java.util.Map;
 /**
  * FlowAgent engine — strict 1:1 with Python {@code flow_agent.FlowAgent}.
  *
- * <p>Composes core {@link ReActAgent}; tests stub via {@link #installTestBridge(ReactBridge)}.
+ * <p>Composes core {@link ReActAgent}; tests inject {@link ReactBridge} via constructor or
+ * {@link com.openjiuwen.studio.dsl.exec.StudioEngineTestOverrides}.
  *
  * @since 2026-08-26
  */
 public final class FlowAgentEngine {
     public static final String USER_FIELDS = "userFields";
     private static final ObjectMapper MAPPER = new ObjectMapper();
-
-    private static final ThreadLocal<ReactBridge> TEST_BRIDGE = new ThreadLocal<>();
 
     /** Test / host stub for ReAct invoke+stream (mirrors patching ReActAgent). */
     public interface ReactBridge {
@@ -51,34 +50,31 @@ public final class FlowAgentEngine {
     private FlowAgentConfig config;
     private final List<Tool> tools = new ArrayList<>();
     private ToolRegistry studioToolRegistry;
+    private final ReactBridge presetBridge;
     private ReactBridge bridge;
     private ReActAgent reactAgent;
-    private boolean initialized;
+    private volatile boolean initialized;
+    private final Object initLock = new Object();
 
     public FlowAgentEngine(String nodeId) {
         this.nodeId = nodeId == null ? "agent" : nodeId;
+        this.presetBridge = null;
     }
 
-    FlowAgentEngine(String nodeId, FlowAgentConfig config, ReactBridge bridge) {
+    public FlowAgentEngine(String nodeId, FlowAgentConfig config, ReactBridge bridge) {
         this.nodeId = nodeId;
         this.config = config;
+        config.validate(nodeId);
+        this.presetBridge = bridge;
         this.bridge = bridge;
         this.initialized = bridge != null;
-    }
-
-    public static void installTestBridge(ReactBridge bridge) {
-        TEST_BRIDGE.set(bridge);
-    }
-
-    public static void clearTestBridge() {
-        TEST_BRIDGE.remove();
     }
 
     /** Python {@code init} via conf map (IR node configs). */
     public void init(Map<String, Object> conf) {
         this.config = FlowAgentConfig.from(nodeId, conf);
-        this.initialized = false;
-        this.bridge = null;
+        this.initialized = presetBridge != null;
+        this.bridge = presetBridge;
         this.reactAgent = null;
         this.tools.clear();
     }
@@ -186,26 +182,28 @@ public final class FlowAgentEngine {
         if (initialized) {
             return;
         }
-        if (config == null) {
-            config = FlowAgentConfig.from(nodeId, Map.of());
-        }
-        config.validate(nodeId);
+        synchronized (initLock) {
+            if (initialized) {
+                return;
+            }
+            if (config == null) {
+                config = FlowAgentConfig.from(nodeId, Map.of());
+            }
+            config.validate(nodeId);
 
-        ReactBridge test = TEST_BRIDGE.get();
-        if (test != null) {
-            this.bridge = test;
-            // still load plugins into tools list for parity assertions
+            if (presetBridge != null) {
+                this.bridge = presetBridge;
+                tools.addAll(FlowAgentToolLoader.loadToolsFromPlugins(config.plugins(), studioToolRegistry));
+                initialized = true;
+                return;
+            }
+
+            createReactAgent();
             tools.addAll(FlowAgentToolLoader.loadToolsFromPlugins(config.plugins(), studioToolRegistry));
-            this.initialized = true;
-            return;
+            registerTools();
+            reactAgent.registerRail(new ToolCallLimitRail(config.maxIteration()));
+            initialized = true;
         }
-
-        createReactAgent();
-        tools.addAll(FlowAgentToolLoader.loadToolsFromPlugins(config.plugins(), studioToolRegistry));
-        registerTools();
-        // max_iteration = tool-call rounds; reserve one model call for the final answer.
-        reactAgent.registerRail(new ToolCallLimitRail(config.maxIteration()));
-        this.initialized = true;
     }
 
     private void createReactAgent() {
@@ -337,8 +335,11 @@ public final class FlowAgentEngine {
         } else {
             userOutput = output == null ? "" : output;
         }
+        String resultType =
+                result == null ? "answer" : String.valueOf(result.getOrDefault("result_type", "answer"));
         Map<String, Object> uf = new LinkedHashMap<>();
         uf.put("output", userOutput);
+        uf.put("result_type", resultType);
         return Map.of(USER_FIELDS, uf);
     }
 

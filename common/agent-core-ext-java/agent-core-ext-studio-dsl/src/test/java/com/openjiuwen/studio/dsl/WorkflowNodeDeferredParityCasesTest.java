@@ -258,7 +258,7 @@ class WorkflowNodeDeferredParityCasesTest {
             @SuppressWarnings("unchecked")
             Map<String, Object> st2 = (Map<String, Object>) bucket.get().get(QuestionerState.KEY);
             @SuppressWarnings("unchecked")
-            Map<String, Object> extracted2 = (Map<String, Object>) st2.get("extracted_fields");
+            Map<String, Object> extracted2 = (Map<String, Object>) st2.get("extracted_key_fields");
             assertThat(extracted2).containsEntry("tel", "10000").containsEntry("time", "十点");
             assertThat(String.valueOf(mid.get("question"))).containsAnyOf("开关", "信号", "流量");
 

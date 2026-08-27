@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl;
 
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
@@ -62,7 +63,7 @@ class WorkflowNodeControllerSuiteCasesTest {
         return LinearWorkflowTestSupport.executeLinear(
                 registry,
                 wf,
-                NodeBuildContext.defaults(wf.workflowId()),
+                StudioEngineTestSupport.context(wf.workflowId()),
                 inputs,
                 mock(NodeSessionApi.class),
                 mock(ModelContext.class));
@@ -113,19 +114,19 @@ class WorkflowNodeControllerSuiteCasesTest {
             String question, String msgTemplate, String endTemplate, String resumeQuery) {
         NodeSessionApi session = sessionWithState();
         ComponentExecutable start =
-                registry.create(AssembledNode.of("start", "jiuwen.start", Map.of()), NodeBuildContext.defaults("wf"));
+                registry.create(AssembledNode.of("start", "jiuwen.start", Map.of()), StudioEngineTestSupport.context("wf"));
         ComponentExecutable questioner = registry.create(
                 AssembledNode.of(
                         "q",
                         "jiuwen.questioner",
                         Map.of("questionContent", question, "extractFieldsFromResponse", false)),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         ComponentExecutable message = registry.create(
                 AssembledNode.of("message", "jiuwen.message", Map.of("template", msgTemplate)),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         ComponentExecutable end = registry.create(
                 AssembledNode.of("end", "jiuwen.end", Map.of("responseTemplate", endTemplate)),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
 
         Map<String, Object> current = Map.of("userFields", Map.of("query", "init"));
         current = asMap(start.invoke(current, session, null));
@@ -152,16 +153,16 @@ class WorkflowNodeControllerSuiteCasesTest {
     private Map<String, Object> hangResumeEnd(String question, String endTemplate, String resumeQuery) {
         NodeSessionApi session = sessionWithState();
         ComponentExecutable start =
-                registry.create(AssembledNode.of("start", "jiuwen.start", Map.of()), NodeBuildContext.defaults("wf"));
+                registry.create(AssembledNode.of("start", "jiuwen.start", Map.of()), StudioEngineTestSupport.context("wf"));
         ComponentExecutable questioner = registry.create(
                 AssembledNode.of(
                         "q",
                         "jiuwen.questioner",
                         Map.of("questionContent", question, "extractFieldsFromResponse", false)),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         ComponentExecutable end = registry.create(
                 AssembledNode.of("end", "jiuwen.end", Map.of("responseTemplate", endTemplate)),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
 
         Map<String, Object> current = Map.of("userFields", Map.of("query", "init"));
         current = asMap(start.invoke(current, session, null));
@@ -179,22 +180,22 @@ class WorkflowNodeControllerSuiteCasesTest {
     /** Start → Questioner → Questioner → End (two hangs; fresh session per questioner). */
     private Map<String, Object> doubleQuestionerEnd() {
         ComponentExecutable start =
-                registry.create(AssembledNode.of("start", "jiuwen.start", Map.of()), NodeBuildContext.defaults("wf"));
+                registry.create(AssembledNode.of("start", "jiuwen.start", Map.of()), StudioEngineTestSupport.context("wf"));
         ComponentExecutable q1 = registry.create(
                 AssembledNode.of(
                         "q1",
                         "jiuwen.questioner",
                         Map.of("questionContent", "请输入金额", "extractFieldsFromResponse", false)),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         ComponentExecutable q2 = registry.create(
                 AssembledNode.of(
                         "q2",
                         "jiuwen.questioner",
                         Map.of("questionContent", "请输入收款人", "extractFieldsFromResponse", false)),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         ComponentExecutable end = registry.create(
                 AssembledNode.of("end", "jiuwen.end", Map.of("responseTemplate", "转账完成")),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
 
         NodeSessionApi session1 = sessionWithState();
         Map<String, Object> current = Map.of("userFields", Map.of("query", "init"));
@@ -375,17 +376,17 @@ class WorkflowNodeControllerSuiteCasesTest {
     @Test
     void test_start_workflow_new_06() {
         // Python: start → questioner → intent_detection → branch → end; capture hang/resume + stub LLM
-        IntentDetectionEngine.installTestInvoker(messages -> "{\"class\": \"分类1\", \"reason\": \"理财相关\"}");
+        StudioEngineTestSupport.installIntent(messages -> "{\"class\": \"分类1\", \"reason\": \"理财相关\"}");
         try {
             NodeSessionApi session = sessionWithState();
             ComponentExecutable start =
-                    registry.create(AssembledNode.of("start", "jiuwen.start", Map.of()), NodeBuildContext.defaults("wf"));
+                    registry.create(AssembledNode.of("start", "jiuwen.start", Map.of()), StudioEngineTestSupport.context("wf"));
             ComponentExecutable questioner = registry.create(
                     AssembledNode.of(
                             "q",
                             "jiuwen.questioner",
                             Map.of("questionContent", "请输入您的需求", "extractFieldsFromResponse", false)),
-                    NodeBuildContext.defaults("wf"));
+                    StudioEngineTestSupport.context("wf"));
             ComponentExecutable intent = registry.create(
                     AssembledNode.of(
                             "intent",
@@ -409,7 +410,7 @@ class WorkflowNodeControllerSuiteCasesTest {
                                     true,
                                     "enableInput",
                                     true)),
-                    NodeBuildContext.defaults("wf"));
+                    StudioEngineTestSupport.context("wf"));
         ComponentExecutable branch = registry.create(
                 AssembledNode.of(
                         "branch",
@@ -429,13 +430,13 @@ class WorkflowNodeControllerSuiteCasesTest {
                                                         "right",
                                                         1)),
                                         Map.of("branchId", "其他路径", "isDefault", true)))),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         ComponentExecutable end = registry.create(
                 AssembledNode.of(
                         "end",
                         "jiuwen.end",
                         Map.of("responseTemplate", "continue=True age_temp=25")),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
 
         Map<String, Object> current = Map.of("userFields", Map.of("query", "init", "input", "我想理财"));
         current = asMap(start.invoke(current, session, null));
@@ -456,7 +457,7 @@ class WorkflowNodeControllerSuiteCasesTest {
         current = asMap(end.invoke(current, session, null));
         assertThat(String.valueOf(uf(current).get("answer"))).contains("continue=True");
         } finally {
-            IntentDetectionEngine.clearTestInvoker();
+            StudioEngineTestSupport.clear();
         }
     }
 
@@ -477,7 +478,7 @@ class WorkflowNodeControllerSuiteCasesTest {
                                                 "condition",
                                                 "('升金' in ${query})"),
                                         Map.of("branchId", "default", "isDefault", true)))),
-                NodeBuildContext.defaults("shengjin"));
+                StudioEngineTestSupport.context("shengjin"));
         @SuppressWarnings("unchecked")
         Map<String, Object> branchOut = (Map<String, Object>)
                 branch.invoke(Map.of("userFields", Map.of("query", "升金有礼")), session, null);
@@ -509,7 +510,7 @@ class WorkflowNodeControllerSuiteCasesTest {
                                                 "condition",
                                                 "('继续' in ${query})"),
                                         Map.of("branchId", "default", "isDefault", true)))),
-                NodeBuildContext.defaults("smart"));
+                StudioEngineTestSupport.context("smart"));
         @SuppressWarnings("unchecked")
         Map<String, Object> branchOut = (Map<String, Object>)
                 branch.invoke(Map.of("userFields", Map.of("query", "继续")), null, null);

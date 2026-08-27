@@ -175,6 +175,7 @@ public final class StudioDslModule {
                 registry,
                 new WorkflowVariableScope(),
                 tenantId,
-                properties);
+                properties,
+                null);
     }
 }

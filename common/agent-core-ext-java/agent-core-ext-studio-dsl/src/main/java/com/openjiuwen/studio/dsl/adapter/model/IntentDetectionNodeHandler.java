@@ -12,6 +12,7 @@ import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.adapter.AbstractStudioNode;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.intentdetection.IntentDetectionEngine;
+import com.openjiuwen.studio.dsl.intentdetection.IntentDetectionLlmDetector;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
 import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
@@ -38,15 +39,22 @@ public final class IntentDetectionNodeHandler implements NodeHandlerFactory {
 
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
-        return new IntentExecutable(node, ctx.toolRegistry());
+        return new IntentExecutable(node, ctx);
     }
 
     static final class IntentExecutable extends AbstractStudioNode {
         private final IntentDetectionEngine engine;
 
-        IntentExecutable(AssembledNode node, ToolRegistry toolRegistry) {
+        IntentExecutable(AssembledNode node, NodeBuildContext ctx) {
             super(node);
-            this.engine = new IntentDetectionEngine(node.id(), node.configs(), toolRegistry);
+            ToolRegistry toolRegistry = ctx == null ? null : ctx.toolRegistry();
+            IntentDetectionLlmDetector.ModelInvoker invoker =
+                    ctx != null && ctx.testOverrides() != null ? ctx.testOverrides().intentInvoker() : null;
+            if (invoker != null) {
+                this.engine = new IntentDetectionEngine(node.id(), node.configs(), invoker, toolRegistry);
+            } else {
+                this.engine = new IntentDetectionEngine(node.id(), node.configs(), toolRegistry);
+            }
         }
 
         IntentDetectionEngine engine() {

@@ -13,6 +13,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 /**
@@ -23,30 +24,87 @@ import java.util.regex.Pattern;
 public final class FlowEndEngine {
     public static final String OUTPUT_PREFIX = "#end_";
     public static final String SPLIT_DELIMITER = "\u0001";
-    public static final String INVOKE_DONE_KEY = "end_invoke_executed";
+    /** @deprecated use {@link #scopedKey(String, String)} — kept for tests referencing raw suffix */
+    public static final String INVOKE_DONE_KEY = "invoke_executed";
+    /** @deprecated use scoped keys */
+    public static final String STREAM_DONE_KEY = "stream_executed";
+    /** @deprecated use scoped keys */
+    public static final String COLLECT_DONE_KEY = "collect_executed";
+    /** @deprecated use scoped keys */
+    public static final String TRANSFORM_DONE_KEY = "transform_executed";
+
+    private static final Map<MixKey, FlowEndMixCoordinator> MIX_BY_SESSION_NODE = new ConcurrentHashMap<>();
     /** Python {@code _TEMPLATE_SPLIT_PATTERN}. */
     public static final Pattern TEMPLATE_SPLIT_PATTERN = Pattern.compile("(\\{\\{[^{}]*?\\}\\})");
 
     private FlowEndEngine() {}
 
-    public static boolean alreadyInvoked(NodeSessionApi session) {
+    public static boolean alreadyInvoked(NodeSessionApi session, String nodeId) {
+        return sessionFlag(session, scopedKey(nodeId, INVOKE_DONE_KEY));
+    }
+
+    public static void markInvoked(NodeSessionApi session, String nodeId) {
+        markSessionFlag(session, scopedKey(nodeId, INVOKE_DONE_KEY));
+    }
+
+    public static boolean alreadyStreamed(NodeSessionApi session, String nodeId) {
+        return sessionFlag(session, scopedKey(nodeId, STREAM_DONE_KEY));
+    }
+
+    public static void markStreamed(NodeSessionApi session, String nodeId) {
+        markSessionFlag(session, scopedKey(nodeId, STREAM_DONE_KEY));
+    }
+
+    public static boolean alreadyCollected(NodeSessionApi session, String nodeId) {
+        return sessionFlag(session, scopedKey(nodeId, COLLECT_DONE_KEY));
+    }
+
+    public static void markCollected(NodeSessionApi session, String nodeId) {
+        markSessionFlag(session, scopedKey(nodeId, COLLECT_DONE_KEY));
+    }
+
+    public static boolean alreadyTransformed(NodeSessionApi session, String nodeId) {
+        return sessionFlag(session, scopedKey(nodeId, TRANSFORM_DONE_KEY));
+    }
+
+    public static void markTransformed(NodeSessionApi session, String nodeId) {
+        markSessionFlag(session, scopedKey(nodeId, TRANSFORM_DONE_KEY));
+    }
+
+    /** Per (session, nodeId) mix coordinator — avoids cross-node / cross-run leakage. */
+    public static FlowEndMixCoordinator mixCoordinator(NodeSessionApi session, String nodeId) {
+        if (session == null) {
+            return new FlowEndMixCoordinator();
+        }
+        return MIX_BY_SESSION_NODE.computeIfAbsent(new MixKey(session, normalizeNodeId(nodeId)), k -> new FlowEndMixCoordinator());
+    }
+
+    public static String scopedKey(String nodeId, String suffix) {
+        return "end_" + normalizeNodeId(nodeId) + "_" + suffix;
+    }
+
+    private static String normalizeNodeId(String nodeId) {
+        return nodeId == null || nodeId.isBlank() ? "n/a" : nodeId;
+    }
+
+    private static boolean sessionFlag(NodeSessionApi session, String key) {
         if (session == null) {
             return false;
         }
         try {
-            Object v = session.getState(INVOKE_DONE_KEY);
+            Object v = session.getState(key);
             return Boolean.TRUE.equals(v) || "true".equalsIgnoreCase(String.valueOf(v));
         } catch (RuntimeException ignored) {
             return false;
         }
     }
 
-    public static void markInvoked(NodeSessionApi session) {
+    private static void markSessionFlag(NodeSessionApi session, String key) {
         if (session == null) {
             return;
         }
         try {
-            session.updateState(Map.of(INVOKE_DONE_KEY, true));
+            session.updateState(Map.of(key, true));
         } catch (RuntimeException ignored) {
             // mock
         }
@@ -265,4 +323,6 @@ public final class FlowEndEngine {
         }
         return out;
     }
+
+    private record MixKey(NodeSessionApi session, String nodeId) {}
 }

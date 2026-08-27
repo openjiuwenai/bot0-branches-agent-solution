@@ -14,6 +14,7 @@ import com.openjiuwen.core.session.interaction.WorkflowInteraction;
 import com.openjiuwen.core.session.stream.OutputSchema;
 import com.openjiuwen.studio.dsl.contract.ToolRegistry;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
+import com.openjiuwen.studio.dsl.util.OutboundUrlSafety;
 import com.openjiuwen.studio.dsl.util.TemplateRenderer;
 
 import java.io.IOException;
@@ -35,7 +36,7 @@ import java.util.Map;
  * Strict 1:1 of Python {@code flow_api.FlowApi}.
  *
  * <p>Backend resolution: {@code mockResponse} → ToolRegistry({@code apiId}) → IR HTTP ({@code url}).
- * Tests may also {@link #installTestBridge(TestBridge)}.
+ * Tests inject {@link TestBridge} via constructor or {@link com.openjiuwen.studio.dsl.exec.StudioEngineTestOverrides}.
  *
  * @since 2026-08-26
  */
@@ -50,7 +51,6 @@ public final class FlowApiEngine {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
-    private static final ThreadLocal<TestBridge> TEST_BRIDGE = new ThreadLocal<>();
 
     /** Test stub for ainvoke/astream (mirrors patching RestfulApiToolNew). */
     public interface TestBridge {
@@ -62,6 +62,7 @@ public final class FlowApiEngine {
     }
 
     private final String nodeId;
+    private final TestBridge presetBridge;
     private Map<String, Object> conf = Map.of();
     private boolean enableValidate;
     private boolean enableConfirm;
@@ -76,15 +77,12 @@ public final class FlowApiEngine {
     private WorkflowMetadata metadata = WorkflowMetadata.EMPTY;
 
     public FlowApiEngine(String nodeId) {
+        this(nodeId, null);
+    }
+
+    public FlowApiEngine(String nodeId, TestBridge bridge) {
         this.nodeId = nodeId == null ? "plugin" : nodeId;
-    }
-
-    public static void installTestBridge(TestBridge bridge) {
-        TEST_BRIDGE.set(bridge);
-    }
-
-    public static void clearTestBridge() {
-        TEST_BRIDGE.remove();
+        this.presetBridge = bridge;
     }
 
     public void setToolRegistry(ToolRegistry toolRegistry) {
@@ -120,7 +118,7 @@ public final class FlowApiEngine {
             this.apiId = str(idObj);
             // Python: Runner.resource_mgr.get_tool — fail fast when registry is present
             if (this.mockResponse == null
-                    && TEST_BRIDGE.get() == null
+                    && presetBridge == null
                     && toolRegistry != null
                     && toolRegistry.find(this.apiId).isEmpty()) {
                 throw FlowApiErrors.of(
@@ -438,7 +436,7 @@ public final class FlowApiEngine {
 
     private Map<String, Object> ainvokeBackend(Map<String, Object> inputs, Map<String, String> headers)
             throws Exception {
-        TestBridge bridge = TEST_BRIDGE.get();
+        TestBridge bridge = presetBridge;
         if (bridge != null) {
             return bridge.ainvoke(apiId, inputs, headers);
         }
@@ -464,7 +462,7 @@ public final class FlowApiEngine {
 
     private Iterator<Object> astreamBackend(Map<String, Object> inputs, Map<String, String> headers)
             throws Exception {
-        TestBridge bridge = TEST_BRIDGE.get();
+        TestBridge bridge = presetBridge;
         if (bridge != null) {
             return bridge.astream(apiId, inputs, headers);
         }
@@ -544,6 +542,7 @@ public final class FlowApiEngine {
                     "Failed to build API from IR config: url, apiId+ToolRegistry, or mockResponse required");
         }
         url = TemplateRenderer.render(url, inputs);
+        com.openjiuwen.studio.dsl.util.OutboundUrlSafety.validateOutbound(url);
         String method = str(conf.getOrDefault("method", "POST"));
         if (method.isBlank()) {
             method = "POST";

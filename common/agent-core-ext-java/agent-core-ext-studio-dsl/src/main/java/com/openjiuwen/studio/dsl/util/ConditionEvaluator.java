@@ -127,6 +127,19 @@ public final class ConditionEvaluator {
         if (right == null) {
             right = firstObj(m, "value", "compareValue");
         }
+        String opLower = op.toLowerCase(Locale.ROOT);
+        if ("in".equals(opLower)) {
+            if (m.containsKey("variable")) {
+                return membership(left, right);
+            }
+            return membership(right, left);
+        }
+        if ("not_in".equals(opLower)) {
+            if (m.containsKey("variable")) {
+                return !membership(left, right);
+            }
+            return !membership(right, left);
+        }
         return compare(op, left, right);
     }
 
@@ -231,9 +244,10 @@ public final class ConditionEvaluator {
             case "neq", "!=", "not_equals" -> !Objects.equals(stringify(left), stringify(right));
             case "empty", "is_empty" -> left == null || "".equals(stringify(left));
             case "not_empty", "is_not_empty" -> left != null && !"".equals(stringify(left));
-            case "contains" -> stringify(left).contains(stringify(right));
-            case "in" -> stringify(left).contains(stringify(right));
-            case "not_in", "not_contains" -> !stringify(left).contains(stringify(right));
+            case "contains" -> membership(left, right);
+            case "in" -> membership(right, left);
+            case "not_in" -> !membership(right, left);
+            case "not_contains" -> !membership(left, right);
             case "gt", ">" -> toDouble(left) > toDouble(right);
             case "gte", ">=" -> toDouble(left) >= toDouble(right);
             case "lt", "<" -> toDouble(left) < toDouble(right);
@@ -241,6 +255,35 @@ public final class ConditionEvaluator {
             case "true", "always" -> true;
             default -> Objects.equals(stringify(left), stringify(right));
         };
+    }
+
+    /** {@code left in right} — membership in collection/map or substring in string container. */
+    private static boolean membership(Object container, Object member) {
+        if (container instanceof List<?> list) {
+            String ms = stringify(member);
+            for (Object item : list) {
+                if (Objects.equals(stringify(item), ms)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (container instanceof Map<?, ?> map) {
+            if (map.containsKey(member)) {
+                return true;
+            }
+            String ms = stringify(member);
+            if (map.containsKey(ms)) {
+                return true;
+            }
+            for (Object v : map.values()) {
+                if (Objects.equals(stringify(v), ms)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return stringify(container).contains(stringify(member));
     }
 
     private static String stringify(Object o) {

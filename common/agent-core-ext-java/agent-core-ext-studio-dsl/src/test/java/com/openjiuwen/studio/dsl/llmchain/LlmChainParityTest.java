@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl.llmchain;
 
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -33,7 +34,7 @@ class LlmChainParityTest {
 
     @AfterEach
     void tearDown() {
-        LlmChainEngine.clearTestBridge();
+        StudioEngineTestSupport.clear();
     }
 
     private static Map<String, Object> baseConf() {
@@ -63,7 +64,7 @@ class LlmChainParityTest {
 
     @Test
     void invokeFormatsTextOutputAndFlattensUsage() {
-        LlmChainEngine.installTestBridge(new LlmChainEngine.ModelBridge() {
+        StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
                 AssistantMessage msg = new AssistantMessage("北京是中国的首都");
@@ -81,8 +82,7 @@ class LlmChainParityTest {
             }
         });
 
-        LlmChainEngine engine = new LlmChainEngine("llm1");
-        engine.init(baseConf());
+        LlmChainEngine engine = StudioEngineTestSupport.createLlmChain("llm1", baseConf());
         Map<String, Object> out =
                 engine.invoke(Map.of("userFields", Map.of("query", "中国首都")), null, null);
 
@@ -105,7 +105,7 @@ class LlmChainParityTest {
                                 Map.of("id", "capital", "type", "string"),
                                 Map.of("id", "country", "type", "string"))));
 
-        LlmChainEngine.installTestBridge(new LlmChainEngine.ModelBridge() {
+        StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
                 return new AssistantMessage("{\"capital\": \"北京\", \"country\": \"中国\"}");
@@ -117,8 +117,7 @@ class LlmChainParityTest {
             }
         });
 
-        LlmChainEngine engine = new LlmChainEngine("llm1");
-        engine.init(conf);
+        LlmChainEngine engine = StudioEngineTestSupport.createLlmChain("llm1", conf);
         Map<String, Object> out =
                 engine.invoke(Map.of("userFields", Map.of("query", "首都")), null, null);
         @SuppressWarnings("unchecked")
@@ -129,7 +128,7 @@ class LlmChainParityTest {
 
     @Test
     void undefinedPlaceholderRaises() {
-        LlmChainEngine.installTestBridge(new LlmChainEngine.ModelBridge() {
+        StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
                 return new AssistantMessage("x");
@@ -140,8 +139,7 @@ class LlmChainParityTest {
                 return List.<AssistantMessageChunk>of().iterator();
             }
         });
-        LlmChainEngine engine = new LlmChainEngine("llm1");
-        engine.init(baseConf());
+        LlmChainEngine engine = StudioEngineTestSupport.createLlmChain("llm1", baseConf());
         assertThatThrownBy(() -> engine.invoke(Map.of("userFields", Map.of()), null, null))
                 .isInstanceOf(NodeExecutionException.class)
                 .hasMessageContaining("query");
@@ -162,7 +160,7 @@ class LlmChainParityTest {
 
     @Test
     void streamRealTimeYieldsChunksThenFinal() {
-        LlmChainEngine.installTestBridge(new LlmChainEngine.ModelBridge() {
+        StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
                 return new AssistantMessage("ab");
@@ -177,8 +175,7 @@ class LlmChainParityTest {
             }
         });
 
-        LlmChainEngine engine = new LlmChainEngine("llm1");
-        engine.init(baseConf());
+        LlmChainEngine engine = StudioEngineTestSupport.createLlmChain("llm1", baseConf());
         Iterator<Object> it =
                 engine.stream(Map.of("userFields", Map.of("query", "hi")), null, null);
         List<Object> frames = new ArrayList<>();
@@ -209,7 +206,7 @@ class LlmChainParityTest {
                                 Map.of("id", "raw_output", "type", "string"),
                                 Map.of("id", "reasoning_content", "type", "string"))));
 
-        LlmChainEngine.installTestBridge(new LlmChainEngine.ModelBridge() {
+        StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
                 return new AssistantMessage("答案");
@@ -228,8 +225,7 @@ class LlmChainParityTest {
             }
         });
 
-        LlmChainEngine engine = new LlmChainEngine("llm1");
-        engine.init(conf);
+        LlmChainEngine engine = StudioEngineTestSupport.createLlmChain("llm1", conf);
         Iterator<Object> it =
                 engine.stream(Map.of("userFields", Map.of("query", "q")), null, null);
         List<Object> frames = new ArrayList<>();
@@ -246,7 +242,7 @@ class LlmChainParityTest {
     @Test
     void enableHistoryInjectsChatHistoryVariable() {
         List<BaseMessage> captured = new ArrayList<>();
-        LlmChainEngine.installTestBridge(new LlmChainEngine.ModelBridge() {
+        StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
                 captured.addAll(messages);
@@ -266,8 +262,7 @@ class LlmChainParityTest {
                 List.of(Map.of("role", "user", "content", "历史：{{CHAT_HISTORY}}\n问：{{query}}")));
 
         StubModelContext ctx = new StubModelContext(new UserMessage("上一轮问题"));
-        LlmChainEngine engine = new LlmChainEngine("llm1");
-        engine.init(conf);
+        LlmChainEngine engine = StudioEngineTestSupport.createLlmChain("llm1", conf);
         engine.invoke(Map.of("userFields", Map.of("query", "下一轮")), null, ctx);
 
         assertThat(captured).isNotEmpty();

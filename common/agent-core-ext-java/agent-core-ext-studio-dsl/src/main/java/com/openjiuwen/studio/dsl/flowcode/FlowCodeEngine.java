@@ -19,6 +19,8 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Strict 1:1 of Python {@code agent_runtime...flow_code.FlowCode}.
@@ -29,6 +31,7 @@ import java.util.Map;
  * @since 2026-08-26
  */
 public final class FlowCodeEngine {
+    private static final Logger LOG = Logger.getLogger(FlowCodeEngine.class.getName());
     public static final String USER_FIELDS = "userFields";
     public static final String JIUWEN_CODE_TYPE = "jiuwen.code";
 
@@ -141,6 +144,15 @@ public final class FlowCodeEngine {
                             e);
                 }
                 if (wantSandbox && !isTimeout) {
+                    if (PythonCodeRunners.isSandboxStrict()) {
+                        throw e;
+                    }
+                    LOG.log(
+                            Level.WARNING,
+                            "node "
+                                    + nodeId
+                                    + ": sandbox execution failed; falling back to local subprocess: "
+                                    + e.getMessage());
                     active = PythonCodeRunners.resolveLocal(localMode, fallbackSubprocess);
                     result = active.execute(request);
                 } else {

@@ -24,10 +24,8 @@ import java.util.Map;
 public final class ExtractorEngine {
     private static final String LLM_EXTRA_CONFIGS = "llm_extra_configs";
 
-    /** Test-only LLM stub (mirrors Python {@code patch Extractor._create_llm_instance}). */
-    private static final ThreadLocal<ExtractorLlmExtractor.ModelInvoker> TEST_INVOKER = new ThreadLocal<>();
-
     private final String nodeId;
+    private final ExtractorLlmExtractor.ModelInvoker presetInvoker;
 
     private ExtractorLlmExtractor llmExtractor;
     private ExtractorConfig config;
@@ -38,27 +36,21 @@ public final class ExtractorEngine {
 
     public ExtractorEngine(String nodeId) {
         this.nodeId = nodeId;
+        this.presetInvoker = null;
     }
 
     /** Direct unit-test entry (init + invoke without lazy path). */
-    ExtractorEngine(String nodeId, ExtractorConfig config, ExtractorLlmExtractor.ModelInvoker invoker) {
+    public ExtractorEngine(String nodeId, ExtractorConfig config, ExtractorLlmExtractor.ModelInvoker invoker) {
         this.nodeId = nodeId;
+        this.presetInvoker = invoker;
         init(config.rawConfigs(), null, invoker);
-    }
-
-    public static void installTestInvoker(ExtractorLlmExtractor.ModelInvoker invoker) {
-        TEST_INVOKER.set(invoker);
-    }
-
-    public static void clearTestInvoker() {
-        TEST_INVOKER.remove();
     }
 
     /**
      * Python {@code init(conf, session, context)} — validates config and wires LLM.
      */
     public void init(Map<String, Object> conf, NodeSessionApi session) {
-        init(conf, session, TEST_INVOKER.get());
+        init(conf, session, presetInvoker);
     }
 
     private void init(Map<String, Object> conf, NodeSessionApi session, ExtractorLlmExtractor.ModelInvoker testInvoker) {

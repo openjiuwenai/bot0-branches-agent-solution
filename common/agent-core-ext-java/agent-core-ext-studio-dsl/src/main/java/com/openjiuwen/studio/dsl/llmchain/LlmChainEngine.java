@@ -32,9 +32,6 @@ public final class LlmChainEngine {
     private static final String PARTIAL_CONTENT = "partial_content";
     private static final String LLM_EXTRA_CONFIGS = "llm_extra_configs";
 
-    /** Test-only LLM stub (mirrors Python patch {@code _create_llm_instance}). */
-    private static final ThreadLocal<ModelBridge> TEST_BRIDGE = new ThreadLocal<>();
-
     /** Invoke + stream bridge. */
     public interface ModelBridge {
         AssistantMessage invoke(List<BaseMessage> messages) throws Exception;
@@ -44,36 +41,29 @@ public final class LlmChainEngine {
 
     private final String nodeId;
     private LlmChainConfig config;
+    private final ModelBridge presetBridge;
     private ModelBridge bridge;
-    private boolean initialized;
+    private volatile boolean initialized;
     private Map<String, Object> streamFinalOutput;
-    private NodeSessionApi session;
-    private ModelContext context;
 
     public LlmChainEngine(String nodeId) {
         this.nodeId = nodeId;
+        this.presetBridge = null;
     }
 
-    LlmChainEngine(String nodeId, LlmChainConfig config, ModelBridge bridge) {
+    public LlmChainEngine(String nodeId, LlmChainConfig config, ModelBridge bridge) {
         this.nodeId = nodeId;
         this.config = config;
+        this.presetBridge = bridge;
         this.bridge = bridge;
         this.initialized = bridge != null;
-    }
-
-    public static void installTestBridge(ModelBridge bridge) {
-        TEST_BRIDGE.set(bridge);
-    }
-
-    public static void clearTestBridge() {
-        TEST_BRIDGE.remove();
     }
 
     /** Python {@code init}. */
     public void init(Map<String, Object> conf) {
         this.config = LlmChainConfig.from(nodeId, conf);
-        this.initialized = false;
-        this.bridge = null;
+        this.initialized = presetBridge != null;
+        this.bridge = presetBridge;
         this.streamFinalOutput = null;
     }
 
@@ -85,8 +75,6 @@ public final class LlmChainEngine {
     public Map<String, Object> invoke(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         initializeIfNeeded(session);
-        this.session = session;
-        this.context = context;
 
         Map<String, Object> inputsData = userFieldsOf(inputs);
         LlmChainPrompt.processInputs(config, inputsData, context);
@@ -121,8 +109,6 @@ public final class LlmChainEngine {
     public Iterator<Object> stream(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         initializeIfNeeded(session);
-        this.session = session;
-        this.context = context;
         this.streamFinalOutput = null;
 
         Map<String, Object> inputsData = userFieldsOf(inputs);
@@ -211,7 +197,7 @@ public final class LlmChainEngine {
             if (item.getUsageMetadata() != null) {
                 usage = item.getUsageMetadata();
             }
-            if (item.getReasoningContent() != null && !item.getReasoningContent().isBlank()) {
+            if (item.getReasoningContent() != null && !item.getReasoningContent().isEmpty()) {
                 reasoning.append(item.getReasoningContent());
                 Map<String, Object> data = new LinkedHashMap<>();
                 data.put("answer", "");
@@ -222,7 +208,7 @@ public final class LlmChainEngine {
                 data.put("should_interrupt", false);
                 writePartial(session, index++, data);
             }
-            if (item.getContent() != null && !String.valueOf(item.getContent()).isBlank()) {
+            if (hasChunkContent(item)) {
                 contentChunks.add(String.valueOf(item.getContent()));
             }
         }
@@ -239,7 +225,7 @@ public final class LlmChainEngine {
             frames.add(Map.of(USER_FIELDS, Map.of(outputId, chunk)));
         }
 
-        Map<String, Object> modelStats = usage == null ? Map.of() : Map.of();
+        Map<String, Object> modelStats = modelStatsFromUsage(usage);
         Map<String, Object> customData = new LinkedHashMap<>();
         customData.put(
                 "rawOutput",
@@ -282,89 +268,170 @@ public final class LlmChainEngine {
             NodeSessionApi session,
             boolean outputReasoning)
             throws Exception {
-        long start = System.nanoTime();
-        StringBuilder accumulated = new StringBuilder();
-        StringBuilder reasoning = new StringBuilder();
-        Map<String, Object> modelStats = new LinkedHashMap<>();
-        UsageMetadata usage = null;
-        Long firstTokenMs = null;
-        boolean first = true;
-        int thinkIndex = 0;
+        Iterator<AssistantMessageChunk> source = bridge.stream(languageModelInputs);
+        return new RealTimeStreamIterator(
+                source, languageModelInputs, outputId, nodeComponentId, session, outputReasoning);
+    }
 
-        List<Object> frames = new ArrayList<>();
-        Iterator<AssistantMessageChunk> iter = bridge.stream(languageModelInputs);
-        while (iter.hasNext()) {
-            AssistantMessageChunk chunk = iter.next();
-            if (chunk.getUsageMetadata() != null) {
-                usage = chunk.getUsageMetadata();
+    private static boolean hasChunkContent(AssistantMessageChunk chunk) {
+        Object content = chunk.getContent();
+        if (content == null) {
+            return false;
+        }
+        if (content instanceof String s) {
+            return !s.isEmpty();
+        }
+        return true;
+    }
+
+    private static String chunkContent(AssistantMessageChunk chunk) {
+        return String.valueOf(chunk.getContent());
+    }
+
+    /** Lazy pull iterator — yields content frames as chunks arrive (Python {@code _stream_real_time}). */
+    private final class RealTimeStreamIterator implements Iterator<Object> {
+        private final Iterator<AssistantMessageChunk> source;
+        private final List<BaseMessage> languageModelInputs;
+        private final String outputId;
+        private final String nodeComponentId;
+        private final NodeSessionApi session;
+        private final boolean outputReasoning;
+
+        private final long start = System.nanoTime();
+        private final StringBuilder accumulated = new StringBuilder();
+        private final StringBuilder reasoning = new StringBuilder();
+        private UsageMetadata usage;
+        private Long firstTokenMs;
+        private boolean first = true;
+        private int thinkIndex;
+        private boolean sourceExhausted;
+        private boolean finalFramePending = true;
+        private Object nextFrame;
+        private final Map<String, Object> modelStats = new LinkedHashMap<>();
+
+        RealTimeStreamIterator(
+                Iterator<AssistantMessageChunk> source,
+                List<BaseMessage> languageModelInputs,
+                String outputId,
+                String nodeComponentId,
+                NodeSessionApi session,
+                boolean outputReasoning) {
+            this.source = source;
+            this.languageModelInputs = languageModelInputs;
+            this.outputId = outputId;
+            this.nodeComponentId = nodeComponentId;
+            this.session = session;
+            this.outputReasoning = outputReasoning;
+        }
+
+        @Override
+        public boolean hasNext() {
+            if (nextFrame != null) {
+                return true;
             }
-            if (first) {
-                firstTokenMs = Math.round((System.nanoTime() - start) / 1_000_000.0);
-                first = false;
-            }
-            if (outputReasoning
-                    && chunk.getReasoningContent() != null
-                    && !chunk.getReasoningContent().isBlank()) {
-                reasoning.append(chunk.getReasoningContent());
-                Map<String, Object> data = new LinkedHashMap<>();
-                data.put("answer", "");
-                data.put("think", chunk.getReasoningContent());
-                data.put("node_id", nodeComponentId);
-                data.put("node_name", config.nodeName());
-                data.put("node_type", LlmChainConfig.JIUWEN_LLM_TYPE);
-                data.put("componentType", "LLM");
-                data.put("should_interrupt", false);
-                writePartial(session, thinkIndex++, data);
-            }
-            if (chunk.getContent() != null && !String.valueOf(chunk.getContent()).isBlank()) {
-                String finish = chunk.getFinishReason();
-                if (finish == null || "null".equals(finish)) {
-                    accumulated.append(chunk.getContent());
+            if (!sourceExhausted) {
+                pullContentFrame();
+                if (nextFrame != null) {
+                    return true;
                 }
-                frames.add(Map.of(USER_FIELDS, Map.of(outputId, String.valueOf(chunk.getContent()))));
             }
+            if (finalFramePending) {
+                nextFrame = buildFinalFrame();
+                finalFramePending = false;
+            }
+            return nextFrame != null;
         }
 
-        long totalTokenMs = Math.round((System.nanoTime() - start) / 1_000_000.0);
-        String reasoningForFormat = outputReasoning ? reasoning.toString() : null;
-        Map<String, Object> formatted = LlmChainPrompt.formatResponse(
-                config, accumulated.toString(), config.responseType(), reasoningForFormat);
-
-        Map<String, Object> customData = new LinkedHashMap<>();
-        customData.put("rawOutput", accumulated.toString());
-        customData.put("node_id", nodeComponentId);
-        customData.put("node_name", config.nodeName());
-        customData.put("node_type", LlmChainConfig.JIUWEN_LLM_TYPE);
-        customData.put("componentType", "LLM");
-        customData.put("should_interrupt", false);
-        customData.put(USER_FIELDS, formatted);
-        customData.put("model_stats", modelStats);
-        customData.put("status", "finish");
-
-        trace(session, Map.of(
-                "llm_info",
-                Map.of(
-                        "llm_inputs", languageModelInputs,
-                        "llm_outputs", accumulated.toString(),
-                        "reasoning_content", reasoningForFormat == null ? "" : reasoningForFormat)));
-        Map<String, Object> perf = new LinkedHashMap<>();
-        perf.put("first_token<llm>", firstTokenMs);
-        perf.put("total_token<llm>", totalTokenMs);
-        trace(session, Map.of("performance_metric", perf));
-        streamFinalOutput = customData;
-
-        Map<String, Object> finalUf = new LinkedHashMap<>();
-        finalUf.put("final_output", formatted);
-        if (outputReasoning && !reasoning.isEmpty()) {
-            finalUf.put("reasoning_content", reasoning.toString());
+        @Override
+        public Object next() {
+            if (!hasNext()) {
+                throw new java.util.NoSuchElementException();
+            }
+            Object frame = nextFrame;
+            nextFrame = null;
+            return frame;
         }
-        Map<String, Object> finalFrame = new LinkedHashMap<>();
-        finalFrame.put(USER_FIELDS, finalUf);
-        if (usage != null) {
-            finalFrame.putAll(usageToMap(usage));
+
+        private void pullContentFrame() {
+            while (source.hasNext()) {
+                AssistantMessageChunk chunk = source.next();
+                if (chunk.getUsageMetadata() != null) {
+                    usage = chunk.getUsageMetadata();
+                    modelStats.clear();
+                    modelStats.putAll(modelStatsFromUsage(usage));
+                }
+                mergeChunkMetadata(chunk, modelStats);
+                if (first) {
+                    firstTokenMs = Math.round((System.nanoTime() - start) / 1_000_000.0);
+                    first = false;
+                }
+                if (outputReasoning
+                        && chunk.getReasoningContent() != null
+                        && !chunk.getReasoningContent().isEmpty()) {
+                    reasoning.append(chunk.getReasoningContent());
+                    Map<String, Object> data = new LinkedHashMap<>();
+                    data.put("answer", "");
+                    data.put("think", chunk.getReasoningContent());
+                    data.put("node_id", nodeComponentId);
+                    data.put("node_name", config.nodeName());
+                    data.put("node_type", LlmChainConfig.JIUWEN_LLM_TYPE);
+                    data.put("componentType", "LLM");
+                    data.put("should_interrupt", false);
+                    writePartial(session, thinkIndex++, data);
+                }
+                if (hasChunkContent(chunk)) {
+                    String finish = chunk.getFinishReason();
+                    if (finish == null || "null".equals(finish)) {
+                        accumulated.append(chunkContent(chunk));
+                    }
+                    nextFrame = Map.of(USER_FIELDS, Map.of(outputId, chunkContent(chunk)));
+                    return;
+                }
+            }
+            sourceExhausted = true;
         }
-        frames.add(finalFrame);
-        return frames.iterator();
+
+        private Object buildFinalFrame() {
+            long totalTokenMs = Math.round((System.nanoTime() - start) / 1_000_000.0);
+            String reasoningForFormat = outputReasoning ? reasoning.toString() : null;
+            Map<String, Object> formatted = LlmChainPrompt.formatResponse(
+                    config, accumulated.toString(), config.responseType(), reasoningForFormat);
+
+            Map<String, Object> customData = new LinkedHashMap<>();
+            customData.put("rawOutput", accumulated.toString());
+            customData.put("node_id", nodeComponentId);
+            customData.put("node_name", config.nodeName());
+            customData.put("node_type", LlmChainConfig.JIUWEN_LLM_TYPE);
+            customData.put("componentType", "LLM");
+            customData.put("should_interrupt", false);
+            customData.put(USER_FIELDS, formatted);
+            customData.put("model_stats", modelStats.isEmpty() ? Map.of() : Map.copyOf(modelStats));
+            customData.put("status", "finish");
+
+            trace(session, Map.of(
+                    "llm_info",
+                    Map.of(
+                            "llm_inputs", languageModelInputs,
+                            "llm_outputs", accumulated.toString(),
+                            "reasoning_content", reasoningForFormat == null ? "" : reasoningForFormat)));
+            Map<String, Object> perf = new LinkedHashMap<>();
+            perf.put("first_token<llm>", firstTokenMs);
+            perf.put("total_token<llm>", totalTokenMs);
+            trace(session, Map.of("performance_metric", perf));
+            streamFinalOutput = customData;
+
+            Map<String, Object> finalUf = new LinkedHashMap<>();
+            finalUf.put("final_output", formatted);
+            if (outputReasoning && !reasoning.isEmpty()) {
+                finalUf.put("reasoning_content", reasoning.toString());
+            }
+            Map<String, Object> finalFrame = new LinkedHashMap<>();
+            finalFrame.put(USER_FIELDS, finalUf);
+            if (usage != null) {
+                finalFrame.putAll(usageToMap(usage));
+            }
+            return finalFrame;
+        }
     }
 
     private void initializeIfNeeded(NodeSessionApi session) {
@@ -378,9 +445,8 @@ public final class LlmChainEngine {
                     NodeCauseCode.NODE_CONFIG_INVALID,
                     "LLMChain not initialized");
         }
-        ModelBridge test = TEST_BRIDGE.get();
-        if (test != null) {
-            this.bridge = test;
+        if (presetBridge != null) {
+            this.bridge = presetBridge;
             this.initialized = true;
             return;
         }
@@ -480,6 +546,24 @@ public final class LlmChainEngine {
             return;
         }
         finalOutput.putAll(usageToMap(usage));
+    }
+
+    private static Map<String, Object> modelStatsFromUsage(UsageMetadata usage) {
+        if (usage == null) {
+            return Map.of();
+        }
+        // Java UsageMetadata has no model_stats field; Python falls back to {} when absent.
+        return Map.of();
+    }
+
+    private static void mergeChunkMetadata(AssistantMessageChunk chunk, Map<String, Object> modelStats) {
+        if (chunk == null || modelStats == null) {
+            return;
+        }
+        Map<String, Object> metadata = chunk.getMetadata();
+        if (metadata != null && !metadata.isEmpty()) {
+            modelStats.putAll(metadata);
+        }
     }
 
     private static Map<String, Object> usageToMap(UsageMetadata usage) {

@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl;
 
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
@@ -110,8 +111,7 @@ class StudioDslModuleTest {
                         AssembledNode.of("s", "jiuwen.start", Map.of()),
                         AssembledNode.of("llm", "jiuwen.llm", llmConf()),
                         AssembledNode.of("e", "jiuwen.end", Map.of())));
-        NodeBuildContext ctx = module.newRootContext("alias-wf");
-        LlmChainEngine.installTestBridge(new LlmChainEngine.ModelBridge() {
+        StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
                 return new AssistantMessage("ok");
@@ -123,6 +123,8 @@ class StudioDslModuleTest {
             }
         });
         try {
+            NodeBuildContext ctx =
+                    StudioEngineTestSupport.withCurrentOverrides(module.newRootContext("alias-wf"));
             Map<String, Object> out = LinearWorkflowTestSupport.executeLinear(
                     module.registry(),
                     wf,
@@ -135,7 +137,7 @@ class StudioDslModuleTest {
             assertThat(uf).containsEntry("raw_output", "ok");
             assertThat(ctx.variableScope().isClosed()).isTrue();
         } finally {
-            LlmChainEngine.clearTestBridge();
+            StudioEngineTestSupport.clear();
         }
     }
 }

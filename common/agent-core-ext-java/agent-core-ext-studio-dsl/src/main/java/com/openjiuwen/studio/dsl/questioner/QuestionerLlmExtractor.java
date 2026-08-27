@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * LLM field extraction + reflection for Questioner
@@ -95,7 +94,6 @@ public final class QuestionerLlmExtractor {
     public Map<String, Object> extract(
             String query, List<Map<String, String>> chatHistory, QuestionerState state, NodeSessionApi session) {
         List<BaseMessage> llmInputs = buildExtractionMessages(query, chatHistory);
-        traceLlm(session, llmInputs, null);
         String response;
         try {
             response = invoker.invoke(llmInputs);
@@ -362,30 +360,56 @@ public final class QuestionerLlmExtractor {
         return out;
     }
 
-    private static List<String> summarizeMessages(List<BaseMessage> msgs) {
-        return msgs.stream()
-                .map(m -> m.getClass().getSimpleName() + ":" + m.getContent())
-                .collect(Collectors.toList());
+    private static List<Map<String, Object>> messageMaps(List<BaseMessage> msgs) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        if (msgs == null) {
+            return out;
+        }
+        for (BaseMessage m : msgs) {
+            if (m == null) {
+                continue;
+            }
+            Map<String, Object> turn = new LinkedHashMap<>();
+            String role = m.getRole();
+            if (role == null || role.isBlank()) {
+                String simple = m.getClass().getSimpleName().toLowerCase();
+                if (simple.contains("system")) {
+                    role = "system";
+                } else if (simple.contains("assistant")) {
+                    role = "assistant";
+                } else {
+                    role = "user";
+                }
+            }
+            turn.put("role", role);
+            turn.put("content", m.getContent() == null ? "" : String.valueOf(m.getContent()));
+            out.add(turn);
+        }
+        return out;
     }
 
-    private static void traceLlm(NodeSessionApi session, List<BaseMessage> inputs, String response) {
-        if (session == null) {
+    private void traceLlm(NodeSessionApi session, List<BaseMessage> inputs, String response) {
+        if (session == null || response == null) {
+            return;
+        }
+        Map<String, Object> llmInfo = new LinkedHashMap<>();
+        llmInfo.put("llm_inputs", messageMaps(inputs));
+        llmInfo.put("llm_outputs", response);
+        Map<String, Object> traceData = Map.of("llm_info", llmInfo);
+        trace(session, traceData);
+        appendRedisTrace(session, traceData);
+    }
+
+    private void appendRedisTrace(NodeSessionApi session, Map<String, Object> data) {
+        if (session == null || data == null || data.isEmpty()) {
             return;
         }
         try {
-            if (response == null) {
-                session.trace(
-                        Map.of(
-                                "llm_info",
-                                Map.of("llm_inputs", summarizeMessages(inputs))));
-            } else {
-                session.trace(
-                        Map.of(
-                                "llm_info",
-                                Map.of(
-                                        "llm_inputs", summarizeMessages(inputs),
-                                        "llm_outputs", response)));
+            String sessionId = session.getSessionId();
+            if (sessionId == null || sessionId.isBlank()) {
+                return;
             }
+            QuestionerTraceStore.append(sessionId, nodeId, data);
         } catch (RuntimeException ignored) {
             // mock
         }

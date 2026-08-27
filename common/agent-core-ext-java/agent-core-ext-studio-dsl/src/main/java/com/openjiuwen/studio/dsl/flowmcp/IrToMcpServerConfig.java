@@ -71,10 +71,15 @@ public final class IrToMcpServerConfig {
             clientType = transportType;
         }
 
+        String serverPath = str(ir.get("url"));
+        if (!serverPath.isBlank()) {
+            com.openjiuwen.studio.dsl.util.OutboundUrlSafety.validateOutbound(serverPath);
+        }
+
         McpServerConfig config = McpServerConfig.builder()
                 .serverId(serverId.isBlank() ? null : serverId)
                 .serverName(serverName)
-                .serverPath(str(ir.get("url")))
+                .serverPath(serverPath)
                 .clientType(clientType)
                 .authHeaders(authHeaders)
                 .params(params)

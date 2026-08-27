@@ -11,7 +11,9 @@ import com.openjiuwen.core.workflow.component.BranchComponent;
 import com.openjiuwen.core.workflow.condition.AlwaysTrue;
 import com.openjiuwen.studio.dsl.adapter.AbstractStudioNode;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
+import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
+import com.openjiuwen.studio.dsl.model.NodeCauseCode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
 import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
 import com.openjiuwen.studio.dsl.util.ConditionEvaluator;
@@ -115,7 +117,7 @@ public final class BranchNodeHandler implements NodeHandlerFactory {
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
             Map<String, Object> uf = userFieldsOf(inputs);
             lastUserFields = uf;
-            String selected = select(defs, uf);
+            String selected = select(node.id(), defs, uf);
             Map<String, Object> outUf = new LinkedHashMap<>(uf);
             outUf.put("__branchId__", selected);
             Map<String, Object> wrap = new LinkedHashMap<>();
@@ -135,8 +137,8 @@ public final class BranchNodeHandler implements NodeHandlerFactory {
         }
     }
 
-    static String select(List<BranchDef> defs, Map<String, Object> uf) {
-        String fallback = "default";
+    static String select(String nodeId, List<BranchDef> defs, Map<String, Object> uf) {
+        String fallback = null;
         for (BranchDef d : defs) {
             if (d.isDefault) {
                 fallback = d.branchId;
@@ -146,7 +148,14 @@ public final class BranchNodeHandler implements NodeHandlerFactory {
                 return d.branchId;
             }
         }
-        return fallback;
+        if (fallback != null) {
+            return fallback;
+        }
+        throw new NodeExecutionException(
+                nodeId == null ? "branch" : nodeId,
+                "jiuwen.branch",
+                NodeCauseCode.NODE_CONFIG_INVALID,
+                "no branch matched and no default branch configured");
     }
 
     static List<BranchDef> parse(Map<String, Object> configs) {

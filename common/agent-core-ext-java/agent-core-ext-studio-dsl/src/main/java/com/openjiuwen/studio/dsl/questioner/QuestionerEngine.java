@@ -97,6 +97,12 @@ public final class QuestionerEngine {
         syncTraceRedis(session, resuming);
 
         String query = queryOf(in, userFields);
+        if (resuming) {
+            String fromHistory = lastChatHistoryContent(userFields);
+            if (fromHistory != null && !fromHistory.isBlank()) {
+                query = fromHistory;
+            }
+        }
         traceUser(session, query);
 
         Map<String, Object> result;
@@ -214,6 +220,9 @@ public final class QuestionerEngine {
         }
 
         writeUserToContext(context, query);
+        if (query != null && !query.isBlank()) {
+            state.setUserResponse(query);
+        }
 
         if (config.allowNodeBreak() && QuestionerKeywords.matchesBreak(query)) {
             state.setUserBreak(true);
@@ -684,6 +693,7 @@ public final class QuestionerEngine {
             custom.put("answer", question);
             custom.put("result", question);
             custom.put("node_id", nodeId);
+            custom.put("node_name", nodeDisplayName());
             custom.put("node_type", "jiuwen.questioner");
             custom.put("should_interrupt", true);
             session.writeCustomStream(Map.of("type", "partial_content", "index", 0, "data", custom));
@@ -702,6 +712,31 @@ public final class QuestionerEngine {
         } catch (RuntimeException ignored) {
             // mock / no stream
         }
+    }
+
+    private String nodeDisplayName() {
+        Object name = config.rawConfigs().get("name");
+        if (name != null && !String.valueOf(name).isBlank()) {
+            return String.valueOf(name);
+        }
+        return nodeId;
+    }
+
+    private static String lastChatHistoryContent(Map<String, Object> userFields) {
+        Object raw = userFields.get("chatHistory");
+        if (!(raw instanceof List<?> list) || list.isEmpty()) {
+            return null;
+        }
+        for (int i = list.size() - 1; i >= 0; i--) {
+            Object item = list.get(i);
+            if (item instanceof Map<?, ?> m) {
+                Object content = m.get("content");
+                if (content != null && !String.valueOf(content).isBlank()) {
+                    return String.valueOf(content);
+                }
+            }
+        }
+        return null;
     }
 
     private Object collectViaInteract(NodeSessionApi session, QuestionerState state) {

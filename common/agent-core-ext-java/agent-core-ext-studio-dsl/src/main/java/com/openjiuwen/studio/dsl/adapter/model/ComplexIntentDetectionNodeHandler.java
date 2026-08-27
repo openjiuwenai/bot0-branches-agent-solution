@@ -44,13 +44,18 @@ public final class ComplexIntentDetectionNodeHandler implements NodeHandlerFacto
 
         ComplexIntentExecutable(AssembledNode node, NodeBuildContext ctx) {
             super(node);
+            ComplexIntentDetectionEngine.TestBridge bridge =
+                    ctx != null && ctx.testOverrides() != null
+                            ? ctx.testOverrides().complexIntentBridge()
+                            : null;
             this.engine = new ComplexIntentDetectionEngine(
                     node.id(),
                     node.configs(),
                     ctx == null ? null : ctx.subWorkflowResolver(),
                     ctx == null ? null : ctx.nodeTypeRegistry(),
                     ctx,
-                    ctx == null ? null : ctx.toolRegistry());
+                    ctx == null ? null : ctx.toolRegistry(),
+                    bridge);
         }
 
         ComplexIntentDetectionEngine engine() {

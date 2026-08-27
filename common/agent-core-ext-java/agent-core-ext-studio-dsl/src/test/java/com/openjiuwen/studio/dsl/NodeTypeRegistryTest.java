@@ -43,10 +43,14 @@ class NodeTypeRegistryTest {
     @Test
     void unknownType_failsWithSurface() {
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
-        assertThatThrownBy(() -> registry.canonicalize("EI.notAThing"))
+        assertThatThrownBy(() -> registry.canonicalize("EI.notAThing", "node-x"))
                 .isInstanceOf(NodeExecutionException.class)
-                .extracting(e -> e instanceof NodeExecutionException ne ? ne.causeCode() : null)
-                .isEqualTo(NodeCauseCode.UNKNOWN_NODE_TYPE);
+                .satisfies(
+                        e -> {
+                            NodeExecutionException ne = (NodeExecutionException) e;
+                            assertThat(ne.nodeId()).isEqualTo("node-x");
+                            assertThat(ne.causeCode()).isEqualTo(NodeCauseCode.UNKNOWN_NODE_TYPE);
+                        });
     }
 
     @Test

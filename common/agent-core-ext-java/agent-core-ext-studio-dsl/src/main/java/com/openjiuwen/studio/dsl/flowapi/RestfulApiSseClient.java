@@ -44,10 +44,24 @@ public final class RestfulApiSseClient {
      * @return iterator of payloads (prefix stripped)
      */
     public static Iterator<Object> parseSseDataLines(InputStream in) {
+        return parseSseDataLines(in, 0);
+    }
+
+    /**
+     * Parse SSE with optional wall-clock deadline (0 = no extra deadline beyond HttpRequest timeout).
+     */
+    public static Iterator<Object> parseSseDataLines(InputStream in, long deadlineMs) {
+        long deadlineNanos = deadlineMs > 0 ? System.nanoTime() + deadlineMs * 1_000_000L : 0L;
         BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
         return new Iterator<>() {
             private String next;
             private boolean primed;
+
+            private void checkDeadline() {
+                if (deadlineNanos > 0 && System.nanoTime() > deadlineNanos) {
+                    throw new UncheckedIOException(new IOException("SSE read deadline exceeded"));
+                }
+            }
 
             private void prime() {
                 if (primed) {
@@ -58,6 +72,7 @@ public final class RestfulApiSseClient {
                 try {
                     String line;
                     while ((line = reader.readLine()) != null) {
+                        checkDeadline();
                         String stripped = line.strip();
                         if (!stripped.isEmpty() && stripped.startsWith(DATA_PREFIX)) {
                             next = stripped.substring(DATA_PREFIX.length());
@@ -115,6 +130,7 @@ public final class RestfulApiSseClient {
     public static Iterator<Object> stream(
             String url, String method, String body, Map<String, String> headers, long timeoutMs)
             throws Exception {
+        com.openjiuwen.studio.dsl.util.OutboundUrlSafety.validateOutbound(url);
         HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(timeoutMs)).build();
         HttpRequest.Builder rb =
                 HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofMillis(timeoutMs));
@@ -134,7 +150,7 @@ public final class RestfulApiSseClient {
             throw new IOException("plugin response code " + code + " error.");
         }
         InputStream bodyStream = resp.body();
-        Iterator<Object> inner = parseSseDataLines(bodyStream);
+        Iterator<Object> inner = parseSseDataLines(bodyStream, timeoutMs);
         return new Iterator<>() {
             @Override
             public boolean hasNext() {

@@ -64,15 +64,27 @@ public final class NodeTypeRegistry {
      * @return result
      */
     public String canonicalize(String irType) {
+        return canonicalize(irType, "n/a");
+    }
+
+    /**
+     * canonicalize with node id for failure surface.
+     *
+     * @param irType irType
+     * @param nodeId node id for {@link NodeExecutionException}
+     * @return canonical type
+     */
+    public String canonicalize(String irType, String nodeId) {
+        String nid = nodeId == null || nodeId.isBlank() ? "n/a" : nodeId;
         if (irType == null) {
-            throw new NodeExecutionException("n/a", "unknown", NodeCauseCode.UNKNOWN_NODE_TYPE, "irType is null");
+            throw new NodeExecutionException(nid, "unknown", NodeCauseCode.UNKNOWN_NODE_TYPE, "irType is null");
         }
         if (byCanonical.containsKey(irType)) {
             return irType;
         }
         String canonical = aliasToCanonical.get(irType);
         if (canonical == null) {
-            throw new NodeExecutionException("n/a", irType, NodeCauseCode.UNKNOWN_NODE_TYPE, "unknown IR: " + irType);
+            throw new NodeExecutionException(nid, irType, NodeCauseCode.UNKNOWN_NODE_TYPE, "unknown IR: " + irType);
         }
         return canonical;
     }
@@ -85,7 +97,7 @@ public final class NodeTypeRegistry {
      * @return result
      */
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
-        String canonical = canonicalize(node.irType());
+        String canonical = canonicalize(node.irType(), node.id());
         NodeHandlerFactory factory = byCanonical.get(canonical);
         AssembledNode normalized = node.withCanonical(canonical);
         return factory.create(normalized, ctx);

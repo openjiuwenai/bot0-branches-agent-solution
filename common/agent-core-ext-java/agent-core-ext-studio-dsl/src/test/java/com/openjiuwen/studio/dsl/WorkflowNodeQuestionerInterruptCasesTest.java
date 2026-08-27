@@ -77,7 +77,7 @@ class WorkflowNodeQuestionerInterruptCasesTest {
             assertThat(serialized.get("response_num")).isEqualTo(2);
             assertThat(serialized.get("status")).isEqualTo(QuestionerState.USER_INTERACT);
             @SuppressWarnings("unchecked")
-            Map<String, Object> fields = (Map<String, Object>) serialized.get("extracted_fields");
+            Map<String, Object> fields = (Map<String, Object>) serialized.get("extracted_key_fields");
             assertThat(fields.get("name")).isEqualTo("张三");
 
             QuestionerState deserialized = QuestionerState.fromMap(serialized);
@@ -344,7 +344,7 @@ class WorkflowNodeQuestionerInterruptCasesTest {
             @SuppressWarnings("unchecked")
             Map<String, Object> st1 = (Map<String, Object>) bucket.get().get(QuestionerState.KEY);
             @SuppressWarnings("unchecked")
-            Map<String, Object> extracted1 = (Map<String, Object>) st1.get("extracted_fields");
+            Map<String, Object> extracted1 = (Map<String, Object>) st1.get("extracted_key_fields");
             assertThat(extracted1).containsEntry("name", "张三");
 
             QuestionerEngine round2 = new QuestionerEngine(

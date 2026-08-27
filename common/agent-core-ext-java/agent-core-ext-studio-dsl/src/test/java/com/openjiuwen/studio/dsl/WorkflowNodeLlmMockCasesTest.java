@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl;
 
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
@@ -80,7 +81,7 @@ class WorkflowNodeLlmMockCasesTest {
 
     @Test
     void test_workflow_llm_text_invoke_mock() {
-        LlmChainEngine.installTestBridge(new LlmChainEngine.ModelBridge() {
+        StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
                 return new AssistantMessage("hello from mock llm");
@@ -94,18 +95,18 @@ class WorkflowNodeLlmMockCasesTest {
         try {
             ComponentExecutable exec = registry.create(
                     AssembledNode.of("llm", "jiuwen.llm", llmConf()),
-                    NodeBuildContext.defaults("wf_llm"));
+                    StudioEngineTestSupport.context("wf_llm"));
             Map<String, Object> fields =
                     uf(exec.invoke(Map.of("userFields", Map.of("query", "hi")), null, null));
             assertThat(fields).containsEntry("raw_output", "hello from mock llm");
         } finally {
-            LlmChainEngine.clearTestBridge();
+            StudioEngineTestSupport.clear();
         }
     }
 
     @Test
     void test_workflow_llm_chain_two_nodes_mock() {
-        LlmChainEngine.installTestBridge(new LlmChainEngine.ModelBridge() {
+        StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
                 return new AssistantMessage("step2-final");
@@ -132,19 +133,19 @@ class WorkflowNodeLlmMockCasesTest {
             Map<String, Object> out = LinearWorkflowTestSupport.executeLinear(
                             registry,
                             wf,
-                            NodeBuildContext.defaults("llm_chain"),
+                            StudioEngineTestSupport.context("llm_chain"),
                             Map.of("userFields", Map.of("query", "chain")),
                             mock(NodeSessionApi.class),
                             null);
             assertThat(String.valueOf(uf(out).get("answer"))).contains("step2-final");
         } finally {
-            LlmChainEngine.clearTestBridge();
+            StudioEngineTestSupport.clear();
         }
     }
 
     @Test
     void test_workflow_intent_detection_weather_mock() {
-        IntentDetectionEngine.installTestInvoker(messages -> "{\"class\": \"分类1\", \"reason\": \"询问天气\"}");
+        StudioEngineTestSupport.installIntent(messages -> "{\"class\": \"分类1\", \"reason\": \"询问天气\"}");
         try {
             ComponentExecutable exec = registry.create(
                     AssembledNode.of(
@@ -169,13 +170,13 @@ class WorkflowNodeLlmMockCasesTest {
                                     true,
                                     "enableInput",
                                     true)),
-                    NodeBuildContext.defaults("wf"));
+                    StudioEngineTestSupport.context("wf"));
             Map<String, Object> fields =
                     uf(exec.invoke(Map.of("input", "今天天气怎么样"), null, null));
             assertThat(fields.get("classificationId")).isEqualTo(1);
             assertThat(String.valueOf(fields.get("name"))).contains("天气");
         } finally {
-            IntentDetectionEngine.clearTestInvoker();
+            StudioEngineTestSupport.clear();
         }
     }
 
@@ -186,7 +187,7 @@ class WorkflowNodeLlmMockCasesTest {
                         "card",
                         "jiuwen.card",
                         Map.of("template", "{\"title\":\"{{title}}\"}", "output_mode", "separate")),
-                NodeBuildContext.defaults("wf_card"));
+                StudioEngineTestSupport.context("wf_card"));
         @SuppressWarnings("unchecked")
         Map<String, Object> out = (Map<String, Object>) card.invoke(
                 Map.of("userFields", Map.of("title", "mock-card")), mock(NodeSessionApi.class), null);

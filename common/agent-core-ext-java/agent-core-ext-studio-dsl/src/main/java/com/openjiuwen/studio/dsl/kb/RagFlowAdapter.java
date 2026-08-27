@@ -50,7 +50,23 @@ public final class RagFlowAdapter implements KBServiceAdapter {
         if (scoreThreshold > 0) {
             body.put("similarity_threshold", scoreThreshold);
         }
+        if (retrievalParams.containsKey("vectorSimilarityWeight")) {
+            body.put("vector_similarity_weight", retrievalParams.get("vectorSimilarityWeight"));
+        }
+        if (retrievalParams.containsKey("keyword")) {
+            body.put("keyword", retrievalParams.get("keyword"));
+        }
+        if (retrievalParams.containsKey("rerankId")) {
+            body.put("rerank_id", retrievalParams.get("rerankId"));
+        }
+        if (retrievalParams.containsKey("highlight")) {
+            body.put("highlight", retrievalParams.get("highlight"));
+        }
+        if (retrievalParams.containsKey("crossLanguages")) {
+            body.put("cross_languages", retrievalParams.get("crossLanguages"));
+        }
         String url = endpoint.replaceAll("/$", "") + "/api/v1/retrieval";
+        CustomerHeaderInject.applyToKb(headers);
         List<KBSearchResult> results = parseResponse(KbHttp.postJson(url, headers, body));
         results.sort(Comparator.comparingDouble(KBSearchResult::score).reversed());
         if (results.size() > topK) {
@@ -98,14 +114,18 @@ public final class RagFlowAdapter implements KBServiceAdapter {
             meta.remove("content");
             meta.remove("similarity");
             String docName = first(chunk, "document_keyword", "docnm_kwd", "title", "document_name", "documentName");
+            double score = KbHttp.doubleOf(chunk.get("similarity"), 0);
+            String kbId = first(chunk, "dataset_id", "datasetId", "kb_id");
             results.add(new KBSearchResult()
                     .setText(text)
-                    .setScore(KbHttp.doubleOf(chunk.get("similarity"), 0))
-                    .setSource(first(chunk, "dataset_id", "datasetId"))
-                    .setKnowledgeBaseId(first(chunk, "dataset_id", "datasetId"))
-                    .setFileId(first(chunk, "document_id", "documentId"))
+                    .setScore(score)
+                    .setSource(kbId)
+                    .setKnowledgeBaseId(kbId)
+                    .setFileId(first(chunk, "document_id", "documentId", "doc_id", "chunk_id"))
                     .setDocumentName(docName)
-                    .setType("doc")
+                    .setSubtitle(docName)
+                    .setKnowledgeBaseType(first(chunk, "knowledge_base_type", "knowledgeBaseType"))
+                    .setType(score > 0.9 ? "faq" : "doc")
                     .setMetadata(meta));
         }
         return results;

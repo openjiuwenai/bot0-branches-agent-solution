@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl;
 
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -72,7 +73,7 @@ class WorkflowNodeInteractControlEiParityTest {
                                 "operatorMapping",
                                 Map.of()));
         ComponentExecutable exec =
-                new SetVariableNodeHandler().create(node, NodeBuildContext.defaults("wf-sv"));
+                new SetVariableNodeHandler().create(node, StudioEngineTestSupport.context("wf-sv"));
         @SuppressWarnings("unchecked")
         Map<String, Object> out = (Map<String, Object>)
                 exec.invoke(Map.of("userFields", Map.of("conversationId", "c1")), session, null);
@@ -83,7 +84,7 @@ class WorkflowNodeInteractControlEiParityTest {
 
     @Test
     void setVariable_incrementOperator() {
-        NodeBuildContext ctx = NodeBuildContext.defaults("wf-inc");
+        NodeBuildContext ctx = StudioEngineTestSupport.context("wf-inc");
         ctx.variableScope().putAll(Map.of("n", 3));
         AssembledNode node =
                 AssembledNode.of(
@@ -106,7 +107,7 @@ class WorkflowNodeInteractControlEiParityTest {
     void message_prefersTemplate_andMustache() {
         ComponentExecutable exec = registry.create(
                 AssembledNode.of("m", "jiuwen.message", Map.of("template", "hi {{name}}")),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         @SuppressWarnings("unchecked")
         Map<String, Object> out = (Map<String, Object>)
                 exec.invoke(Map.of("userFields", Map.of("name", "Ada")), mock(NodeSessionApi.class), null);
@@ -125,7 +126,7 @@ class WorkflowNodeInteractControlEiParityTest {
                                 Map.of(
                                         "inputs",
                                         List.of(Map.of("id", "name", "required", true, "type", "string"))))),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         AtomicReference<Map<String, Object>> stateBucket = new AtomicReference<>(new HashMap<>());
         NodeSessionApi session = mock(NodeSessionApi.class);
         when(session.getState(any())).thenAnswer(inv -> {
@@ -183,7 +184,7 @@ class WorkflowNodeInteractControlEiParityTest {
                                 Map.of(
                                         "inputs",
                                         List.of(Map.of("id", "name", "required", true, "type", "string"))))),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         assertThat(exec.invoke(Map.of("userFields", Map.of()), session, null)).isEqualTo(Map.of());
         @SuppressWarnings("unchecked")
         Map<String, Object> out2 = (Map<String, Object>)
@@ -196,7 +197,7 @@ class WorkflowNodeInteractControlEiParityTest {
     @Test
     void end_mapsEndPrefix_andMarksTerminal() {
         ComponentExecutable exec =
-                registry.create(AssembledNode.of("e", "jiuwen.end", Map.of()), NodeBuildContext.defaults("wf"));
+                registry.create(AssembledNode.of("e", "jiuwen.end", Map.of()), StudioEngineTestSupport.context("wf"));
         @SuppressWarnings("unchecked")
         Map<String, Object> out = (Map<String, Object>)
                 exec.invoke(Map.of("userFields", Map.of("#end_answer", "done", "x", 1)), mock(NodeSessionApi.class), null);
@@ -213,7 +214,7 @@ class WorkflowNodeInteractControlEiParityTest {
                         "a",
                         "jiuwen.aggregate",
                         Map.of("groups", Map.of("out", List.of("a", "b")))),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         @SuppressWarnings("unchecked")
         Map<String, Object> out = (Map<String, Object>)
                 exec.invoke(Map.of("userFields", Map.of("a", "", "b", "ok")), null, null);
@@ -226,7 +227,7 @@ class WorkflowNodeInteractControlEiParityTest {
     void exception_abort_throws() {
         ComponentExecutable exec = registry.create(
                 AssembledNode.of("ex", "jiuwen.exception", Map.of("handleType", "abort")),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         assertThatThrownBy(() -> exec.invoke(Map.of("userFields", Map.of("message", "boom")), null, null))
                 .isInstanceOf(com.openjiuwen.studio.dsl.flowexception.WorkflowAbortException.class)
                 .satisfies(ex -> assertThat(
@@ -237,7 +238,7 @@ class WorkflowNodeInteractControlEiParityTest {
     @Test
     void ei_paramOutput_passthrough() {
         ComponentExecutable exec =
-                registry.create(AssembledNode.of("p", "EI.ParamOutput", Map.of()), NodeBuildContext.defaults("wf"));
+                registry.create(AssembledNode.of("p", "EI.ParamOutput", Map.of()), StudioEngineTestSupport.context("wf"));
         @SuppressWarnings("unchecked")
         Map<String, Object> out = (Map<String, Object>)
                 exec.invoke(Map.of("userFields", Map.of("a", 1), "systemFields", Map.of("t", 2)), null, null);
@@ -248,7 +249,7 @@ class WorkflowNodeInteractControlEiParityTest {
     @Test
     void ei_paramOutput_mapWithoutUserFields_yieldsEmpty() {
         ComponentExecutable exec =
-                registry.create(AssembledNode.of("p", "EI.ParamOutput", Map.of()), NodeBuildContext.defaults("wf"));
+                registry.create(AssembledNode.of("p", "EI.ParamOutput", Map.of()), StudioEngineTestSupport.context("wf"));
         @SuppressWarnings("unchecked")
         Map<String, Object> out = (Map<String, Object>)
                 exec.invoke(Map.of("a", 1, "systemFields", Map.of("t", 2)), null, null);
@@ -259,7 +260,7 @@ class WorkflowNodeInteractControlEiParityTest {
     @Test
     void ei_paramOutput_nonMapInput_wrapsAsUserFields() {
         ComponentExecutable exec =
-                registry.create(AssembledNode.of("p", "EI.ParamOutput", Map.of()), NodeBuildContext.defaults("wf"));
+                registry.create(AssembledNode.of("p", "EI.ParamOutput", Map.of()), StudioEngineTestSupport.context("wf"));
         @SuppressWarnings("unchecked")
         Map<String, Object> out = (Map<String, Object>) exec.invoke("hello", null, null);
         assertThat(out.get("userFields")).isEqualTo("hello");
@@ -281,7 +282,7 @@ class WorkflowNodeInteractControlEiParityTest {
                                 List.of("A", "B", "C"),
                                 "index_key",
                                 "index")),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         @SuppressWarnings("unchecked")
         Map<String, Object> out = (Map<String, Object>)
                 exec.invoke(Map.of("userFields", Map.of("index", 1)), mock(NodeSessionApi.class), null);
@@ -297,7 +298,7 @@ class WorkflowNodeInteractControlEiParityTest {
                         "q",
                         "EI.qa",
                         Map.of("needReply", true, "options", List.of("hello"), "qaStrategy", "index")),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         NodeSessionApi session = mock(NodeSessionApi.class);
         when(session.getState(any())).thenReturn(null);
         @SuppressWarnings("unchecked")
@@ -310,7 +311,7 @@ class WorkflowNodeInteractControlEiParityTest {
 
     @Test
     void ei_complexIntent_matchesViaIntentStub() {
-        com.openjiuwen.studio.dsl.complexintent.ComplexIntentDetectionEngine.installTestBridge(
+        StudioEngineTestSupport.installComplexIntent(
                 new com.openjiuwen.studio.dsl.complexintent.ComplexIntentDetectionEngine.TestBridge() {
                     @Override
                     public Map<String, Object> intentResult(Map<String, Object> convertedInputs) {
@@ -336,7 +337,7 @@ class WorkflowNodeInteractControlEiParityTest {
                                             Map.of("id", "branch_1", "catalog", "refund")),
                                     "groups",
                                     Map.of("reply", List.of("${branch_1.userFields.answer}")))),
-                    NodeBuildContext.defaults("wf"));
+                    StudioEngineTestSupport.context("wf"));
             @SuppressWarnings("unchecked")
             Map<String, Object> out = (Map<String, Object>)
                     exec.invoke(Map.of("userFields", Map.of("input", "I want a refund please")), null, null);
@@ -345,7 +346,7 @@ class WorkflowNodeInteractControlEiParityTest {
             assertThat(uf.get("classificationId")).isEqualTo(1);
             assertThat(uf.get("name")).isEqualTo("refund");
         } finally {
-            com.openjiuwen.studio.dsl.complexintent.ComplexIntentDetectionEngine.clearTestBridge();
+            StudioEngineTestSupport.clear();
         }
     }
 }

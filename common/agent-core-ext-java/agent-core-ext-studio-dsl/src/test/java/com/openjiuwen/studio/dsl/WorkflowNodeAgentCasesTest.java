@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl;
 
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -38,7 +39,7 @@ class WorkflowNodeAgentCasesTest {
     void setUp() {
         registry = NodeTypeRegistry.createWithBuiltins();
         lastInputs = new AtomicReference<>();
-        FlowAgentEngine.installTestBridge(new FlowAgentEngine.ReactBridge() {
+        StudioEngineTestSupport.installFlowAgent(new FlowAgentEngine.ReactBridge() {
             @Override
             public Map<String, Object> invoke(Map<String, Object> mappedInputs) {
                 lastInputs.set(new LinkedHashMap<>(mappedInputs));
@@ -54,7 +55,7 @@ class WorkflowNodeAgentCasesTest {
 
     @AfterEach
     void tearDown() {
-        FlowAgentEngine.clearTestBridge();
+        StudioEngineTestSupport.clear();
     }
 
     @SuppressWarnings("unchecked")
@@ -77,7 +78,7 @@ class WorkflowNodeAgentCasesTest {
         @Test
         void invokePutsOutputInUserFields() {
             ComponentExecutable exec = registry.create(
-                    AssembledNode.of("agent", "jiuwen.agent", agentConf()), NodeBuildContext.defaults("wf"));
+                    AssembledNode.of("agent", "jiuwen.agent", agentConf()), StudioEngineTestSupport.context("wf"));
             Map<String, Object> fields =
                     uf(exec.invoke(Map.of("userFields", Map.of("query", "What's the weather today?")), null, null));
             assertThat(fields).containsEntry("output", "Agent response");
@@ -87,17 +88,18 @@ class WorkflowNodeAgentCasesTest {
         @Test
         void aliasFlowAgent() {
             ComponentExecutable exec = registry.create(
-                    AssembledNode.of("a", "jiuwen.flowAgent", agentConf()), NodeBuildContext.defaults("wf"));
+                    AssembledNode.of("a", "jiuwen.flowAgent", agentConf()), StudioEngineTestSupport.context("wf"));
             assertThat(uf(exec.invoke(Map.of("userFields", Map.of("query", "hi")), null, null)))
                     .containsEntry("output", "Agent response");
         }
 
         @Test
         void invalidStrategySurfaces() {
+            StudioEngineTestSupport.clear();
             Map<String, Object> conf = agentConf();
             conf.put("strategy_name", "Other");
             ComponentExecutable exec =
-                    registry.create(AssembledNode.of("a", "jiuwen.agent", conf), NodeBuildContext.defaults("wf"));
+                    registry.create(AssembledNode.of("a", "jiuwen.agent", conf), StudioEngineTestSupport.context("wf"));
             assertThatThrownBy(() -> exec.invoke(Map.of("userFields", Map.of("query", "q")), null, null))
                     .isInstanceOf(NodeExecutionException.class)
                     .hasMessageContaining("ReAct");
@@ -105,8 +107,8 @@ class WorkflowNodeAgentCasesTest {
 
         @Test
         void reactErrorSurfacesAsErrorPayload() {
-            FlowAgentEngine.clearTestBridge();
-            FlowAgentEngine.installTestBridge(new FlowAgentEngine.ReactBridge() {
+            StudioEngineTestSupport.clear();
+            StudioEngineTestSupport.installFlowAgent(new FlowAgentEngine.ReactBridge() {
                 @Override
                 public Map<String, Object> invoke(Map<String, Object> mappedInputs) {
                     throw new IllegalStateException("boom");
@@ -118,7 +120,7 @@ class WorkflowNodeAgentCasesTest {
                 }
             });
             ComponentExecutable exec = registry.create(
-                    AssembledNode.of("agent", "jiuwen.agent", agentConf()), NodeBuildContext.defaults("wf"));
+                    AssembledNode.of("agent", "jiuwen.agent", agentConf()), StudioEngineTestSupport.context("wf"));
             @SuppressWarnings("unchecked")
             Map<String, Object> out =
                     (Map<String, Object>) exec.invoke(Map.of("userFields", Map.of("query", "q")), null, null);

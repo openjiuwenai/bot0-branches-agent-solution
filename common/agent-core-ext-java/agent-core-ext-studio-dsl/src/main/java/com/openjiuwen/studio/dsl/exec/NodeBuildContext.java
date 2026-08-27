@@ -27,6 +27,7 @@ public final class NodeBuildContext {
     private final WorkflowVariableScope variableScope;
     private final String tenantId;
     private final StudioDslNodeProperties properties;
+    private final StudioEngineTestOverrides testOverrides;
 
     /**
      * NodeBuildContext.
@@ -53,7 +54,8 @@ public final class NodeBuildContext {
                 null,
                 new WorkflowVariableScope(),
                 null,
-                new StudioDslNodeProperties());
+                new StudioDslNodeProperties(),
+                null);
     }
 
     /**
@@ -85,7 +87,8 @@ public final class NodeBuildContext {
                 nodeTypeRegistry,
                 new WorkflowVariableScope(),
                 null,
-                new StudioDslNodeProperties());
+                new StudioDslNodeProperties(),
+                null);
     }
 
     /**
@@ -101,6 +104,7 @@ public final class NodeBuildContext {
      * @param variableScope variableScope
      * @param tenantId tenantId
      * @param properties properties
+     * @param testOverrides test-only stubs (null in production)
      */
     public NodeBuildContext(
             String workflowId,
@@ -112,7 +116,8 @@ public final class NodeBuildContext {
             NodeTypeRegistry nodeTypeRegistry,
             WorkflowVariableScope variableScope,
             String tenantId,
-            StudioDslNodeProperties properties) {
+            StudioDslNodeProperties properties,
+            StudioEngineTestOverrides testOverrides) {
         this.workflowId = workflowId;
         this.nestingDepth = nestingDepth;
         this.maxNestingDepth = maxNestingDepth;
@@ -123,6 +128,7 @@ public final class NodeBuildContext {
         this.variableScope = variableScope == null ? new WorkflowVariableScope() : variableScope;
         this.tenantId = tenantId;
         this.properties = properties == null ? new StudioDslNodeProperties() : properties;
+        this.testOverrides = testOverrides;
     }
 
     /**
@@ -160,7 +166,8 @@ public final class NodeBuildContext {
                 null,
                 new WorkflowVariableScope(),
                 null,
-                p);
+                p,
+                null);
     }
 
     /**
@@ -189,7 +196,8 @@ public final class NodeBuildContext {
                 null,
                 new WorkflowVariableScope(),
                 tenantId,
-                p);
+                p,
+                null);
     }
 
     /**
@@ -209,7 +217,29 @@ public final class NodeBuildContext {
                 registry,
                 variableScope,
                 tenantId,
-                properties);
+                properties,
+                testOverrides);
+    }
+
+    /**
+     * Attach test stubs for handler integration tests (production never calls this).
+     *
+     * @param overrides overrides
+     * @return copy with test wiring
+     */
+    public NodeBuildContext withTestOverrides(StudioEngineTestOverrides overrides) {
+        return new NodeBuildContext(
+                workflowId,
+                nestingDepth,
+                maxNestingDepth,
+                pythonExecutor,
+                subWorkflowResolver,
+                toolRegistry,
+                nodeTypeRegistry,
+                variableScope,
+                tenantId,
+                properties,
+                overrides);
     }
 
     /**
@@ -302,6 +332,11 @@ public final class NodeBuildContext {
         return properties;
     }
 
+    /** Test-only engine stubs; {@code null} in production. */
+    public StudioEngineTestOverrides testOverrides() {
+        return testOverrides;
+    }
+
     /**
      * Nested child workflow: new depth + independent variable scope (L2 §3.7).
      *
@@ -318,6 +353,7 @@ public final class NodeBuildContext {
                 nodeTypeRegistry,
                 new WorkflowVariableScope(),
                 tenantId,
-                properties);
+                properties,
+                testOverrides);
     }
 }

@@ -132,7 +132,12 @@ public final class FlowMessageEngine {
         try {
             return TemplateRenderer.render(config.template(), vars);
         } catch (RuntimeException e) {
-            return config.template();
+            throw new com.openjiuwen.studio.dsl.exec.NodeExecutionException(
+                    nodeId,
+                    NODE_TYPE,
+                    com.openjiuwen.studio.dsl.model.NodeCauseCode.NODE_INVOKE_FAILED,
+                    "message template render failed: " + e.getMessage(),
+                    e);
         }
     }
 
@@ -145,7 +150,12 @@ public final class FlowMessageEngine {
             all.put("_NODE_OUTPUT", originOutput);
             return TemplateRenderer.render(config.structOutputTemplate(), all);
         } catch (RuntimeException e) {
-            return "";
+            throw new com.openjiuwen.studio.dsl.exec.NodeExecutionException(
+                    nodeId,
+                    NODE_TYPE,
+                    com.openjiuwen.studio.dsl.model.NodeCauseCode.NODE_INVOKE_FAILED,
+                    "struct message template render failed: " + e.getMessage(),
+                    e);
         }
     }
 

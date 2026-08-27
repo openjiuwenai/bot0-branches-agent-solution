@@ -63,7 +63,7 @@ public final class FlowSetVariableEngine {
         if (scope != null) {
             vars.putAll(scope.snapshot());
         }
-        vars.putAll(userFieldsOf(inputs));
+        Map<String, Object> inputUserFields = userFieldsOf(inputs);
 
         Map<String, Object> sessionVarDefs = loadSessionVarDefs(session);
         Map<String, Object> redisPatch = new LinkedHashMap<>();
@@ -74,7 +74,17 @@ public final class FlowSetVariableEngine {
             String left = e.getKey();
             Object right = e.getValue();
             String operator = resolveOperator(left);
-            applyOne(vars, redisPatch, requestPatch, globalPatch, sessionVarDefs, session, left, right, operator);
+            applyOne(
+                    vars,
+                    inputUserFields,
+                    redisPatch,
+                    requestPatch,
+                    globalPatch,
+                    sessionVarDefs,
+                    session,
+                    left,
+                    right,
+                    operator);
         }
 
         if (scope != null) {
@@ -100,6 +110,7 @@ public final class FlowSetVariableEngine {
 
     private void applyOne(
             Map<String, Object> vars,
+            Map<String, Object> inputUserFields,
             Map<String, Object> redisPatch,
             Map<String, Object> requestPatch,
             Map<String, Object> globalPatch,
@@ -116,11 +127,11 @@ public final class FlowSetVariableEngine {
             leftRefStr = stripRef(left);
         }
 
-        Object value = generateValue(vars, session, right);
+        Object value = generateValue(vars, inputUserFields, session, right);
 
         // MEMORY_VARIABLE.* → update_global (Python); bare prefix accepted for Studio settings IR
         if (leftRefStr.startsWith(MEMORY_PREFIX)) {
-            value = applyOperator(vars, session, left, leftRefStr, value, operator, true);
+            value = applyOperator(vars, inputUserFields, session, left, leftRefStr, value, operator, true);
             globalPatch.put(leftRefStr, value);
             String varName = leftRefStr.substring(MEMORY_PREFIX.length());
             vars.put(leftRefStr, value);
@@ -133,7 +144,7 @@ public final class FlowSetVariableEngine {
 
         // ${_request.xxx} — Studio/SubWorkflow global_state bucket (legacy REQUEST_VARIABLES path)
         if (leftRefStr.startsWith("_request.") || leftRefStr.startsWith("_REQUEST.")) {
-            value = applyOperator(vars, session, left, leftRefStr, value, operator, false);
+            value = applyOperator(vars, inputUserFields, session, left, leftRefStr, value, operator, false);
             String reqName = leftRefStr.substring(leftRefStr.indexOf('.') + 1);
             requestPatch.put(reqName, value);
             vars.put(reqName, value);
@@ -146,7 +157,7 @@ public final class FlowSetVariableEngine {
             throw new IllegalArgumentException("key[" + left + "] not supported format");
         }
 
-        value = applyOperator(vars, session, left, leftRefStr, value, operator, false);
+        value = applyOperator(vars, inputUserFields, session, left, leftRefStr, value, operator, false);
         Object outputData = generateOutput(slice(keys, 1), value);
 
         String simple = keys[keys.length - 1];
@@ -164,6 +175,7 @@ public final class FlowSetVariableEngine {
 
     private Object applyOperator(
             Map<String, Object> vars,
+            Map<String, Object> inputUserFields,
             NodeSessionApi session,
             String left,
             String leftRefStr,
@@ -172,8 +184,10 @@ public final class FlowSetVariableEngine {
             boolean memoryGlobal) {
         String op = operator == null ? "" : operator;
         return switch (op) {
-            case "increment" -> toLong(readCurrent(vars, session, left, leftRefStr, memoryGlobal)) + 1;
-            case "decrement" -> toLong(readCurrent(vars, session, left, leftRefStr, memoryGlobal)) - 1;
+            case "increment" ->
+                    toLong(readCurrent(vars, inputUserFields, session, left, leftRefStr, memoryGlobal)) + 1;
+            case "decrement" ->
+                    toLong(readCurrent(vars, inputUserFields, session, left, leftRefStr, memoryGlobal)) - 1;
             case "empty" -> null;
             case "empty_str" -> "";
             case "empty_arr" -> List.of();
@@ -189,6 +203,7 @@ public final class FlowSetVariableEngine {
      */
     private static Object readCurrent(
             Map<String, Object> vars,
+            Map<String, Object> inputUserFields,
             NodeSessionApi session,
             String left,
             String leftRefStr,
@@ -200,10 +215,14 @@ public final class FlowSetVariableEngine {
                     vars.get(simpleName(leftRefStr)));
         }
         if (SessionUtils.isRefPath(left)) {
-            Object v = generateValue(vars, session, left);
-            return v;
+            return generateValue(vars, inputUserFields, session, left);
         }
-        return firstNonNull(vars.get(leftRefStr), vars.get(simpleName(leftRefStr)), vars.get(left));
+        return firstNonNull(
+                vars.get(leftRefStr),
+                lookupInput(inputUserFields, leftRefStr),
+                vars.get(simpleName(leftRefStr)),
+                lookupInput(inputUserFields, simpleName(leftRefStr)),
+                vars.get(left));
     }
 
     private static String simpleName(String ref) {
@@ -215,30 +234,52 @@ public final class FlowSetVariableEngine {
 
     /** Python {@code LoopSetVariableComponent.generate_value}. */
     static Object generateValue(Map<String, Object> vars, NodeSessionApi session, Object value) {
+        return generateValue(vars, Map.of(), session, value);
+    }
+
+    /** Python {@code LoopSetVariableComponent.generate_value}. */
+    static Object generateValue(
+            Map<String, Object> vars, Map<String, Object> inputUserFields, NodeSessionApi session, Object value) {
         if (value instanceof String s && SessionUtils.isRefPath(s)) {
             String ref = SessionUtils.extractOriginKey(s);
             Object g = sessionGlobal(session, ref);
             if (g != null) {
                 return g;
             }
-            if (vars.containsKey(ref)) {
-                return vars.get(ref);
-            }
-            String simple = ref.contains(".") ? ref.substring(ref.lastIndexOf('.') + 1) : ref;
-            return vars.getOrDefault(simple, value);
+            Object resolved = lookupVar(vars, inputUserFields, ref);
+            return resolved != null ? resolved : value;
         }
         if (value instanceof String s) {
             String t = s.trim();
             if (t.startsWith("${") && t.endsWith("}")) {
                 String ref = stripRef(t);
-                if (vars.containsKey(ref)) {
-                    return vars.get(ref);
-                }
-                String simple = ref.contains(".") ? ref.substring(ref.lastIndexOf('.') + 1) : ref;
-                return vars.getOrDefault(simple, value);
+                Object resolved = lookupVar(vars, inputUserFields, ref);
+                return resolved != null ? resolved : value;
             }
         }
         return value;
+    }
+
+    private static Object lookupVar(Map<String, Object> vars, Map<String, Object> inputUserFields, String ref) {
+        if (vars.containsKey(ref)) {
+            return vars.get(ref);
+        }
+        Object fromInput = lookupInput(inputUserFields, ref);
+        if (fromInput != null) {
+            return fromInput;
+        }
+        String simple = ref.contains(".") ? ref.substring(ref.lastIndexOf('.') + 1) : ref;
+        if (vars.containsKey(simple)) {
+            return vars.get(simple);
+        }
+        return lookupInput(inputUserFields, simple);
+    }
+
+    private static Object lookupInput(Map<String, Object> inputUserFields, String key) {
+        if (inputUserFields == null || key == null || key.isBlank()) {
+            return null;
+        }
+        return inputUserFields.get(key);
     }
 
     /** Python {@code LoopSetVariableComponent.generate_output}. */

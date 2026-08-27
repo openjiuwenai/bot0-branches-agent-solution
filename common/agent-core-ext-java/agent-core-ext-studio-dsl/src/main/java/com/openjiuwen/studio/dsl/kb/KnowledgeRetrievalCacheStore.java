@@ -4,6 +4,8 @@
 
 package com.openjiuwen.studio.dsl.kb;
 
+import com.openjiuwen.studio.dsl.store.SharedJedisPool;
+
 import redis.clients.jedis.JedisPooled;
 
 import java.util.Map;
@@ -110,7 +112,7 @@ public final class KnowledgeRetrievalCacheStore {
             if (p != null) {
                 port = Integer.parseInt(p.trim());
             }
-            return new JedisPooled(host, port);
+            return SharedJedisPool.getOrConnect(host.trim(), port);
         } catch (Exception e) {
             return null;
         }

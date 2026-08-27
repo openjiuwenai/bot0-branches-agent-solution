@@ -8,6 +8,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.session.NodeSessionApi;
 
+import com.openjiuwen.studio.dsl.store.SharedJedisPool;
+
 import redis.clients.jedis.JedisPooled;
 
 import java.util.ArrayList;
@@ -32,7 +34,9 @@ public final class QuestionerTraceStore {
     private static final Logger LOG = Logger.getLogger(QuestionerTraceStore.class.getName());
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
-    private static final int DEFAULT_TTL_SECONDS = 7 * 24 * 3600;
+    private static final int DEFAULT_TTL_SECONDS = 86400;
+    private static final int MEMORY_MAX_ENTRIES_PER_KEY = 512;
+    private static final int MEMORY_MAX_KEYS = 1024;
 
     private static final ConcurrentHashMap<String, List<Map<String, Object>>> MEMORY = new ConcurrentHashMap<>();
     private static volatile JedisPooled jedisOverride;
@@ -69,7 +73,20 @@ public final class QuestionerTraceStore {
                 LOG.log(Level.WARNING, "Failed to append questioner trace to Redis: " + e.getMessage(), e);
             }
         }
-        MEMORY.computeIfAbsent(key, k -> new ArrayList<>()).add(new LinkedHashMap<>(traceData));
+        MEMORY.computeIfAbsent(key, k -> {
+            if (MEMORY.size() >= MEMORY_MAX_KEYS) {
+                MEMORY.clear();
+            }
+            return new ArrayList<>();
+        }).add(new LinkedHashMap<>(traceData));
+        trimMemoryList(key);
+    }
+
+    private static void trimMemoryList(String key) {
+        List<Map<String, Object>> list = MEMORY.get(key);
+        if (list != null && list.size() > MEMORY_MAX_ENTRIES_PER_KEY) {
+            list.subList(0, list.size() - MEMORY_MAX_ENTRIES_PER_KEY).clear();
+        }
     }
 
     public static List<Map<String, Object>> getAll(String sessionId, String componentId) {
@@ -151,7 +168,7 @@ public final class QuestionerTraceStore {
             if (p != null) {
                 port = Integer.parseInt(p.trim());
             }
-            return new JedisPooled(host, port);
+            return SharedJedisPool.getOrConnect(host.trim(), port);
         } catch (Exception e) {
             return null;
         }

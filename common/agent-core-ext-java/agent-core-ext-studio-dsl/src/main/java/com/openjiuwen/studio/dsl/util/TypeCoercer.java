@@ -4,6 +4,9 @@
 
 package com.openjiuwen.studio.dsl.util;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,6 +18,9 @@ import java.util.Map;
  * @since 2026-08-17
  */
 public final class TypeCoercer {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final TypeReference<List<Object>> LIST_TYPE = new TypeReference<>() {};
+
     private TypeCoercer() {}
 
     /**
@@ -222,153 +228,9 @@ public final class TypeCoercer {
             return s;
         }
         try {
-            return SubprocessJson.parseArray(t);
+            return MAPPER.readValue(t, LIST_TYPE);
         } catch (Exception e) {
             return s;
-        }
-    }
-
-    /** Tiny bridge so util package can parse JSON arrays without circular deps on python package. */
-    private static final class SubprocessJson {
-        static Object parseArray(String s) throws Exception {
-            // Delegate to python SimpleJson via reflection-free duplicate minimal array parse
-            return MiniJson.parse(s);
-        }
-    }
-
-    private static final class MiniJson {
-        private final String s;
-        private int i;
-
-        private MiniJson(String s) {
-            this.s = s;
-        }
-
-        static Object parse(String s) throws Exception {
-            MiniJson p = new MiniJson(s.trim());
-            Object v = p.parseValue();
-            p.skipWs();
-            if (p.i != p.s.length()) {
-                throw new Exception("trailing");
-            }
-            return v;
-        }
-
-        private Object parseValue() throws Exception {
-            skipWs();
-            char c = s.charAt(i);
-            if (c == '[') {
-                return parseArray();
-            }
-            if (c == '{') {
-                return parseObject();
-            }
-            if (c == '"') {
-                return parseString();
-            }
-            return parseLiteral();
-        }
-
-        private List<Object> parseArray() throws Exception {
-            expect('[');
-            List<Object> list = new ArrayList<>();
-            skipWs();
-            if (peek(']')) {
-                i++;
-                return list;
-            }
-            while (true) {
-                list.add(parseValue());
-                skipWs();
-                if (peek(']')) {
-                    i++;
-                    return list;
-                }
-                expect(',');
-            }
-        }
-
-        private Map<String, Object> parseObject() throws Exception {
-            expect('{');
-            Map<String, Object> map = new LinkedHashMap<>();
-            skipWs();
-            if (peek('}')) {
-                i++;
-                return map;
-            }
-            while (true) {
-                String key = parseString();
-                skipWs();
-                expect(':');
-                map.put(key, parseValue());
-                skipWs();
-                if (peek('}')) {
-                    i++;
-                    return map;
-                }
-                expect(',');
-            }
-        }
-
-        private String parseString() throws Exception {
-            expect('"');
-            StringBuilder sb = new StringBuilder();
-            while (i < s.length()) {
-                char c = s.charAt(i++);
-                if (c == '"') {
-                    return sb.toString();
-                }
-                if (c == '\\' && i < s.length()) {
-                    sb.append(s.charAt(i++));
-                } else {
-                    sb.append(c);
-                }
-            }
-            throw new Exception("unterminated");
-        }
-
-        private Object parseLiteral() {
-            int start = i;
-            while (i < s.length()) {
-                char c = s.charAt(i);
-                if (Character.isLetterOrDigit(c) || c == '+' || c == '-' || c == '.') {
-                    i++;
-                } else {
-                    break;
-                }
-            }
-            String lit = s.substring(start, i);
-            if ("true".equals(lit)) {
-                return Boolean.TRUE;
-            }
-            if ("false".equals(lit)) {
-                return Boolean.FALSE;
-            }
-            if ("null".equals(lit)) {
-                return null;
-            }
-            if (lit.contains(".")) {
-                return Double.valueOf(lit);
-            }
-            return Long.valueOf(lit);
-        }
-
-        private void expect(char c) throws Exception {
-            skipWs();
-            if (i >= s.length() || s.charAt(i) != c) {
-                throw new Exception("expected " + c);
-            }
-            i++;
-        }
-
-        private boolean peek(char c) {
-            return i < s.length() && s.charAt(i) == c;
-        }
-
-        private void skipWs() {
-            while (i < s.length() && Character.isWhitespace(s.charAt(i))) {
-                i++;
-            }
         }
     }
 }

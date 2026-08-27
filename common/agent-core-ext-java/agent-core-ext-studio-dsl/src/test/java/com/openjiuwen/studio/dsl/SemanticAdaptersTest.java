@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl;
 
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
@@ -32,7 +33,9 @@ import java.util.Map;
  */
 class SemanticAdaptersTest {
     private final NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
-    private final NodeBuildContext ctx = NodeBuildContext.defaults("wf");
+    private NodeBuildContext ctx() {
+        return StudioEngineTestSupport.context("wf");
+    }
     private final NodeSessionApi session = mock(NodeSessionApi.class);
     private final ModelContext model = mock(ModelContext.class);
 
@@ -57,7 +60,7 @@ class SemanticAdaptersTest {
                                                         "right",
                                                         Map.of("value", "gold"))),
                                         Map.of("branchId", "default", "isDefault", true)))),
-                ctx);
+                ctx());
         @SuppressWarnings("unchecked")
         Map<String, Object> out = (Map<String, Object>)
                 exec.invoke(Map.of("userFields", Map.of("tier", "gold")), session, model);
@@ -81,7 +84,7 @@ class SemanticAdaptersTest {
                                         "jiuwen.setVariable",
                                         "configs",
                                         Map.of("variableMapping", Map.of("tick", 1)))))),
-                ctx);
+                ctx());
         @SuppressWarnings("unchecked")
         Map<String, Object> out =
                 (Map<String, Object>) exec.invoke(Map.of("userFields", Map.of("x", 1)), session, model);
@@ -93,7 +96,7 @@ class SemanticAdaptersTest {
     @Test
     void message_rendersTemplate() {
         ComponentExecutable exec = registry.create(
-                AssembledNode.of("m1", "jiuwen.message", Map.of("template", "hello {{name}}")), ctx);
+                AssembledNode.of("m1", "jiuwen.message", Map.of("template", "hello {{name}}")), ctx());
         @SuppressWarnings("unchecked")
         Map<String, Object> out =
                 (Map<String, Object>) exec.invoke(Map.of("userFields", Map.of("name", "Kayla")), session, model);
@@ -102,7 +105,7 @@ class SemanticAdaptersTest {
 
     @Test
     void extractor_llmExtractsFromContextHistory() {
-        ExtractorEngine.installTestInvoker(msgs -> "{\"city\": \"SZ\"}");
+        StudioEngineTestSupport.installExtractor(msgs -> "{\"city\": \"SZ\"}");
         try {
             ModelContext model = new StubModelContext(new com.openjiuwen.core.foundation.llm.schema.UserMessage("住在深圳"));
             ComponentExecutable exec = registry.create(
@@ -123,7 +126,7 @@ class SemanticAdaptersTest {
                                                     "field_name", "city",
                                                     "cn_field_name", "城市",
                                                     "description", "城市")))),
-                    ctx);
+                    ctx());
             @SuppressWarnings("unchecked")
             Map<String, Object> out = (Map<String, Object>) exec.invoke(
                     Map.of("userFields", Map.of()), session, model);
@@ -132,7 +135,7 @@ class SemanticAdaptersTest {
             assertThat(uf.get("city")).isEqualTo("SZ");
             assertThat(uf.get("USER_RESPONSE")).isEqualTo("住在深圳");
         } finally {
-            ExtractorEngine.clearTestInvoker();
+            StudioEngineTestSupport.clear();
         }
     }
 
@@ -149,7 +152,7 @@ class SemanticAdaptersTest {
                                         Map.of("result", "{{value}}"),
                                         "variables",
                                         List.of(Map.of("name", "value", "src_path", "a"))))),
-                ctx);
+                ctx());
         @SuppressWarnings("unchecked")
         Map<String, Object> out = (Map<String, Object>)
                 exec.invoke(Map.of("userFields", Map.of("_input", List.of(Map.of("a", 1)))), session, model);
@@ -161,7 +164,7 @@ class SemanticAdaptersTest {
     @Test
     void plugin_mockResponse() {
         ComponentExecutable exec = registry.create(
-                AssembledNode.of("p1", "jiuwen.plugin", Map.of("mockResponse", Map.of("ok", true))), ctx);
+                AssembledNode.of("p1", "jiuwen.plugin", Map.of("mockResponse", Map.of("ok", true))), ctx());
         @SuppressWarnings("unchecked")
         Map<String, Object> out =
                 (Map<String, Object>) exec.invoke(Map.of("userFields", Map.of()), session, model);
@@ -173,7 +176,7 @@ class SemanticAdaptersTest {
     @Test
     void mcp_invalidConfig_failsSurface() {
         ComponentExecutable exec =
-                registry.create(AssembledNode.of("mcp1", "jiuwen.mcp", Map.of("tool", "x")), ctx);
+                registry.create(AssembledNode.of("mcp1", "jiuwen.mcp", Map.of("tool", "x")), ctx());
         assertThatThrownBy(() -> exec.invoke(Map.of(), session, model))
                 .isInstanceOf(NodeExecutionException.class)
                 .extracting(e -> e instanceof NodeExecutionException ne ? ne.causeCode() : null)
@@ -183,7 +186,7 @@ class SemanticAdaptersTest {
     @Test
     void questioner_emitsInputRequired() {
         ComponentExecutable exec = registry.create(
-                AssembledNode.of("q1", "jiuwen.questioner", Map.of("question", "name?")), ctx);
+                AssembledNode.of("q1", "jiuwen.questioner", Map.of("question", "name?")), ctx());
         @SuppressWarnings("unchecked")
         Map<String, Object> out =
                 (Map<String, Object>) exec.invoke(Map.of("userFields", Map.of()), session, model);
@@ -194,7 +197,7 @@ class SemanticAdaptersTest {
 
     @Test
     void intent_stubLlmClassifies() {
-        IntentDetectionEngine.installTestInvoker(messages -> "{\"class\": \"分类0\", \"reason\": \"退款\"}");
+        StudioEngineTestSupport.installIntent(messages -> "{\"class\": \"分类0\", \"reason\": \"退款\"}");
         try {
             ComponentExecutable exec = registry.create(
                     AssembledNode.of(
@@ -213,7 +216,7 @@ class SemanticAdaptersTest {
                                                     Map.of("api_key", "k", "api_base", "http://localhost"))),
                                     "branches",
                                     List.of(Map.of("id", "branch_0", "catalog", "退款")))),
-                    ctx);
+                    ctx());
             @SuppressWarnings("unchecked")
             Map<String, Object> out = (Map<String, Object>)
                     exec.invoke(Map.of("input", "我要退款"), session, model);
@@ -221,7 +224,7 @@ class SemanticAdaptersTest {
             Map<String, Object> uf = (Map<String, Object>) out.get("userFields");
             assertThat(uf.get("result")).isEqualTo("分类0");
         } finally {
-            IntentDetectionEngine.clearTestInvoker();
+            StudioEngineTestSupport.clear();
         }
     }
 }

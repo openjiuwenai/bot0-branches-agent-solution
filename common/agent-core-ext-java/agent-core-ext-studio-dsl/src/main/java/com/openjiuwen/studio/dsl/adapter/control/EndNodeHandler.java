@@ -23,7 +23,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * jiuwen.end — strict 1:1 with Python {@code jiuwen/extension/workflow_node/end.py}.
@@ -47,12 +46,9 @@ public final class EndNodeHandler implements NodeHandlerFactory {
     }
 
     public static final class EndExecutable extends AbstractStudioNode {
-        private final FlowEndMixCoordinator mix = new FlowEndMixCoordinator();
-        private final AtomicBoolean invokeDone = new AtomicBoolean();
-        private final AtomicBoolean streamDone = new AtomicBoolean();
-        private final AtomicBoolean collectDone = new AtomicBoolean();
-        private final AtomicBoolean transformDone = new AtomicBoolean();
         private volatile Map<String, Object> streamOutput;
+        private volatile boolean pendingMix;
+        private volatile Boolean pendingExpectMix;
 
         EndExecutable(AssembledNode node) {
             super(node);
@@ -60,15 +56,28 @@ public final class EndNodeHandler implements NodeHandlerFactory {
 
         @Override
         public void setMix() {
-            mix.setMix();
+            pendingMix = true;
         }
 
         public void setExpectMix(boolean expect) {
-            mix.setExpectMix(expect);
+            pendingExpectMix = expect;
         }
 
         public boolean isMix() {
-            return mix.isMix();
+            return pendingMix;
+        }
+
+        private FlowEndMixCoordinator mixOf(NodeSessionApi session) {
+            FlowEndMixCoordinator mix = FlowEndEngine.mixCoordinator(session, node.id());
+            if (pendingMix) {
+                mix.setMix();
+                pendingMix = false;
+            }
+            if (pendingExpectMix != null) {
+                mix.setExpectMix(pendingExpectMix);
+                pendingExpectMix = null;
+            }
+            return mix;
         }
 
         public Map<String, Object> getStreamOutput() {
@@ -77,14 +86,14 @@ public final class EndNodeHandler implements NodeHandlerFactory {
 
         @Override
         protected NodePayload doInvoke(Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
-            if (invokeDone.getAndSet(true) || FlowEndEngine.alreadyInvoked(session)) {
+            if (FlowEndEngine.alreadyInvoked(session, node.id())) {
                 return NodePayload.ofFields(Map.of());
             }
-            FlowEndEngine.markInvoked(session);
+            FlowEndEngine.markInvoked(session, node.id());
 
             Prepared prepared = prepareBatchInputs(inputs);
             FlowEndMixCoordinator.MixResult mixResult =
-                    mix.coordinate("batch", prepared.fields, prepared.outputs);
+                    mixOf(session).coordinate("batch", prepared.fields, prepared.outputs);
             if (!mixResult.isRenderer()) {
                 return NodePayload.ofFields(Map.of());
             }
@@ -94,18 +103,19 @@ public final class EndNodeHandler implements NodeHandlerFactory {
             outputs.putAll(mixResult.outputs());
 
             NodePayload payload = renderAndEmit(fields, outputs, session, true);
-            mix.markRenderComplete();
+            mixOf(session).markRenderComplete();
             return payload;
         }
 
         @Override
         public Iterator<Object> stream(Object inputs, NodeSessionApi session, ModelContext context) {
-            if (streamDone.getAndSet(true)) {
+            if (FlowEndEngine.alreadyStreamed(session, node.id())) {
                 return List.of().iterator();
             }
+            FlowEndEngine.markStreamed(session, node.id());
             Prepared prepared = prepareBatchInputs(asMap(inputs));
             FlowEndMixCoordinator.MixResult mixResult =
-                    mix.coordinate("batch", prepared.fields, prepared.outputs);
+                    mixOf(session).coordinate("batch", prepared.fields, prepared.outputs);
             if (!mixResult.isRenderer()) {
                 return List.of().iterator();
             }
@@ -118,19 +128,20 @@ public final class EndNodeHandler implements NodeHandlerFactory {
             for (Object f : frames) {
                 writeFrame(session, f);
             }
-            mix.markRenderComplete();
+            mixOf(session).markRenderComplete();
             return frames.iterator();
         }
 
         @Override
         public Object collect(Object inputs, NodeSessionApi session, ModelContext context) {
-            if (collectDone.getAndSet(true)) {
+            if (FlowEndEngine.alreadyCollected(session, node.id())) {
                 return null;
             }
+            FlowEndEngine.markCollected(session, node.id());
             Map<String, Object> finalInputs = collectChunks(inputs);
             Prepared prepared = prepareFromFields(finalInputs);
             FlowEndMixCoordinator.MixResult mixResult =
-                    mix.coordinate("stream", prepared.fields, prepared.outputs);
+                    mixOf(session).coordinate("stream", prepared.fields, prepared.outputs);
             if (!mixResult.isRenderer()) {
                 return null;
             }
@@ -140,15 +151,16 @@ public final class EndNodeHandler implements NodeHandlerFactory {
             outputs.putAll(mixResult.outputs());
 
             NodePayload payload = renderAndEmit(fields, outputs, session, true);
-            mix.markRenderComplete();
+            mixOf(session).markRenderComplete();
             return payload.toInvokeMap();
         }
 
         @Override
         public Iterator<Object> transform(Object inputs, NodeSessionApi session, ModelContext context) {
-            if (transformDone.getAndSet(true)) {
+            if (FlowEndEngine.alreadyTransformed(session, node.id())) {
                 return List.of().iterator();
             }
+            FlowEndEngine.markTransformed(session, node.id());
             streamOutput = null;
             Map<String, Object> in = asMap(inputs);
             Map<String, Object> fields = new LinkedHashMap<>(userFieldsOf(in));
@@ -184,7 +196,7 @@ public final class EndNodeHandler implements NodeHandlerFactory {
             }
             Map<String, Object> outputs = FlowEndEngine.mapEndPrefixed(fields);
             // For mix, stream path coordinates with batch
-            FlowEndMixCoordinator.MixResult mixResult = mix.coordinate("stream", fields, outputs);
+            FlowEndMixCoordinator.MixResult mixResult = mixOf(session).coordinate("stream", fields, outputs);
             if (!mixResult.isRenderer()) {
                 return List.of().iterator();
             }
@@ -193,7 +205,7 @@ public final class EndNodeHandler implements NodeHandlerFactory {
             outputs.putAll(FlowEndEngine.mapEndPrefixed(fields));
 
             List<Object> frames = buildTransformFrames(fields, outputs, session);
-            mix.markRenderComplete();
+            mixOf(session).markRenderComplete();
             return frames.iterator();
         }
 

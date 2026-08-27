@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl;
 
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.core.workflow.ComponentExecutable;
@@ -32,13 +33,13 @@ class WorkflowNodeIntentDetectionCasesTest {
     @BeforeEach
     void setUp() {
         registry = NodeTypeRegistry.createWithBuiltins();
-        IntentDetectionEngine.installTestInvoker(
+        StudioEngineTestSupport.installIntent(
                 messages -> "{\"class\": \"分类1\", \"reason\": \"用户想要预订机票\"}");
     }
 
     @AfterEach
     void tearDown() {
-        IntentDetectionEngine.clearTestInvoker();
+        StudioEngineTestSupport.clear();
     }
 
     @SuppressWarnings("unchecked")
@@ -76,7 +77,7 @@ class WorkflowNodeIntentDetectionCasesTest {
     void workflowIntentDetectionWithStubLlm() {
         ComponentExecutable exec = registry.create(
                 AssembledNode.of("intent_detection", "jiuwen.intentDetection", intentConfig()),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
 
         Map<String, Object> fields = uf(exec.invoke(Map.of("input", USER_INPUT), null, null));
 
@@ -88,10 +89,10 @@ class WorkflowNodeIntentDetectionCasesTest {
 
     @Test
     void bareDigitClassNormalizedByStubLlm() {
-        IntentDetectionEngine.installTestInvoker(messages -> "{\"class\": \"2\", \"reason\": \"酒店\"}");
+        StudioEngineTestSupport.installIntent(messages -> "{\"class\": \"2\", \"reason\": \"酒店\"}");
         ComponentExecutable exec = registry.create(
                 AssembledNode.of("i1", "jiuwen.intentDetection", intentConfig()),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         Map<String, Object> fields = uf(exec.invoke(Map.of("input", "订酒店"), null, null));
         assertThat(fields.get("result")).isEqualTo("分类2");
         assertThat(String.valueOf(fields.get("name"))).contains("酒店");

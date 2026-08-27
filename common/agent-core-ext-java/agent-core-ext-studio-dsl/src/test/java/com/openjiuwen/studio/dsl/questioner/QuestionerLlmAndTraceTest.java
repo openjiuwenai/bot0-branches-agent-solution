@@ -15,6 +15,7 @@ import com.openjiuwen.studio.dsl.rails.formatters.DateUtilCompatibleParser;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -134,6 +135,73 @@ class QuestionerLlmAndTraceTest {
         assertThat(QuestionerTraceStore.getAll("s1", "q1"))
                 .anyMatch(m -> "hello".equals(m.get("user")))
                 .anyMatch(m -> "请问姓名？".equals(m.get("assistant")));
+    }
+
+    @Test
+    void state_usesPythonFieldNames() {
+        QuestionerState state = new QuestionerState();
+        state.extractedFields().put("city", "上海");
+        state.setUserResponse("我在上海");
+        Map<String, Object> serialized = state.toMap();
+        assertThat(serialized).containsKey("extracted_key_fields");
+        assertThat(serialized).doesNotContainKey("extracted_fields");
+        assertThat(serialized.get("user_response")).isEqualTo("我在上海");
+
+        QuestionerState roundTrip = QuestionerState.fromMap(serialized);
+        assertThat(roundTrip.extractedFields()).containsEntry("city", "上海");
+        assertThat(roundTrip.userResponse()).isEqualTo("我在上海");
+
+        Map<String, Object> legacy = new LinkedHashMap<>(serialized);
+        legacy.remove("extracted_key_fields");
+        legacy.put("extracted_fields", Map.of("city", "北京"));
+        QuestionerState fromLegacy = QuestionerState.fromMap(legacy);
+        assertThat(fromLegacy.extractedFields()).containsEntry("city", "北京");
+    }
+
+    @Test
+    void llmExtractor_writesLlmInfoTraceToStore() {
+        QuestionerConfig cfg =
+                QuestionerConfig.fromNodeConfigs(
+                        Map.of(
+                                "fieldNames",
+                                List.of(Map.of("fieldName", "city", "type", "string", "required", true))));
+        WorkflowSession wf = new WorkflowSession("wf-s1", null, "s-llm", InMemoryState.create(), null);
+        NodeSessionApi session = new NodeSessionApi(new NodeSession(wf, "q-llm"));
+        QuestionerLlmExtractor extractor =
+                new QuestionerLlmExtractor(
+                        "q-llm",
+                        cfg,
+                        messages -> "{\"city\": \"上海\"}");
+        extractor.extract("我在上海", List.of(), new QuestionerState(), session);
+        assertThat(QuestionerTraceStore.getAll("s-llm", "q-llm"))
+                .anySatisfy(
+                        m -> {
+                            assertThat(m).containsKey("llm_info");
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> info = (Map<String, Object>) m.get("llm_info");
+                            assertThat(info).containsKeys("llm_inputs", "llm_outputs");
+                            assertThat(info.get("llm_outputs")).isEqualTo("{\"city\": \"上海\"}");
+                            assertThat(info.get("llm_inputs")).isInstanceOf(List.class);
+                        });
+    }
+
+    @Test
+    void interruptStream_includesNodeName() {
+        QuestionerConfig cfg =
+                QuestionerConfig.fromNodeConfigs(
+                        Map.of("name", "提问节点", "questionContent", "请问？"));
+        NodeSessionApi session = org.mockito.Mockito.mock(NodeSessionApi.class);
+        org.mockito.ArgumentCaptor<Map<String, Object>> captor =
+                org.mockito.ArgumentCaptor.forClass(Map.class);
+        org.mockito.Mockito.when(session.getSessionId()).thenReturn("s1");
+        QuestionerEngine engine = new QuestionerEngine("q-name", cfg);
+        engine.invoke(Map.of("query", "hi"), session);
+        org.mockito.Mockito.verify(session, org.mockito.Mockito.atLeastOnce())
+                .writeCustomStream(captor.capture());
+        Map<String, Object> payload = captor.getValue();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) payload.get("data");
+        assertThat(data).containsEntry("node_name", "提问节点").containsEntry("node_id", "q-name");
     }
 
     @Test

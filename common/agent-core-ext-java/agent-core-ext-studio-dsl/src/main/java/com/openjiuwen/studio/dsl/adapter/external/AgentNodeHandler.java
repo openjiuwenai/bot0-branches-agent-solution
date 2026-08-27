@@ -9,6 +9,7 @@ import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.adapter.AbstractStudioNode;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
+import com.openjiuwen.studio.dsl.flowagent.FlowAgentConfig;
 import com.openjiuwen.studio.dsl.flowagent.FlowAgentEngine;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
@@ -48,9 +49,18 @@ public final class AgentNodeHandler implements NodeHandlerFactory {
 
         FlowAgentExecutable(AssembledNode node, NodeBuildContext ctx) {
             super(node);
-            this.engine = new FlowAgentEngine(node.id());
             this.nodeConfigs = node.configs() == null ? Map.of() : node.configs();
             this.ctx = ctx;
+            FlowAgentEngine.ReactBridge bridge =
+                    ctx != null && ctx.testOverrides() != null
+                            ? ctx.testOverrides().flowAgentBridge()
+                            : null;
+            if (bridge != null) {
+                this.engine = new FlowAgentEngine(node.id(), FlowAgentConfig.from(node.id(), nodeConfigs), bridge);
+                this.ready = true;
+            } else {
+                this.engine = new FlowAgentEngine(node.id());
+            }
         }
 
         FlowAgentEngine engine() {

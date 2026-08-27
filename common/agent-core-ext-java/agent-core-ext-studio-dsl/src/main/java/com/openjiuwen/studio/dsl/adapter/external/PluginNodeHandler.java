@@ -43,7 +43,7 @@ public final class PluginNodeHandler implements NodeHandlerFactory {
 
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
-        return new PluginExecutable(node, ctx == null ? null : ctx.toolRegistry());
+        return new PluginExecutable(node, ctx);
     }
 
     /**
@@ -62,11 +62,13 @@ public final class PluginNodeHandler implements NodeHandlerFactory {
         private final ToolRegistry toolRegistry;
         private volatile boolean ready;
 
-        PluginExecutable(AssembledNode node, ToolRegistry toolRegistry) {
+        PluginExecutable(AssembledNode node, NodeBuildContext ctx) {
             super(node);
-            this.engine = new FlowApiEngine(node.id());
             this.nodeConfigs = node.configs() == null ? Map.of() : node.configs();
-            this.toolRegistry = toolRegistry;
+            this.toolRegistry = ctx == null ? null : ctx.toolRegistry();
+            FlowApiEngine.TestBridge bridge =
+                    ctx != null && ctx.testOverrides() != null ? ctx.testOverrides().flowApiBridge() : null;
+            this.engine = bridge != null ? new FlowApiEngine(node.id(), bridge) : new FlowApiEngine(node.id());
         }
 
         FlowApiEngine engine() {

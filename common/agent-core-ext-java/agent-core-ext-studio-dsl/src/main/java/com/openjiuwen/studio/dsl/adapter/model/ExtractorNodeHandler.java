@@ -9,7 +9,9 @@ import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.adapter.AbstractStudioNode;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
+import com.openjiuwen.studio.dsl.extractor.ExtractorConfig;
 import com.openjiuwen.studio.dsl.extractor.ExtractorEngine;
+import com.openjiuwen.studio.dsl.extractor.ExtractorLlmExtractor;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
 import com.openjiuwen.studio.dsl.contract.NodeHandlerFactory;
@@ -53,17 +55,24 @@ public final class ExtractorNodeHandler implements NodeHandlerFactory {
      */
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
-        return new ExtractorExecutable(node);
+        return new ExtractorExecutable(node, ctx);
     }
 
     static final class ExtractorExecutable extends AbstractStudioNode {
         private final ExtractorEngine engine;
         private final Map<String, Object> nodeConfigs;
 
-        ExtractorExecutable(AssembledNode node) {
+        ExtractorExecutable(AssembledNode node, NodeBuildContext ctx) {
             super(node);
-            this.engine = new ExtractorEngine(node.id());
             this.nodeConfigs = node.configs() == null ? Map.of() : node.configs();
+            ExtractorLlmExtractor.ModelInvoker invoker =
+                    ctx != null && ctx.testOverrides() != null ? ctx.testOverrides().extractorInvoker() : null;
+            if (invoker != null) {
+                this.engine =
+                        new ExtractorEngine(node.id(), ExtractorConfig.fromNodeConfigs(nodeConfigs), invoker);
+            } else {
+                this.engine = new ExtractorEngine(node.id());
+            }
         }
 
         /**

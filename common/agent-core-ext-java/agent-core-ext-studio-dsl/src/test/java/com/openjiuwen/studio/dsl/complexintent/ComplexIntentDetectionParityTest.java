@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl.complexintent;
 
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -34,12 +35,12 @@ class ComplexIntentDetectionParityTest {
     @BeforeEach
     void setUp() {
         registry = NodeTypeRegistry.createWithBuiltins();
-        ComplexIntentDetectionEngine.clearTestBridge();
+        StudioEngineTestSupport.clear();
     }
 
     @AfterEach
     void tearDown() {
-        ComplexIntentDetectionEngine.clearTestBridge();
+        StudioEngineTestSupport.clear();
     }
 
     @SuppressWarnings("unchecked")
@@ -88,7 +89,7 @@ class ComplexIntentDetectionParityTest {
     class InvokeWithStub {
         @Test
         void intentOnly_whenBranchHasNoWorkflow() {
-            ComplexIntentDetectionEngine.installTestBridge(new ComplexIntentDetectionEngine.TestBridge() {
+            StudioEngineTestSupport.installComplexIntent(new ComplexIntentDetectionEngine.TestBridge() {
                 @Override
                 public Map<String, Object> intentResult(Map<String, Object> convertedInputs) {
                     return Map.of("classificationId", 0, "result", "分类0", "name", "其他意图", "reason", "");
@@ -101,7 +102,7 @@ class ComplexIntentDetectionParityTest {
             });
             Map<String, Object> conf = baseConf();
             // branch_0 has no configs.workflow_id → intent only
-            ComplexIntentDetectionEngine engine = new ComplexIntentDetectionEngine("c1", conf);
+            ComplexIntentDetectionEngine engine = StudioEngineTestSupport.createComplexIntent("c1", conf);
             Map<String, Object> fields =
                     uf(engine.invoke(Map.of("userFields", Map.of("input", "hello")), null, null));
             assertThat(fields).containsEntry("classificationId", 0).containsEntry("name", "其他意图");
@@ -109,7 +110,7 @@ class ComplexIntentDetectionParityTest {
 
         @Test
         void branchWorkflow_aggregatesGroup() {
-            ComplexIntentDetectionEngine.installTestBridge(new ComplexIntentDetectionEngine.TestBridge() {
+            StudioEngineTestSupport.installComplexIntent(new ComplexIntentDetectionEngine.TestBridge() {
                 @Override
                 public Map<String, Object> intentResult(Map<String, Object> convertedInputs) {
                     return Map.of("classificationId", 1, "result", "分类1", "name", "refund", "reason", "llm");
@@ -121,7 +122,7 @@ class ComplexIntentDetectionParityTest {
                     return Map.of("userFields", Map.of("answer", "refund-ok"), "responseContent", "refund-ok");
                 }
             });
-            ComplexIntentDetectionEngine engine = new ComplexIntentDetectionEngine("c1", baseConf());
+            ComplexIntentDetectionEngine engine = StudioEngineTestSupport.createComplexIntent("c1", baseConf());
             Map<String, Object> fields =
                     uf(engine.invoke(Map.of("userFields", Map.of("input", "I want a refund")), null, null));
             assertThat(fields).containsEntry("classificationId", 1).containsEntry("reply", "refund-ok");
@@ -147,7 +148,7 @@ class ComplexIntentDetectionParityTest {
     class HandlerPath {
         @Test
         void handlerUsesEngineStub() {
-            ComplexIntentDetectionEngine.installTestBridge(new ComplexIntentDetectionEngine.TestBridge() {
+            StudioEngineTestSupport.installComplexIntent(new ComplexIntentDetectionEngine.TestBridge() {
                 @Override
                 public Map<String, Object> intentResult(Map<String, Object> convertedInputs) {
                     return Map.of("classificationId", 1, "name", "refund");
@@ -159,7 +160,7 @@ class ComplexIntentDetectionParityTest {
                 }
             });
             ComponentExecutable exec =
-                    registry.create(AssembledNode.of("c", "EI.ComplexIntentDetection", baseConf()), NodeBuildContext.defaults("wf"));
+                    registry.create(AssembledNode.of("c", "EI.ComplexIntentDetection", baseConf()), StudioEngineTestSupport.context("wf"));
             assertThat(uf(exec.invoke(Map.of("userFields", Map.of("input", "refund please")), null, null)))
                     .containsEntry("classificationId", 1)
                     .containsEntry("reply", "done");
@@ -167,26 +168,28 @@ class ComplexIntentDetectionParityTest {
 
         @Test
         void resolverPath_runsChildLinear() {
-            ComplexIntentDetectionEngine.clearTestBridge();
+            StudioEngineTestSupport.clear();
             // Force intent via test invoker on IntentDetection would need model; use bridge for intent only
             // and real resolver for child — hybrid: bridge returns intent, null sub → then real sub if bridge
             // returns null for sub... Our bridge always used for both when set.
             // So: no bridge; install IntentDetection test invoker.
-            com.openjiuwen.studio.dsl.intentdetection.IntentDetectionEngine.installTestInvoker(
+            StudioEngineTestSupport.installIntent(
                     messages -> "分类1");
             try {
                 AssembledWorkflow child = new AssembledWorkflow(
                         "wf_refund",
                         List.of(
                                 AssembledNode.of("e", "jiuwen.end", Map.of("responseTemplate", "child-done"))));
-                NodeBuildContext ctx = new NodeBuildContext(
-                        "parent",
-                        0,
-                        5,
-                        null,
-                        configs -> child,
-                        new com.openjiuwen.studio.dsl.support.InMemoryToolRegistry(),
-                        registry);
+                NodeBuildContext ctx =
+                        StudioEngineTestSupport.withCurrentOverrides(
+                                new NodeBuildContext(
+                                        "parent",
+                                        0,
+                                        5,
+                                        null,
+                                        configs -> child,
+                                        new com.openjiuwen.studio.dsl.support.InMemoryToolRegistry(),
+                                        registry));
                 Map<String, Object> conf = baseConf();
                 // IntentDetection needs model wiring OR test invoker — installed above
                 conf.put("llm", Map.of("model_name", "m"));
@@ -196,7 +199,7 @@ class ComplexIntentDetectionParityTest {
                         uf(exec.invoke(Map.of("userFields", Map.of("input", "refund")), null, null));
                 assertThat(fields).containsKey("classificationId");
             } finally {
-                com.openjiuwen.studio.dsl.intentdetection.IntentDetectionEngine.clearTestInvoker();
+                StudioEngineTestSupport.clear();
             }
         }
     }

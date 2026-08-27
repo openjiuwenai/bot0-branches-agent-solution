@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl;
 
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.core.context.ModelContext;
@@ -39,12 +40,12 @@ class WorkflowNodeExtractorCasesTest {
     @BeforeEach
     void setUp() {
         registry = NodeTypeRegistry.createWithBuiltins();
-        ExtractorEngine.installTestInvoker(msgs -> MOCK_LLM_JSON);
+        StudioEngineTestSupport.installExtractor(msgs -> MOCK_LLM_JSON);
     }
 
     @AfterEach
     void tearDown() {
-        ExtractorEngine.clearTestInvoker();
+        StudioEngineTestSupport.clear();
     }
 
     static Map<String, Object> standardExtractorConfig() {
@@ -89,7 +90,7 @@ class WorkflowNodeExtractorCasesTest {
 
     private ComponentExecutable extractor(Map<String, Object> configs) {
         return registry.create(
-                AssembledNode.of("extractor", "jiuwen.extractor", configs), NodeBuildContext.defaults("wf"));
+                AssembledNode.of("extractor", "jiuwen.extractor", configs), StudioEngineTestSupport.context("wf"));
     }
 
     @Nested
@@ -120,7 +121,7 @@ class WorkflowNodeExtractorCasesTest {
 
         @Test
         void extractWithEmptyLlmResponse() {
-            ExtractorEngine.installTestInvoker(msgs -> "{}");
+            StudioEngineTestSupport.installExtractor(msgs -> "{}");
             ComponentExecutable exec = extractor(standardExtractorConfig());
             Map<String, Object> fields = uf(exec.invoke(
                     Map.of("userFields", Map.of()), null, contextWithUserInput(USER_INPUT)));
@@ -142,7 +143,7 @@ class WorkflowNodeExtractorCasesTest {
             Map<String, Object> out = LinearWorkflowTestSupport.executeLinear(
                             registry,
                             wf,
-                            NodeBuildContext.defaults("ext_linear"),
+                            StudioEngineTestSupport.context("ext_linear"),
                             Map.of("userFields", Map.of("query", USER_INPUT)),
                             null,
                             contextWithUserInput(USER_INPUT));
@@ -156,7 +157,7 @@ class WorkflowNodeExtractorCasesTest {
         void aliasInfoExtractionType() {
             ComponentExecutable exec = registry.create(
                     AssembledNode.of("e1", "jiuwen.infoExtraction", standardExtractorConfig()),
-                    NodeBuildContext.defaults("wf"));
+                    StudioEngineTestSupport.context("wf"));
             Map<String, Object> fields = uf(exec.invoke(
                     Map.of("userFields", Map.of()), null, contextWithUserInput("去北京")));
             assertThat(fields.get("location")).isEqualTo("上海");

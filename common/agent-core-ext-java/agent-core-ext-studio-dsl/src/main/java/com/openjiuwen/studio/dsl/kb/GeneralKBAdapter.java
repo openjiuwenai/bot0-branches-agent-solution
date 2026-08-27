@@ -54,6 +54,7 @@ public final class GeneralKBAdapter implements KBServiceAdapter {
             body.put("search_threshold", scoreThreshold);
         }
         String url = endpoint.replaceAll("/$", "") + "/knowledge-bases/retrieve";
+        CustomerHeaderInject.applyToKb(headers);
         List<KBSearchResult> results = parseResponse(KbHttp.postJson(url, headers, body));
         results.sort(Comparator.comparingDouble(KBSearchResult::score).reversed());
         if (results.size() > topK) {

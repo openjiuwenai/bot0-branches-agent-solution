@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl;
 
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
@@ -80,7 +81,7 @@ class FeatGapFillTest {
                                         "jiuwen.setVariable",
                                         "configs",
                                         Map.of("variableMapping", Map.of("tick", 1)))))),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         @SuppressWarnings("unchecked")
         Map<String, Object> out = (Map<String, Object>) exec.invoke(
                 Map.of("userFields", Map.of("x", 0)), mock(NodeSessionApi.class), mock(ModelContext.class));
@@ -153,7 +154,7 @@ class FeatGapFillTest {
                             "method",
                             "Body")));
             ComponentExecutable exec =
-                    registry.create(AssembledNode.of("m1", "jiuwen.mcp", conf), NodeBuildContext.defaults("wf"));
+                    registry.create(AssembledNode.of("m1", "jiuwen.mcp", conf), StudioEngineTestSupport.context("wf"));
             @SuppressWarnings("unchecked")
             Map<String, Object> out = (Map<String, Object>)
                     exec.invoke(Map.of("userFields", Map.of("query", "7")), null, null);
@@ -167,7 +168,7 @@ class FeatGapFillTest {
 
     @Test
     void agent_reactBridge_invokes() {
-        com.openjiuwen.studio.dsl.flowagent.FlowAgentEngine.installTestBridge(
+        StudioEngineTestSupport.installFlowAgent(
                 new com.openjiuwen.studio.dsl.flowagent.FlowAgentEngine.ReactBridge() {
                     @Override
                     public Map<String, Object> invoke(Map<String, Object> mappedInputs) {
@@ -186,7 +187,7 @@ class FeatGapFillTest {
             conf.put("max_iteration", 3);
             conf.put("llm_config", Map.of("model_name", "m"));
             ComponentExecutable exec =
-                    registry.create(AssembledNode.of("a1", "jiuwen.agent", conf), NodeBuildContext.defaults("wf"));
+                    registry.create(AssembledNode.of("a1", "jiuwen.agent", conf), StudioEngineTestSupport.context("wf"));
             @SuppressWarnings("unchecked")
             Map<String, Object> out = (Map<String, Object>)
                     exec.invoke(Map.of("userFields", Map.of("query", "1")), null, null);
@@ -194,7 +195,7 @@ class FeatGapFillTest {
             Map<String, Object> uf = (Map<String, Object>) out.get("userFields");
             assertThat(uf).containsEntry("output", "ok-1");
         } finally {
-            com.openjiuwen.studio.dsl.flowagent.FlowAgentEngine.clearTestBridge();
+            StudioEngineTestSupport.clear();
         }
     }
 
@@ -224,7 +225,7 @@ class FeatGapFillTest {
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
         ComponentExecutable exec = registry.create(
                 AssembledNode.of("q1", "jiuwen.questioner", Map.of("question", "name?")),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         @SuppressWarnings("unchecked")
         Map<String, Object> hang =
                 (Map<String, Object>) exec.invoke(Map.of("userFields", Map.of()), session, mock(ModelContext.class));
@@ -245,7 +246,7 @@ class FeatGapFillTest {
         NodeSessionApi session = mock(NodeSessionApi.class);
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
         ComponentExecutable exec = registry.create(
-                AssembledNode.of("m1", "jiuwen.message", Map.of("template", "hi")), NodeBuildContext.defaults("wf"));
+                AssembledNode.of("m1", "jiuwen.message", Map.of("template", "hi")), StudioEngineTestSupport.context("wf"));
         exec.invoke(Map.of("userFields", Map.of()), session, mock(ModelContext.class));
         verify(session, atLeastOnce()).writeCustomStream(any());
     }
@@ -253,7 +254,7 @@ class FeatGapFillTest {
     @Test
     void llm_invokeWithStubBridge() {
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
-        LlmChainEngine.installTestBridge(new LlmChainEngine.ModelBridge() {
+        StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
                 return new AssistantMessage("seen");
@@ -267,7 +268,7 @@ class FeatGapFillTest {
         try {
             ComponentExecutable exec = registry.create(
                     AssembledNode.of("llm1", "jiuwen.LLMComponent", llmConf()),
-                    NodeBuildContext.defaults("wf"));
+                    StudioEngineTestSupport.context("wf"));
             @SuppressWarnings("unchecked")
             Map<String, Object> out = (Map<String, Object>) exec.invoke(
                     Map.of("userFields", Map.of("query", "x")),
@@ -277,7 +278,7 @@ class FeatGapFillTest {
             Map<String, Object> uf = (Map<String, Object>) out.get("userFields");
             assertThat(uf.get("raw_output")).isEqualTo("seen");
         } finally {
-            LlmChainEngine.clearTestBridge();
+            StudioEngineTestSupport.clear();
         }
     }
 
@@ -298,7 +299,7 @@ class FeatGapFillTest {
                                                 "condition",
                                                 Map.of("variable", "flag", "operator", "eq", "value", true)),
                                         Map.of("branchId", "default", "isDefault", true)))),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         @SuppressWarnings("unchecked")
         Map<String, Object> out = (Map<String, Object>) exec.invoke(
                 Map.of("userFields", Map.of("flag", true)), mock(NodeSessionApi.class), mock(ModelContext.class));
@@ -310,7 +311,7 @@ class FeatGapFillTest {
     void llm_visionInjectsImageIntoLastUserMessage() {
         NodeTypeRegistry registry = NodeTypeRegistry.createWithBuiltins();
         AtomicReference<List<BaseMessage>> captured = new AtomicReference<>();
-        LlmChainEngine.installTestBridge(new LlmChainEngine.ModelBridge() {
+        StudioEngineTestSupport.installLlm(new LlmChainEngine.ModelBridge() {
             @Override
             public AssistantMessage invoke(List<BaseMessage> messages) {
                 captured.set(messages);
@@ -334,7 +335,7 @@ class FeatGapFillTest {
 
             ComponentExecutable exec = registry.create(
                     AssembledNode.of("llm1", "jiuwen.LLMComponent", conf),
-                    NodeBuildContext.defaults("wf"));
+                    StudioEngineTestSupport.context("wf"));
             exec.invoke(
                     Map.of(
                             "userFields",
@@ -347,7 +348,7 @@ class FeatGapFillTest {
             List<Map<String, Object>> parts = (List<Map<String, Object>>) content;
             assertThat(parts.stream().anyMatch(p -> "image_url".equals(p.get("type")))).isTrue();
         } finally {
-            LlmChainEngine.clearTestBridge();
+            StudioEngineTestSupport.clear();
         }
     }
 
@@ -395,7 +396,7 @@ class FeatGapFillTest {
     void defaults_respectsMaxNestingDepthProperty() {
         var props = new com.openjiuwen.studio.dsl.config.StudioDslNodeProperties();
         props.setMaxNestingDepth(2);
-        NodeBuildContext ctx = NodeBuildContext.defaults("wf", props);
+        NodeBuildContext ctx = StudioEngineTestSupport.context("wf", props);
         assertThat(ctx.maxNestingDepth()).isEqualTo(2);
     }
 }

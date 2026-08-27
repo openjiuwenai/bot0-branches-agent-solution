@@ -32,8 +32,7 @@ public final class IntentDetectionEngine {
     private static final String USER_PROFILE_KEY = "userProfile";
     private static final String ENABLE_KEY = "enable";
 
-    /** Test-only LLM stub (mirrors Python {@code patch IntentDetection._get_llm_instance}). */
-    private static final ThreadLocal<IntentDetectionLlmDetector.ModelInvoker> TEST_INVOKER = new ThreadLocal<>();
+    /** Test-only LLM stub wired via constructor (mirrors Python patch). */
 
     private final String nodeId;
     private final Map<String, Object> llmConf;
@@ -49,10 +48,6 @@ public final class IntentDetectionEngine {
     private IntentDetectionState nodeState = new IntentDetectionState();
     private final IntentDetectionState nodeStateRetry = new IntentDetectionState();
 
-    private String fewShotExample = "";
-    private String conversationId = "";
-    private NodeSessionApi session;
-    private Map<String, Object> modelMap = Map.of();
     private boolean enableKnowledge;
 
     public IntentDetectionEngine(String nodeId, Map<String, Object> nodeConfigs) {
@@ -98,14 +93,6 @@ public final class IntentDetectionEngine {
         getKgInstance(faqConfig);
     }
 
-    public static void installTestInvoker(IntentDetectionLlmDetector.ModelInvoker invoker) {
-        TEST_INVOKER.set(invoker);
-    }
-
-    public static void clearTestInvoker() {
-        TEST_INVOKER.remove();
-    }
-
     // --------------------------------------------------------------------------
     // State management (Python reset / get_state / load_state)
     // --------------------------------------------------------------------------
@@ -113,7 +100,6 @@ public final class IntentDetectionEngine {
     public boolean reset() {
         this.intentConfig = intentConfigRetry;
         this.nodeState = nodeStateRetry.copy();
-        this.fewShotExample = "";
         if (!hasBranch0) {
             this.intentConfig =
                     IntentDetectionConfigFormatter.withDefaultClass(
@@ -149,10 +135,8 @@ public final class IntentDetectionEngine {
     public Map<String, Object> invoke(
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         long startTime = System.nanoTime();
-        this.session = session;
-        this.conversationId = session == null ? "" : session.getSessionId();
         router.setSession(session);
-        modelMap = resolveModelMap(session);
+        Map<String, Object> modelMap = resolveModelMap(session);
 
         List<Map<String, Object>> chatHistory = getChatHistory(context, session);
         Map<String, Object> currentInputs = new LinkedHashMap<>();
@@ -188,11 +172,11 @@ public final class IntentDetectionEngine {
                     str(idName.get("name")));
         }
 
-        String llmOutput = getLlmResult(currentInputs);
-        Map<String, Object> intentRes = handleDetectionResult(llmOutput, globalIntentMap);
+        String llmOutput = getLlmResult(currentInputs, session, modelMap);
+        Map<String, Object> intentRes = handleDetectionResult(llmOutput, globalIntentMap, session);
 
         long durationMs = Math.round((System.nanoTime() - startTime) / 1_000_000.0);
-        tracePerformance(durationMs);
+        tracePerformance(session, durationMs);
         return intentRes;
     }
 
@@ -221,7 +205,6 @@ public final class IntentDetectionEngine {
                 IntentFaqMatcher.match(intentConfig, toolRegistry, query, chatHistory, enableKnowledge);
         String fewShot = faq.fewShotExample();
         currentInputs.put("example_content", fewShot);
-        fewShotExample = fewShotExample + "\n" + fewShot;
         return faq.intentClass();
     }
 
@@ -229,7 +212,8 @@ public final class IntentDetectionEngine {
     // LLM (Python get_llm_result)
     // --------------------------------------------------------------------------
 
-    private String getLlmResult(Map<String, Object> currentInputs) {
+    private String getLlmResult(
+            Map<String, Object> currentInputs, NodeSessionApi session, Map<String, Object> modelMap) {
         IntentDetectionLlmDetector.ModelInvoker invoker = resolveInvoker();
         if (invoker == null && !intentConfig.hasModelWiring()) {
             throw new NodeExecutionException(
@@ -262,7 +246,7 @@ public final class IntentDetectionEngine {
         if (testInvoker != null) {
             return testInvoker;
         }
-        return TEST_INVOKER.get();
+        return null;
     }
 
     // --------------------------------------------------------------------------
@@ -331,18 +315,19 @@ public final class IntentDetectionEngine {
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> handleDetectionResult(String llmOutput, Map<String, Object> globalIntentMap) {
+    private Map<String, Object> handleDetectionResult(
+            String llmOutput, Map<String, Object> globalIntentMap, NodeSessionApi session) {
         String[] parsed = IntentDetectionLlmDetector.postProcess(intentConfig, llmOutput);
         String intentClass = parsed[0];
         String reason = parsed[1];
 
         if (globalIntentMap.containsKey(intentClass)) {
-            return handleGlobalIntent(intentClass, reason, globalIntentMap.get(intentClass));
+            return handleGlobalIntent(intentClass, reason, globalIntentMap.get(intentClass), session);
         }
         if ("分类0".equals(intentClass)
                 && intentConfig.overridable()
                 && !globalIntentMap.isEmpty()) {
-            return handleGlobalOtherIntent();
+            return handleGlobalOtherIntent(session);
         }
 
         if (!intentConfig.categoryList().contains(intentClass)) {
@@ -364,7 +349,7 @@ public final class IntentDetectionEngine {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> handleGlobalIntent(
-            String intentClass, String reason, Object matchedIntent) {
+            String intentClass, String reason, Object matchedIntent, NodeSessionApi session) {
         Map<String, Object> intent = new LinkedHashMap<>();
         if (matchedIntent instanceof Map<?, ?> m) {
             m.forEach((k, v) -> intent.put(String.valueOf(k), v));
@@ -380,7 +365,7 @@ public final class IntentDetectionEngine {
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> handleGlobalOtherIntent() {
+    private Map<String, Object> handleGlobalOtherIntent(NodeSessionApi session) {
         Map<String, Object> intent = Map.of("intent_id", "0", "reason", "其他");
         nodeState.setStatus(IntentDetectionState.ExecutionStatus.USER_INTERACT);
         if (session == null) {
@@ -506,7 +491,7 @@ public final class IntentDetectionEngine {
                 "intent detection user input error, reason: " + errorMsg);
     }
 
-    private void tracePerformance(long durationMs) {
+    private void tracePerformance(NodeSessionApi session, long durationMs) {
         if (session == null) {
             return;
         }

@@ -19,12 +19,21 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * End mix + Iterator/generator parity (Python end.py mix / process_generator_values / collect / transform).
@@ -144,13 +153,15 @@ class WorkflowNodeEndMixGeneratorCasesTest {
                                 NodeBuildContext.defaults("wf"));
         end.setMix();
 
+        NodeSessionApi sharedSession = statefulSession();
         CountDownLatch started = new CountDownLatch(1);
         AtomicReference<Object> batchOut = new AtomicReference<>();
         AtomicReference<Object> streamOut = new AtomicReference<>();
 
         Thread batch = new Thread(() -> {
             started.countDown();
-            batchOut.set(end.invoke(Map.of("userFields", Map.of("a", "A")), mock(NodeSessionApi.class), null));
+            batchOut.set(
+                    end.invoke(Map.of("userFields", Map.of("a", "A")), sharedSession, null));
         });
         Thread stream = new Thread(() -> {
             try {
@@ -159,7 +170,8 @@ class WorkflowNodeEndMixGeneratorCasesTest {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
-            streamOut.set(end.collect(Map.of("userFields", Map.of("b", "B")), mock(NodeSessionApi.class), null));
+            streamOut.set(
+                    end.collect(Map.of("userFields", Map.of("b", "B")), sharedSession, null));
         });
         batch.start();
         stream.start();
@@ -191,5 +203,26 @@ class WorkflowNodeEndMixGeneratorCasesTest {
                 NodeBuildContext.defaults("wf"));
         Map<String, Object> a = uf(end.invoke(Map.of("userFields", Map.of("v", "1")), mock(NodeSessionApi.class), null));
         assertThat(a.get("response")).isEqualTo("x=1");
+    }
+
+    private static NodeSessionApi statefulSession() {
+        AtomicReference<Map<String, Object>> bucket = new AtomicReference<>(new HashMap<>());
+        NodeSessionApi session = mock(NodeSessionApi.class);
+        when(session.getState(any())).thenAnswer(inv -> {
+            Object key = inv.getArgument(0);
+            if (key == null) {
+                return bucket.get();
+            }
+            return bucket.get().get(String.valueOf(key));
+        });
+        doAnswer(inv -> {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> patch = inv.getArgument(0);
+            Map<String, Object> cur = new java.util.LinkedHashMap<>(bucket.get());
+            patch.forEach(cur::put);
+            bucket.set(cur);
+            return null;
+        }).when(session).updateState(any());
+        return session;
     }
 }

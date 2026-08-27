@@ -22,6 +22,7 @@ public final class QuestionerState {
 
     private String status = START;
     private String question = "";
+    private String userResponse = "";
     private int responseNum;
     private final Map<String, Object> extractedFields = new LinkedHashMap<>();
     private final Set<String> fieldsCheckFailed = new HashSet<>();
@@ -54,7 +55,10 @@ public final class QuestionerState {
         if (rn instanceof Number n) {
             s.responseNum = n.intValue();
         }
-        Object fields = raw.get("extracted_fields");
+        Object fields = raw.get("extracted_key_fields");
+        if (!(fields instanceof Map<?, ?>)) {
+            fields = raw.get("extracted_fields");
+        }
         if (fields instanceof Map<?, ?> m) {
             m.forEach((k, v) -> s.extractedFields.put(String.valueOf(k), v));
         }
@@ -67,6 +71,10 @@ public final class QuestionerState {
         Object reflection = raw.get("reflection_map");
         if (reflection instanceof Map<?, ?> rm) {
             rm.forEach((k, v) -> s.reflectionMap.put(String.valueOf(k), v));
+        }
+        Object ur = raw.get("user_response");
+        if (ur != null) {
+            s.userResponse = String.valueOf(ur);
         }
         Object nuc = raw.get("need_user_confirm");
         s.needUserConfirm = nuc instanceof Boolean b ? b : true;
@@ -88,7 +96,8 @@ public final class QuestionerState {
         m.put("status", status);
         m.put("question", question);
         m.put("response_num", responseNum);
-        m.put("extracted_fields", new LinkedHashMap<>(extractedFields));
+        m.put("extracted_key_fields", new LinkedHashMap<>(extractedFields));
+        m.put("user_response", userResponse == null ? "" : userResponse);
         m.put("fields_check_failed", Set.copyOf(fieldsCheckFailed));
         m.put("need_user_confirm", needUserConfirm);
         m.put("user_break", userBreak);
@@ -176,6 +185,20 @@ public final class QuestionerState {
      */
     public void setUserBreak(boolean userBreak) {
         this.userBreak = userBreak;
+    }
+
+    /** @return userResponse (Python {@code user_response}) */
+    public String userResponse() {
+        return userResponse;
+    }
+
+    /**
+     * setUserResponse.
+     *
+     * @param userResponse userResponse
+     */
+    public void setUserResponse(String userResponse) {
+        this.userResponse = userResponse == null ? "" : userResponse;
     }
 
     /** @return reflectionMap (Python {@code reflection_map}) */

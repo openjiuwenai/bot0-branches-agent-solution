@@ -14,6 +14,7 @@ import com.openjiuwen.studio.dsl.contract.ToolRegistry;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.exec.StudioChildWorkflowRunner;
 import com.openjiuwen.studio.dsl.intentdetection.IntentDetectionEngine;
+import com.openjiuwen.studio.dsl.intentdetection.IntentDetectionLlmDetector;
 import com.openjiuwen.studio.dsl.model.AssembledWorkflow;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
 
@@ -26,7 +27,8 @@ import java.util.Map;
  * ComplexIntentDetection engine — strict 1:1 with Python {@code complex_intent_detection.py}.
  *
  * <p>Composes {@link IntentDetectionEngine}; branch SubWorkflow via {@link SubWorkflowResolver}
- * + linear assembly. Tests stub via {@link #installTestBridge(TestBridge)}.
+ * + linear assembly. Tests inject {@link TestBridge} via constructor or
+ * {@link com.openjiuwen.studio.dsl.exec.StudioEngineTestOverrides}.
  *
  * @since 2026-08-26
  */
@@ -35,8 +37,6 @@ public final class ComplexIntentDetectionEngine {
     public static final String KEY_CLASSIFICATION_ID = "classificationId";
     public static final String RESPONSE_CONTENT = "responseContent";
     public static final String INPUT = "input";
-
-    private static final ThreadLocal<TestBridge> TEST_BRIDGE = new ThreadLocal<>();
 
     /** Test stub for intent + optional sub-workflow (mirrors patching IntentDetection / SubWorkflow). */
     public interface TestBridge {
@@ -55,11 +55,12 @@ public final class ComplexIntentDetectionEngine {
     private final SubWorkflowResolver subWorkflowResolver;
     private final NodeTypeRegistry nodeTypeRegistry;
     private final NodeBuildContext buildContext;
+    private final TestBridge presetBridge;
 
     private ComplexIntentState state = new ComplexIntentState();
 
     public ComplexIntentDetectionEngine(String nodeId, Map<String, Object> nodeConfigs) {
-        this(nodeId, nodeConfigs, null, null, null);
+        this(nodeId, nodeConfigs, null, null, null, null, null);
     }
 
     public ComplexIntentDetectionEngine(
@@ -68,7 +69,7 @@ public final class ComplexIntentDetectionEngine {
             SubWorkflowResolver subWorkflowResolver,
             NodeTypeRegistry nodeTypeRegistry,
             NodeBuildContext buildContext) {
-        this(nodeId, nodeConfigs, subWorkflowResolver, nodeTypeRegistry, buildContext, null);
+        this(nodeId, nodeConfigs, subWorkflowResolver, nodeTypeRegistry, buildContext, null, null);
     }
 
     public ComplexIntentDetectionEngine(
@@ -78,6 +79,18 @@ public final class ComplexIntentDetectionEngine {
             NodeTypeRegistry nodeTypeRegistry,
             NodeBuildContext buildContext,
             ToolRegistry toolRegistry) {
+        this(nodeId, nodeConfigs, subWorkflowResolver, nodeTypeRegistry, buildContext, toolRegistry, null);
+    }
+
+    public ComplexIntentDetectionEngine(
+            String nodeId,
+            Map<String, Object> nodeConfigs,
+            SubWorkflowResolver subWorkflowResolver,
+            NodeTypeRegistry nodeTypeRegistry,
+            NodeBuildContext buildContext,
+            ToolRegistry toolRegistry,
+            TestBridge testBridge) {
+        this.presetBridge = testBridge;
         this.nodeId = nodeId == null ? "cid" : nodeId;
         this.config = ComplexIntentDetectionConfig.from(this.nodeId, nodeConfigs);
         this.branchesById = new LinkedHashMap<>();
@@ -94,19 +107,21 @@ public final class ComplexIntentDetectionEngine {
             }
         }
         this.branch2group = buildBranchToGroup(config.groups());
-        this.intentDetection =
-                new IntentDetectionEngine(this.nodeId + "-intent", config.toIntentDetectionConfigs(), toolRegistry);
+        IntentDetectionLlmDetector.ModelInvoker intentInvoker = null;
+        if (buildContext != null && buildContext.testOverrides() != null) {
+            intentInvoker = buildContext.testOverrides().intentInvoker();
+        }
+        if (intentInvoker != null) {
+            this.intentDetection =
+                    new IntentDetectionEngine(
+                            this.nodeId + "-intent", config.toIntentDetectionConfigs(), intentInvoker, toolRegistry);
+        } else {
+            this.intentDetection =
+                    new IntentDetectionEngine(this.nodeId + "-intent", config.toIntentDetectionConfigs(), toolRegistry);
+        }
         this.subWorkflowResolver = subWorkflowResolver;
         this.nodeTypeRegistry = nodeTypeRegistry;
         this.buildContext = buildContext;
-    }
-
-    public static void installTestBridge(TestBridge bridge) {
-        TEST_BRIDGE.set(bridge);
-    }
-
-    public static void clearTestBridge() {
-        TEST_BRIDGE.remove();
     }
 
     public ComplexIntentState getState() {
@@ -163,7 +178,7 @@ public final class ComplexIntentDetectionEngine {
             Map<String, Object> inputs, NodeSessionApi session, ModelContext context) {
         if (ComplexIntentState.START.equals(state.status())) {
             Map<String, Object> intentResult;
-            TestBridge bridge = TEST_BRIDGE.get();
+            TestBridge bridge = presetBridge;
             if (bridge != null) {
                 intentResult = bridge.intentResult(inputs);
             } else {
@@ -227,7 +242,7 @@ public final class ComplexIntentDetectionEngine {
             NodeSessionApi session,
             ModelContext context) {
         Map<String, Object> subInputs = buildSubWorkflowInput(inputs);
-        TestBridge bridge = TEST_BRIDGE.get();
+        TestBridge bridge = presetBridge;
         if (bridge != null) {
             Map<String, Object> stub = bridge.subWorkflowResult(workflowId, subInputs);
             state.setStatus(ComplexIntentState.END);

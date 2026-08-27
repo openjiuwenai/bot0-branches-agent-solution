@@ -6,6 +6,9 @@ package com.openjiuwen.studio.dsl.python;
 
 import com.openjiuwen.studio.dsl.contract.PythonCodeExecutor;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 /**
  * Selects Python executors like Python {@code CodeRunnerFactory} + {@code LOCAL_CODE_EXEC_MODE}.
  *
@@ -18,6 +21,7 @@ import com.openjiuwen.studio.dsl.contract.PythonCodeExecutor;
  * @since 2026-08-25
  */
 public final class PythonCodeRunners {
+    private static final Logger LOG = Logger.getLogger(PythonCodeRunners.class.getName());
     private static volatile PythonCodeExecutor sandboxExecutor;
 
     private PythonCodeRunners() {}
@@ -47,7 +51,14 @@ public final class PythonCodeRunners {
             if (sb != null) {
                 return sb;
             }
-            // Python: SandboxRunner.create fails → _ensure_code_runner falls back to local
+            if (isSandboxStrict()) {
+                throw new IllegalStateException(
+                        "exec_env=sandbox but no sandbox executor configured "
+                                + "(set studio.dsl.sandbox.strict=false to allow local fallback)");
+            }
+            LOG.log(
+                    Level.WARNING,
+                    "exec_env=sandbox but no sandbox executor configured; falling back to local execution");
             return resolveLocal(localExecMode, fallbackSubprocess);
         }
         return resolveLocal(localExecMode, fallbackSubprocess);
@@ -69,6 +80,24 @@ public final class PythonCodeRunners {
             return new InprocessPythonCodeExecutor();
         }
         return fallbackSubprocess != null ? fallbackSubprocess : new SubprocessPythonCodeExecutor();
+    }
+
+    /**
+     * When true, sandbox misconfiguration or non-timeout failures do not fall back to local execution.
+     * Controlled by {@code STUDIO_DSL_SANDBOX_STRICT} or {@code studio.dsl.sandbox.strict}.
+     *
+     * @return strict mode enabled
+     */
+    public static boolean isSandboxStrict() {
+        String env = System.getenv("STUDIO_DSL_SANDBOX_STRICT");
+        if (env == null || env.isBlank()) {
+            env = System.getProperty("studio.dsl.sandbox.strict");
+        }
+        if (env == null || env.isBlank()) {
+            return false;
+        }
+        String t = env.trim();
+        return "true".equalsIgnoreCase(t) || "1".equals(t);
     }
 
     /**

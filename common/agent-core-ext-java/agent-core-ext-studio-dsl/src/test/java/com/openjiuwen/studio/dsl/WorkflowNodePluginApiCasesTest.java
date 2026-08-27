@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl;
 
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -55,7 +56,7 @@ class WorkflowNodePluginApiCasesTest {
 
     @AfterEach
     void tearDown() {
-        FlowApiEngine.clearTestBridge();
+        StudioEngineTestSupport.clear();
     }
 
     @SuppressWarnings("unchecked")
@@ -91,7 +92,7 @@ class WorkflowNodePluginApiCasesTest {
                         "weather_api",
                         "jiuwen.plugin",
                         confWithResponse(Map.of("mockResponse", MOCK_API_SUCCESS))),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         Map<String, Object> fields =
                 uf(exec.invoke(Map.of("userFields", Map.of("latitude", 39.9042)), mock(NodeSessionApi.class), null));
         assertThat(fields).containsAllEntriesOf(MOCK_WEATHER);
@@ -102,7 +103,7 @@ class WorkflowNodePluginApiCasesTest {
     void mockResponse_plainMap_passthrough() {
         ComponentExecutable exec = registry.create(
                 AssembledNode.of("p", "jiuwen.flowApi", Map.of("mockResponse", Map.of("temp", 25))),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         assertThat(uf(exec.invoke(Map.of("userFields", Map.of()), null, null))).containsEntry("temp", 25);
     }
 
@@ -110,7 +111,7 @@ class WorkflowNodePluginApiCasesTest {
     void mockResponse_emptyResponse_returnsFullEnvelope() {
         ComponentExecutable exec = registry.create(
                 AssembledNode.of("p", "jiuwen.plugin", Map.of("mockResponse", MOCK_API_SUCCESS)),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         Map<String, Object> fields = uf(exec.invoke(Map.of("userFields", Map.of()), null, null));
         assertThat(fields).containsEntry("errCode", 0);
         assertThat(fields.get("data")).isEqualTo(MOCK_WEATHER);
@@ -157,7 +158,7 @@ class WorkflowNodePluginApiCasesTest {
                                 true,
                                 "exceptionSuppression",
                                 "{\"fallback\": \"default_value\"}"))),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         Map<String, Object> fields = uf(exec.invoke(Map.of("userFields", Map.of()), null, null));
         assertThat(fields).containsEntry("fallback", "default_value");
         assertThat(fields).doesNotContainKey("exceptionSuppressed");
@@ -210,7 +211,7 @@ class WorkflowNodePluginApiCasesTest {
                                         "name", "city",
                                         "description", "city name",
                                         "type", "string"))))),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         // missing city → interact; mock session returns null → continue then may still call API
         // GraphInterrupt not thrown by mock → invoke continues after interact
         uf(exec.invoke(Map.of("userFields", Map.of()), session, null));
@@ -243,7 +244,7 @@ class WorkflowNodePluginApiCasesTest {
                                 Map.of("errCode", 0, "data", Map.of("chunk", "hi")),
                                 "userFields",
                                 Map.of("outputs", List.of(Map.of("id", "out", "required", true))))),
-                NodeBuildContext.defaults("wf"));
+                StudioEngineTestSupport.context("wf"));
         Iterator<Object> it = exec.stream(Map.of("userFields", Map.of()), mock(NodeSessionApi.class), null);
         List<Object> frames = new java.util.ArrayList<>();
         it.forEachRemaining(frames::add);

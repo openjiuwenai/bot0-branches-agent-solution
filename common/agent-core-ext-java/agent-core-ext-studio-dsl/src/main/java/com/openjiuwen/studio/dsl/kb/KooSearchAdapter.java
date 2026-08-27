@@ -75,6 +75,7 @@ public final class KooSearchAdapter implements KBServiceAdapter {
             }
             body.put("filter_string", "tags:(" + String.join(" OR ", parts) + ")");
         }
+        CustomerHeaderInject.applyToKb(headers);
         // Reuse LakeSearch response shape
         List<KBSearchResult> results =
                 LakeSearchAdapter.parseResponse(KbHttp.postJson(url, headers, body), datasetIds.get(0));

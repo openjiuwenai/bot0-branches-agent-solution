@@ -78,6 +78,7 @@ public final class LakeSearchAdapter implements KBServiceAdapter {
         if (repoIds.isEmpty()) {
             return List.of();
         }
+        CustomerHeaderInject.applyToKb(headers);
         String url = endpoint.replaceAll("/$", "")
                 + "/v1/"
                 + projectId
@@ -166,6 +167,11 @@ public final class LakeSearchAdapter implements KBServiceAdapter {
                     meta.put(k, v);
                 }
             });
+            String docName = KbHttp.str(doc.get("title"));
+            String subtitle = KbHttp.str(doc.get("subtitle"));
+            if (subtitle.isBlank()) {
+                subtitle = docName;
+            }
             String type = KbHttp.str(doc.get("doc_type"));
             if (type.isBlank()) {
                 type = KbHttp.str(doc.get("docType"));
@@ -178,9 +184,10 @@ public final class LakeSearchAdapter implements KBServiceAdapter {
                     .setScore(KbHttp.doubleOf(doc.get("score"), 0))
                     .setSource(repo)
                     .setKnowledgeBaseId(repo)
-                    .setFileId(first(doc, "file_id", "fileId"))
-                    .setDocumentName(KbHttp.str(doc.get("title")))
-                    .setSubtitle(KbHttp.str(doc.get("subtitle")))
+                    .setFileId(first(doc, "file_id", "fileId", "chunk_id", "chunkId"))
+                    .setDocumentName(docName)
+                    .setSubtitle(subtitle)
+                    .setKnowledgeBaseType(first(doc, "knowledge_base_type", "knowledgeBaseType"))
                     .setType(type)
                     .setMetadata(meta));
         }

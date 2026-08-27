@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl.intentdetection;
 
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.core.foundation.llm.schema.BaseMessage;
@@ -25,7 +26,7 @@ import java.util.concurrent.atomic.AtomicReference;
 class IntentDetectionParityTest {
     @AfterEach
     void tearDown() {
-        IntentDetectionEngine.clearTestInvoker();
+        StudioEngineTestSupport.clear();
     }
 
     private static Map<String, Object> modelConfigs() {

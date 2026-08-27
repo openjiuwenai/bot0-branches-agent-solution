@@ -4,6 +4,7 @@
 
 package com.openjiuwen.studio.dsl.flowagent;
 
+import com.openjiuwen.studio.dsl.testsupport.StudioEngineTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -31,7 +32,7 @@ class FlowAgentParityTest {
     @BeforeEach
     void setUp() {
         lastInputs = new AtomicReference<>();
-        FlowAgentEngine.installTestBridge(new FlowAgentEngine.ReactBridge() {
+        StudioEngineTestSupport.installFlowAgent(new FlowAgentEngine.ReactBridge() {
             @Override
             public Map<String, Object> invoke(Map<String, Object> mappedInputs) {
                 lastInputs.set(new LinkedHashMap<>(mappedInputs));
@@ -48,7 +49,7 @@ class FlowAgentParityTest {
 
     @AfterEach
     void tearDown() {
-        FlowAgentEngine.clearTestBridge();
+        StudioEngineTestSupport.clear();
     }
 
     private static Map<String, Object> agentConf() {
@@ -75,21 +76,20 @@ class FlowAgentParityTest {
     class ConfigAndInvoke {
         @Test
         void init_validatesAndMapsQuery() {
-            FlowAgentEngine engine = new FlowAgentEngine("a1");
-            engine.init(agentConf());
+            FlowAgentEngine engine = StudioEngineTestSupport.createFlowAgent("a1", agentConf());
             Map<String, Object> out =
                     engine.invoke(Map.of("userFields", Map.of("query", "What's the weather today?")), null, null);
             assertThat(out).containsKey("userFields");
             @SuppressWarnings("unchecked")
             Map<String, Object> uf = (Map<String, Object>) out.get("userFields");
             assertThat(uf).containsEntry("output", "Agent response");
+            assertThat(uf).containsEntry("result_type", "answer");
             assertThat(lastInputs.get()).containsEntry("query", "What's the weather today?");
         }
 
         @Test
         void mapFirstFieldToQueryWhenQueryAbsent() {
-            FlowAgentEngine engine = new FlowAgentEngine("a1");
-            engine.init(agentConf());
+            FlowAgentEngine engine = StudioEngineTestSupport.createFlowAgent("a1", agentConf());
             engine.invoke(Map.of("userFields", Map.of("question", "hello")), null, null);
             assertThat(lastInputs.get()).containsEntry("query", "hello");
         }
@@ -105,8 +105,7 @@ class FlowAgentParityTest {
 
         @Test
         void streamYieldsChunks() {
-            FlowAgentEngine engine = new FlowAgentEngine("a1");
-            engine.init(agentConf());
+            FlowAgentEngine engine = StudioEngineTestSupport.createFlowAgent("a1", agentConf());
             Iterator<Object> it = engine.stream(Map.of("userFields", Map.of("query", "hi")), null, null);
             assertThat(it.hasNext()).isTrue();
             assertThat(it.next()).isInstanceOf(Map.class);
@@ -114,8 +113,8 @@ class FlowAgentParityTest {
 
         @Test
         void outputDictExtractsDataResult() {
-            FlowAgentEngine.clearTestBridge();
-            FlowAgentEngine.installTestBridge(new FlowAgentEngine.ReactBridge() {
+            StudioEngineTestSupport.clear();
+            StudioEngineTestSupport.installFlowAgent(new FlowAgentEngine.ReactBridge() {
                 @Override
                 public Map<String, Object> invoke(Map<String, Object> mappedInputs) {
                     return Map.of(
@@ -130,8 +129,7 @@ class FlowAgentParityTest {
                     return List.of().iterator();
                 }
             });
-            FlowAgentEngine engine = new FlowAgentEngine("a1");
-            engine.init(agentConf());
+            FlowAgentEngine engine = StudioEngineTestSupport.createFlowAgent("a1", agentConf());
             @SuppressWarnings("unchecked")
             Map<String, Object> uf =
                     (Map<String, Object>) engine.invoke(Map.of("userFields", Map.of("query", "q")), null, null)

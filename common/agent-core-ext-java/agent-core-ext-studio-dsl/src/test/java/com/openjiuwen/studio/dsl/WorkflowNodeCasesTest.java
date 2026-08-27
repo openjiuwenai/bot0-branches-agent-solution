@@ -18,6 +18,7 @@ import com.openjiuwen.studio.dsl.adapter.control.AggregateNodeHandler;
 import com.openjiuwen.studio.dsl.adapter.interact.FlowInputUtils;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
 import com.openjiuwen.studio.dsl.exec.NodeExecutionException;
+import com.openjiuwen.studio.dsl.flowend.FlowEndEngine;
 import com.openjiuwen.studio.dsl.flowmessage.FlowMessageEngine;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.registry.NodeTypeRegistry;
@@ -556,11 +557,12 @@ class WorkflowNodeCasesTest {
         void endMapsPrefixTemplateAndIdempotent() {
             NodeSessionApi session = mock(NodeSessionApi.class);
             AtomicReference<Object> done = new AtomicReference<>();
-            when(session.getState("end_invoke_executed")).thenAnswer(inv -> done.get());
+            when(session.getState(FlowEndEngine.scopedKey("e", FlowEndEngine.INVOKE_DONE_KEY)))
+                    .thenAnswer(inv -> done.get());
             doAnswer(inv -> {
                         @SuppressWarnings("unchecked")
                         Map<String, Object> patch = inv.getArgument(0);
-                        done.set(patch.get("end_invoke_executed"));
+                        done.set(patch.get(FlowEndEngine.scopedKey("e", FlowEndEngine.INVOKE_DONE_KEY)));
                         return null;
                     })
                     .when(session)

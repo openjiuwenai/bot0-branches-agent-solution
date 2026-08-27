@@ -9,6 +9,7 @@ import com.openjiuwen.core.session.NodeSessionApi;
 import com.openjiuwen.core.workflow.ComponentExecutable;
 import com.openjiuwen.studio.dsl.adapter.AbstractStudioNode;
 import com.openjiuwen.studio.dsl.exec.NodeBuildContext;
+import com.openjiuwen.studio.dsl.llmchain.LlmChainConfig;
 import com.openjiuwen.studio.dsl.llmchain.LlmChainEngine;
 import com.openjiuwen.studio.dsl.model.AssembledNode;
 import com.openjiuwen.studio.dsl.model.NodePayload;
@@ -37,7 +38,7 @@ public final class LlmNodeHandler implements NodeHandlerFactory {
 
     @Override
     public ComponentExecutable create(AssembledNode node, NodeBuildContext ctx) {
-        return new LlmChainExecutable(node);
+        return new LlmChainExecutable(node, ctx);
     }
 
     static final class LlmChainExecutable extends AbstractStudioNode {
@@ -45,10 +46,17 @@ public final class LlmNodeHandler implements NodeHandlerFactory {
         private final Map<String, Object> nodeConfigs;
         private volatile boolean ready;
 
-        LlmChainExecutable(AssembledNode node) {
+        LlmChainExecutable(AssembledNode node, NodeBuildContext ctx) {
             super(node);
-            this.engine = new LlmChainEngine(node.id());
             this.nodeConfigs = node.configs() == null ? Map.of() : node.configs();
+            LlmChainEngine.ModelBridge bridge =
+                    ctx != null && ctx.testOverrides() != null ? ctx.testOverrides().llmBridge() : null;
+            if (bridge != null) {
+                this.engine = new LlmChainEngine(node.id(), LlmChainConfig.from(node.id(), nodeConfigs), bridge);
+                this.ready = true;
+            } else {
+                this.engine = new LlmChainEngine(node.id());
+            }
         }
 
         LlmChainEngine engine() {

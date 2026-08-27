@@ -276,7 +276,7 @@ public final class FlowInputEngine {
             return session.interact(question);
         } catch (RuntimeException e) {
             rethrowGraphInterrupt(e);
-            return null;
+            throw e;
         }
     }
 

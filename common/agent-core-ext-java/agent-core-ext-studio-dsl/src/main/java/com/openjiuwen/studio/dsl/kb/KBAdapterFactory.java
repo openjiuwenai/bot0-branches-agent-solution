@@ -26,6 +26,7 @@ public final class KBAdapterFactory {
         register("Ragflow", RagFlowAdapter::new);
         register("General", GeneralKBAdapter::new);
         register("Custom", LakeSearchAdapter::new);
+        register("OpenJiuwen", OpenJiuwenKBAdapter::new);
     }
 
     private KBAdapterFactory() {}
