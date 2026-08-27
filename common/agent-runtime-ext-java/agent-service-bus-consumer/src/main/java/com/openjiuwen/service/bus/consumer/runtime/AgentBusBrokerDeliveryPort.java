@@ -85,13 +85,10 @@ public final class AgentBusBrokerDeliveryPort implements AutoCloseable {
         byte[] inlinePayload = message.inlinePayload() == null
                 ? null
                 : message.inlinePayload().getBytes(StandardCharsets.UTF_8);
-        Map<String, String> metadata = message.capability() == null
-                ? Map.of()
-                : Map.of("capability", message.capability());
         AgentBusEventEnvelope envelope = new AgentBusEventEnvelope(eventType.name(), message.messageId(),
                 message.tenantId(), sourceServiceId, message.targetServiceId(), message.routeHandle(),
                 message.correlationId(), message.traceId(), message.idempotencyKey(),
-                Instant.ofEpochMilli(message.deadlineMillisEpoch()), inlinePayload, message.payloadRef(), metadata);
+                Instant.ofEpochMilli(message.deadlineMillisEpoch()), inlinePayload, message.payloadRef(), Map.of());
         inFlight.put(message.messageId(), message);
         return new Delivery(envelope, inlinePayload);
     }

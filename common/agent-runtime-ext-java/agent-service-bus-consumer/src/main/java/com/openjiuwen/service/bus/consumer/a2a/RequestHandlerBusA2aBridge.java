@@ -86,7 +86,7 @@ public class RequestHandlerBusA2aBridge {
         ServerCallContext context = context(envelope);
         BusA2AJsonRpcSupport.ParsedA2ARequest decoded = decode(payload, envelope.tenantId());
         return switch (envelope.eventType()) {
-            case "CLIENT_INVOCATION_REQUESTED", "A2A_CALL_REQUESTED" -> send(envelope, decoded, context, handler);
+            case "CLIENT_INVOCATION_REQUESTED", "A2A_CALL_REQUESTED" -> send(decoded, context, handler);
             case "CLIENT_INVOCATION_QUERY_REQUESTED", "A2A_CALL_QUERY_REQUESTED" -> {
                 requireMethod(decoded, "GetTask");
                 TaskQueryParams params = params(decoded, TaskQueryParams.class);
@@ -212,16 +212,14 @@ public class RequestHandlerBusA2aBridge {
         throw new IllegalStateException("A2A request handler does not support caller-reserved Task ids");
     }
 
-    private BusDispatchResult send(AgentBusEventEnvelope envelope, BusA2AJsonRpcSupport.ParsedA2ARequest decoded,
-            ServerCallContext context,
+    private BusDispatchResult send(BusA2AJsonRpcSupport.ParsedA2ARequest decoded, ServerCallContext context,
             RequestHandler handler)
             throws A2AError {
         MessageSendParams params = params(decoded, MessageSendParams.class);
         if (params.message().taskId() != null) {
             handler.validateRequestedTask(params.message().taskId());
         }
-        boolean streaming = isMethod(decoded, "SendStreamingMessage") || decoded.method() == null
-                && Boolean.parseBoolean(envelope.metadata() == null ? null : envelope.metadata().get("streaming"));
+        boolean streaming = isMethod(decoded, "SendStreamingMessage");
         context.getState().put("_a2a_stream", streaming);
         if (streaming) {
             Flow.Publisher<StreamingEventKind> publisher = handler.onMessageSendStream(params, context);
